@@ -25,12 +25,18 @@ export interface MonsterDef {
   immune?: string[];
   packTactics?: boolean;
   boss?: boolean;
+  /** Experience awarded for defeating it. */
+  xp: number;
+  /** Coins it carries, as a dice expression. */
+  gold?: string;
   description: string;
 }
 
 export const MONSTERS: Record<string, MonsterDef> = {
   goblin: {
     id: 'goblin',
+    xp: 50,
+    gold: '2d6',
     name: 'Goblin',
     sprite: 'goblin',
     ac: 15,
@@ -46,6 +52,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   giant_rat: {
     id: 'giant_rat',
+    xp: 25,
     name: 'Giant Rat',
     sprite: 'rat',
     ac: 12,
@@ -59,6 +66,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   skeleton: {
     id: 'skeleton',
+    xp: 50,
+    gold: '1d6',
     name: 'Skeleton',
     sprite: 'skeleton',
     ac: 13,
@@ -76,6 +85,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   bugbear: {
     id: 'bugbear',
+    xp: 200,
+    gold: '4d10',
     name: 'Bugbear Chief',
     sprite: 'bugbear',
     ac: 16,
@@ -89,5 +100,67 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ],
     boss: true,
     description: 'A hulking, hairy goblinoid brute who rules the warren by fear.',
+  },
+  wolf: {
+    id: 'wolf',
+    xp: 50,
+    name: 'Wolf',
+    sprite: 'wolf',
+    ac: 13,
+    hp: 11,
+    speed: 40,
+    dexMod: 2,
+    saves: { str: 1, dex: 2, con: 1, int: -4, wis: 1, cha: -2 },
+    attacks: [{ name: 'Bite', toHit: 4, damage: '2d4+2', damageType: 'piercing', range: 5 }],
+    packTactics: true,
+    description: 'A lean grey hunter that circles with its pack and goes for stragglers.',
+  },
+  bandit: {
+    id: 'bandit',
+    xp: 25,
+    gold: '2d8',
+    name: 'Bandit',
+    sprite: 'bandit',
+    ac: 12,
+    hp: 11,
+    speed: 30,
+    dexMod: 1,
+    saves: { str: 0, dex: 1, con: 1, int: 0, wis: 0, cha: 0 },
+    attacks: [
+      { name: 'Scimitar', toHit: 3, damage: '1d6+1', damageType: 'slashing', range: 5 },
+      { name: 'Light Crossbow', toHit: 3, damage: '1d8+1', damageType: 'piercing', range: 80, longRange: 320, ranged: true },
+    ],
+    description: 'A desperate highway robber who would rather be paid than bleed.',
+  },
+  orc: {
+    id: 'orc',
+    xp: 100,
+    gold: '2d10',
+    name: 'Orc',
+    sprite: 'orc',
+    ac: 13,
+    hp: 15,
+    speed: 30,
+    dexMod: 1,
+    saves: { str: 3, dex: 1, con: 3, int: -2, wis: 0, cha: 0 },
+    attacks: [
+      { name: 'Greataxe', toHit: 5, damage: '1d12+3', damageType: 'slashing', range: 5 },
+      { name: 'Javelin', toHit: 5, damage: '1d6+3', damageType: 'piercing', range: 30, longRange: 120, ranged: true },
+    ],
+    description: 'A scarred raider who charges the strongest-looking foe.',
+  },
+  zombie: {
+    id: 'zombie',
+    xp: 50,
+    name: 'Zombie',
+    sprite: 'zombie',
+    ac: 8,
+    hp: 22,
+    speed: 20,
+    dexMod: -2,
+    saves: { str: 1, dex: -2, con: 3, int: -4, wis: 0, cha: -3 },
+    attacks: [{ name: 'Slam', toHit: 3, damage: '1d6+1', damageType: 'bludgeoning', range: 5 }],
+    immune: ['poison'],
+    description: 'A shambling corpse, slow and tireless.',
   },
 };

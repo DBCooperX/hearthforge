@@ -23,6 +23,7 @@ export class Room {
     private dm: DungeonMaster,
     private store: Store,
     private actionDelayMs = 500,
+    private travelDelayMs = 320,
   ) {
     const saved = store.load(name);
     this.game = new Game(name, Math.random, saved);
@@ -86,6 +87,7 @@ export class Room {
     const playerId = this.sockets.get(ws);
     if (!playerId) return;
     if (msg.t === 'say') return this.say(playerId, String(msg.text ?? ''));
+    if (msg.t === 'travel') return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));
     this.enqueue(async () => {
       try {
         this.apply(playerId, msg);
@@ -109,16 +111,40 @@ export class Room {
       case 'ability': return g.useAbility(playerId, String(msg.characterId), String(msg.abilityId), msg.targetId ? String(msg.targetId) : undefined);
       case 'use_item': return g.useItem(playerId, String(msg.characterId), String(msg.uid), msg.targetId ? String(msg.targetId) : undefined);
       case 'end_turn': return g.endTurn(playerId, String(msg.characterId));
-      case 'open_chest': return g.openChest(playerId, String(msg.characterId), String(msg.chestId));
       case 'inv_move': return g.invMove(playerId, String(msg.characterId), msg.from, msg.to);
       case 'give': return g.give(playerId, String(msg.characterId), msg.from, String(msg.toCharacterId));
       case 'short_rest': return g.shortRest();
+      case 'long_rest': return g.longRest();
+      case 'go': return g.goTo(String(msg.locationId));
+      case 'delve': return g.delve();
       case 'reset':
         this.epoch++;
         return g.reset();
       default:
         throw new GameError('Unknown action');
     }
+  }
+
+  /** Walk the party across the map one hex at a time so everyone watches the journey unfold. */
+  private travel(ws: WebSocket, q: number, r: number) {
+    this.enqueue(async () => {
+      const g = this.game;
+      try {
+        g.beginTravel(q, r);
+      } catch (err) {
+        if (err instanceof GameError) return this.send(ws, { t: 'error', message: err.message });
+        throw err;
+      }
+      const epoch = this.epoch;
+      this.flush();
+      while (g.travelStep()) {
+        this.flush();
+        await sleep(this.travelDelayMs);
+        if (epoch !== this.epoch) return;
+      }
+      this.flush();
+      await this.pump();
+    });
   }
 
   /** Run monster turns until a hero is up, then hand story beats to the narrator. */
@@ -161,6 +187,8 @@ export class Room {
           this.dmBusy--;
           this.flush();
         }
+        // The DM may have started a fight or caused new beats.
+        this.enqueue(() => this.pump());
       })
       .catch((err) => console.error('[room] narration failed:', err));
   }
@@ -169,8 +197,8 @@ export class Room {
     if (!beats.length) return;
     const epoch = this.epoch;
     this.background(async () => {
-      const text = await this.dm.narrate(this.game, beats);
-      if (text && epoch === this.epoch) this.game.log('dm', text);
+      const scene = await this.dm.narrate(this.game, beats, async () => this.flush());
+      if (scene && epoch === this.epoch) this.game.addScene(scene);
     });
   }
 
@@ -179,13 +207,14 @@ export class Room {
     if (!text) return;
     const player = this.game.s.players.find((p) => p.id === playerId);
     const name = player?.name ?? 'Adventurer';
-    this.game.log('chat', text, name);
+    this.game.log('chat', text, { speaker: name });
     this.flush();
     if (this.game.s.phase === 'lobby') return;
     const epoch = this.epoch;
     this.background(async () => {
-      const reply = await this.dm.chat(this.game, name, text, async () => this.flush());
-      if (reply && epoch === this.epoch) this.game.log('dm', reply);
+      const scene = await this.dm.respond(this.game, name, text, async () => this.flush());
+      if (scene && epoch === this.epoch) this.game.addScene(scene);
+      void this.dm.maintain(this.game);
     });
   }
 }

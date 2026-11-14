@@ -76,7 +76,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
             </li>
           ))}
         </ul>
-        <button className="primary" disabled={!state.characters.length} onClick={() => conn.send({ t: 'start' })}>Descend into the cellar</button>
+        <button className="primary" disabled={!state.characters.length} onClick={() => conn.send({ t: 'start' })}>Begin the adventure</button>
         <p className="muted small">
           Dungeon Master: {state.dmMode === 'claude' ? `Claude (${state.dmModel})` : 'scripted fallback. Set ANTHROPIC_API_KEY on the server for the AI Dungeon Master.'}
         </p>

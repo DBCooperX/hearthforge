@@ -82,6 +82,10 @@ export interface Character {
   /** Limited-use abilities already spent (reset on rest). */
   spent: string[];
   skills: string[];
+  /** Experience points earned so far. */
+  xp: number;
+  /** Passive class features gained from levels, as short readable lines. */
+  features: string[];
 }
 
 export interface MonsterView {
@@ -98,7 +102,7 @@ export interface MonsterView {
   sprite: string;
 }
 
-export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge';
+export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash';
 
 export interface AbilityDef {
   id: string;
@@ -120,13 +124,6 @@ export interface AbilityDef {
   target: 'enemy' | 'ally' | 'self';
 }
 
-export interface Chest {
-  id: string;
-  x: number;
-  y: number;
-  opened: boolean;
-}
-
 export interface Combatant {
   id: string;
   kind: 'pc' | 'monster';
@@ -141,18 +138,60 @@ export interface CombatState {
   movementLeft: number;
   actionUsed: boolean;
   bonusUsed: boolean;
+  /** Further weapon attacks still allowed by the Attack action taken this turn (Extra Attack). */
+  attacksLeft: number;
 }
 
-export type LogKind = 'dm' | 'system' | 'roll' | 'chat';
+export type LogKind = 'dm' | 'system' | 'roll' | 'chat' | 'levelup';
+
+export const MOODS = ['calm', 'warm', 'tense', 'danger', 'mystery', 'wonder', 'somber', 'triumph'] as const;
+export type Mood = (typeof MOODS)[number];
+
+/** Presentation data that turns a piece of narration into a scene card. */
+export interface SceneMeta {
+  title: string;
+  mood: Mood;
+  /** Suggested next actions, shown as chips under the newest card. */
+  actions: string[];
+  /** Reserved for phase 3: id of a generated image for this scene. */
+  imageId: string | null;
+}
+
+/** A d20 roll the server made, with everything needed to show its breakdown. */
+export interface RollInfo {
+  actor: string;
+  label: string;
+  /** The d20 result that counted. */
+  die: number;
+  /** Every d20 rolled (two with advantage or disadvantage). */
+  rolls: number[];
+  mode: 'normal' | 'advantage' | 'disadvantage';
+  modifier: number;
+  total: number;
+  target: { kind: 'AC' | 'DC'; value: number; name?: string };
+  outcome: 'hit' | 'miss' | 'crit' | 'success' | 'failure';
+  damage?: { amount: number; type: string };
+}
+
+export interface LevelUpInfo {
+  characterId: string;
+  name: string;
+  className: string;
+  level: number;
+  gains: string[];
+}
 
 export interface LogEntry {
   id: number;
   kind: LogKind;
   text: string;
   speaker?: string;
+  scene?: SceneMeta;
+  roll?: RollInfo;
+  levelUp?: LevelUpInfo;
 }
 
-export type Phase = 'lobby' | 'explore' | 'combat' | 'victory' | 'defeat';
+export type Phase = 'lobby' | 'explore' | 'combat' | 'defeat';
 
 export interface PlayerInfo {
   id: string;
@@ -160,15 +199,98 @@ export interface PlayerInfo {
   connected: boolean;
 }
 
+// ------------------------------------------------------------------ world
+
+export const LOCATION_KINDS = ['town', 'village', 'tavern', 'shop', 'temple', 'shrine', 'camp', 'dungeon', 'ruin', 'cave', 'landmark'] as const;
+export type LocationKind = (typeof LOCATION_KINDS)[number];
+
+/**
+ * The saved look of a character or place. Phase 3 generates one reference image
+ * from the description and reuses it, so later pictures stay consistent.
+ */
+export interface VisualBible {
+  description: string;
+  imageId: string | null;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  kind: LocationKind;
+  q: number;
+  r: number;
+  /** Set for places inside another location, such as a tavern in a town. */
+  parentId: string | null;
+  description: string;
+  visited: boolean;
+  origin: 'seed' | 'dm';
+  visual: VisualBible;
+  /** Reserved for phase 2: a generated top-down zone map of this place. */
+  zone: null;
+  /** Sections of a dungeon: how many exist and how many the party has cleared. */
+  dungeon?: { total: number; cleared: number; next: string | null };
+}
+
+export const DISPOSITIONS = ['friendly', 'neutral', 'wary', 'hostile'] as const;
+export type Disposition = (typeof DISPOSITIONS)[number];
+
+export interface Npc {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  disposition: Disposition;
+  /** Where the party last saw them. */
+  locationId: string | null;
+  notes: string[];
+  origin: 'seed' | 'dm';
+  visual: VisualBible;
+}
+
+export type QuestStatus = 'active' | 'completed' | 'failed';
+
+export interface Quest {
+  id: string;
+  title: string;
+  status: QuestStatus;
+  summary: string;
+  notes: string[];
+}
+
+export interface Deed {
+  id: string;
+  day: number;
+  text: string;
+}
+
+export interface WorldView {
+  width: number;
+  height: number;
+  /** One terrain code per hex, row-major. '?' is unexplored. See shared/hex.ts. */
+  terrain: string;
+  party: { q: number; r: number };
+  /** Minutes since midnight of day 1. */
+  minutes: number;
+  /** Locations the party knows about. */
+  locations: Location[];
+  /** The place the party is in right now, or null in the wilderness. */
+  placeId: string | null;
+  /** A long rest here cannot be interrupted. */
+  safe: boolean;
+}
+
+export interface MemoryView {
+  /** People the party has met. */
+  npcs: Npc[];
+  quests: Quest[];
+  deeds: Deed[];
+}
+
 export interface GameState {
   room: string;
   phase: Phase;
+  /** The tactical battle map. Only meaningful while phase is 'combat'. */
   map: { width: number; height: number; rows: string[] };
-  /** One char per tile, row-major: '0' unseen, '1' seen before, '2' visible now. */
-  fog: string;
-  /** Keys "x,y" of doors that are open. */
-  openDoors: string[];
-  chests: Chest[];
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;
@@ -176,6 +298,9 @@ export interface GameState {
   shortRestsLeft: number;
   log: LogEntry[];
   players: PlayerInfo[];
+  world: WorldView | null;
+  memory: MemoryView;
+  travelling: boolean;
   dmBusy: boolean;
   dmMode: 'claude' | 'scripted';
   dmModel: string | null;
@@ -193,10 +318,13 @@ export type ClientMessage =
   | { t: 'ability'; characterId: string; abilityId: string; targetId?: string }
   | { t: 'use_item'; characterId: string; uid: string; targetId?: string }
   | { t: 'end_turn'; characterId: string }
-  | { t: 'open_chest'; characterId: string; chestId: string }
   | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc }
   | { t: 'give'; characterId: string; from: InvLoc; toCharacterId: string }
   | { t: 'short_rest' }
+  | { t: 'long_rest' }
+  | { t: 'travel'; q: number; r: number }
+  | { t: 'go'; locationId: string }
+  | { t: 'delve' }
   | { t: 'say'; text: string }
   | { t: 'reset' };
 
@@ -208,3 +336,7 @@ export type ServerMessage =
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
 }
+
+/** Total experience needed to reach each level; index 0 is level 1. */
+export const XP_THRESHOLDS = [0, 300, 900, 2700, 6500];
+export const MAX_LEVEL = XP_THRESHOLDS.length;

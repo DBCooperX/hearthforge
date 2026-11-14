@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
 import { ABILITIES, ITEMS } from '../../../shared/content';
 import type { Character, GameState } from '../../../shared/types';
 import type { Connection } from '../net';
@@ -7,14 +6,7 @@ export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: strin
 
 export function TurnBar({ state }: { state: GameState }) {
   const combat = state.combat;
-  if (!combat) {
-    return (
-      <div className="turnbar">
-        <span className="phase">{state.phase === 'victory' ? 'Victory' : state.phase === 'defeat' ? 'Defeat' : 'Exploring'}</span>
-        {state.dmBusy && <span className="thinking">The Dungeon Master is speaking…</span>}
-      </div>
-    );
-  }
+  if (!combat) return null;
   const name = (id: string) => state.characters.find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
   return (
     <div className="turnbar">
@@ -64,7 +56,7 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
         {actor && combat && (
           <button
             className={targeting?.kind === 'attack' ? 'act on' : 'act'}
-            disabled={!canAct || actionUsed}
+            disabled={!canAct || (actionUsed && combat.attacksLeft <= 0)}
             data-hotkey={key()}
             onClick={() => toggle({ kind: 'attack' })}
             title="Attack with your main-hand weapon. You can also just click an enemy."
@@ -75,9 +67,10 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
         {actor?.abilityIds.map((id) => {
           const ab = ABILITIES[id];
           if (!ab) return null;
-          if ((ab.target === 'enemy' || ab.kind === 'dodge') && !combat) return null;
+          if (!combat) return null;
           const spent = ab.oncePerRest && actor.spent.includes(id);
-          const blocked = !canAct || spent || actor.mana < ab.cost || (combat ? (ab.bonusAction ? combat.bonusUsed : actionUsed) : false);
+          const used = ab.kind === 'surge' ? !actionUsed : ab.bonusAction ? combat.bonusUsed : actionUsed;
+          const blocked = !canAct || spent || actor.mana < ab.cost || used;
           const on = targeting?.kind === 'ability' && targeting.abilityId === id;
           return (
             <button
@@ -108,11 +101,6 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
           </button>
         )}
         <span className="spacer" />
-        {!combat && (state.phase === 'explore' || state.phase === 'victory') && (
-          <button className="act" disabled={state.shortRestsLeft <= 0} onClick={() => conn.send({ t: 'short_rest' })} title="Spend a hit die to heal and recover some mana.">
-            <span className="icon">⛺</span>Short rest<span className="cost">{state.shortRestsLeft}</span>
-          </button>
-        )}
         <button className="act" onClick={onInventory} title="Inventory (i)"><span className="icon">🎒</span>Inventory</button>
         {actor && combat && (
           <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} title="End turn (Space)">
@@ -121,39 +109,5 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
         )}
       </div>
     </div>
-  );
-}
-
-export function LogPanel({ state, conn }: { state: GameState; conn: Connection }) {
-  const [text, setText] = useState('');
-  const end = useRef<HTMLDivElement>(null);
-  const last = state.log[state.log.length - 1]?.id;
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [last, state.dmBusy]);
-  return (
-    <aside className="log">
-      <h2>
-        Dungeon Master
-        <small>{state.dmMode === 'claude' ? 'AI' : 'scripted'}</small>
-      </h2>
-      <div className="entries">
-        {state.log.map((l) => (
-          <p key={l.id} className={`entry ${l.kind}`}>
-            {l.kind === 'chat' && <b>{l.speaker}: </b>}
-            {l.text}
-          </p>
-        ))}
-        {state.dmBusy && <p className="entry dm typing">…</p>}
-        <div ref={end} />
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (text.trim()) conn.send({ t: 'say', text });
-          setText('');
-        }}
-      >
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Speak to the Dungeon Master…" />
-      </form>
-    </aside>
   );
 }

@@ -9,17 +9,13 @@ export function tileAt(state: GameState, x: number, y: number): string {
   return state.map.rows[y][x];
 }
 
-export function fogAt(state: GameState, x: number, y: number): number {
-  return Number(state.fog[y * state.map.width + x] ?? 0);
-}
-
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 /** Tiles the hero can reach with the given number of steps (mirrors the server's pathing rules). */
 export function reachable(state: GameState, c: Character, steps: number): Set<string> {
   const out = new Set<string>();
   if (steps <= 0) return out;
-  const walk = (x: number, y: number) => { const t = tileAt(state, x, y); return t === '.' || t === '+'; };
+  const walk = (x: number, y: number) => tileAt(state, x, y) === '.';
   const blocked = new Set<string>();
   for (const m of state.monsters) if (m.alive) blocked.add(key(m.x, m.y));
   for (const o of state.characters) if (o.id !== c.id && !o.dead && o.hp > 0) blocked.add(key(o.x, o.y));
@@ -31,15 +27,10 @@ export function reachable(state: GameState, c: Character, steps: number): Set<st
     if (d >= steps) continue;
     for (const [dx, dy] of DIRS) {
       const nx = cur.x + dx, ny = cur.y + dy, k = key(nx, ny);
-      if (dist.has(k) || !walk(nx, ny) || blocked.has(k) || fogAt(state, nx, ny) === 0) continue;
-      if (dx && dy) {
-        if (!walk(cur.x + dx, cur.y) || !walk(cur.x, cur.y + dy)) continue;
-        if (tileAt(state, nx, ny) === '+' || tileAt(state, cur.x, cur.y) === '+') continue;
-      }
+      if (dist.has(k) || !walk(nx, ny) || blocked.has(k)) continue;
+      if (dx && dy && (!walk(cur.x + dx, cur.y) || !walk(cur.x, cur.y + dy))) continue;
       dist.set(k, d + 1);
       out.add(k);
-      // A closed door ends the move.
-      if (tileAt(state, nx, ny) === '+' && !state.openDoors.includes(k)) continue;
       queue.push({ x: nx, y: ny });
     }
   }

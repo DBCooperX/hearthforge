@@ -1,5 +1,5 @@
 // Level 1 pregenerated heroes built from the SRD 5.1 classes with the standard array.
-import type { Abilities, ClassId, SlotId } from '../../../shared/types';
+import type { Abilities, AbilityKey, ClassId, SlotId } from '../../../shared/types';
 
 export interface ClassDef {
   id: ClassId;
@@ -17,7 +17,23 @@ export interface ClassDef {
   equipment: Partial<Record<SlotId, string>>;
   bag: { id: string; qty?: number }[];
   defaultNames: string[];
+  /** What each level after the first grants, keyed by the level reached. */
+  levels: Record<number, LevelGain>;
 }
+
+export interface LevelGain {
+  /** Ability ids from ABILITIES learned at this level. */
+  abilities?: string[];
+  /** Passive features, as lines for the character sheet. A later line with the same prefix before ':' replaces the earlier one. */
+  features?: string[];
+  /** Ability score improvement: +2 to this ability. */
+  asi?: AbilityKey;
+}
+
+/** Spell points by level for casters (house rule; a 1st-level spell costs 2). */
+export const MANA_BY_LEVEL = [4, 6, 8, 10, 14];
+
+export const profBonusFor = (level: number) => (level >= 5 ? 3 : 2);
 
 export const CLASSES: Record<ClassId, ClassDef> = {
   fighter: {
@@ -33,6 +49,12 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'chain_mail', mainHand: 'longsword', offHand: 'shield' },
     bag: [{ id: 'handaxe' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     defaultNames: ['Brann', 'Kara', 'Thorgar'],
+    levels: {
+      2: { abilities: ['action_surge'] },
+      3: { features: ['Improved Critical: weapon attacks crit on 19 or 20'] },
+      4: { asi: 'str' },
+      5: { features: ['Extra Attack: two weapon attacks with each Attack action'] },
+    },
   },
   rogue: {
     id: 'rogue',
@@ -48,6 +70,12 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'leather', mainHand: 'shortsword' },
     bag: [{ id: 'shortbow' }, { id: 'dagger' }, { id: 'potion_healing' }, { id: 'thieves_tools' }],
     defaultNames: ['Vex', 'Nim', 'Sable'],
+    levels: {
+      2: { abilities: ['dash'] },
+      3: { features: ['Sneak Attack: 2d6'] },
+      4: { asi: 'dex' },
+      5: { features: ['Sneak Attack: 3d6'] },
+    },
   },
   wizard: {
     id: 'wizard',
@@ -64,6 +92,12 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { mainHand: 'quarterstaff' },
     bag: [{ id: 'dagger' }, { id: 'potion_healing' }, { id: 'spellbook' }],
     defaultNames: ['Elowen', 'Mirth', 'Zarek'],
+    levels: {
+      2: { features: ['Arcane Recovery: a short rest restores 1 extra mana'] },
+      3: { abilities: ['acid_arrow'] },
+      4: { asi: 'int' },
+      5: { features: ['Potent Cantrips: cantrips roll twice as many damage dice'] },
+    },
   },
   cleric: {
     id: 'cleric',
@@ -79,5 +113,11 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'scale_mail', mainHand: 'mace', offHand: 'shield', amulet: 'holy_symbol' },
     bag: [{ id: 'potion_healing', qty: 2 }],
     defaultNames: ['Osric', 'Maeve', 'Tomas'],
+    levels: {
+      2: { abilities: ['healing_word'] },
+      3: { features: ['Disciple of Life: your healing spells restore 3 extra hit points'] },
+      4: { asi: 'wis' },
+      5: { features: ['Potent Cantrips: cantrips roll twice as many damage dice'] },
+    },
   },
 };

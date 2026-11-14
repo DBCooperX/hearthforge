@@ -1,9 +1,9 @@
-// PixiJS renderer for the dungeon: tiles, fog of war, tokens, movement tweens and
+// PixiJS renderer for the battle map: tiles, tokens, movement tweens and
 // floating combat numbers. React owns the UI; this class owns the canvas.
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../../../shared/types';
 import { TILE, spriteCanvas } from './sprites';
-import { fogAt, key, tileAt } from './util';
+import { tileAt } from './util';
 
 interface Ent {
   root: Container;
@@ -45,11 +45,9 @@ export class MapRenderer {
   private world = new Container();
   private tileLayer = new Container();
   private overlay = new Graphics();
-  private propLayer = new Container();
   private entLayer = new Container();
   private fxLayer = new Container();
   private tiles: Sprite[] = [];
-  private props = new Map<string, Sprite>();
   private ents = new Map<string, Ent>();
   private floaters: Floater[] = [];
   private state: GameState | null = null;
@@ -67,7 +65,7 @@ export class MapRenderer {
     await this.app.init({ resizeTo: host, background: 0x0c0a0e, antialias: false, autoDensity: true, resolution: Math.min(window.devicePixelRatio || 1, 2) });
     if (this.destroyed) { this.app.destroy(true); return; }
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.tileLayer, this.propLayer, this.overlay, this.entLayer, this.fxLayer);
+    this.world.addChild(this.tileLayer, this.overlay, this.entLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
@@ -111,8 +109,6 @@ export class MapRenderer {
         this.tiles.push(s);
       }
     }
-    this.propLayer.removeChildren().forEach((c) => c.destroy());
-    this.props.clear();
     for (const e of this.ents.values()) e.root.destroy({ children: true });
     this.ents.clear();
     this.cam.ready = false;
@@ -120,44 +116,20 @@ export class MapRenderer {
 
   private sync() {
     const state = this.state!;
-    const mk = `${state.room}:${state.map.width}x${state.map.height}:${state.map.rows.length ? state.map.rows[0].length : 0}:${state.phase === 'lobby'}`;
+    const mk = `${state.room}:${state.map.rows.join('')}`;
     if (mk !== this.mapKey) { this.mapKey = mk; this.buildTiles(state); }
     const hostW = this.app.screen.width;
-    this.scale = hostW < 700 ? 2 : 3;
+    // Battle arenas are small: show the whole fight when it fits, in quarter steps so pixels stay fairly crisp.
+    const fit = Math.min(hostW / (state.map.width * TILE), this.app.screen.height / (state.map.height * TILE));
+    this.scale = Math.max(1.5, Math.min(4, Math.floor(fit * 4) / 4));
     this.world.scale.set(this.scale);
 
-    // Tiles and fog
+    // Tiles
     for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
-        const s = this.tiles[y * state.map.width + x];
-        const fog = fogAt(state, x, y);
-        s.visible = fog !== 0;
-        if (!s.visible) continue;
-        const t = tileAt(state, x, y);
         const h = (x * 7 + y * 13) % 4;
-        s.rotation = 0;
-        if (t === '#') s.texture = tex(`wall${h % 3}`);
-        else if (t === '+') {
-          s.texture = tex(state.openDoors.includes(key(x, y)) ? 'door_open' : 'door');
-          if (tileAt(state, x, y - 1) === '#' && tileAt(state, x, y + 1) === '#') s.rotation = Math.PI / 2;
-        } else s.texture = tex(`floor${h}`);
-        s.tint = fog === 2 ? 0xffffff : 0x6a6480;
+        this.tiles[y * state.map.width + x].texture = tex(tileAt(state, x, y) === '#' ? `wall${h % 3}` : `floor${h}`);
       }
-    }
-
-    // Chests
-    for (const c of state.chests) {
-      let s = this.props.get(c.id);
-      if (!s) {
-        s = new Sprite(tex('chest'));
-        s.position.set(c.x * TILE, c.y * TILE);
-        this.propLayer.addChild(s);
-        this.props.set(c.id, s);
-      }
-      const fog = fogAt(state, c.x, c.y);
-      s.visible = fog !== 0;
-      s.texture = tex(c.opened ? 'chest_open' : 'chest');
-      s.tint = fog === 2 ? 0xffffff : 0x6a6480;
     }
 
     // Tokens
@@ -197,7 +169,7 @@ export class MapRenderer {
       return e;
     };
     for (const c of state.characters) {
-      if (state.phase === 'lobby') continue;
+      if (c.dead) continue;
       const e = place(c.id, 'pc', c.classId, c.x, c.y, c.hp, c.maxHp);
       const down = c.hp <= 0;
       e.sprite.rotation = down ? Math.PI / 2 : 0;
@@ -208,7 +180,6 @@ export class MapRenderer {
     for (const m of state.monsters) {
       if (!m.alive) continue;
       const e = place(m.id, 'monster', m.sprite, m.x, m.y, m.hp, m.maxHp);
-      e.root.visible = fogAt(state, m.x, m.y) === 2;
       e.root.zIndex = 1;
     }
     this.entLayer.sortableChildren = true;
@@ -274,7 +245,7 @@ export class MapRenderer {
     for (const id of this.opts.targetIds) ring(id, 0xff5252, beat);
     if (this.opts.activeId && this.opts.activeId !== this.opts.selectedId) ring(this.opts.activeId, 0xffd54f, beat);
     ring(this.opts.selectedId, 0xffffff, 0.9);
-    if (this.hover && fogAt(state, this.hover.x, this.hover.y) !== 0) {
+    if (this.hover && tileAt(state, this.hover.x, this.hover.y) === '.') {
       g.rect(this.hover.x * TILE + 0.5, this.hover.y * TILE + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color: 0xd4a857, alpha: 0.8 });
     }
 
