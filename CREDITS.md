@@ -12,7 +12,7 @@ Hearthforge is not affiliated with, endorsed, sponsored, or specifically approve
 
 All sprites and tiles are original pixel art generated procedurally in `client/src/game/sprites.ts` and dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No third-party art is bundled.
 
-The tiles are 16×16 pixels, the same size as two CC0 packs that would make good drop-in upgrades:
+The tiles are 16×16 pixels, the same size as two CC0 packs that can optionally be downloaded at runtime (see "Art packs" in the README). They are not redistributed in this repository:
 
 - Kenney, "Tiny Dungeon": <https://kenney.nl/assets/tiny-dungeon>
 - 0x72, "DungeonTileset II": <https://0x72.itch.io/dungeontileset-ii>

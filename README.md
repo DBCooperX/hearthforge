@@ -17,9 +17,44 @@ Four level 1 heroes are available: Fighter, Rogue, Wizard and Cleric.
 
 ## Install on Proxmox
 
+### One command
+
+On the Proxmox host, as root:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/DBCooperX/hearthforge/main/scripts/proxmox-install.sh)"
+```
+
+The script creates an unprivileged Debian 12 LXC named `hearthforge` (nesting and keyctl enabled for Docker), installs Docker, clones this repository to `/opt/hearthforge`, asks for your Anthropic API key, writes `.env`, and runs `docker compose up -d --build`. When it finishes it prints the address to open.
+
+**Run the same command again to update.** It finds the existing container, pulls the latest code and rebuilds.
+
+Defaults are 2 cores, 2 GB RAM, 8 GB disk, DHCP on `vmbr0`, the next free container id and your `local-lvm` or `local-zfs` storage. Override any of them by setting variables first:
+
+```bash
+CTID=120 STORAGE=tank MEMORY=4096 IP=192.168.1.50/24 GATEWAY=192.168.1.1 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/DBCooperX/hearthforge/main/scripts/proxmox-install.sh)"
+```
+
+| Variable | Default | |
+| --- | --- | --- |
+| `CTID` | next free id | Container id |
+| `HOSTNAME_CT` | `hearthforge` | Container name, also how a re-run finds it |
+| `STORAGE` | auto | Storage for the root disk |
+| `TEMPLATE_STORAGE` | `local` | Storage holding container templates |
+| `BRIDGE`, `IP`, `GATEWAY` | `vmbr0`, `dhcp`, none | Networking |
+| `CORES`, `MEMORY`, `SWAP`, `DISK` | `2`, `2048`, `512`, `8` | Resources (MB and GB) |
+| `PORT` | `3000` | Port Hearthforge is published on |
+| `ANTHROPIC_API_KEY` | prompt | Set it to skip the prompt |
+| `BRANCH` | `main` | Git branch to install |
+
+As with any script piped from the internet, read [`scripts/proxmox-install.sh`](scripts/proxmox-install.sh) first if you like; it is short.
+
+### By hand
+
 You need a Debian 12 (or Ubuntu) guest with Docker. Either works:
 
-- **LXC container**: create an unprivileged Debian 12 container with 1 core, 1 GB RAM and 4 GB disk. Under *Options → Features*, enable **nesting** and **keyctl**, which Docker needs.
+- **LXC container**: create an unprivileged Debian 12 container with 2 cores, 2 GB RAM and 8 GB disk. Under *Options → Features*, enable **nesting** and **keyctl**, which Docker needs.
 - **VM**: any small Debian 12 VM. No special settings.
 
 Then, inside the guest:
@@ -43,9 +78,9 @@ docker compose up -d --build
 
 Open `http://<guest-ip>:3000` in a browser. Friends on your network use the same address and the same table name.
 
-If the repository is private, clone with a [personal access token](https://github.com/settings/tokens) or a deploy key instead of the plain HTTPS URL.
-
 ### Updating
+
+Re-run the one-command installer, or inside the guest:
 
 ```bash
 cd /opt/hearthforge
@@ -64,11 +99,36 @@ Set these in `.env`:
 | `ANTHROPIC_API_KEY` | empty | Your key from [platform.claude.com](https://platform.claude.com). Empty means the scripted fallback DM. |
 | `HEARTHFORGE_DM_MODEL` | `claude-opus-5-5` | Claude model for the Dungeon Master. `claude-fable-5-2` is the most capable, `claude-haiku-5-5` the cheapest and fastest. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
+| `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host. |
 
 The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
 
 Hearthforge has no login. Anyone who can reach the port can join a table, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
+
+## Art packs
+
+Out of the box Hearthforge draws its own 16×16 pixel art, so it needs no downloads. You can switch to a CC0 art pack by setting `HEARTHFORGE_ART` in `.env` and restarting (`docker compose up -d`). The server fetches the pack on start into the data volume (`/data/art`), and anything it cannot get or map keeps the built-in sprite, so a failed download never breaks the game.
+
+This is **experimental**: the packs could not be downloaded in the environment this was built in, so the pack-to-sprite mappings have not been checked against the real images.
+
+**Kenney Tiny Dungeon** (`HEARTHFORGE_ART=kenney`): downloaded automatically from [kenney.nl](https://kenney.nl/assets/tiny-dungeon). If a hero shows up as the wrong tile, correct it without rebuilding by writing tile numbers into `kenney-map.json` in the art folder:
+
+```bash
+docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}" > /data/art/kenney-map.json'
+```
+
+Sprite names are `fighter`, `rogue`, `wizard`, `cleric`, `goblin`, `skeleton`, `bugbear`, `rat`, `chest`, `chest_open`, `door`, `door_open`, `floor0`–`floor3` and `wall0`–`wall2`. The numbers are the `tile_NNNN.png` files in the pack.
+
+**0x72 DungeonTileset II** (`HEARTHFORGE_ART=0x72`): itch.io has no direct download link, so download the zip from [0x72.itch.io](https://0x72.itch.io/dungeontileset-ii) (free, name your own price) and copy it in:
+
+```bash
+docker compose exec hearthforge mkdir -p /data/art
+docker cp 0x72_DungeonTilesetII_v1.7.zip hearthforge:/data/art/
+docker compose restart
+```
+
+Sprites are matched by the names in the pack's own tile list, so this one does not depend on guessed numbers.
 
 ## How to play
 

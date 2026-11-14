@@ -169,7 +169,8 @@ export class MapRenderer {
         const root = new Container();
         const sp = new Sprite(tex(sprite));
         sp.anchor.set(0.5);
-        sp.position.set(TILE / 2, TILE / 2);
+        // Sprites taller than a tile (some art packs) stand on the tile's bottom edge.
+        sp.position.set(TILE / 2, TILE - sp.height / 2);
         const bar = new Graphics();
         root.addChild(sp, bar);
         root.position.set(x * TILE, y * TILE);

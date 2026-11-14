@@ -249,3 +249,49 @@ export function spriteUrl(name: string): string {
   if (!u) { u = spriteCanvas(name).toDataURL(); urlCache.set(name, u); }
   return u;
 }
+
+const TILE_SPRITES = /^(floor|wall|door)/;
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.src = src;
+  });
+}
+
+/**
+ * Replace generated sprites with ones from an optional art pack the server has
+ * downloaded (see server/src/art.ts). Anything missing or oddly sized keeps the
+ * generated art, so a broken pack can never leave the map blank.
+ */
+export async function loadArtPack(): Promise<void> {
+  try {
+    const res = await fetch('/api/art');
+    if (!res.ok) return;
+    const manifest = (await res.json()) as { sprites: Record<string, { src: string; rect?: { x: number; y: number; w: number; h: number } }> };
+    const images = new Map<string, Promise<HTMLImageElement>>();
+    await Promise.all(
+      Object.entries(manifest.sprites ?? {}).map(async ([name, ref]) => {
+        try {
+          if (!images.has(ref.src)) images.set(ref.src, loadImage(ref.src));
+          const img = await images.get(ref.src)!;
+          const r = ref.rect ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+          if (r.w < 1 || r.h < 1 || r.w > 48 || r.h > 48) return;
+          if (TILE_SPRITES.test(name) && (r.w !== TILE || r.h !== TILE)) return;
+          const c = document.createElement('canvas');
+          c.width = r.w;
+          c.height = r.h;
+          c.getContext('2d')!.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+          canvasCache.set(name, c);
+          urlCache.delete(name);
+        } catch {
+          /* keep the generated sprite */
+        }
+      }),
+    );
+  } catch {
+    /* no art pack: generated sprites */
+  }
+}
