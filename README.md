@@ -14,6 +14,7 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **Progression**: XP from fights and quests, levels 1 to 5 with a level-up summary, and a full character sheet (press `c`).
 - **Turn-based 5e combat** on a battle map that is generated for each fight: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
 - **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
+- **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
 - **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. Games are saved in SQLite and survive restarts.
 
 Four heroes are available: Fighter, Rogue, Wizard and Cleric. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
@@ -182,6 +183,7 @@ npm run build && npm start
 Layout:
 
 - `shared/` types and content (items, abilities) used by both sides
+- `shared/i18n.ts` and `shared/i18n-de.ts` translations. English text is the lookup key, so a missing entry falls back to English, and `server/test/i18n.test.ts` fails when the interface or a game term has no German
 - `server/src/game/` the rules engine: dice, movement, line of sight, combat, inventory
 - `server/src/game/world.ts` overworld generation, exploration and battle arenas; `shared/hex.ts` hex maths and the route planner
 - `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback

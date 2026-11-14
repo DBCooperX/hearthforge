@@ -12,11 +12,13 @@ import { EntityProvider, StoryFeed } from './components/Story';
 import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
+import { LangSwitch, useT } from './i18n';
 import { playerId, useConnection } from './net';
 
 type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | null;
 
 export function App() {
+  const t = useT();
   const conn = useConnection();
   const { state, send } = conn;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -74,14 +76,14 @@ export function App() {
       const monster = state.monsters.find((m) => m.alive && m.x === x && m.y === y);
       const hero = state.characters.find((c) => !c.dead && c.x === x && c.y === y);
       if (monster) {
-        if (!actor) return conn.toast('Wait for your turn');
+        if (!actor) return conn.toast(t('Wait for your turn'));
         if (targeting?.kind === 'ability' && targetAbility?.target === 'enemy') send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: monster.id });
         else send({ t: 'attack', characterId: actor.id, targetId: monster.id });
         setTargeting(null);
         return;
       }
       if (hero && (wantsAlly || hero.id !== actor?.id) && (wantsAlly || hero.hp > 0)) return pickCharacter(hero);
-      if (!actor) return conn.toast('Wait for your turn');
+      if (!actor) return conn.toast(t('Wait for your turn'));
       setTargeting(null);
       send({ t: 'move', characterId: actor.id, x, y });
     },
@@ -126,15 +128,15 @@ export function App() {
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} /><Toasts conn={conn} /></>;
 
   let hint: string;
-  if (targeting?.kind === 'attack') hint = 'Attack: click an enemy. Esc to cancel.';
-  else if (targetAbility) hint = `${targetAbility.name}: click ${targetAbility.target === 'ally' ? 'a hero on the map or in the party panel' : 'an enemy'}. Esc to cancel.`;
-  else if (targeting?.kind === 'item') hint = 'Potion: click the hero who should drink it. Esc to cancel.';
-  else if (combat && turnChar) hint = `${turnChar.name}'s turn · ${combat.movementLeft * 5} ft of movement · ${combat.actionUsed ? (combat.attacksLeft > 0 ? 'one more attack' : 'action used') : 'action ready'}`;
-  else if (combat) hint = `Waiting for ${state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? 'the Dungeon Master'}…`;
+  if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
+  else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
+  else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
+  else if (combat && turnChar) hint = `${t("{name}'s turn", { name: turnChar.name })} · ${t('{n} ft of movement', { n: combat.movementLeft * 5 })} · ${combat.actionUsed ? (combat.attacksLeft > 0 ? t('one more attack') : t('action used')) : t('action ready')}`;
+  else if (combat) hint = t('Waiting for {name}…', { name: state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
   else hint = '';
 
   const focus = selected ?? mine[0] ?? state.characters[0];
-  const newAdventure = () => { if (window.confirm('Abandon this adventure and return to the party screen?')) send({ t: 'reset' }); };
+  const newAdventure = () => { if (window.confirm(t('Abandon this adventure and return to the party screen?'))) send({ t: 'reset' }); };
   const travel = { world: state.world, state, conn, target: travelTarget, setTarget: setTravelTarget };
 
   return (
@@ -142,13 +144,14 @@ export function App() {
       <div className={combat ? 'game fighting' : 'game'}>
         <header className="topbar">
           <h1>Hearthforge</h1>
-          <span className="muted">Table {state.room}</span>
-          <span className={conn.connected ? 'dot ok' : 'dot'} title={conn.connected ? 'Connected' : 'Reconnecting…'} />
+          <span className="muted">{t('Table')} {state.room}</span>
+          <span className={conn.connected ? 'dot ok' : 'dot'} title={conn.connected ? t('Connected') : t('Reconnecting…')} />
           <span className="spacer" />
-          <button className="link" onClick={() => setOverlay('sheet')} title="Character sheet (c)">Character</button>
-          <button className="link" onClick={() => setOverlay('inventory')} title="Inventory (i)">Inventory</button>
-          <button className="link" onClick={() => setOverlay('journal')} title="Journal (j)">Journal</button>
-          <button className="link" onClick={newAdventure}>New adventure</button>
+          <button className="link" onClick={() => setOverlay('sheet')} title={t('Character sheet (c)')}>{t('Character')}</button>
+          <button className="link" onClick={() => setOverlay('inventory')} title={t('Inventory (i)')}>{t('Inventory')}</button>
+          <button className="link" onClick={() => setOverlay('journal')} title={t('Journal (j)')}>{t('Journal')}</button>
+          <LangSwitch />
+          <button className="link" onClick={newAdventure}>{t('New adventure')}</button>
         </header>
         <PartyPanel
           state={state}
@@ -173,8 +176,8 @@ export function App() {
             <main className="stage">
               {state.phase === 'defeat' && (
                 <div className="banner defeat">
-                  <b>Your party has fallen.</b>
-                  <button onClick={() => send({ t: 'reset' })}>New adventure</button>
+                  <b>{t('Your party has fallen.')}</b>
+                  <button onClick={() => send({ t: 'reset' })}>{t('New adventure')}</button>
                 </div>
               )}
               <StoryFeed state={state} conn={conn} />

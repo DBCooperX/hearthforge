@@ -1,5 +1,7 @@
 // Types shared between the server (authoritative game state) and the browser client.
 
+import type { Lang } from './i18n';
+
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
 
@@ -304,6 +306,10 @@ export interface GameState {
   dmBusy: boolean;
   dmMode: 'claude' | 'scripted';
   dmModel: string | null;
+  /** Language of the game log, world text and narration. */
+  language: Lang;
+  /** The player who may change the session language (whoever opened the table). */
+  hostId: string | null;
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };
@@ -325,6 +331,7 @@ export type ClientMessage =
   | { t: 'travel'; q: number; r: number }
   | { t: 'go'; locationId: string }
   | { t: 'delve' }
+  | { t: 'set_language'; lang: Lang }
   | { t: 'say'; text: string }
   | { t: 'reset' };
 

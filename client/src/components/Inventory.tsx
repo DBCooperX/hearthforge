@@ -4,6 +4,7 @@ import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemInstanc
 import { spriteUrl } from '../game/sprites';
 import { mod, slotForItem, weaponSummary } from '../game/util';
 import { playerId, type Connection } from '../net';
+import { useT } from '../i18n';
 
 const MIME = 'application/x-hearthforge-item';
 const LEFT: SlotId[] = ['head', 'armor', 'mainHand', 'ring'];
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function Inventory({ state, character: c, conn, onSelect, onClose }: Props) {
+  const t = useT();
   const [drag, setDrag] = useState<{ item: ItemInstance; from: InvLoc } | null>(null);
   const [hover, setHover] = useState<ItemInstance | null>(null);
   const mine = c.ownerId === playerId;
@@ -46,7 +48,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
           else {
             const free = c.bag.findIndex((b) => !b);
             if (free >= 0) conn.send({ t: 'inv_move', characterId: c.id, from: loc, to: { type: 'bag', index: free } });
-            else conn.toast('No free bag space');
+            else conn.toast(t('No free bag space'));
           }
         }}
       >
@@ -73,7 +75,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   const slot = (s: SlotId) => (
     <div className="slot" key={s}>
       {cell(c.equipment[s], { type: 'slot', slot: s })}
-      <label>{SLOT_LABELS[s]}</label>
+      <label>{t(SLOT_LABELS[s])}</label>
     </div>
   );
 
@@ -100,7 +102,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               </button>
             ))}
           </div>
-          <button className="link close" onClick={onClose} title="Close (i or Esc)">✕</button>
+          <button className="link close" onClick={onClose} title={t('Close (i or Esc)')}>✕</button>
         </header>
         <div className="inv-body">
           <section className="doll">
@@ -108,7 +110,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               <div className="col">{LEFT.map(slot)}</div>
               <div className="figure">
                 <img className="pixel" src={spriteUrl(c.classId)} alt="" />
-                <div className="ac-badge" title="Armor Class"><b>{c.ac}</b><small>AC</small></div>
+                <div className="ac-badge" title={t('Armor Class')}><b>{c.ac}</b><small>{t('AC')}</small></div>
               </div>
               <div className="col">{RIGHT.map(slot)}</div>
             </div>
@@ -118,13 +120,13 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               ))}
             </div>
             <p className="muted small">
-              {c.name}, level {c.level} {c.className} · HP {c.hp}/{c.maxHp} · Speed {c.speed} ft<br />Attack: {weaponSummary(c)}
+              {c.name}, {t('Level {level} {class}', { level: c.level, class: t(c.className) })} · {t('HP')} {c.hp}/{c.maxHp} · {t('Speed')} {c.speed} ft<br />{t('Attack')}: {weaponSummary(c, t)}
             </p>
           </section>
           <section className="bag">
             <div className="bag-head">
-              <h3>Backpack</h3>
-              <span className="gold" title="Party gold">🪙 {state.gold} gp</span>
+              <h3>{t('Backpack')}</h3>
+              <span className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</span>
             </div>
             <div className="bag-grid">
               {Array.from({ length: BAG_SIZE }, (_, i) => <div key={i}>{cell(c.bag[i] ?? null, { type: 'bag', index: i })}</div>)}
@@ -132,15 +134,15 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
             <div className="tooltip">
               {hovered ? (
                 <>
-                  <b className={hovered.rarity}>{hovered.icon} {hovered.name}</b>
-                  <p>{hovered.description}</p>
-                  <small>{hovered.value} gp{hovered.rarity ? ` · ${hovered.rarity}` : ''}</small>
+                  <b className={hovered.rarity}>{hovered.icon} {t(hovered.name)}</b>
+                  <p>{t(hovered.description)}</p>
+                  <small>{hovered.value} {t('gp')}{hovered.rarity ? ` · ${t(hovered.rarity)}` : ''}</small>
                 </>
               ) : (
                 <p className="muted">
                   {mine
-                    ? 'Drag items between the backpack and equipment slots. Double-click to equip, drink or unequip. Drop an item on another hero to hand it over.'
-                    : `${c.name} belongs to another player, so you can look but not touch.`}
+                    ? t('Drag items between the backpack and equipment slots. Double-click to equip, drink or unequip. Drop an item on another hero to hand it over.')
+                    : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}
                 </p>
               )}
             </div>
