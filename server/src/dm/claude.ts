@@ -2,6 +2,7 @@
 // The server stays authoritative: Claude proposes through tools, the engine
 // validates and resolves with real dice, and Claude narrates the result.
 import Anthropic from '@anthropic-ai/sdk';
+import { BIOMES } from '../../../shared/battlemap';
 import { ITEMS } from '../../../shared/content';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
@@ -111,6 +112,7 @@ const STORY_TOOLS: Tool[] = [
       items: { type: 'object', properties: { type: { type: 'string', enum: Object.keys(MONSTERS) }, count: int('How many of this type.') }, required: ['type', 'count'], additionalProperties: false },
     },
     reason: str('One sentence on how the fight started, for the record.'),
+    setting: { type: 'string', enum: ['here', ...BIOMES], description: 'What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup.' },
   }),
   tool('delve', 'The party pushes into the next uncleared section of the dungeon it is standing in. The server sets up that fight.', {}),
   tool('move_to_place', "Move the party to another known place in its current hex, such as into a tavern in the town it is in.", {
@@ -239,7 +241,7 @@ export class ClaudeDM implements DungeonMaster {
             return game.grantItem(String(i.character_id), String(i.item_id), Number(i.quantity));
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count) }));
-            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? '') });
+            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             return { started: true, enemies: game.s.monsters.map((m) => m.name), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
           }

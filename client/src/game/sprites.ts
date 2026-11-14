@@ -3,6 +3,8 @@
 // tile size matches Kenney's "Tiny Dungeon" and 0x72's "DungeonTileset II" so those
 // CC0 packs can be dropped in later.
 
+import { battleTileGrid } from './battleTiles';
+
 export const TILE = 16;
 type Grid = (string | null)[][];
 
@@ -205,7 +207,7 @@ const canvasCache = new Map<string, HTMLCanvasElement>();
 export function spriteCanvas(name: string): HTMLCanvasElement {
   let c = canvasCache.get(name);
   if (c) return c;
-  const grid = (GRIDS[name] ?? GRIDS.goblin)();
+  const grid = battleTileGrid(name) ?? (GRIDS[name] ?? GRIDS.goblin)();
   c = document.createElement('canvas');
   c.width = TILE;
   c.height = TILE;

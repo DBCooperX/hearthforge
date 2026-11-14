@@ -149,6 +149,7 @@ export function describeCombat(game: Game): string {
   const lines: string[] = languageNote(game);
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
+  lines.push(`The battle map shows: ${s.biome ?? 'dungeon'}. Mud, undergrowth, rubble and shallow water are difficult terrain (double movement); trees, boulders and furniture give half cover (+2 AC) against shots. The server applies both; use them to colour the narration.`);
   lines.push('Party:');
   for (const c of s.characters) {
     const weapon = c.equipment.mainHand?.defId ?? 'unarmed';

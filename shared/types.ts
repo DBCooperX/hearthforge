@@ -1,4 +1,5 @@
 // Types shared between the server (authoritative game state) and the browser client.
+import type { Biome } from './battlemap';
 
 import type { Lang } from './i18n';
 
@@ -297,7 +298,7 @@ export interface GameState {
   room: string;
   phase: Phase;
   /** The tactical battle map. Only meaningful while phase is 'combat'. */
-  map: { width: number; height: number; rows: string[] };
+  map: { width: number; height: number; rows: string[]; biome: Biome };
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;

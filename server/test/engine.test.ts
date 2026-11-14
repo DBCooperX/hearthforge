@@ -6,7 +6,7 @@ import { ENCOUNTERS, SEED_LOCATIONS } from '../src/data/world';
 import { MONSTERS } from '../src/data/monsters';
 import { roll } from '../src/game/dice';
 import { Game, GameError } from '../src/game/engine';
-import { buildArena, generateWorld, trueTerrain } from '../src/game/world';
+import { generateWorld, trueTerrain } from '../src/game/world';
 
 function seeded(seed: number) {
   let a = seed >>> 0;
@@ -118,9 +118,6 @@ describe('world', () => {
       for (const m of st.monsters) expect(MONSTERS[m.defId]).toBeDefined();
       for (const it of st.loot.items) expect(ITEMS[it.id]).toBeDefined();
     }
-    const rows = buildArena('f', false, seeded(3));
-    expect(new Set(rows.map((r) => r.length)).size).toBe(1);
-    for (const y of [2, 6, 10]) for (const x of [2, 3, rows[0].length - 4, rows[0].length - 3]) expect(rows[y][x]).toBe('.');
   });
 
   it('summarises a route with distance, time and encounter risk', () => {
@@ -245,6 +242,7 @@ describe('progression', () => {
     const foe = g.s.monsters[0];
     g.move('p1', f.id, foe.x - 1, foe.y);
     while (cheb(f, foe) > 1) { g.endTurn('p1', f.id); const b = g.monsterBlock(); for (const m of b) g.monsterAct(m.id); g.finishMonsterBlock(b); if (g.current()?.id === f.id && cheb(f, foe) > 1) g.move('p1', f.id, foe.x - 1, foe.y); }
+    for (const m of g.s.monsters) m.hp = 999; // the map differs from fight to fight, so keep the neighbour standing
     const target = () => g.s.monsters.find((m) => m.alive && cheb(m, f) <= 1)!.id;
     g.attack('p1', f.id, target());
     g.attack('p1', f.id, target());
