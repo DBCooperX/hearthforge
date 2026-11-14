@@ -1,6 +1,7 @@
 // Builds the text the Dungeon Master sees: a stable system prompt, and a compact,
 // factual snapshot of the world, the party and everything the DM should remember.
 import { ITEMS } from '../../../shared/content';
+import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import { MONSTERS } from '../data/monsters';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
@@ -60,11 +61,27 @@ export function languageNote(game: Game): string[] {
   ];
 }
 
+/** Stated on every hero line so the narration never guesses or switches a hero's gender. */
+const PRONOUNS: Record<string, string> = {
+  female: 'female (she/her)',
+  male: 'male (he/him)',
+  neutral: 'gender-neutral (they/them; in German avoid gendered nouns such as Magierin or Krieger, use the name instead)',
+};
+
 function partyLines(game: Game): string[] {
   return game.s.characters.map((c) => {
     const weapon = c.equipment.mainHand ? ITEMS[c.equipment.mainHand.defId].name : 'unarmed';
     const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
-    return `- ${c.name} [${c.id}] level ${c.level} ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.join(', ')}, ${status}`;
+    const who = `${SPECIES[c.speciesId]?.name ?? ''} ${c.subclass ?? ''} ${c.className}`.replace(/\s+/g, ' ').trim();
+    const line = `- ${c.name} [${c.id}] ${PRONOUNS[c.gender] ?? PRONOUNS.neutral}, level ${c.level} ${who} (${BACKGROUNDS[c.backgroundId]?.name ?? 'no'} background), HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.map((s) => (c.expertise.includes(s) ? `${s} (expertise)` : s)).join(', ')}, ${status}`;
+    // Story traits are not enforced by the rules engine, so the DM has to honour them.
+    const traits = (SPECIES[c.speciesId]?.effects ?? []).filter((e) => e.by === 'story').map((e) => `${e.name}: ${e.text.en}`);
+    return [
+      line,
+      ...(traits.length ? [`  Traits to honour in the story: ${traits.join(' ')}`] : []),
+      ...(c.appearance ? [`  Appearance: ${c.appearance}`] : []),
+      ...(c.backstory ? [`  Backstory: ${c.backstory}`] : []),
+    ].join('\n');
   });
 }
 

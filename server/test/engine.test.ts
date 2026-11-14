@@ -183,7 +183,8 @@ describe('characters and inventory', () => {
   it('derives armor class from equipment', () => {
     const g = party();
     const ac = Object.fromEntries(g.s.characters.map((c) => [c.classId, c.ac]));
-    expect(ac).toEqual({ fighter: 18, rogue: 14, wizard: 12, cleric: 16 });
+    // Brann: chain mail 16 + shield 2 + Defense style 1. Maeve: scale mail 14 + DEX 1 + shield 2.
+    expect(ac).toEqual({ fighter: 19, rogue: 14, wizard: 11, cleric: 17 });
   });
 
   it('enforces slots, proficiency and two-handed weapons', () => {
@@ -192,14 +193,14 @@ describe('characters and inventory', () => {
     const [fighter, rogue, wizard] = g.s.characters;
     g.invMove('p1', rogue.id, { type: 'bag', index: 0 }, { type: 'slot', slot: 'mainHand' });
     expect(rogue.equipment.mainHand?.defId).toBe('shortbow');
-    expect(rogue.bag[0]?.defId).toBe('shortsword');
+    expect(rogue.bag[0]?.defId).toBe('rapier');
     expect(() => g.invMove('p1', rogue.id, { type: 'bag', index: 0 }, { type: 'slot', slot: 'head' })).toThrow(GameError);
     g.invMove('p1', rogue.id, { type: 'slot', slot: 'mainHand' }, { type: 'bag', index: 10 });
     g.give('p1', rogue.id, { type: 'bag', index: 10 }, fighter.id);
     const idx = fighter.bag.findIndex((b) => b?.defId === 'shortbow');
     g.invMove('p1', fighter.id, { type: 'bag', index: idx }, { type: 'slot', slot: 'mainHand' });
     expect(fighter.equipment.offHand).toBeNull();
-    expect(fighter.ac).toBe(16);
+    expect(fighter.ac).toBe(17);
     g.invMove('p1', fighter.id, { type: 'slot', slot: 'armor' }, { type: 'bag', index: 15 });
     g.give('p1', fighter.id, { type: 'bag', index: 15 }, wizard.id);
     const mail = wizard.bag.findIndex((b) => b?.defId === 'chain_mail');
@@ -216,11 +217,12 @@ describe('progression', () => {
     const hp = fighter.maxHp;
     g.grantXp(1200, 'a test');
     expect(g.s.characters.map((c) => [c.xp, c.level])).toEqual([[300, 2], [300, 2], [300, 2], [300, 2]]);
-    expect(fighter.maxHp).toBe(hp + 8);
+    // d10 hit die: 6 + CON 3 + 1 for Dwarven Toughness.
+    expect(fighter.maxHp).toBe(hp + 10);
     expect(fighter.abilityIds).toContain('action_surge');
     expect(rogue.abilityIds).toContain('dash');
     expect(cleric.abilityIds).toContain('healing_word');
-    expect(wizard.maxMana).toBe(6);
+    expect(wizard.maxMana).toBe(8);
     const cards = g.s.log.filter((l) => l.kind === 'levelup');
     expect(cards).toHaveLength(4);
     expect(cards[0].levelUp).toMatchObject({ name: fighter.name, level: 2 });
@@ -230,8 +232,11 @@ describe('progression', () => {
     g.grantXp(4 * 100000, 'a test');
     expect(fighter.level).toBe(5);
     expect(fighter.profBonus).toBe(3);
-    expect(fighter.abilities.str).toBe(18);
-    expect(rogue.features).toEqual(['Sneak Attack: 3d6']);
+    expect(fighter.abilities.str).toBe(16);
+    expect(fighter.pending).toMatchObject([{ kind: 'feat', level: 4 }]);
+    expect(fighter.subclass).toBe('Champion');
+    expect(rogue.features).toContain('Sneak Attack: 3d6');
+    expect(rogue.features).not.toContain('Sneak Attack: 1d6');
     expect(fighter.hitDice).toBe(5);
   });
 
@@ -240,7 +245,9 @@ describe('progression', () => {
     g.start();
     g.grantXp(7000, 'a test');
     const f = g.s.characters[0];
+    g.choose('p1', f.id, f.pending[0].id, { feat: { id: 'asi', abilities: ['str', 'str'] } });
     g.startEncounter([{ defId: 'zombie', count: 4 }], { source: 'story', context: 'test' });
+    for (const m of g.s.monsters) m.hp = m.maxHp = 500; // tough enough to survive the whole exchange
     for (let i = 0; i < 20 && g.current()?.id !== f.id; i++) { const b = g.monsterBlock(); for (const m of b) g.monsterAct(m.id); g.finishMonsterBlock(b); }
     const foe = g.s.monsters[0];
     g.move('p1', f.id, foe.x - 1, foe.y);
@@ -389,7 +396,8 @@ describe("the Dungeon Master's tools", () => {
     expect(g.grantItem(g.s.characters[0].id, 'potion_healing', 99).quantity).toBe(10);
     expect(() => g.grantItem(g.s.characters[0].id, 'vorpal_sword', 1)).toThrow(/Unknown item/);
     const check = g.skillCheck(g.s.characters[1].id, 'dex', 'Stealth', 12);
-    expect(check.modifier).toBe(5);
+    // Vex: DEX +3 and Expertise in Stealth (+4).
+    expect(check.modifier).toBe(7);
     expect(g.s.log[g.s.log.length - 1].roll).toMatchObject({ label: 'Stealth check', target: { kind: 'DC', value: 12 }, outcome: check.success ? 'success' : 'failure' });
     g.addScene({ title: 'Market square', mood: 'warm', text: 'The square hums.', actions: ['Browse the stalls', '', 'Find the reeve'] });
     expect(g.s.log[g.s.log.length - 1].scene).toMatchObject({ title: 'Market square', actions: ['Browse the stalls', 'Find the reeve'] });
