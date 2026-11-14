@@ -54,12 +54,17 @@ export interface ItemInstance {
 
 export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric';
 
+/** A hero's gender. It fixes the pronouns and, in German, the grammatical forms the story uses for them. */
+export type Gender = 'female' | 'male' | 'neutral';
+export const PRONOUNS: Record<Gender, string> = { female: 'she/her', male: 'he/him', neutral: 'they/them' };
+
 export interface Character {
   id: string;
   ownerId: string;
   name: string;
   classId: ClassId;
   className: string;
+  gender: Gender;
   level: number;
   abilities: Abilities;
   profBonus: number;
