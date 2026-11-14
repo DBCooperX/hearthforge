@@ -15,6 +15,8 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **Turn-based 5e combat** on a battle map that is generated for each fight: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
 - **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
 - **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
+- **A seat at the tavern**: dark wood, parchment scene cards, brass and candlelight, with bundled book fonts. Nothing is loaded from the internet by the browser.
+- **Background music** that follows the story: tavern, town, the open road, dungeons, fights and boss fights each have their own tracks and crossfade into each other. Every player has a mute button and a volume slider in the top bar, remembered in their browser. See [Music](#music).
 - **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. Games are saved in SQLite and survive restarts.
 
 Four heroes are available: Fighter, Rogue, Wizard and Cleric. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
@@ -107,6 +109,7 @@ Set these in `.env`:
 | `HEARTHFORGE_DM_FORCE_MODEL` | empty | Set to a model id to run everything on that one model and switch the automatic choice off. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
 | `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
+| `HEARTHFORGE_MUSIC` | `on` | `on` or `off`. See [Music](#music). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host. |
 
 The server decides the tier from what just happened in the game, and the DM can mark a scene as a turning point so the next reply is escalated. Every call is logged as `[dm] <purpose>: tier=<tier> model=<model>`, so `docker compose logs` shows what was used. The older `HEARTHFORGE_DM_MODEL` setting is no longer read; use `HEARTHFORGE_DM_FORCE_MODEL` if you want a single model. The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
@@ -136,6 +139,27 @@ docker compose restart
 ```
 
 Sprites are matched by the names in the pack's own tile list, so this one does not depend on guessed numbers.
+
+## Music
+
+Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 17 tracks, roughly 100 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
+
+This is **untested against the real site**: incompetech.com could not be reached from the environment this was built in, so the track titles and links were written from memory. `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
+
+**Your own music**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
+
+```bash
+docker compose exec hearthforge mkdir -p /data/music/tavern
+docker cp my-tavern-song.mp3 hearthforge:/data/music/tavern/
+```
+
+**A different download list**: write `/data/music/tracks.json` and restart. It replaces the built-in list:
+
+```json
+[{ "context": "tavern", "title": "Song name", "artist": "Who made it", "license": "CC BY 4.0", "url": "https://example.org/song.mp3" }]
+```
+
+Title, artist and license are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
 
 ## How to play
 
@@ -189,6 +213,7 @@ Layout:
 - `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback
 - `server/src/data/` classes, monsters and the starting region
 - `client/src/` React UI, the SVG hex map and the PixiJS battle map
+- `client/src/theme.css` the tavern look; `client/src/music.tsx` the music player; `shared/music.ts` decides which kind of music fits the game state; `server/src/music.ts` fetches and lists tracks
 
 Saves from before the open world cannot be converted: such a table keeps its players and starts a new adventure.
 
@@ -198,4 +223,4 @@ The engine is authoritative and synchronous. The DM never changes state directly
 
 ## Credits and licenses
 
-See [CREDITS.md](CREDITS.md). Rules content comes from the D&D 5e System Reference Document 5.1 (CC BY 4.0). The pixel art is original, generated in code, and dedicated to the public domain (CC0).
+See [CREDITS.md](CREDITS.md). Rules content comes from the D&D 5e System Reference Document 5.1 (CC BY 4.0). The pixel art is original, generated in code, and dedicated to the public domain (CC0). Music is downloaded at runtime, not bundled, and is CC BY 4.0. The fonts are under the SIL Open Font License.

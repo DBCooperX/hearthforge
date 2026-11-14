@@ -19,6 +19,23 @@ The tiles are 16×16 pixels, the same size as two CC0 packs that can optionally 
 
 Item icons are emoji rendered by the player's system font.
 
+## Music
+
+No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
+
+- Tavern: "Thatched Villagers", "Master of the Feast", "Folk Round"
+- Town: "Minstrel Guild", "Village Consort", "Suonatore di Liuto"
+- Overworld: "Heroic Age", "Moorland", "Skye Cuillin"
+- Dungeon: "Ossuary 6 - Air", "Dark Times", "The Dread"
+- Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm"
+- Boss fights: "Black Vortex", "Death and Axes"
+
+The game shows title, artist and license of the track that is playing. If you add your own tracks or a `tracks.json`, crediting them is up to you.
+
+## Fonts
+
+Bundled through [Fontsource](https://fontsource.org), all under the [SIL Open Font License 1.1](https://openfontlicense.org): Alegreya and Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica), Cinzel (Natanael Gama) and Grenze Gotisch (Omnibus-Type).
+
 ## Software
 
 Built with [PixiJS](https://pixijs.com) (MIT), [React](https://react.dev) (MIT), [ws](https://github.com/websockets/ws) (MIT) and the [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) (MIT).

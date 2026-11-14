@@ -1579,6 +1579,7 @@ export class Game {
         ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions, sprite: MONSTERS[m.defId].sprite,
       })),
       combat: s.combat,
+      bossFight: s.phase === 'combat' && !!s.encounter?.boss,
       gold: s.gold,
       shortRestsLeft: s.shortRestsLeft,
       log: s.log.slice(-150),
