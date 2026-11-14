@@ -117,23 +117,19 @@ function rat(): Grid {
   return outline(g);
 }
 
-function chest(open: boolean): Grid {
+function wolf(): Grid {
   const g = blank();
-  const wood = '#8d5a2b', dark = '#5e3a1a', gold = '#e0b34a';
-  rect(g, 2, 7, 13, 13, wood);
-  rect(g, 2, 13, 13, 13, dark);
-  if (open) {
-    rect(g, 2, 3, 13, 5, dark);
-    rect(g, 2, 2, 13, 2, wood);
-    rect(g, 3, 6, 12, 8, '#1c130d');
-    px(g, 5, 7, gold); px(g, 8, 6, gold); px(g, 10, 7, gold);
-  } else {
-    rect(g, 2, 5, 13, 7, dark);
-    rect(g, 2, 4, 13, 4, wood);
-    rect(g, 7, 7, 8, 9, gold);
-  }
-  rect(g, 2, 8, 2, 13, gold);
-  rect(g, 13, 8, 13, 13, gold);
+  const fur = '#8a8f98', dark = '#5c626c', light = '#c9ced6';
+  rect(g, 2, 7, 11, 10, fur);
+  rect(g, 3, 6, 10, 6, fur);
+  rect(g, 10, 4, 13, 8, fur);
+  px(g, 10, 3, dark); px(g, 13, 3, dark);
+  rect(g, 14, 6, 15, 7, light);
+  px(g, 12, 5, '#ffd54f');
+  px(g, 15, 6, OUTLINE);
+  rect(g, 0, 6, 1, 7, dark);
+  for (const x of [3, 5, 8, 10]) rect(g, x, 11, x, 13, dark);
+  rect(g, 3, 10, 10, 10, light);
   return outline(g);
 }
 
@@ -182,23 +178,6 @@ function wall(variant: number): Grid {
   return g;
 }
 
-function door(open: boolean): Grid {
-  const g = floor(0);
-  const wood = '#8d5a2b', dark = '#5e3a1a', frame = '#4a4454';
-  rect(g, 0, 0, 1, 15, frame);
-  rect(g, 14, 0, 15, 15, frame);
-  if (open) {
-    rect(g, 2, 0, 3, 15, dark);
-  } else {
-    rect(g, 2, 0, 13, 15, wood);
-    for (const x of [5, 9]) rect(g, x, 0, x, 15, dark);
-    rect(g, 2, 3, 13, 3, '#b0b8c0');
-    rect(g, 2, 12, 13, 12, '#b0b8c0');
-    rect(g, 11, 7, 12, 8, '#e0b34a');
-  }
-  return g;
-}
-
 const GRIDS: Record<string, () => Grid> = {
   fighter: () => humanoid({ skin: '#f0c8a0', body: '#9aa5b1', trim: '#c0392b', legs: '#5b6470', helmet: '#b8c2cc', weapon: 'sword', shield: '#c0392b' }),
   rogue: () => humanoid({ skin: '#e8b890', body: '#3d5a45', trim: '#22352a', legs: '#2c2c34', hood: '#2e4435', weapon: 'dagger' }),
@@ -207,11 +186,11 @@ const GRIDS: Record<string, () => Grid> = {
   goblin: () => humanoid({ skin: '#7fae4a', body: '#6b4a2f', trim: '#3d2a1a', legs: '#4a3421', eyes: '#ffe14d', ears: true, weapon: 'scimitar' }),
   skeleton: () => humanoid({ skin: '#e6e2d3', body: '#d8d3c0', trim: '#8f8a78', legs: '#d8d3c0', ribs: '#3a3440', weapon: 'sword' }),
   bugbear: () => humanoid({ skin: '#a0673a', body: '#6e4424', trim: '#3b2413', legs: '#56351c', eyes: '#ff5a3c', ears: true, big: true, hair: '#5a3418', weapon: 'morningstar' }),
+  bandit: () => humanoid({ skin: '#d9a877', body: '#5a4632', trim: '#8c2f2f', legs: '#3b3026', hood: '#4a3a2a', weapon: 'scimitar' }),
+  orc: () => humanoid({ skin: '#6f8f5a', body: '#4d4038', trim: '#2a2320', legs: '#3a302a', eyes: '#ff5a3c', big: true, hair: '#20201c', weapon: 'morningstar' }),
+  zombie: () => humanoid({ skin: '#8fa58a', body: '#5b5a4a', trim: '#3b3a30', legs: '#45443a', eyes: '#e8e8c0', hair: '#3a3f33', weapon: 'none' }),
   rat,
-  chest: () => chest(false),
-  chest_open: () => chest(true),
-  door: () => door(false),
-  door_open: () => door(true),
+  wolf,
   floor0: () => floor(0),
   floor1: () => floor(1),
   floor2: () => floor(2),
@@ -250,7 +229,7 @@ export function spriteUrl(name: string): string {
   return u;
 }
 
-const TILE_SPRITES = /^(floor|wall|door)/;
+const TILE_SPRITES = /^(floor|wall)/;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

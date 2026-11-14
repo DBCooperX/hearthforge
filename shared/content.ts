@@ -1,8 +1,8 @@
-// Game content shared by server and client: items and abilities.
+// Game content shared by server and client: items, abilities and skills.
 // Rules text and statistics are adapted from the D&D 5e System Reference Document 5.1
 // (CC-BY-4.0, Wizards of the Coast). See CREDITS.md.
 
-import type { AbilityDef, ItemDef } from './types';
+import type { AbilityDef, AbilityKey, ItemDef } from './types';
 
 const items: ItemDef[] = [
   // Weapons
@@ -43,6 +43,10 @@ const abilities: AbilityDef[] = [
   { id: 'magic_missile', name: 'Magic Missile', icon: '✨', kind: 'auto', cost: 2, range: 120, dice: '3d4+3', damageType: 'force', target: 'enemy', description: '1st-level spell (2 mana). Three darts strike unerringly for 1d4+1 force damage each.' },
   { id: 'sacred_flame', name: 'Sacred Flame', icon: '☀️', kind: 'save', cost: 0, range: 60, dice: '1d8', damageType: 'radiant', saveAbility: 'dex', target: 'enemy', description: 'Cantrip. Target makes a DEX save or takes 1d8 radiant damage.' },
   { id: 'guiding_bolt', name: 'Guiding Bolt', icon: '🌟', kind: 'attack', cost: 2, range: 120, dice: '4d6', damageType: 'radiant', target: 'enemy', description: '1st-level spell (2 mana). Ranged spell attack, 4d6 radiant damage. The next attack against the target has advantage.' },
+  { id: 'action_surge', name: 'Action Surge', icon: '⚡', kind: 'surge', cost: 0, range: 0, target: 'self', oncePerRest: true, description: 'Push past your limits: take one more action this turn. Once per rest.' },
+  { id: 'dash', name: 'Cunning Dash', icon: '👟', kind: 'dash', cost: 0, range: 0, target: 'self', bonusAction: true, description: 'Bonus action. Gain extra movement equal to your speed this turn.' },
+  { id: 'acid_arrow', name: 'Acid Arrow', icon: '🧫', kind: 'attack', cost: 3, range: 90, dice: '4d4', damageType: 'acid', target: 'enemy', description: '2nd-level spell (3 mana). Ranged spell attack, 4d4 acid damage.' },
+  { id: 'healing_word', name: 'Healing Word', icon: '🗣️', kind: 'heal', cost: 2, range: 60, dice: '1d4', target: 'ally', bonusAction: true, description: '1st-level spell (2 mana). Bonus action. A creature within 60 ft regains 1d4 + your spellcasting modifier hit points.' },
   { id: 'cure_wounds', name: 'Cure Wounds', icon: '💚', kind: 'heal', cost: 2, range: 5, dice: '1d8', target: 'ally', description: '1st-level spell (2 mana). A creature you touch regains 1d8 + your spellcasting modifier hit points.' },
 ];
 
@@ -64,4 +68,20 @@ export const CLASS_INFO: Record<string, { name: string; blurb: string; color: st
   rogue: { name: 'Rogue', blurb: 'Quick and precise. Sneak Attack when an ally flanks the target.', color: '#27ae60' },
   wizard: { name: 'Wizard', blurb: 'Fragile arcane caster. Fire Bolt and Magic Missile.', color: '#2980b9' },
   cleric: { name: 'Cleric', blurb: 'Armored healer. Sacred Flame, Guiding Bolt and Cure Wounds.', color: '#f1c40f' },
+};
+
+/** The 5e skills and the ability each one uses. */
+export const SKILLS: Record<string, AbilityKey> = {
+  acrobatics: 'dex', 'animal handling': 'wis', arcana: 'int', athletics: 'str', deception: 'cha', history: 'int',
+  insight: 'wis', intimidation: 'cha', investigation: 'int', medicine: 'wis', nature: 'int', perception: 'wis',
+  performance: 'cha', persuasion: 'cha', religion: 'int', 'sleight of hand': 'dex', stealth: 'dex', survival: 'wis',
+};
+
+export const ABILITY_NAMES: Record<AbilityKey, string> = {
+  str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+};
+
+/** Saving throw proficiencies by class. */
+export const SAVE_PROFS: Record<string, AbilityKey[]> = {
+  fighter: ['str', 'con'], rogue: ['dex', 'int'], wizard: ['int', 'wis'], cleric: ['wis', 'cha'],
 };

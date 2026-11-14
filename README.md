@@ -2,18 +2,21 @@
 
 A self-hosted Dungeons & Dragons 5e game for your browser, run by an AI Dungeon Master.
 
-Hearthforge runs as a single Docker container on your own server. You and your friends open it in a browser, build a party, and explore a 2D top-down dungeon. The server owns the rules and rolls every die; Claude narrates the adventure and plays the monsters.
+Hearthforge runs as a single Docker container on your own server. You and your friends open it in a browser, build a party, and set out into an open world: a hex map to travel, a story told in scene cards, and a tactical grid that appears only when a fight breaks out. The server owns the rules and rolls every die; Claude narrates the adventure and plays the monsters.
 
-## What's in this milestone
+## What's in the game
 
 - **Party panel** on the left: portrait, HP and mana bars, armor class and conditions for every hero.
 - **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear.
-- **One dungeon**, the goblin warren under the old Hearthforge smithy: seven rooms, doors, fog of war, six chests, and four encounters ending with a bugbear chief.
-- **Turn-based 5e combat**: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
-- **AI Dungeon Master**: narrates scenes and fights, chooses what each monster does, answers players who talk to it, and can call for skill checks. Without an API key the game still runs with scripted monsters and canned narration.
+- **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
+- **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
+- **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal.
+- **Progression**: XP from fights and quests, levels 1 to 5 with a level-up summary, and a full character sheet (press `c`).
+- **Turn-based 5e combat** on a battle map that is generated for each fight: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
+- **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
 - **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. Games are saved in SQLite and survive restarts.
 
-Four level 1 heroes are available: Fighter, Rogue, Wizard and Cleric.
+Four heroes are available: Fighter, Rogue, Wizard and Cleric. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
 
 ## Install on Proxmox
 
@@ -97,12 +100,15 @@ Set these in `.env`:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | empty | Your key from [platform.claude.com](https://platform.claude.com). Empty means the scripted fallback DM. |
-| `HEARTHFORGE_DM_MODEL` | `claude-opus-5-5` | Claude model for the Dungeon Master. `claude-fable-5-2` is the most capable, `claude-haiku-5-5` the cheapest and fastest. |
+| `HEARTHFORGE_DM_MODEL_BACKGROUND` | `claude-haiku-5-5` | Model for background work: memory summaries and routine beats such as short journeys and rests. |
+| `HEARTHFORGE_DM_MODEL_STANDARD` | `claude-sonnet-5-5` | Model for everyday narration, conversation and monster turns. |
+| `HEARTHFORGE_DM_MODEL_KEY` | `claude-opus-5-5` | Model for key moments: the opening scene, first arrival at a major place, boss fights, level-ups, defeats, and turns the DM flagged as a turning point. |
+| `HEARTHFORGE_DM_FORCE_MODEL` | empty | Set to a model id to run everything on that one model and switch the automatic choice off. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
 | `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host. |
 
-The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
+The server decides the tier from what just happened in the game, and the DM can mark a scene as a turning point so the next reply is escalated. Every call is logged as `[dm] <purpose>: tier=<tier> model=<model>`, so `docker compose logs` shows what was used. The older `HEARTHFORGE_DM_MODEL` setting is no longer read; use `HEARTHFORGE_DM_FORCE_MODEL` if you want a single model. The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
 
 Hearthforge has no login. Anyone who can reach the port can join a table, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
 
@@ -118,7 +124,7 @@ This is **experimental**: the packs could not be downloaded in the environment t
 docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}" > /data/art/kenney-map.json'
 ```
 
-Sprite names are `fighter`, `rogue`, `wizard`, `cleric`, `goblin`, `skeleton`, `bugbear`, `rat`, `chest`, `chest_open`, `door`, `door_open`, `floor0`–`floor3` and `wall0`–`wall2`. The numbers are the `tile_NNNN.png` files in the pack.
+Sprite names are `fighter`, `rogue`, `wizard`, `cleric`, `goblin`, `skeleton`, `bugbear`, `rat`, `wolf`, `bandit`, `orc`, `zombie`, `floor0`–`floor3` and `wall0`–`wall2`. The numbers are the `tile_NNNN.png` files in the pack.
 
 **0x72 DungeonTileset II** (`HEARTHFORGE_ART=0x72`): itch.io has no direct download link, so download the zip from [0x72.itch.io](https://0x72.itch.io/dungeontileset-ii) (free, name your own price) and copy it in:
 
@@ -133,27 +139,32 @@ Sprites are matched by the names in the pack's own tile list, so this one does n
 ## How to play
 
 1. Enter your name and a table name. Everyone who enters the same table name shares one adventure.
-2. Add heroes. Playing alone? Add up to four and control them all; your other heroes follow the one you move.
-3. Click the map or use `WASD` / arrow keys to move. Click a chest to loot it and a door to open it.
-4. When enemies come into view, initiative is rolled. On your hero's turn you get 30 ft of movement and one action: click an enemy to attack, or pick a spell or ability from the action bar. `Space` ends the turn.
-5. Type in the box under the log to talk to the Dungeon Master.
+2. Add heroes. Playing alone? Add up to four and control them all.
+3. Read the scene, then click a suggested action or type what you do. The panel on the right shows where you are, who is here, the map and your quests.
+4. To travel, click a hex on the map (press `m` for the big one), check the journey and press **Set out**. Places inside a town, such as the tavern, are listed under *Here*, and dungeons are entered with **Delve**.
+5. When a fight starts, the battle map appears and initiative is rolled. On your hero's turn you get 30 ft of movement and one action: click an enemy to attack, or pick a spell or ability from the action bar. `Space` ends the turn.
+6. Short rests take an hour, long rests eight. Camping in the wild can be interrupted; towns, taverns and shrines are safe. If the whole party goes down, survivors are dragged back to the last safe place, lighter in the purse.
 
 | Key | Action |
 | --- | --- |
-| `i` | Open or close the inventory |
-| `WASD`, arrows | Move the selected hero |
+| `i` | Inventory |
+| `c` | Character sheet |
+| `m` | Full map |
+| `j` | Journal |
+| `WASD`, arrows | Move the active hero in a fight |
 | `1`–`9` | Action bar buttons |
 | `Space` | End turn |
-| `Tab` | Cycle your heroes while exploring |
-| `Esc` | Cancel targeting or close the inventory |
+| `Esc` | Cancel targeting, close an overlay, clear the planned journey |
 
 ### House rules
 
-The rules follow the 5e SRD with a few simplifications for this milestone:
+The rules follow the 5e SRD with a few simplifications:
 
-- Mana is the Spell Points variant: a level 1 caster has 4 points and a 1st-level spell costs 2.
+- Mana is the Spell Points variant: casters have 4, 6, 8, 10 and 14 points at levels 1 to 5.
+- Levels stop at 5 for now. Hit points on level-up use the fixed average.
 - Parties smaller than four get the Hearth's Blessing (+4 max HP per missing hero) and face fewer monsters.
-- Heroes left unconscious when a fight ends get back up with 1 HP.
+- Heroes left unconscious when a fight is won get back up with 1 HP.
+- A long rest is allowed once every 16 hours.
 - No opportunity attacks, ammunition tracking, attunement or encumbrance yet.
 
 ## Development
@@ -172,9 +183,14 @@ Layout:
 
 - `shared/` types and content (items, abilities) used by both sides
 - `server/src/game/` the rules engine: dice, movement, line of sight, combat, inventory
-- `server/src/dm/` the Dungeon Master: Claude integration and the scripted fallback
-- `server/src/data/` classes, monsters and the dungeon map
-- `client/src/` React UI and the PixiJS map renderer
+- `server/src/game/world.ts` overworld generation, exploration and battle arenas; `shared/hex.ts` hex maths and the route planner
+- `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback
+- `server/src/data/` classes, monsters and the starting region
+- `client/src/` React UI, the SVG hex map and the PixiJS battle map
+
+Saves from before the open world cannot be converted: such a table keeps its players and starts a new adventure.
+
+The data model already has the hooks for what comes next: every place has a `zone` slot for generated town and tavern maps, and every character, person and place carries a `visual` record (a fixed appearance description plus an image id) so generated pictures can stay consistent.
 
 The engine is authoritative and synchronous. The DM never changes state directly: it picks monster intents through a tool call, the engine resolves them with real dice, and the DM narrates the result.
 

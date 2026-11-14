@@ -1,5 +1,5 @@
 import { CLASS_INFO } from '../../../shared/content';
-import type { Character, GameState, InvLoc } from '../../../shared/types';
+import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
 import { playerId } from '../net';
 
@@ -10,6 +10,7 @@ interface Props {
   targeting: boolean;
   onPick: (c: Character) => void;
   onGive: (fromCharacterId: string, from: InvLoc, to: Character) => void;
+  onSheet: (c: Character) => void;
 }
 
 function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: number }) {
@@ -22,7 +23,7 @@ function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: nu
   );
 }
 
-export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive }: Props) {
+export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet }: Props) {
   return (
     <aside className="party">
       <h2>Party</h2>
@@ -52,10 +53,13 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             <div className="info">
               <div className="name">
                 <b>{c.name}</b>
-                <span className="muted">{c.className} {c.level}</span>
+                <button className="link sheet-link" title="Character sheet (c)" onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{c.className} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} />
               {c.maxMana > 0 && <Bar kind="mana" value={c.mana} max={c.maxMana} />}
+              <div className="xpbar" title={c.level < MAX_LEVEL ? `${c.xp} / ${XP_THRESHOLDS[c.level]} XP to level ${c.level + 1}` : `${c.xp} XP`}>
+                <div style={{ width: `${c.level < MAX_LEVEL ? Math.min(100, ((c.xp - XP_THRESHOLDS[c.level - 1]) / (XP_THRESHOLDS[c.level] - XP_THRESHOLDS[c.level - 1])) * 100) : 100}%` }} />
+              </div>
               <div className="conditions">
                 {c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{x}</span>)}
                 {down && !c.conditions.includes('stable') && (

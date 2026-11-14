@@ -2,30 +2,44 @@
 // The engine is synchronous and deterministic for a given RNG; the AI Dungeon
 // Master only chooses monster intents and narrates what the engine resolved.
 
-import { ABILITIES, ITEMS } from '../../../shared/content';
+import { ABILITIES, ABILITY_NAMES, ITEMS } from '../../../shared/content';
+import {
+  COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex,
+  type Compass, type Hex,
+} from '../../../shared/hex';
 import {
   BAG_SIZE,
+  MAX_LEVEL,
   SLOT_IDS,
+  XP_THRESHOLDS,
   abilityMod,
   type AbilityKey,
   type Character,
-  type Chest,
   type ClassId,
   type CombatState,
+  type Disposition,
   type GameState,
   type InvLoc,
   type ItemDef,
   type ItemInstance,
+  type LevelUpInfo,
+  type Location,
+  type LocationKind,
   type LogEntry,
   type LogKind,
+  type Mood,
   type Phase,
   type PlayerInfo,
+  type QuestStatus,
+  type RollInfo,
+  type SceneMeta,
   type SlotId,
 } from '../../../shared/types';
-import { CLASSES } from '../data/classes';
-import { AREAS, CHEST_LOOT, DUNGEON_ROWS, MONSTER_SYMBOLS, type Area } from '../data/dungeon';
+import { CLASSES, MANA_BY_LEVEL, profBonusFor } from '../data/classes';
 import { MONSTERS, type MonsterAttack, type MonsterDef } from '../data/monsters';
+import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { d20, fmtD20, roll, rollMode, signed, type Rng } from './dice';
+import { buildArena, generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
 
 export class GameError extends Error {}
 
@@ -38,43 +52,51 @@ export interface Monster {
   hp: number;
   maxHp: number;
   alive: boolean;
-  revealed: boolean;
-  encounterId: number;
   conditions: string[];
 }
 
-interface ChestFull extends Chest {
-  gold: number;
-  items: { id: string; qty: number }[];
+/** The fight in progress: where it came from and what winning it is worth. */
+export interface EncounterState {
+  source: 'wild' | 'dungeon' | 'story';
+  locationId: string | null;
+  boss: boolean;
 }
 
 export interface InternalState {
   room: string;
   phase: Phase;
+  /** Battle map rows; empty outside combat. */
   rows: string[];
-  /** 0 unseen, 1 seen before, 2 visible now. Row-major. */
-  fog: number[];
-  openDoors: string[];
-  chests: ChestFull[];
   characters: Character[];
   monsters: Monster[];
   combat: CombatState | null;
+  encounter: EncounterState | null;
   gold: number;
   shortRestsLeft: number;
   log: LogEntry[];
   logSeq: number;
   uidSeq: number;
   players: PlayerInfo[];
-  engaged: number[];
-  visitedAreas: string[];
+  world: WorldState | null;
+  memory: MemoryState;
+  /** Destination of a journey in progress. */
+  travel: { to: Hex; hexes: number; minutes: number; terrain: string[] } | null;
+  /** The DM flagged the last scene as a turning point, so the next reply gets the strongest model. */
+  escalate: boolean;
+  /** World clock (minutes) when the party last finished a long rest. */
+  lastLongRest: number;
 }
 
 export type Beat =
   | { kind: 'start' }
-  | { kind: 'area'; area: Area }
-  | { kind: 'combat_start'; monsters: string[] }
-  | { kind: 'combat_end' }
-  | { kind: 'victory' }
+  | { kind: 'arrive'; location: string; firstVisit: boolean; major: boolean; journey?: string }
+  | { kind: 'travel_end'; journey: string; reason: 'arrived' | 'blocked' }
+  | { kind: 'discover'; locations: string[]; journey: string }
+  | { kind: 'combat_start'; monsters: string[]; boss: boolean; context: string }
+  | { kind: 'combat_end'; boss: boolean; rewards: string }
+  | { kind: 'level_up'; heroes: string[] }
+  | { kind: 'rest'; long: boolean }
+  | { kind: 'rescued' }
   | { kind: 'defeat' };
 
 export interface MonsterIntent {
@@ -105,8 +127,9 @@ const DIRS: Pt[] = [
   { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
 ];
-const SIGHT_RADIUS = 9;
-const MAX_LOG = 150;
+const MAX_LOG = 400;
+const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '' });
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
 export class Game {
   s: InternalState;
@@ -116,7 +139,9 @@ export class Game {
 
   constructor(room: string, rng: Rng = Math.random, saved?: InternalState) {
     this.rng = rng;
-    this.s = saved ?? Game.freshState(room);
+    // Saves from before the open world have no map or memory; those tables start over.
+    const usable = saved && saved.memory && typeof saved.lastLongRest === 'number' && (saved.phase === 'lobby' || saved.world);
+    this.s = usable ? saved : Game.freshState(room, saved?.players ?? []);
   }
 
   static freshState(room: string, players: PlayerInfo[] = []): InternalState {
@@ -124,20 +149,21 @@ export class Game {
       room,
       phase: 'lobby',
       rows: [],
-      fog: [],
-      openDoors: [],
-      chests: [],
       characters: [],
       monsters: [],
       combat: null,
+      encounter: null,
       gold: 0,
       shortRestsLeft: 2,
       log: [],
       logSeq: 0,
       uidSeq: 0,
       players,
-      engaged: [],
-      visitedAreas: [],
+      world: null,
+      memory: emptyMemory(),
+      travel: null,
+      escalate: false,
+      lastLongRest: -100000,
     };
   }
 
@@ -146,8 +172,8 @@ export class Game {
   get width() { return this.s.rows[0]?.length ?? 0; }
   get height() { return this.s.rows.length; }
 
-  log(kind: LogKind, text: string, speaker?: string) {
-    this.s.log.push({ id: ++this.s.logSeq, kind, text, speaker });
+  log(kind: LogKind, text: string, extra: Partial<Pick<LogEntry, 'speaker' | 'scene' | 'roll' | 'levelUp'>> = {}) {
+    this.s.log.push({ id: ++this.s.logSeq, kind, text, ...extra });
     if (this.s.log.length > MAX_LOG) this.s.log.splice(0, this.s.log.length - MAX_LOG);
   }
 
@@ -158,18 +184,10 @@ export class Game {
     return this.s.rows[y][x];
   }
 
-  private doorOpen(x: number, y: number) { return this.s.openDoors.includes(key(x, y)); }
-
-  private blocksSight(x: number, y: number) {
-    const t = this.tile(x, y);
-    return t === '#' || (t === '+' && !this.doorOpen(x, y));
-  }
+  private blocksSight(x: number, y: number) { return this.tile(x, y) === '#'; }
 
   /** Can anything ever stand here? */
-  private walkable(x: number, y: number) {
-    const t = this.tile(x, y);
-    return t === '.' || t === '+';
-  }
+  private walkable(x: number, y: number) { return this.tile(x, y) === '.'; }
 
   char(id: string): Character {
     const c = this.s.characters.find((c) => c.id === id);
@@ -225,11 +243,8 @@ export class Game {
         const n = { x: cur.x + d.x, y: cur.y + d.y };
         const k = key(n.x, n.y);
         if (prev.has(k) || !this.walkable(n.x, n.y) || !canEnter(n)) continue;
-        // No cutting corners around walls or squeezing diagonally through doorways.
-        if (d.x !== 0 && d.y !== 0) {
-          if (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y)) continue;
-          if (this.tile(n.x, n.y) === '+' || this.tile(cur.x, cur.y) === '+') continue;
-        }
+        // No cutting corners around obstacles.
+        if (d.x !== 0 && d.y !== 0 && (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y))) continue;
         prev.set(k, key(cur.x, cur.y));
         if (isGoal(n)) { found = n; break; }
         queue.push(n);
@@ -245,10 +260,6 @@ export class Game {
       k = prev.get(k) ?? null;
     }
     return path;
-  }
-
-  private areaAt(x: number, y: number): Area | undefined {
-    return AREAS.find((a) => x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1);
   }
 
   // ------------------------------------------------------------ lobby/setup
@@ -307,6 +318,8 @@ export class Game {
       abilityIds: [...cls.abilityIds],
       spent: [],
       skills: [...cls.skills],
+      xp: 0,
+      features: classId === 'rogue' ? ['Sneak Attack: 1d6'] : [],
     };
     c.ac = this.computeAc(c);
     this.s.characters.push(c);
@@ -324,27 +337,9 @@ export class Game {
     if (this.s.phase !== 'lobby') throw new GameError('The adventure has already begun');
     if (!this.s.characters.length) throw new GameError('Add at least one hero first');
     const s = this.s;
-    const starts: Pt[] = [];
-    const grid = DUNGEON_ROWS.map((r) => r.split(''));
-    const width = grid[0].length;
-    if (grid.some((r) => r.length !== width)) throw new Error('Dungeon rows have uneven width');
-    const spawns: { defId: string; x: number; y: number }[] = [];
-    s.chests = [];
-    for (let y = 0; y < grid.length; y++) {
-      for (let x = 0; x < width; x++) {
-        const t = grid[y][x];
-        if (t === '@') { starts.push({ x, y }); grid[y][x] = '.'; }
-        else if (MONSTER_SYMBOLS[t]) { spawns.push({ defId: MONSTER_SYMBOLS[t], x, y }); grid[y][x] = '.'; }
-        else if (t === 'C') {
-          const loot = CHEST_LOOT[key(x, y)] ?? { gold: 10, items: [] };
-          s.chests.push({ id: this.uid('chest'), x, y, opened: false, gold: loot.gold, items: loot.items.map((i) => ({ id: i.id, qty: i.qty ?? 1 })) });
-        }
-      }
-    }
-    s.rows = grid.map((r) => r.join(''));
-    s.fog = Array(width * grid.length).fill(0);
-    s.openDoors = [];
-    s.characters.forEach((c, i) => { c.x = starts[i % starts.length].x; c.y = starts[i % starts.length].y; });
+    const { world, memory } = generateWorld(Math.floor(this.rng() * 2 ** 31), this.rng);
+    s.world = world;
+    s.memory = memory;
     s.gold = 15 * s.characters.length;
     // House rule: small parties get the Hearth's Blessing so solo play is survivable.
     const blessing = (4 - s.characters.length) * 4;
@@ -352,63 +347,15 @@ export class Game {
       for (const c of s.characters) { c.maxHp += blessing; c.hp = c.maxHp; }
       this.log('system', `The Hearth's Blessing warms the party: +${blessing} maximum HP for each hero.`);
     }
-
-    // Group monsters into encounters by room, then scale to party size.
-    const regions = this.floodRegions();
-    const byEncounter = new Map<number, typeof spawns>();
-    for (const sp of spawns) {
-      const r = regions.get(key(sp.x, sp.y)) ?? -1;
-      byEncounter.set(r, [...(byEncounter.get(r) ?? []), sp]);
-    }
-    const scale = Math.min(1, s.characters.length / 4);
-    s.monsters = [];
-    for (const [encounterId, group] of byEncounter) {
-      const bosses = group.filter((g) => MONSTERS[g.defId].boss);
-      const minions = group.filter((g) => !MONSTERS[g.defId].boss);
-      const keep = Math.max(bosses.length ? 0 : 1, Math.ceil(minions.length * scale));
-      const chosen = [...bosses, ...minions.slice(0, keep)];
-      const counts = new Map<string, number>();
-      for (const sp of chosen) {
-        const def = MONSTERS[sp.defId];
-        const n = (counts.get(def.id) ?? 0) + 1;
-        counts.set(def.id, n);
-        const total = chosen.filter((c) => c.defId === def.id).length;
-        const hp = def.boss ? Math.max(Math.ceil(def.hp * 0.5), Math.round(def.hp * Math.max(scale, 0.5))) : def.hp;
-        s.monsters.push({
-          id: this.uid('m'), defId: def.id, name: total > 1 ? `${def.name} ${n}` : def.name,
-          x: sp.x, y: sp.y, hp, maxHp: hp, alive: true, revealed: false, encounterId, conditions: [],
-        });
-      }
-    }
     s.phase = 'explore';
     s.combat = null;
-    s.engaged = [];
-    s.visitedAreas = [];
+    s.encounter = null;
+    s.rows = [];
+    s.monsters = [];
     this.log('system', 'The adventure begins.');
+    const here = this.place();
+    if (here) this.settleIn(here);
     this.beats.push({ kind: 'start' });
-    this.afterMovement(s.characters[0]);
-  }
-
-  /** Label each floor tile with a room id; doors separate rooms. */
-  private floodRegions(): Map<string, number> {
-    const out = new Map<string, number>();
-    let id = 0;
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
-        if (this.tile(x, y) !== '.' || out.has(key(x, y))) continue;
-        id++;
-        const stack: Pt[] = [{ x, y }];
-        out.set(key(x, y), id);
-        while (stack.length) {
-          const cur = stack.pop()!;
-          for (const d of DIRS.slice(0, 4)) {
-            const n = { x: cur.x + d.x, y: cur.y + d.y };
-            if (this.tile(n.x, n.y) === '.' && !out.has(key(n.x, n.y))) { out.set(key(n.x, n.y), id); stack.push(n); }
-          }
-        }
-      }
-    }
-    return out;
   }
 
   reset() {
@@ -418,69 +365,201 @@ export class Game {
     this.moves = [];
   }
 
-  // ------------------------------------------------------------- visibility
+  // ------------------------------------------------------------------ world
 
-  /** Recompute fog. Returns encounter ids newly spotted. */
-  private updateVisibility(): number[] {
-    const s = this.s;
-    for (let i = 0; i < s.fog.length; i++) if (s.fog[i] === 2) s.fog[i] = 1;
-    for (const c of s.characters) {
-      if (c.dead) continue;
-      for (let y = c.y - SIGHT_RADIUS; y <= c.y + SIGHT_RADIUS; y++) {
-        for (let x = c.x - SIGHT_RADIUS; x <= c.x + SIGHT_RADIUS; x++) {
-          if (x < 0 || y < 0 || x >= this.width || y >= this.height) continue;
-          if (this.los(c, { x, y })) s.fog[y * this.width + x] = 2;
-        }
-      }
-    }
-    const spotted = new Set<number>();
-    for (const m of s.monsters) {
-      if (m.alive && s.fog[m.y * this.width + m.x] === 2) {
-        m.revealed = true;
-        if (!s.engaged.includes(m.encounterId)) spotted.add(m.encounterId);
-      }
-    }
-    return [...spotted];
+  get world(): WorldState {
+    if (!this.s.world) throw new GameError('The adventure has not started');
+    return this.s.world;
   }
 
-  private afterMovement(mover: Character): boolean {
-    const spotted = this.updateVisibility();
-    const area = this.areaAt(mover.x, mover.y);
-    if (area && !this.s.visitedAreas.includes(area.name)) {
-      this.s.visitedAreas.push(area.name);
-      if (this.s.visitedAreas.length > 1) this.beats.push({ kind: 'area', area });
+  day() { return Math.floor((this.s.world?.minutes ?? 0) / 1440) + 1; }
+
+  location(id: string): LocationState | undefined { return this.s.world?.locations.find((l) => l.id === id); }
+
+  /** The place the party is in, or null in the wilderness. */
+  place(): LocationState | null {
+    const w = this.s.world;
+    return (w?.placeId && w.locations.find((l) => l.id === w.placeId)) || null;
+  }
+
+  /** Known places in the party's hex, the enclosing one first. */
+  placesHere(): LocationState[] {
+    const w = this.world;
+    return w.locations.filter((l) => l.discovered && sameHex(l, w.party)).sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId));
+  }
+
+  presentNpcs(): NpcState[] {
+    const id = this.s.world?.placeId;
+    return id ? this.s.memory.npcs.filter((n) => n.locationId === id) : [];
+  }
+
+  isSafe() { const p = this.place(); return !!p && SAFE_KINDS.includes(p.kind); }
+
+  private needExplore() {
+    if (this.s.phase === 'lobby') throw new GameError('The adventure has not started');
+    if (this.s.phase === 'defeat') throw new GameError('The party has fallen. Start a new adventure.');
+    if (this.s.phase === 'combat') throw new GameError('Finish the fight first');
+    if (this.s.travel) throw new GameError('The party is on the road');
+    if (!this.consciousChars().length) throw new GameError('Nobody in the party can act');
+  }
+
+  advanceTime(minutes: number) { this.world.minutes += Math.max(0, Math.round(minutes)); }
+
+  /** Mark a place as visited and its people as met. */
+  private settleIn(loc: LocationState): boolean {
+    const first = !loc.visited;
+    this.world.placeId = loc.id;
+    loc.visited = true;
+    loc.discovered = true;
+    for (const n of this.s.memory.npcs) if (n.locationId === loc.id) n.met = true;
+    return first;
+  }
+
+  private arriveAt(loc: LocationState, journey?: string) {
+    const firstVisit = this.settleIn(loc);
+    this.beats.push({ kind: 'arrive', location: loc.name, firstVisit, major: MAJOR_KINDS.includes(loc.kind), journey });
+  }
+
+  /** Step into a known place in the party's hex, such as a tavern in town. */
+  goTo(locationId: string) {
+    this.needExplore();
+    const loc = this.location(locationId);
+    if (!loc || !loc.discovered) throw new GameError('You do not know that place');
+    if (!sameHex(loc, this.world.party)) throw new GameError(`${loc.name} is not here. Travel there on the map.`);
+    if (this.world.placeId === loc.id) return;
+    this.log('system', `The party heads to ${loc.name}.`);
+    this.arriveAt(loc);
+  }
+
+  private knownRoute(to: Hex): Hex[] | null {
+    const w = this.world;
+    return findRoute(w.width, w.height, (h) => knownTerrain(w, h), w.party, to);
+  }
+
+  beginTravel(q: number, r: number) {
+    this.needExplore();
+    const w = this.world;
+    const to = { q, r };
+    if (!Number.isInteger(q) || !Number.isInteger(r) || q < 0 || r < 0 || q >= w.width || r >= w.height) throw new GameError('That is off the map');
+    if (sameHex(to, w.party)) throw new GameError('You are already there');
+    const charted = isExplored(w, to) || w.locations.some((l) => l.discovered && sameHex(l, to));
+    if (!charted) throw new GameError('That is uncharted. Travel to the edge of what you know first.');
+    if (!this.knownRoute(to)) throw new GameError(isExplored(w, to) && !TERRAIN[trueTerrain(w, to)].passable ? 'You cannot cross open water' : 'You know no way there');
+    this.s.travel = { to, hexes: 0, minutes: 0, terrain: [] };
+  }
+
+  /** Advance the journey by one hex. Returns true while the party is still travelling. */
+  travelStep(): boolean {
+    const s = this.s, w = this.world, t = s.travel;
+    if (!t || s.phase !== 'explore') { s.travel = null; return false; }
+    const route = this.knownRoute(t.to);
+    if (!route?.length) return this.endTravel(route ? 'arrived' : 'blocked');
+    const next = route[0];
+    const code = trueTerrain(w, next);
+    const minutes = hoursFor(code) * 60;
+    w.party = next;
+    w.placeId = null;
+    w.minutes += minutes;
+    t.hexes++;
+    t.minutes += minutes;
+    if (!t.terrain.includes(TERRAIN[code].name)) t.terrain.push(TERRAIN[code].name);
+    const found = reveal(w, next, code === 'h' || code === 'm' ? 2 : 1).filter((l) => !l.parentId);
+    const here = w.locations.find((l) => !l.parentId && sameHex(l, next));
+    if (sameHex(next, t.to) || (here && found.includes(here))) return this.endTravel('arrived');
+    if (!here && this.rng() < encounterChance(code, w.minutes)) {
+      const journey = this.journeyText(t);
+      s.travel = null;
+      this.log('system', `After ${journey}, the party is set upon. ${formatTime(w.minutes)}.`);
+      const table = ENCOUNTERS[code] ?? ENCOUNTERS.p;
+      this.startEncounter(table[Math.floor(this.rng() * table.length)], { source: 'wild', context: `The party is ambushed on the road after ${journey}, in ${TERRAIN[code].name}.` });
+      return false;
     }
-    if (spotted.length) {
-      for (const e of spotted) this.engage(e);
-      return true;
+    if (found.length) return this.endTravel('discovery', found);
+    return true;
+  }
+
+  private journeyText(t: NonNullable<InternalState['travel']>) {
+    return `${t.hexes * HEX_MILES} miles and ${formatHours(t.minutes / 60)} through ${t.terrain.join(', ') || 'open country'}`;
+  }
+
+  private endTravel(reason: 'arrived' | 'blocked' | 'discovery', found: LocationState[] = []): false {
+    const s = this.s, w = this.world, t = s.travel!;
+    s.travel = null;
+    const journey = this.journeyText(t);
+    const here = w.locations.find((l) => !l.parentId && sameHex(l, w.party));
+    if (!t.hexes) {
+      this.log('system', 'The party finds no way forward.');
+      return false;
     }
+    const sighted = found.filter((l) => l !== here);
+    this.log('system', `The party travels ${journey}${here ? ` and reaches ${here.name}` : ''}. ${formatTime(w.minutes)}.${sighted.length ? ` In the distance: ${sighted.map((l) => l.name).join(', ')}.` : ''}`);
+    if (here) this.arriveAt(here, journey);
+    else if (sighted.length) this.beats.push({ kind: 'discover', locations: sighted.map((l) => `${l.name} (${l.kind}) to the ${direction(w.party, l)}`), journey });
+    else this.beats.push({ kind: 'travel_end', journey, reason: reason === 'blocked' ? 'blocked' : 'arrived' });
     return false;
+  }
+
+  /** Push into the next unexplored section of the dungeon the party is standing in. */
+  delve() {
+    this.needExplore();
+    const loc = this.place();
+    const stage = loc?.stages?.[loc.cleared ?? 0];
+    if (!loc || !stage) throw new GameError(loc?.stages ? `${loc.name} has been cleared` : 'There is nothing to delve into here');
+    this.log('system', `The party pushes into ${stage.name}.`);
+    this.startEncounter(stage.monsters, { source: 'dungeon', locationId: loc.id, context: `The party delves into ${stage.name} of ${loc.name}. ${stage.description}` });
   }
 
   // ----------------------------------------------------------------- combat
 
-  private initiativeFor(dexMod: number) { return d20(this.rng).value + dexMod; }
-
-  private engage(encounterId: number) {
+  /** Set up a battle map and roll initiative. Group counts are for a party of four. */
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string }) {
     const s = this.s;
-    s.engaged.push(encounterId);
-    const group = s.monsters.filter((m) => m.encounterId === encounterId && m.alive);
-    group.forEach((m) => { m.revealed = true; });
-    const entries = group.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod) }));
-    if (s.combat) {
-      s.combat.order.push(...entries);
-      this.log('system', `${group.map((m) => m.name).join(', ')} join${group.length === 1 ? 's' : ''} the fight!`);
-      this.beats.push({ kind: 'combat_start', monsters: group.map((m) => m.name) });
-      return;
+    if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
+    const heroes = s.characters.filter((c) => !c.dead);
+    if (!this.consciousChars().length) throw new GameError('Nobody in the party can fight');
+    const scale = Math.min(1, heroes.length / 4);
+    const chosen: MonsterDef[] = [];
+    for (const g of groups) {
+      const def = MONSTERS[g.defId];
+      if (!def) throw new GameError(`Unknown monster type "${g.defId}". Known types: ${Object.keys(MONSTERS).join(', ')}.`);
+      const wanted = Math.max(1, Math.min(8, Math.round(Number(g.count) || 1)));
+      const count = def.boss ? wanted : Math.max(1, Math.ceil(wanted * scale));
+      for (let i = 0; i < count && chosen.length < 8; i++) chosen.push(def);
     }
-    const pcs = s.characters.filter((c) => !c.dead).map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.initiativeFor(abilityMod(c.abilities.dex)) }));
-    const order = [...pcs, ...entries].sort((a, b) => b.initiative - a.initiative || (a.kind === 'pc' ? -1 : 1));
-    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false };
+    if (!chosen.length) throw new GameError('An encounter needs at least one monster');
+    s.travel = null;
+    const place = this.place();
+    const indoors = opts.source === 'dungeon' || (!!place && ['dungeon', 'cave', 'tavern', 'shop', 'temple'].includes(place.kind));
+    s.rows = buildArena(trueTerrain(this.world, this.world.party), indoors, this.rng);
+    const midY = Math.floor(this.height / 2);
+    const column = (xs: number[]) => {
+      const out: Pt[] = [];
+      for (const x of xs) for (const dy of [0, -1, 1, -2, 2, -3, 3, -4, 4]) out.push({ x, y: midY + dy });
+      return out;
+    };
+    const heroSpots = column([3, 2]);
+    heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
+    const foeSpots = column([this.width - 4, this.width - 3]);
+    const boss = chosen.some((d) => d.boss);
+    s.monsters = chosen.map((def, i) => {
+      const total = chosen.filter((d) => d.id === def.id).length;
+      const n = chosen.slice(0, i + 1).filter((d) => d.id === def.id).length;
+      const hp = def.boss ? Math.max(Math.ceil(def.hp * 0.5), Math.round(def.hp * Math.max(scale, 0.5))) : def.hp;
+      return { id: this.uid('m'), defId: def.id, name: total > 1 ? `${def.name} ${n}` : def.name, x: foeSpots[i].x, y: foeSpots[i].y, hp, maxHp: hp, alive: true, conditions: [] };
+    });
+    s.encounter = { source: opts.source, locationId: opts.locationId ?? null, boss };
+    const order = [
+      ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.initiativeFor(abilityMod(c.abilities.dex)) })),
+      ...s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod) })),
+    ].sort((a, b) => b.initiative - a.initiative || (a.kind === 'pc' ? -1 : 1));
+    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0 };
     s.phase = 'combat';
     this.log('system', `Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.initiative}`).join(', ')}.`);
-    this.beats.push({ kind: 'combat_start', monsters: group.map((m) => m.name) });
+    this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
     this.nextTurn();
   }
+
+  private initiativeFor(dexMod: number) { return d20(this.rng).value + dexMod; }
 
   nameOf(id: string): string {
     return this.s.characters.find((c) => c.id === id)?.name ?? this.s.monsters.find((m) => m.id === id)?.name ?? id;
@@ -505,6 +584,7 @@ export class Game {
       const cur = combat.order[combat.turnIndex];
       combat.actionUsed = false;
       combat.bonusUsed = false;
+      combat.attacksLeft = 0;
       if (cur.kind === 'pc') {
         const c = this.char(cur.id);
         if (c.dead) continue;
@@ -548,15 +628,34 @@ export class Game {
     const s = this.s;
     if (!s.combat) return true;
     if (!this.consciousChars().length) {
-      s.phase = 'defeat';
       s.combat = null;
-      this.log('system', 'The party has fallen.');
-      this.beats.push({ kind: 'defeat' });
+      s.encounter = null;
+      s.monsters = [];
+      s.rows = [];
+      const survivors = s.characters.filter((c) => !c.dead);
+      if (!survivors.length) {
+        s.phase = 'defeat';
+        this.log('system', 'The party has fallen.');
+        this.beats.push({ kind: 'defeat' });
+        return true;
+      }
+      // Left for dead, the survivors are carried back to the nearest safe place.
+      for (const c of survivors) { c.hp = 1; c.conditions = []; c.deathSaves = { successes: 0, failures: 0 }; }
+      const w = this.world;
+      const haven = w.locations.filter((l) => !l.parentId && l.visited && SAFE_KINDS.includes(l.kind)).sort((a, b) => hexDistance(a, w.party) - hexDistance(b, w.party))[0];
+      const lost = Math.floor(s.gold / 2);
+      s.gold -= lost;
+      w.minutes = (Math.floor(w.minutes / 1440) + 1) * 1440 + 8 * 60;
+      if (haven) { w.party = { q: haven.q, r: haven.r }; this.settleIn(haven); reveal(w, w.party, 1); }
+      s.phase = 'explore';
+      this.log('system', `The party is overwhelmed. The survivors wake ${haven ? `in ${haven.name}` : 'where they fell'} the next morning with 1 HP${lost ? `, ${lost} gp lighter` : ''}.`);
+      this.beats.push({ kind: 'rescued' });
       return true;
     }
-    const foes = s.combat.order.filter((o) => o.kind === 'monster' && this.monster(o.id).alive);
-    if (foes.length) return false;
+    if (s.monsters.some((m) => m.alive)) return false;
+    const enc = s.encounter;
     s.combat = null;
+    s.encounter = null;
     s.phase = 'explore';
     for (const c of s.characters) {
       c.conditions = c.conditions.filter((x) => x !== 'dodging');
@@ -565,20 +664,93 @@ export class Game {
         this.log('system', `${c.name} is tended to and comes around with 1 HP.`);
       }
     }
-    const bosses = s.monsters.filter((m) => MONSTERS[m.defId].boss);
-    if (bosses.length && bosses.every((m) => !m.alive)) {
-      s.phase = 'victory';
-      this.log('system', 'Victory! The warren is cleared.');
-      this.beats.push({ kind: 'victory' });
-    } else {
-      this.log('system', 'Combat is over.');
-      this.beats.push({ kind: 'combat_end' });
+    const rewards: string[] = [];
+    let gold = 0;
+    for (const m of s.monsters) { const g = MONSTERS[m.defId].gold; if (g) gold += roll(g, this.rng).total; }
+    const xp = s.monsters.reduce((n, m) => n + MONSTERS[m.defId].xp, 0);
+    const slain = s.monsters.map((m) => m.name).join(', ');
+    const loc = enc?.source === 'dungeon' && enc.locationId ? this.location(enc.locationId) : undefined;
+    const stage = loc?.stages?.[loc.cleared ?? 0];
+    let questDone: string | null = null;
+    if (loc && stage) {
+      loc.cleared = (loc.cleared ?? 0) + 1;
+      gold += stage.loot.gold;
+      const items = this.giveLoot(stage.loot.items);
+      if (items.length) rewards.push(items.join(', '));
+      if (loc.cleared >= loc.stages!.length && loc.questId) questDone = loc.questId;
     }
-    this.updateVisibility();
+    if (gold) { s.gold += gold; rewards.unshift(`${gold} gp`); }
+    this.log('system', `Victory${stage ? ` in ${stage.name}` : ''}.${rewards.length ? ` The party finds ${rewards.join(', ')}.` : ''}${loc && stage && loc.cleared! >= loc.stages!.length ? ` ${loc.name} is cleared.` : ''}`);
+    s.monsters = [];
+    s.rows = [];
+    this.grantXp(xp, `defeating ${slain}`);
+    if (questDone) this.setQuest({ id: questDone, status: 'completed' });
+    this.beats.push({ kind: 'combat_end', boss: !!enc?.boss, rewards: `${xp} XP${rewards.length ? `, ${rewards.join(', ')}` : ''}` });
     return true;
   }
 
-  private exploring() { return this.s.phase === 'explore' || this.s.phase === 'victory'; }
+  /** Hand items to whoever has room. Returns readable names of what was taken. */
+  private giveLoot(items: { id: string; qty?: number }[]): string[] {
+    const got: string[] = [];
+    for (const it of items) {
+      const qty = it.qty ?? 1;
+      const taker = this.s.characters.find((c) => !c.dead && this.addToBag(c, it.id, qty));
+      got.push(`${qty > 1 ? `${qty}× ` : ''}${ITEMS[it.id].name}${taker ? ` (${taker.name})` : ' (left behind, bags are full)'}`);
+    }
+    return got;
+  }
+
+  // ------------------------------------------------------------ progression
+
+  /** Share experience among the living heroes and apply any level-ups. */
+  grantXp(total: number, reason: string) {
+    const heroes = this.s.characters.filter((c) => !c.dead);
+    if (!heroes.length || total <= 0) return;
+    const each = Math.max(1, Math.floor(total / heroes.length));
+    this.log('system', `The party gains ${each * heroes.length} XP (${each} each) for ${reason}.`);
+    const leveled: string[] = [];
+    for (const c of heroes) {
+      c.xp += each;
+      while (c.level < MAX_LEVEL && c.xp >= XP_THRESHOLDS[c.level]) { this.levelUp(c); if (!leveled.includes(c.name)) leveled.push(c.name); }
+    }
+    if (leveled.length) this.beats.push({ kind: 'level_up', heroes: leveled });
+  }
+
+  private levelUp(c: Character) {
+    const cls = CLASSES[c.classId];
+    c.level++;
+    const gains: string[] = [];
+    const hp = Math.max(1, cls.hitDie / 2 + 1 + abilityMod(c.abilities.con));
+    c.maxHp += hp;
+    if (!c.dead && c.hp > 0) c.hp += hp;
+    c.hitDice++;
+    gains.push(`+${hp} maximum HP (now ${c.maxHp})`);
+    const pb = profBonusFor(c.level);
+    if (pb !== c.profBonus) { c.profBonus = pb; gains.push(`Proficiency bonus rises to +${pb}`); }
+    if (cls.maxMana) {
+      const max = MANA_BY_LEVEL[c.level - 1] ?? c.maxMana;
+      const diff = max - MANA_BY_LEVEL[c.level - 2];
+      if (diff > 0) { c.maxMana += diff; c.mana += diff; gains.push(`+${diff} maximum mana (now ${c.maxMana})`); }
+    }
+    const gain = cls.levels[c.level];
+    if (gain?.asi) {
+      c.abilities[gain.asi] += 2;
+      gains.push(`${ABILITY_NAMES[gain.asi]} +2 (now ${c.abilities[gain.asi]})`);
+      if (gain.asi === 'con') { c.maxHp += c.level; c.hp += c.level; }
+    }
+    for (const id of gain?.abilities ?? []) {
+      if (!c.abilityIds.includes(id)) c.abilityIds.unshift(id);
+      gains.push(`New ability: ${ABILITIES[id].name}. ${ABILITIES[id].description}`);
+    }
+    for (const f of gain?.features ?? []) {
+      const prefix = f.split(':')[0];
+      c.features = [...c.features.filter((x) => x.split(':')[0] !== prefix), f];
+      gains.push(f);
+    }
+    c.ac = this.computeAc(c);
+    const info: LevelUpInfo = { characterId: c.id, name: c.name, className: c.className, level: c.level, gains };
+    this.log('levelup', `${c.name} reaches level ${c.level}!`, { levelUp: info });
+  }
 
   /** Validates that this player may act with this character right now. */
   private actor(playerId: string, characterId: string, needsTurn = true): Character {
@@ -603,6 +775,21 @@ export class Game {
     }
   }
 
+  private canAttack() {
+    const combat = this.s.combat;
+    if (combat && this.s.phase === 'combat' && combat.actionUsed && combat.attacksLeft <= 0) throw new GameError('Action already used this turn');
+  }
+
+  /** Weapon attacks share one Attack action; Extra Attack allows a second swing. */
+  private spendAttack(c: Character) {
+    const combat = this.s.combat;
+    if (!combat || this.s.phase !== 'combat') return;
+    if (!combat.actionUsed) {
+      combat.actionUsed = true;
+      combat.attacksLeft = c.classId === 'fighter' && c.level >= 5 ? 1 : 0;
+    } else combat.attacksLeft--;
+  }
+
   private canAct(bonus = false) {
     const combat = this.s.combat;
     if (!combat || this.s.phase !== 'combat') return;
@@ -614,75 +801,25 @@ export class Game {
   move(playerId: string, characterId: string, tx: number, ty: number) {
     const c = this.actor(playerId, characterId);
     const s = this.s;
-    const inCombat = s.phase === 'combat';
+    if (s.phase !== 'combat' || !s.combat) throw new GameError('There is no battle to move in right now');
     if (!this.walkable(tx, ty)) throw new GameError("You can't go there");
-    if (s.fog[ty * this.width + tx] === 0) throw new GameError("You haven't explored that far");
     if (c.x === tx && c.y === ty) return;
-    const canEnter = (p: Pt) => {
-      if (s.fog[p.y * this.width + p.x] === 0) return false;
-      if (this.monsterAt(p.x, p.y)) return false;
-      if (inCombat && this.charAt(p.x, p.y, c.id)) return false;
-      return true;
-    };
-    let path = this.bfs(c, (p) => p.x === tx && p.y === ty, canEnter);
+    const canEnter = (p: Pt) => !this.monsterAt(p.x, p.y) && !this.charAt(p.x, p.y, c.id);
+    const path = this.bfs(c, (p) => p.x === tx && p.y === ty, canEnter);
     if (!path) throw new GameError('No path there');
-    if (inCombat) {
-      const left = s.combat!.movementLeft;
-      if (left <= 0) throw new GameError('No movement left this turn');
-      path = path.slice(0, left);
-    }
-    const walked: Pt[] = [];
-    for (const step of path) {
-      if (this.tile(step.x, step.y) === '+' && !this.doorOpen(step.x, step.y)) {
-        s.openDoors.push(key(step.x, step.y));
-        this.log('system', `${c.name} opens a door.`);
-        this.afterMovement(c);
-        break;
-      }
-      const from = { x: c.x, y: c.y };
-      c.x = step.x;
-      c.y = step.y;
-      walked.push(step);
-      if (inCombat) s.combat!.movementLeft--;
-      else this.follow(c, from);
-      if (this.afterMovement(c)) break;
-    }
-    // Never end stacked on an ally.
-    if (this.charAt(c.x, c.y, c.id)) {
-      const free = this.bfs(c, (p) => !this.charAt(p.x, p.y, c.id) && !this.monsterAt(p.x, p.y), (p) => !this.monsterAt(p.x, p.y));
-      if (free?.length) { const end = free[free.length - 1]; c.x = end.x; c.y = end.y; walked.push(...free); this.afterMovement(c); }
-    }
-    if (walked.length) this.moves.push({ id: c.id, path: walked });
-  }
-
-  /** Out of combat, a player's other heroes trail behind the one they move. */
-  private follow(leader: Character, leaderFrom: Pt) {
-    let ahead: Pt = leaderFrom;
-    let target: Pt = leader;
-    for (const f of this.s.characters) {
-      if (f.id === leader.id || f.ownerId !== leader.ownerId || !this.conscious(f)) continue;
-      const from = { x: f.x, y: f.y };
-      if (cheb(f, target) > 1) {
-        const dest = this.charAt(ahead.x, ahead.y, f.id) || this.monsterAt(ahead.x, ahead.y) ? null : ahead;
-        const path = dest && cheb(f, dest) <= 1
-          ? [dest]
-          : this.bfs(f, (p) => cheb(p, target) <= 1 && !this.charAt(p.x, p.y, f.id), (p) => !this.monsterAt(p.x, p.y) && this.s.fog[p.y * this.width + p.x] !== 0 && (this.tile(p.x, p.y) !== '+' || this.doorOpen(p.x, p.y)));
-        const step = path?.[0];
-        if (step && !this.charAt(step.x, step.y, f.id)) {
-          f.x = step.x;
-          f.y = step.y;
-          this.moves.push({ id: f.id, path: [step] });
-        }
-      }
-      ahead = from;
-      target = f;
-    }
+    if (s.combat.movementLeft <= 0) throw new GameError('No movement left this turn');
+    const walked = path.slice(0, s.combat.movementLeft);
+    const end = walked[walked.length - 1];
+    c.x = end.x;
+    c.y = end.y;
+    s.combat.movementLeft -= walked.length;
+    this.moves.push({ id: c.id, path: walked });
   }
 
   // ---------------------------------------------------------------- attacks
 
   private hostileAdjacentToChar(c: Character) {
-    return this.s.monsters.some((m) => m.alive && m.revealed && cheb(m, c) <= 1);
+    return this.s.monsters.some((m) => m.alive && cheb(m, c) <= 1);
   }
 
   private damageMonster(m: Monster, amount: number, type: string): { dealt: number; note: string } {
@@ -732,7 +869,7 @@ export class Game {
 
   private targetMonster(c: Character, targetId: string, rangeFeet: number): Monster {
     const m = this.monster(targetId);
-    if (!m.alive || !m.revealed) throw new GameError('No such target');
+    if (!m.alive) throw new GameError('No such target');
     if (cheb(c, m) * 5 > Math.max(5, rangeFeet)) throw new GameError(`${m.name} is out of range`);
     if (!this.los(c, m)) throw new GameError(`${c.name} cannot see ${m.name}`);
     return m;
@@ -741,7 +878,7 @@ export class Game {
   attack(playerId: string, characterId: string, targetId: string) {
     const c = this.actor(playerId, characterId);
     if (this.s.phase !== 'combat') throw new GameError('There is nothing to fight right now');
-    this.canAct();
+    this.canAttack();
     const w = this.weaponOf(c);
     const wp = w?.weapon;
     const ranged = wp?.ranged;
@@ -754,26 +891,28 @@ export class Game {
     const guided = m.conditions.includes('guided');
     const mode = rollMode(guided, !!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c)));
     if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
-    this.spendAction();
+    this.spendAttack(c);
     const r = d20(this.rng, mode);
     const total = r.value + bonus;
-    const crit = r.value === 20;
+    const crit = r.value >= (c.classId === 'fighter' && c.level >= 3 ? 19 : 20);
     const ac = MONSTERS[m.defId].ac;
     const label = w ? w.name : 'an unarmed strike';
     const head = `${c.name} attacks ${m.name} with ${label}: ${fmtD20(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
+    const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
+      ({ actor: c.name, label: w ? w.name : 'Unarmed strike', die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
     if (r.value === 1 || (!crit && total < ac)) {
-      this.log('roll', `${head} Miss.`);
+      this.log('roll', `${head} Miss.`, { roll: info('miss') });
     } else {
       let dmg = wp ? roll(wp.damage, this.rng, crit).total + mod + (wp.bonus ?? 0) : 1 + strMod;
       let extra = '';
       const flanked = this.s.characters.some((a) => a.id !== c.id && this.conscious(a) && cheb(a, m) <= 1);
       if (c.classId === 'rogue' && wp && (wp.finesse || ranged) && (flanked || mode === 'advantage')) {
-        dmg += roll('1d6', this.rng, crit).total;
+        dmg += roll(`${Math.ceil(c.level / 2)}d6`, this.rng, crit).total;
         extra = ' (with Sneak Attack)';
       }
       dmg = Math.max(1, dmg);
       const res = this.damageMonster(m, dmg, wp?.damageType ?? 'bludgeoning');
-      this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${res.dealt} ${wp?.damageType ?? 'bludgeoning'} damage${extra}.${res.note}`);
+      this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${res.dealt} ${wp?.damageType ?? 'bludgeoning'} damage${extra}.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.dealt, type: wp?.damageType ?? 'bludgeoning' }) });
     }
     this.checkCombatOver();
   }
@@ -789,11 +928,15 @@ export class Game {
     if (!ab || !c.abilityIds.includes(abilityId)) throw new GameError(`${c.name} doesn't know that`);
     const inCombat = this.s.phase === 'combat';
     if (ab.target === 'enemy' && !inCombat) throw new GameError('There is nothing to fight right now');
-    if (ab.kind === 'dodge' && !inCombat) throw new GameError('Dodge is only useful in combat');
-    this.canAct(ab.bonusAction);
+    if (['dodge', 'surge', 'dash'].includes(ab.kind) && !inCombat) throw new GameError(`${ab.name} is only useful in combat`);
+    if (ab.kind !== 'surge') this.canAct(ab.bonusAction);
     if (ab.oncePerRest && c.spent.includes(ab.id)) throw new GameError(`${ab.name} is spent until you rest`);
     if (c.mana < ab.cost) throw new GameError('Not enough mana');
     const cmod = this.castingMod(c);
+    // Cantrips grow with the caster; healing magic is stronger in a practised cleric's hands.
+    const potent = ab.cost === 0 && c.level >= 5 && (ab.kind === 'attack' || ab.kind === 'save');
+    const dice = ab.dice && potent ? ab.dice.replace(/^(\d+)/, (n) => String(Number(n) * 2)) : ab.dice;
+    const healBonus = c.classId === 'cleric' && c.level >= 3 ? 3 : 0;
     const spend = () => {
       this.spendAction(ab.bonusAction);
       c.mana -= ab.cost;
@@ -801,6 +944,21 @@ export class Game {
     };
 
     switch (ab.kind) {
+      case 'surge': {
+        const combat = this.s.combat!;
+        if (!combat.actionUsed) throw new GameError(`${c.name} still has an action this turn`);
+        c.spent.push(ab.id);
+        combat.actionUsed = false;
+        combat.attacksLeft = 0;
+        this.log('roll', `${c.name} uses ${ab.name} and can act again.`);
+        break;
+      }
+      case 'dash': {
+        spend();
+        this.s.combat!.movementLeft += Math.floor(c.speed / 5);
+        this.log('roll', `${c.name} dashes, gaining ${c.speed} ft of movement.`);
+        break;
+      }
       case 'dodge': {
         spend();
         c.conditions.push('dodging');
@@ -820,7 +978,7 @@ export class Game {
         if (cheb(c, t) * 5 > Math.max(5, ab.range)) throw new GameError(`${t.name} is too far away`);
         if (t.hp >= t.maxHp) throw new GameError(`${t.name} is already at full health`);
         spend();
-        const healed = this.healChar(t, roll(ab.dice!, this.rng).total + cmod);
+        const healed = this.healChar(t, roll(dice!, this.rng).total + cmod + healBonus);
         this.log('roll', `${c.name} casts ${ab.name} on ${t.id === c.id ? 'themself' : t.name}, restoring ${healed} HP.`);
         break;
       }
@@ -836,11 +994,13 @@ export class Game {
         const crit = r.value === 20;
         const ac = MONSTERS[m.defId].ac;
         const head = `${c.name} casts ${ab.name} at ${m.name}: ${fmtD20(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
-        if (r.value === 1 || (!crit && total < ac)) this.log('roll', `${head} Miss.`);
+        const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
+          ({ actor: c.name, label: ab.name, die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
+        if (r.value === 1 || (!crit && total < ac)) this.log('roll', `${head} Miss.`, { roll: info('miss') });
         else {
-          const res = this.damageMonster(m, roll(ab.dice!, this.rng, crit).total, ab.damageType!);
+          const res = this.damageMonster(m, roll(dice!, this.rng, crit).total, ab.damageType!);
           if (ab.id === 'guiding_bolt' && m.alive) m.conditions.push('guided');
-          this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${res.dealt} ${ab.damageType} damage.${res.note}`);
+          this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${res.dealt} ${ab.damageType} damage.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.dealt, type: ab.damageType! }) });
         }
         break;
       }
@@ -851,10 +1011,12 @@ export class Game {
         const saveMod = MONSTERS[m.defId].saves[ab.saveAbility!] ?? 0;
         const r = d20(this.rng).value;
         const head = `${c.name} casts ${ab.name} at ${m.name}: ${ab.saveAbility!.toUpperCase()} save ${r}${signed(saveMod)} = ${r + saveMod} vs DC ${dc}.`;
-        if (r + saveMod >= dc) this.log('roll', `${head} ${m.name} avoids it.`);
+        const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
+          ({ actor: m.name, label: `${ab.saveAbility!.toUpperCase()} save against ${ab.name}`, die: r, rolls: [r], mode: 'normal', modifier: saveMod, total: r + saveMod, target: { kind: 'DC', value: dc }, outcome, damage });
+        if (r + saveMod >= dc) this.log('roll', `${head} ${m.name} avoids it.`, { roll: info('success') });
         else {
-          const res = this.damageMonster(m, roll(ab.dice!, this.rng).total, ab.damageType!);
-          this.log('roll', `${head} Failed, ${res.dealt} ${ab.damageType} damage.${res.note}`);
+          const res = this.damageMonster(m, roll(dice!, this.rng).total, ab.damageType!);
+          this.log('roll', `${head} Failed, ${res.dealt} ${ab.damageType} damage.${res.note}`, { roll: info('failure', { amount: res.dealt, type: ab.damageType! }) });
         }
         break;
       }
@@ -906,7 +1068,6 @@ export class Game {
   }
 
   private monsterBlocked(p: Pt, self: Monster) {
-    if (this.tile(p.x, p.y) === '+' && !this.doorOpen(p.x, p.y)) return true;
     const m = this.monsterAt(p.x, p.y);
     if (m && m.id !== self.id) return true;
     return !!this.charAt(p.x, p.y);
@@ -983,13 +1144,15 @@ export class Game {
     const total = r.value + chosen.toHit;
     const crit = r.value === 20;
     const head = `${m.name} attacks ${target.name} with ${chosen.name}: ${fmtD20(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${target.ac}.`;
+    const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
+      ({ actor: m.name, label: chosen!.name, die: r.value, rolls: r.rolls, mode, modifier: chosen!.toHit, total, target: { kind: 'AC', value: target!.ac, name: target!.name }, outcome, damage });
     if (r.value === 1 || (!crit && total < target.ac)) {
-      this.log('roll', `${head} Miss.`);
+      this.log('roll', `${head} Miss.`, { roll: info('miss') });
       return { monster: m.name, moved: walked.length, attack: { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false } };
     }
     const dmg = Math.max(1, roll(chosen.damage, this.rng, crit).total);
     const down = this.damageChar(target, dmg);
-    this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${dmg} ${chosen.damageType} damage.${down ? ` ${target.name} falls unconscious!` : ''}`);
+    this.log('roll', `${head} ${crit ? 'Critical hit' : 'Hit'} for ${dmg} ${chosen.damageType} damage.${down ? ` ${target.name} falls unconscious!` : ''}`, { roll: info(crit ? 'crit' : 'hit', { amount: dmg, type: chosen.damageType }) });
     return { monster: m.name, moved: walked.length, attack: { name: chosen.name, target: target.name, hit: true, crit, damage: dmg, targetHp: target.hp, targetDown: down } };
   }
 
@@ -1137,29 +1300,11 @@ export class Game {
     this.log('roll', `${c.name} ${t.id === c.id ? 'drinks' : `feeds ${t.name}`} a ${def.name}, restoring ${healed} HP.`);
   }
 
-  openChest(playerId: string, characterId: string, chestId: string) {
-    const c = this.actor(playerId, characterId, false);
-    if (!this.exploring()) throw new GameError('Not while fighting!');
-    const chest = this.s.chests.find((ch) => ch.id === chestId);
-    if (!chest) throw new GameError('No such chest');
-    if (cheb(c, chest) > 1) throw new GameError('Move next to the chest first');
-    if (chest.opened && !chest.items.length) throw new GameError('The chest is empty');
-    const got: string[] = [];
-    if (chest.gold) { this.s.gold += chest.gold; got.push(`${chest.gold} gold`); chest.gold = 0; }
-    const left: typeof chest.items = [];
-    for (const it of chest.items) {
-      if (this.addToBag(c, it.id, it.qty)) got.push(`${it.qty > 1 ? `${it.qty}× ` : ''}${ITEMS[it.id].name}`);
-      else left.push(it);
-    }
-    chest.items = left;
-    chest.opened = true;
-    this.log('system', `${c.name} opens the chest and finds ${got.length ? got.join(', ') : 'nothing they can carry'}.${left.length ? ` ${c.name}'s bag is full; some items remain.` : ''}`);
-  }
-
   shortRest() {
-    if (this.s.phase !== 'explore' && this.s.phase !== 'victory') throw new GameError('You can only rest outside combat');
-    if (this.s.shortRestsLeft <= 0) throw new GameError('The party is too wary to rest again here');
+    this.needExplore();
+    if (this.s.shortRestsLeft <= 0) throw new GameError('The party needs a long rest before another short one helps');
     this.s.shortRestsLeft--;
+    this.advanceTime(60);
     const parts: string[] = [];
     for (const c of this.s.characters) {
       if (c.dead) continue;
@@ -1169,24 +1314,221 @@ export class Game {
         healed = this.healChar(c, Math.max(1, roll(`1d${CLASSES[c.classId].hitDie}`, this.rng).total + abilityMod(c.abilities.con)));
       }
       c.spent = [];
-      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, 2) : 0;
+      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, c.classId === 'wizard' && c.level >= 2 ? 3 : 2) : 0;
       c.mana += mana;
       parts.push(`${c.name} +${healed} HP${mana ? `, +${mana} mana` : ''}`);
     }
-    this.log('system', `The party takes a short rest. ${parts.join('; ')}.`);
+    this.log('system', `The party rests for an hour. ${parts.join('; ')}.`);
   }
+
+  /** Eight hours of sleep. Outside a safe place the camp may be attacked instead. */
+  longRest() {
+    this.needExplore();
+    const w = this.world;
+    if (w.minutes - this.s.lastLongRest < 16 * 60) throw new GameError('The party is not tired enough for another long rest yet');
+    if (!this.isSafe() && this.rng() < 0.3) {
+      this.advanceTime(4 * 60);
+      this.log('system', 'The camp is attacked in the night!');
+      const code = trueTerrain(w, w.party);
+      const table = ENCOUNTERS[code] ?? ENCOUNTERS.p;
+      this.startEncounter(table[Math.floor(this.rng() * table.length)], { source: 'wild', context: 'The party made camp in the wild and is attacked in the middle of the night.' });
+      return;
+    }
+    this.advanceTime(8 * 60);
+    this.s.lastLongRest = w.minutes;
+    this.s.shortRestsLeft = 2;
+    for (const c of this.s.characters) {
+      if (c.dead) continue;
+      this.healChar(c, c.maxHp);
+      c.mana = c.maxMana;
+      c.hitDice = c.level;
+      c.spent = [];
+    }
+    this.log('system', `The party sleeps for eight hours and wakes restored. ${formatTime(w.minutes)}.`);
+    this.beats.push({ kind: 'rest', long: true });
+  }
+
+  // ------------------------------------------------ Dungeon Master's tools
+  // Everything below is called by the DM. The DM proposes; these methods
+  // validate, clamp and apply, so the server stays the owner of the state.
 
   /** Ability check requested by the Dungeon Master. */
   skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
     const c = this.char(characterId);
-    const prof = c.skills.includes(skill.toLowerCase()) ? c.profBonus : 0;
+    if (!this.conscious(c)) throw new GameError(`${c.name} is in no state to try that`);
+    const name = skill.trim().toLowerCase();
+    const prof = c.skills.includes(name) ? c.profBonus : 0;
     const mod = abilityMod(c.abilities[ability]) + prof;
     const r = d20(this.rng).value;
     const total = r + mod;
     const success = total >= dc;
-    this.log('roll', `${c.name} makes a ${skill || ability.toUpperCase()} check: ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? 'Success.' : 'Failure.'}`);
+    const label = name ? `${name[0].toUpperCase()}${name.slice(1)} check` : `${ABILITY_NAMES[ability]} check`;
+    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode: 'normal', modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
+    this.log('roll', `${c.name} makes a ${name || ability.toUpperCase()} check: ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? 'Success.' : 'Failure.'}`, { roll: info });
     return { character: c.name, roll: r, modifier: mod, total, dc, success };
   }
+
+  /** Narration shown to the players as a scene card. */
+  addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }) {
+    const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
+    this.log('dm', scene.text.trim(), { scene: meta });
+  }
+
+  addJournal(text: string) {
+    const clean = text.trim().slice(0, 300);
+    if (!clean) return;
+    const j = this.s.memory.journal;
+    j.push({ day: this.day(), text: clean });
+    if (j.length > 120) j.splice(0, j.length - 120);
+  }
+
+  private uniqueId(prefix: string, name: string, taken: (id: string) => boolean) {
+    const base = `${prefix}_${slug(name) || 'x'}`;
+    let id = base;
+    for (let n = 2; taken(id); n++) id = `${base}_${n}`;
+    return id;
+  }
+
+  /** Create or update someone the party has met. */
+  rememberNpc(input: { name: string; role?: string; description?: string; appearance?: string; disposition?: Disposition; locationId?: string; note?: string }) {
+    const name = input.name.trim().slice(0, 60);
+    if (!name) throw new GameError('An NPC needs a name');
+    const mem = this.s.memory;
+    let npc = mem.npcs.find((n) => n.name.toLowerCase() === name.toLowerCase() || n.id === name);
+    const created = !npc;
+    if (!npc) {
+      if (mem.npcs.length >= 150) throw new GameError('The cast is full; reuse an existing character');
+      npc = { id: this.uniqueId('npc', name, (id) => mem.npcs.some((n) => n.id === id)), name, role: '', description: '', disposition: 'neutral', locationId: null, notes: [], origin: 'dm', visual: { description: '', imageId: null }, met: true };
+      mem.npcs.push(npc);
+    }
+    npc.met = true;
+    if (input.role?.trim()) npc.role = input.role.trim().slice(0, 80);
+    if (input.description?.trim()) npc.description = input.description.trim().slice(0, 400);
+    // The look is fixed once written, so later pictures of this person stay consistent.
+    if (input.appearance?.trim() && !npc.visual.description) npc.visual.description = input.appearance.trim().slice(0, 400);
+    if (input.disposition) npc.disposition = input.disposition;
+    const loc = input.locationId?.trim();
+    if (loc && this.location(loc)) npc.locationId = loc;
+    else if (created || loc === '') npc.locationId = this.s.world?.placeId ?? npc.locationId;
+    if (input.note?.trim()) { npc.notes.push(input.note.trim().slice(0, 200)); if (npc.notes.length > 12) npc.notes.shift(); }
+    return { id: npc.id, name: npc.name, created, location_id: npc.locationId };
+  }
+
+  /** Put a new place on the map. `direction` is a compass direction or "here". */
+  createLocation(input: { name: string; kind: LocationKind; description: string; appearance?: string; direction: Compass | 'here'; distance: number }) {
+    const w = this.world;
+    const name = input.name.trim().slice(0, 60);
+    if (!name) throw new GameError('A location needs a name');
+    const existing = w.locations.find((l) => l.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      existing.discovered = true;
+      return { id: existing.id, name: existing.name, created: false, note: 'A place with this name already exists.', ...this.whereIs(existing) };
+    }
+    if (w.locations.filter((l) => l.origin === 'dm').length >= 80) throw new GameError('The map is full; reuse an existing location');
+    const distance = Math.max(0, Math.min(8, Math.round(input.distance) || 0));
+    let at: Hex = w.party;
+    let parentId: string | null = null;
+    if (input.direction === 'here' || distance === 0) {
+      parentId = w.locations.find((l) => !l.parentId && sameHex(l, w.party))?.id ?? null;
+    } else {
+      // Aim at a point in that direction, then take the nearest free, walkable hex.
+      const angle = COMPASS.indexOf(input.direction) * (Math.PI / 4);
+      const col = w.party.q + 0.5 * (w.party.r & 1) + Math.cos(angle) * distance;
+      const row = w.party.r - (Math.sin(angle) * distance) / 0.866;
+      const aim = { q: Math.max(0, Math.min(w.width - 1, Math.round(col - 0.5 * (Math.round(row) & 1)))), r: Math.max(0, Math.min(w.height - 1, Math.round(row))) };
+      let best: Hex | null = null;
+      for (let r = 0; r < w.height; r++) {
+        for (let q = 0; q < w.width; q++) {
+          const h = { q, r };
+          if (sameHex(h, w.party) || !TERRAIN[trueTerrain(w, h)].passable || w.locations.some((l) => !l.parentId && sameHex(l, h))) continue;
+          if (!best || hexDistance(h, aim) < hexDistance(best, aim)) best = h;
+        }
+      }
+      if (!best) throw new GameError('There is no room on the map for a new place');
+      at = best;
+    }
+    const loc: LocationState = {
+      id: this.uniqueId('loc', name, (id) => w.locations.some((l) => l.id === id)), name, kind: input.kind, q: at.q, r: at.r, parentId,
+      description: input.description.trim().slice(0, 500), visited: false, origin: 'dm', visual: { description: (input.appearance ?? '').trim().slice(0, 400), imageId: null }, zone: null, discovered: true,
+    };
+    w.locations.push(loc);
+    this.log('system', parentId || sameHex(at, w.party) ? `New place: ${loc.name}.` : `${loc.name} is marked on the map, ${hexDistance(w.party, at) * HEX_MILES} miles to the ${direction(w.party, at)}.`);
+    return { id: loc.id, name: loc.name, created: true, ...this.whereIs(loc) };
+  }
+
+  whereIs(loc: { q: number; r: number }) {
+    const w = this.world;
+    const d = hexDistance(w.party, loc);
+    return d === 0 ? { where: 'here' } : { where: `${d * HEX_MILES} miles ${direction(w.party, loc)}`, hexes: d };
+  }
+
+  /** Create a quest or change its state. Completing one pays out its reward once. */
+  setQuest(input: { id?: string; title?: string; status?: QuestStatus; summary?: string; note?: string }) {
+    const mem = this.s.memory;
+    const title = (input.title ?? '').trim().slice(0, 80);
+    let q = mem.quests.find((x) => x.id === input.id || (title && x.title.toLowerCase() === title.toLowerCase()));
+    if (!q) {
+      if (!title) throw new GameError('A quest needs a title');
+      if (mem.quests.length >= 60) throw new GameError('The quest log is full');
+      q = { id: this.uniqueId('quest', title, (id) => mem.quests.some((x) => x.id === id)), title, status: 'active', summary: '', notes: [] };
+      mem.quests.push(q);
+      this.log('system', `New quest: ${q.title}.`);
+    }
+    if (input.summary?.trim()) q.summary = input.summary.trim().slice(0, 400);
+    if (input.note?.trim()) { q.notes.push(input.note.trim().slice(0, 200)); if (q.notes.length > 12) q.notes.shift(); }
+    if (input.status && input.status !== q.status) {
+      const was = q.status;
+      q.status = input.status;
+      this.log('system', `Quest ${q.status}: ${q.title}.`);
+      if (was === 'active' && q.status === 'completed') {
+        if (q.rewardGold) { this.s.gold += q.rewardGold; this.log('system', `Reward: ${q.rewardGold} gp.`); }
+        if (q.rewardXp) this.grantXp(q.rewardXp, `completing "${q.title}"`);
+        q.rewardGold = 0;
+        q.rewardXp = 0;
+      }
+    }
+    return { id: q.id, title: q.title, status: q.status };
+  }
+
+  recordDeed(text: string) {
+    const clean = text.trim().slice(0, 240);
+    if (!clean) throw new GameError('Describe the deed');
+    const deeds = this.s.memory.deeds;
+    deeds.push({ id: this.uid('deed'), day: this.day(), text: clean });
+    if (deeds.length > 60) deeds.shift();
+    return { recorded: clean };
+  }
+
+  /** Story experience for things other than winning fights. Clamped so the DM cannot skip levels. */
+  awardXp(amount: number, reason: string) {
+    const heroes = this.s.characters.filter((c) => !c.dead);
+    const top = Math.max(1, ...heroes.map((c) => c.level));
+    const granted = Math.max(10, Math.min(Math.round(amount) || 0, 75 * top * Math.max(1, heroes.length)));
+    this.grantXp(granted, reason.trim().slice(0, 120) || 'their deeds');
+    return { granted };
+  }
+
+  changeGold(amount: number, reason: string) {
+    const delta = Math.max(-100000, Math.min(500, Math.round(amount) || 0));
+    if (this.s.gold + delta < 0) throw new GameError(`The party only has ${this.s.gold} gp`);
+    this.s.gold += delta;
+    if (delta) this.log('system', `${delta > 0 ? `The party gains ${delta} gp` : `The party pays ${-delta} gp`}${reason.trim() ? ` (${reason.trim().slice(0, 100)})` : ''}.`);
+    return { gold: this.s.gold };
+  }
+
+  grantItem(characterId: string, itemId: string, qty: number) {
+    const c = this.char(characterId);
+    const def = ITEMS[itemId];
+    if (!def) throw new GameError(`Unknown item "${itemId}"`);
+    if (c.dead) throw new GameError(`${c.name} is dead`);
+    const n = Math.max(1, Math.min(def.stackable ? 10 : 1, Math.round(qty) || 1));
+    if (!this.addToBag(c, itemId, n)) throw new GameError(`${c.name}'s bag is full`);
+    this.log('system', `${c.name} receives ${n > 1 ? `${n}× ` : ''}${def.name}.`);
+    return { character: c.name, item: def.name, quantity: n };
+  }
+
+  /** Forget pending beats of a kind the DM is already narrating itself. */
+  dropBeats(kind: Beat['kind']) { this.beats = this.beats.filter((b) => b.kind !== kind); }
 
   takeBeats(): Beat[] { const b = this.beats; this.beats = []; return b; }
   takeMoves() { const m = this.moves; this.moves = []; return m; }
@@ -1195,23 +1537,40 @@ export class Game {
 
   publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null }): GameState {
     const s = this.s;
+    const w = s.world;
     return {
       room: s.room,
       phase: s.phase,
       map: { width: this.width, height: this.height, rows: s.rows },
-      fog: s.fog.join(''),
-      openDoors: s.openDoors,
-      chests: s.chests.map(({ id, x, y, opened }) => ({ id, x, y, opened })),
       characters: s.characters,
-      monsters: s.monsters.filter((m) => m.revealed).map((m) => ({
+      monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
         ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions, sprite: MONSTERS[m.defId].sprite,
       })),
       combat: s.combat,
       gold: s.gold,
       shortRestsLeft: s.shortRestsLeft,
-      log: s.log.slice(-80),
+      log: s.log.slice(-150),
       players: s.players,
+      world: w && {
+        width: w.width,
+        height: w.height,
+        terrain: maskedTerrain(w),
+        party: w.party,
+        minutes: w.minutes,
+        locations: w.locations.filter((l) => l.discovered).map((l): Location => ({
+          id: l.id, name: l.name, kind: l.kind, q: l.q, r: l.r, parentId: l.parentId, description: l.description, visited: l.visited, origin: l.origin, visual: l.visual, zone: null,
+          ...(l.stages ? { dungeon: { total: l.stages.length, cleared: l.cleared ?? 0, next: l.stages[l.cleared ?? 0]?.name ?? null } } : {}),
+        })),
+        placeId: w.placeId,
+        safe: this.isSafe(),
+      },
+      memory: {
+        npcs: s.memory.npcs.filter((n) => n.met).map(({ met: _met, ...n }) => n),
+        quests: s.memory.quests.map(({ rewardXp: _x, rewardGold: _g, ...q }) => q),
+        deeds: s.memory.deeds,
+      },
+      travelling: !!s.travel,
       dmBusy: dm.busy,
       dmMode: dm.mode,
       dmModel: dm.model,

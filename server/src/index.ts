@@ -31,7 +31,8 @@ const MIME: Record<string, string> = {
 };
 
 const store = new Store(DATA_DIR);
-const dm = createDM(process.env) ?? new ScriptedDM();
+const claude = createDM(process.env);
+const dm = claude ?? new ScriptedDM();
 const rooms = new Map<string, Room>();
 
 function roomFor(raw: string): Room {
@@ -48,7 +49,7 @@ const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, dm: dm.mode, model: dm.model, rooms: rooms.size }));
+    res.end(JSON.stringify({ ok: true, dm: dm.mode, model: dm.model, models: claude?.models ?? null, rooms: rooms.size }));
     return;
   }
   if (url.pathname === '/api/art') {
@@ -115,7 +116,9 @@ void ensureArt(ART_DIR, ART_MODE, process.env);
 server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
   console.log(`Art: ${ART_MODE === 'generated' ? 'generated pixel art' : `${ART_MODE} pack (falls back to generated art if unavailable)`}`);
-  console.log(dm.mode === 'claude' ? `Dungeon Master: Claude (${dm.model})` : 'Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
+  if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
+  else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
+  else console.log(`Dungeon Master: Claude. Key moments: ${claude.models.key}. Narration and combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
 });
 
 function shutdown() {
