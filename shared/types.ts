@@ -296,6 +296,8 @@ export interface GameState {
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;
+  /** The current fight includes a boss. Drives the music. */
+  bossFight: boolean;
   gold: number;
   shortRestsLeft: number;
   log: LogEntry[];

@@ -12,7 +12,9 @@ import { EntityProvider, StoryFeed } from './components/Story';
 import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
+import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
+import { MusicControl, useMusic } from './music';
 import { playerId, useConnection } from './net';
 
 type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | null;
@@ -25,6 +27,7 @@ export function App() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [targeting, setTargeting] = useState<Targeting>(null);
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
+  useMusic(musicContext(state));
 
   const mine = useMemo(() => state?.characters.filter((c) => c.ownerId === playerId) ?? [], [state]);
   const combat = state?.phase === 'combat' ? state.combat : null;
@@ -150,6 +153,7 @@ export function App() {
           <button className="link" onClick={() => setOverlay('sheet')} title={t('Character sheet (c)')}>{t('Character')}</button>
           <button className="link" onClick={() => setOverlay('inventory')} title={t('Inventory (i)')}>{t('Inventory')}</button>
           <button className="link" onClick={() => setOverlay('journal')} title={t('Journal (j)')}>{t('Journal')}</button>
+          <MusicControl />
           <LangSwitch />
           <button className="link" onClick={newAdventure}>{t('New adventure')}</button>
         </header>
