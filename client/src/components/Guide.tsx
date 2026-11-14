@@ -130,7 +130,7 @@ export function Effects({ effects }: { effects: Effect[] }) {
       <h4>{t('What it does')}</h4>
       <ul className="effects">
         {effects.map((e) => (
-          <li key={e.name} className={e.by}>
+          <li key={e.name} className={`by-${e.by}`}>
             <span className="by" title={e.by === 'engine' ? t('Rules: the game applies this automatically.') : t('Story: the Dungeon Master plays this out in the narration.')}>{e.by === 'engine' ? '⚙' : '📖'}</span>
             <span><b>{t(e.name)}.</b> <Rich text={loc(e.text, lang)} /></span>
           </li>

@@ -93,9 +93,12 @@ export function recommend(d: Draft & { classId: ClassId }, keep: (keyof Characte
     out.spells = kept('spells') ?? [...cantrips, ...spells];
     b.abilityIds.unshift(...out.spells);
   }
-  const bgPick = kept('backgroundFeat') ? { id: bg.feat, ...d.backgroundFeat } : fillFeat(b, bg.feat);
+  // A kept Skilled talent is re-filled when the freshly recommended skills now overlap it.
+  const fresh = (p: FeatPick): FeatPick => (p.id === 'skilled' && (p.skills ?? []).some((s) => b.skills.includes(s)) ? fillFeat(b, 'skilled') : p);
+  const bgPick = kept('backgroundFeat') ? fresh({ id: bg.feat, ...d.backgroundFeat }) : fillFeat(b, bg.feat);
   out.backgroundFeat = { skills: bgPick.skills, spells: bgPick.spells };
   applyFeat(b, bgPick, true);
-  if (sp.originFeat) out.originFeat = kept('originFeat') ?? recommendFeat(b, true);
+  const keptOrigin = kept('originFeat');
+  if (sp.originFeat) out.originFeat = keptOrigin ? fresh(keptOrigin) : recommendFeat(b, true);
   return out;
 }

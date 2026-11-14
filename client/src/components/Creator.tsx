@@ -13,7 +13,7 @@ import {
 } from '../../../shared/rules';
 import { GENDERS, abilityMod, type Abilities, type AbilityKey, type CharacterSpec, type ClassId, type GameState } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
-import { useLang, useT } from '../i18n';
+import { LangSwitch, useLang, useT } from '../i18n';
 import { playerId, type Connection } from '../net';
 import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 
@@ -45,7 +45,18 @@ function tidy(d: Draft): Draft {
   out.expertise = cls?.id === 'rogue' ? (d.expertise ?? []).filter((s) => granted.includes(s)) : undefined;
   if (cls?.id !== 'fighter') delete out.fightingStyle;
   if (!sp?.originFeat) delete out.originFeat;
+  // A Skilled talent may not repeat a skill the hero has since gained elsewhere.
+  const fresh = (skills: string[] | undefined) => {
+    const kept = (skills ?? []).filter((s) => !granted.includes(s));
+    granted.push(...kept);
+    return kept;
+  };
+  if (bg?.feat === 'skilled' && out.backgroundFeat?.skills) out.backgroundFeat = { ...out.backgroundFeat, skills: fresh(out.backgroundFeat.skills) };
+  if (out.originFeat?.id === 'skilled' && out.originFeat.skills) out.originFeat = { ...out.originFeat, skills: fresh(out.originFeat.skills) };
   out.boosts = (d.boosts ?? []).filter((k) => bg?.abilities.includes(k));
+  // Scores and the background bonus start out the way that suits the class; the Abilities step changes them.
+  if (cls && !out.base && out.method !== 'roll') out.base = recommendedArray(cls.id);
+  if (cls && bg && out.base && out.boosts.length !== 3) out.boosts = recommendedBoosts(cls.id, out.base, bg.abilities);
   if (out.kit && KITS[out.kit]?.classId !== cls?.id) delete out.kit;
   const list = cls ? classSpellList(cls.id) : null;
   if (cls && list) {
@@ -132,7 +143,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   if (step === 'class') {
     left = (
       <Section title={t('Choose a class')}>
-        {(Object.keys(CLASS_GUIDE) as ClassId[]).map((id) => optionRow(CLASS_GUIDE[id], { classId: id }, d.classId === id, false, t('Class'), loc(CLASS_GUIDE[id].role, lang)))}
+        {(Object.keys(CLASS_GUIDE) as ClassId[]).map((id) => optionRow(CLASS_GUIDE[id], { classId: id, ...(d.method === 'array' && d.classId !== id ? { base: recommendedArray(id), boosts: [] } : {}) }, d.classId === id, false, t('Class'), loc(CLASS_GUIDE[id].role, lang)))}
         <p className="muted small">{t('New to the game? The Fighter is the easiest to play, the Wizard the most demanding.')}</p>
       </Section>
     );
@@ -528,6 +539,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
               );
             })}
           </nav>
+          <LangSwitch />
           <button className="link close" onClick={onClose} title={t('Close')}>✕</button>
         </header>
         <div className="creator-body">
