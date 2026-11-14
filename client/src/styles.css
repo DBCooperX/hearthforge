@@ -59,6 +59,16 @@ input:focus { border-color: var(--gold); }
 .roster img { width: 32px; height: 32px; }
 .roster .muted { margin-left: auto; }
 
+/* ---------- language ---------- */
+.langswitch { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.langswitch button { border: none; border-radius: 0; padding: 2px 8px; font-size: 11px; font-weight: 600; background: none; color: var(--muted); }
+.langswitch button.on { background: var(--gold); color: #1a1208; }
+.join-lang { display: flex; justify-content: center; margin-top: -8px; }
+.session-lang { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.session-lang span { font-weight: 600; }
+.session-lang button.on { border-color: var(--gold); color: var(--gold); }
+.session-lang small { flex-basis: 100%; }
+
 /* ---------- game layout ---------- */
 .game {
   height: 100%; display: grid; grid-template-columns: 270px minmax(0, 1fr) 320px; grid-template-rows: 40px minmax(0, 1fr);

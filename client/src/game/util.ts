@@ -50,9 +50,11 @@ export function mod(score: number): string {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-export function weaponSummary(c: Character): string {
+export function weaponSummary(c: Character, t: (text: string) => string = (x) => x): string {
   const it = c.equipment.mainHand;
   const def = it ? ITEMS[it.defId] : null;
-  if (!def?.weapon) return 'Unarmed strike';
-  return `${def.name} (${def.weapon.damage} ${def.weapon.damageType})`;
+  if (!def?.weapon) return t('Unarmed strike');
+  // German dice notation uses W (Würfel) where English uses d.
+  const dice = t('d20') === 'W20' ? def.weapon.damage.replace(/d/g, 'W') : def.weapon.damage;
+  return `${t(def.name)} (${dice} ${t(`${def.weapon.damageType} damage`)})`;
 }

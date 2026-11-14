@@ -49,6 +49,17 @@ ${Object.values(MONSTERS).map((m) => `- ${m.id}: ${m.name}, AC ${m.ac}, ${m.hp} 
 Item catalogue (use the id in give_item)
 ${Object.values(ITEMS).map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`).join('\n')}`;
 
+/** Tells the DM which language the table plays in. English needs no note. */
+export function languageNote(game: Game): string[] {
+  if (game.lang !== 'de') return [];
+  return [
+    'LANGUAGE: This table plays in German. Write everything the players read in natural, idiomatic German, addressing the party as "ihr": scene titles, narration, suggested actions, dialogue, and the names, roles and descriptions of any place, person or quest you create, as well as quest notes, deeds and journal lines.',
+    'Use the established German D&D 5e terms: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Fertigkeitswurf, Vorteil and Nachteil, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
+    'Tool arguments that are ids or fixed choices (character ids, monster types, item ids, moods, abilities, skills, kinds, statuses) stay exactly as specified in English. Only free text is German. The "appearance" fields stay in English.',
+    '',
+  ];
+}
+
 function partyLines(game: Game): string[] {
   return game.s.characters.map((c) => {
     const weapon = c.equipment.mainHand ? ITEMS[c.equipment.mainHand.defId].name : 'unarmed';
@@ -60,7 +71,7 @@ function partyLines(game: Game): string[] {
 /** The world outside combat: where the party is, what it knows and what the DM remembers. */
 export function describeWorld(game: Game): string {
   const s = game.s, w = game.world, mem = s.memory;
-  const lines: string[] = [];
+  const lines: string[] = languageNote(game);
   const place = game.place();
   const terrain = TERRAIN[trueTerrain(w, w.party)].name;
   lines.push(`Time: ${formatTime(w.minutes)} (${timeOfDay(w.minutes)}).`);
@@ -109,7 +120,7 @@ export function describeWorld(game: Game): string {
 /** The battle in progress, for narrating and playing monsters. */
 export function describeCombat(game: Game): string {
   const s = game.s;
-  const lines: string[] = [];
+  const lines: string[] = languageNote(game);
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
   lines.push('Party:');

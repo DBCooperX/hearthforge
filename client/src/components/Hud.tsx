@@ -1,29 +1,31 @@
 import { ABILITIES, ITEMS } from '../../../shared/content';
 import type { Character, GameState } from '../../../shared/types';
 import type { Connection } from '../net';
+import { useT } from '../i18n';
 
 export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string } | { kind: 'item'; uid: string } | null;
 
 export function TurnBar({ state }: { state: GameState }) {
+  const t = useT();
   const combat = state.combat;
   if (!combat) return null;
   const name = (id: string) => state.characters.find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
   return (
     <div className="turnbar">
-      <span className="phase combat">Round {combat.round}</span>
+      <span className="phase combat">{t('Round {n}', { n: combat.round })}</span>
       <div className="order">
         {combat.order.map((o, i) => {
           const m = state.monsters.find((x) => x.id === o.id);
           const c = state.characters.find((x) => x.id === o.id);
           const out = m ? !m.alive : c ? c.dead || c.hp <= 0 : true;
           return (
-            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out'].filter(Boolean).join(' ')} title={`Initiative ${o.initiative}`}>
+            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out'].filter(Boolean).join(' ')} title={`${t('Initiative')} ${o.initiative}`}>
               {name(o.id)}
             </span>
           );
         })}
       </div>
-      {state.dmBusy && <span className="thinking">The Dungeon Master is thinking…</span>}
+      {state.dmBusy && <span className="thinking">{t('The Dungeon Master is thinking…')}</span>}
     </div>
   );
 }
@@ -39,6 +41,7 @@ interface ActionBarProps {
 }
 
 export function ActionBar({ state, actor, targeting, setTargeting, conn, onInventory, hint }: ActionBarProps) {
+  const t = useT();
   const combat = state.phase === 'combat' ? state.combat : null;
   const myTurn = !!actor && (!combat || combat.order[combat.turnIndex]?.id === actor.id);
   const canAct = myTurn && !!actor && actor.hp > 0;
@@ -59,9 +62,9 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
             disabled={!canAct || (actionUsed && combat.attacksLeft <= 0)}
             data-hotkey={key()}
             onClick={() => toggle({ kind: 'attack' })}
-            title="Attack with your main-hand weapon. You can also just click an enemy."
+            title={t('Attack with your main-hand weapon. You can also just click an enemy.')}
           >
-            <span className="icon">⚔️</span>Attack
+            <span className="icon">⚔️</span>{t('Attack')}
           </button>
         )}
         {actor?.abilityIds.map((id) => {
@@ -78,13 +81,13 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
               className={on ? 'act on' : 'act'}
               disabled={blocked}
               data-hotkey={key()}
-              title={ab.description}
+              title={t(ab.description)}
               onClick={() => {
                 if (ab.target === 'self') { conn.send({ t: 'ability', characterId: actor.id, abilityId: id }); setTargeting(null); }
                 else toggle({ kind: 'ability', abilityId: id });
               }}
             >
-              <span className="icon">{ab.icon}</span>{ab.name}
+              <span className="icon">{ab.icon}</span>{t(ab.name)}
               {ab.cost > 0 && <span className="cost">{ab.cost}</span>}
             </button>
           );
@@ -94,17 +97,17 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
             className={targeting?.kind === 'item' ? 'act on' : 'act'}
             disabled={!canAct || actionUsed}
             data-hotkey={key()}
-            title="Drink a healing potion, or feed it to an adjacent ally."
+            title={t('Drink a healing potion, or feed it to an adjacent ally.')}
             onClick={() => toggle({ kind: 'item', uid: potion.uid })}
           >
-            <span className="icon">🧪</span>Potion<span className="cost">{potions}</span>
+            <span className="icon">🧪</span>{t('Potion')}<span className="cost">{potions}</span>
           </button>
         )}
         <span className="spacer" />
-        <button className="act" onClick={onInventory} title="Inventory (i)"><span className="icon">🎒</span>Inventory</button>
+        <button className="act" onClick={onInventory} title={t('Inventory (i)')}><span className="icon">🎒</span>{t('Inventory')}</button>
         {actor && combat && (
-          <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} title="End turn (Space)">
-            <span className="icon">⏭️</span>End turn
+          <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} title={t('End turn (Space)')}>
+            <span className="icon">⏭️</span>{t('End turn')}
           </button>
         )}
       </div>

@@ -2,6 +2,7 @@ import { CLASS_INFO } from '../../../shared/content';
 import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
 import { playerId } from '../net';
+import { useT } from '../i18n';
 
 interface Props {
   state: GameState;
@@ -14,9 +15,10 @@ interface Props {
 }
 
 function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: number }) {
+  const t = useT();
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   return (
-    <div className={`bar ${kind}`} title={kind === 'hp' ? 'Hit points' : 'Mana (spell points)'}>
+    <div className={`bar ${kind}`} title={kind === 'hp' ? t('Hit points') : t('Mana (spell points)')}>
       <div className="fill" style={{ width: `${pct}%` }} />
       <span>{value} / {max}</span>
     </div>
@@ -24,9 +26,10 @@ function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: nu
 }
 
 export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet }: Props) {
+  const t = useT();
   return (
     <aside className="party">
-      <h2>Party</h2>
+      <h2>{t('Party')}</h2>
       {state.characters.map((c) => {
         const down = c.hp <= 0 && !c.dead;
         const mine = c.ownerId === playerId;
@@ -48,22 +51,22 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
           >
             <div className="portrait" style={{ borderColor: CLASS_INFO[c.classId].color }}>
               <img className="pixel" src={spriteUrl(c.classId)} alt="" />
-              <span className="ac" title="Armor Class">{c.ac}</span>
+              <span className="ac" title={t('Armor Class')}>{c.ac}</span>
             </div>
             <div className="info">
               <div className="name">
                 <b>{c.name}</b>
-                <button className="link sheet-link" title="Character sheet (c)" onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{c.className} {c.level}</button>
+                <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{t(c.className)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} />
               {c.maxMana > 0 && <Bar kind="mana" value={c.mana} max={c.maxMana} />}
-              <div className="xpbar" title={c.level < MAX_LEVEL ? `${c.xp} / ${XP_THRESHOLDS[c.level]} XP to level ${c.level + 1}` : `${c.xp} XP`}>
+              <div className="xpbar" title={c.level < MAX_LEVEL ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next: XP_THRESHOLDS[c.level], level: c.level + 1 }) : `${c.xp} XP`}>
                 <div style={{ width: `${c.level < MAX_LEVEL ? Math.min(100, ((c.xp - XP_THRESHOLDS[c.level - 1]) / (XP_THRESHOLDS[c.level] - XP_THRESHOLDS[c.level - 1])) * 100) : 100}%` }} />
               </div>
               <div className="conditions">
-                {c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{x}</span>)}
+                {c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{t(x)}</span>)}
                 {down && !c.conditions.includes('stable') && (
-                  <span className="saves" title="Death saves">
+                  <span className="saves" title={t('Death saves')}>
                     {'●'.repeat(c.deathSaves.successes)}{'○'.repeat(3 - c.deathSaves.successes)} <i>{'✖'.repeat(c.deathSaves.failures)}</i>
                   </span>
                 )}
@@ -73,7 +76,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
           </div>
         );
       })}
-      <div className="gold" title="Party gold">🪙 {state.gold} gp</div>
+      <div className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</div>
     </aside>
   );
 }

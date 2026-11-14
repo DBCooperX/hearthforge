@@ -3,6 +3,8 @@
 // Hexes are pointy-topped in an "odd-r" offset layout: q is the column, r the row,
 // and odd rows are shifted half a hex to the right.
 
+import { tr, type Lang } from './i18n';
+
 export interface Hex {
   q: number;
   r: number;
@@ -148,10 +150,10 @@ export function summarizeRoute(path: Hex[], terrainAt: (h: Hex) => string, start
 }
 
 /** "Day 2, 14:30" */
-export function formatTime(minutes: number): string {
+export function formatTime(minutes: number, lang: Lang = 'en'): string {
   const day = Math.floor(minutes / 1440) + 1;
   const h = Math.floor(minutes / 60) % 24, m = Math.floor(minutes % 60);
-  return `Day ${day}, ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return `${tr(lang, 'Day')} ${day}, ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 export function timeOfDay(minutes: number): string {
@@ -164,8 +166,8 @@ export function timeOfDay(minutes: number): string {
   return 'night';
 }
 
-export function formatHours(hours: number): string {
+export function formatHours(hours: number, lang: Lang = 'en'): string {
   const h = Math.floor(hours), m = Math.round((hours - h) * 60);
-  if (h >= 24) { const d = Math.floor(h / 24), rest = h % 24; return `${d} day${d > 1 ? 's' : ''}${rest ? ` ${rest} h` : ''}`; }
+  if (h >= 24) { const d = Math.floor(h / 24), rest = h % 24; return `${d} ${tr(lang, d > 1 ? 'days' : 'day')}${rest ? ` ${rest} h` : ''}`; }
   return m ? `${h} h ${m} min` : `${h} h`;
 }

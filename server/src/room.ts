@@ -117,6 +117,7 @@ export class Room {
       case 'long_rest': return g.longRest();
       case 'go': return g.goTo(String(msg.locationId));
       case 'delve': return g.delve();
+      case 'set_language': return g.setLanguage(playerId, msg.lang);
       case 'reset':
         this.epoch++;
         return g.reset();

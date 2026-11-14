@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useT } from '../i18n';
 import { TERRAIN, UNKNOWN, hexCenter, hexKey, sameHex, type Hex, type TerrainCode } from '../../../shared/hex';
 import type { Location, LocationKind, WorldView } from '../../../shared/types';
 
@@ -27,6 +28,7 @@ interface Props {
 
 /** The hex overworld: explored terrain, known places, the party marker and the planned route. */
 export function HexMap({ world, target, route, onPick, local }: Props) {
+  const t = useT();
   const [hover, setHover] = useState<Hex | null>(null);
   const top = useMemo(() => world.locations.filter((l) => !l.parentId), [world.locations]);
   const byHex = useMemo(() => new Map<string, Location>(top.map((l) => [hexKey(l), l])), [top]);
@@ -53,7 +55,7 @@ export function HexMap({ world, target, route, onPick, local }: Props) {
     return `${x.toFixed(0)} ${y.toFixed(0)} ${vw.toFixed(0)} ${vh.toFixed(0)}`;
   }, [local, party.x, party.y, target?.q, target?.r, fullW, fullH]);
   const line = route?.length ? [world.party, ...route].map((h) => { const c = hexCenter(h, SIZE); return `${c.x.toFixed(1)},${c.y.toFixed(1)}`; }).join(' ') : null;
-  const hovered = hover && (byHex.get(hexKey(hover))?.name ?? (world.terrain[hover.r * world.width + hover.q] === UNKNOWN ? 'Uncharted' : TERRAIN[world.terrain[hover.r * world.width + hover.q] as TerrainCode].name));
+  const hovered = hover && (byHex.get(hexKey(hover))?.name ?? (world.terrain[hover.r * world.width + hover.q] === UNKNOWN ? t('Uncharted') : t(TERRAIN[world.terrain[hover.r * world.width + hover.q] as TerrainCode].name)));
 
   return (
     <div className="hexmap">
@@ -86,7 +88,7 @@ export function HexMap({ world, target, route, onPick, local }: Props) {
           <text y={6}>🚩</text>
         </g>
       </svg>
-      <div className="hexmap-hint">{hovered ?? (sameHex(world.party, target ?? { q: -1, r: -1 }) ? '' : 'Click a hex to plan a journey')}</div>
+      <div className="hexmap-hint">{hovered ?? (sameHex(world.party, target ?? { q: -1, r: -1 }) ? '' : t('Click a hex to plan a journey'))}</div>
     </div>
   );
 }

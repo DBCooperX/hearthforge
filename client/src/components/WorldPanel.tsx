@@ -4,6 +4,7 @@ import type { GameState, WorldView } from '../../../shared/types';
 import type { Connection } from '../net';
 import { HexMap, KIND_ICON } from './HexMap';
 import { EntityName, useEntity } from './Story';
+import { useLang, useT } from '../i18n';
 
 function Named({ name }: { name: string }) {
   const entity = useEntity(name);
@@ -20,6 +21,8 @@ interface TravelProps {
 
 /** The hex map with the travel planner: pick a hex, read the journey, set out. */
 export function TravelMap({ world, state, conn, target, setTarget, local }: TravelProps & { local?: boolean }) {
+  const t = useT();
+  const { lang } = useLang();
   const terrainAt = (h: Hex) => world.terrain[h.r * world.width + h.q];
   const plan = useMemo(() => {
     if (!target || sameHex(target, world.party)) return null;
@@ -36,26 +39,26 @@ export function TravelMap({ world, state, conn, target, setTarget, local }: Trav
       {target && plan && (
         <div className="travel">
           <div className="travel-head">
-            <b>{dest ? `${KIND_ICON[dest.kind]} ${dest.name}` : code === UNKNOWN ? 'Uncharted land' : `Open ${TERRAIN[code as TerrainCode].name}`}</b>
-            <button className="link" onClick={() => setTarget(null)}>cancel</button>
+            <b>{dest ? `${KIND_ICON[dest.kind]} ${dest.name}` : code === UNKNOWN ? t('Uncharted land') : t(TERRAIN[code as TerrainCode].name)}</b>
+            <button className="link" onClick={() => setTarget(null)}>{t('cancel')}</button>
           </div>
           {plan.summary ? (
             <>
               <dl>
-                <div><dt>Distance</dt><dd>{plan.summary.miles} miles</dd></div>
-                <div><dt>Time</dt><dd>{formatHours(plan.summary.hours)}</dd></div>
-                <div><dt>Arrive</dt><dd>{formatTime(plan.summary.arrival)}</dd></div>
-                <div><dt>Encounter</dt><dd className={plan.summary.encounterChance > 0.5 ? 'risky' : ''}>{Math.round(plan.summary.encounterChance * 100)}%</dd></div>
+                <div><dt>{t('Distance')}</dt><dd>{t('{n} miles', { n: plan.summary.miles })}</dd></div>
+                <div><dt>{t('Time')}</dt><dd>{formatHours(plan.summary.hours, lang)}</dd></div>
+                <div><dt>{t('Arrive')}</dt><dd>{formatTime(plan.summary.arrival, lang)}</dd></div>
+                <div><dt>{t('Encounter')}</dt><dd className={plan.summary.encounterChance > 0.5 ? 'risky' : ''}>{Math.round(plan.summary.encounterChance * 100)}%</dd></div>
               </dl>
               <div className="terrain-row">
-                {plan.summary.terrain.map((t) => <span key={t.name} className="chip">{t.name} × {t.hexes}</span>)}
+                {plan.summary.terrain.map((x) => <span key={x.name} className="chip">{t(x.name)} × {x.hexes}</span>)}
               </div>
               <button className="primary" disabled={!canGo} onClick={() => { conn.send({ t: 'travel', q: target.q, r: target.r }); setTarget(null); }}>
-                {state.travelling ? 'Travelling…' : 'Set out'}
+                {state.travelling ? t('Travelling…') : t('Set out')}
               </button>
             </>
           ) : (
-            <p className="muted small">{code === 'w' ? 'You cannot cross open water.' : 'You know no way there yet.'}</p>
+            <p className="muted small">{code === 'w' ? t('You cannot cross open water.') : t('You know no way there yet.')}</p>
           )}
         </div>
       )}
@@ -70,6 +73,8 @@ interface PanelProps extends TravelProps {
 
 /** Right-hand panel while exploring: where you are, who is here, the map and your quests. */
 export function WorldPanel(props: PanelProps) {
+  const t = useT();
+  const { lang } = useLang();
   const { world, state, conn, onExpand, onJournal } = props;
   const place = world.locations.find((l) => l.id === world.placeId) ?? null;
   const parent = place?.parentId ? world.locations.find((l) => l.id === place.parentId) : null;
@@ -85,33 +90,33 @@ export function WorldPanel(props: PanelProps) {
       <header className="where">
         <span className="where-icon">{place ? KIND_ICON[place.kind] : '🧭'}</span>
         <div>
-          <h2>{place?.name ?? 'The wilds'}</h2>
-          <small>{place ? `${place.kind}${parent ? ` in ${parent.name}` : ''}` : `${terrain}${nearest ? `, near ${nearest.name}` : ''}`}</small>
+          <h2>{place?.name ?? t('The wilds')}</h2>
+          <small>{place ? (parent ? t('{kind} in {place}', { kind: t(place.kind), place: parent.name }) : t(place.kind)) : `${t(terrain)}${nearest ? `, ${t('near {place}', { place: nearest.name })}` : ''}`}</small>
         </div>
-        <div className="clock" title={world.safe ? 'A safe place to rest' : 'Resting here is risky'}>
-          <b>{formatTime(world.minutes)}</b>
-          <small>{timeOfDay(world.minutes)}{world.safe ? ' · safe' : ''}</small>
+        <div className="clock" title={world.safe ? t('A safe place to rest') : t('Resting here is risky')}>
+          <b>{formatTime(world.minutes, lang)}</b>
+          <small>{t(timeOfDay(world.minutes))}{world.safe ? ` · ${t('safe')}` : ''}</small>
         </div>
       </header>
 
       <div className="wp-scroll">
         <section>
-          <h3>Map <button className="link" onClick={onExpand} title="Open the full map (m)">expand</button></h3>
+          <h3>{t('Map')} <button className="link" onClick={onExpand} title={t('Open the full map (m)')}>{t('expand')}</button></h3>
           <TravelMap {...props} local />
         </section>
 
         {(here.length > 0 || place?.dungeon) && (
           <section>
-            <h3>Here</h3>
+            <h3>{t('Here')}</h3>
             <div className="here-list">
               {place?.dungeon && (
                 place.dungeon.next
-                  ? <button disabled={!idle} onClick={() => conn.send({ t: 'delve' })} title="Fight your way into the next section">⚔️ Delve into {place.dungeon.next} <small>{place.dungeon.cleared}/{place.dungeon.total} cleared</small></button>
-                  : <p className="muted small">Cleared. Nothing stirs here any more.</p>
+                  ? <button disabled={!idle} onClick={() => conn.send({ t: 'delve' })} title={t('Fight your way into the next section')}>⚔️ {t('Delve: {stage}', { stage: place.dungeon.next })} <small>{t('{n}/{total} cleared', { n: place.dungeon.cleared, total: place.dungeon.total })}</small></button>
+                  : <p className="muted small">{t('Cleared. Nothing stirs here any more.')}</p>
               )}
               {here.map((l) => (
                 <button key={l.id} disabled={!idle} onClick={() => conn.send({ t: 'go', locationId: l.id })}>
-                  {KIND_ICON[l.kind]} {l.parentId ? `Enter ${l.name}` : `Back to ${l.name}`}
+                  {KIND_ICON[l.kind]} {l.parentId ? t('Enter {place}', { place: l.name }) : t('Back to {place}', { place: l.name })}
                 </button>
               ))}
             </div>
@@ -119,12 +124,12 @@ export function WorldPanel(props: PanelProps) {
         )}
 
         <section>
-          <h3>Who is here</h3>
-          {present.length === 0 && <p className="muted small">{place ? 'Nobody you know by name.' : 'Just the party and the wind.'}</p>}
+          <h3>{t('Who is here')}</h3>
+          {present.length === 0 && <p className="muted small">{place ? t('Nobody you know by name.') : t('Just the party and the wind.')}</p>}
           <ul className="people">
             {present.map((n) => (
               <li key={n.id}>
-                <span className={`disp ${n.disposition}`} title={n.disposition} />
+                <span className={`disp ${n.disposition}`} title={t(n.disposition)} />
                 <div><Named name={n.name} /><small>{n.role}</small></div>
               </li>
             ))}
@@ -132,8 +137,8 @@ export function WorldPanel(props: PanelProps) {
         </section>
 
         <section>
-          <h3>Quests <button className="link" onClick={onJournal} title="Open the journal (j)">journal</button></h3>
-          {quests.length === 0 && <p className="muted small">No open quests. The Vale is wide; go and find trouble.</p>}
+          <h3>{t('Quests')} <button className="link" onClick={onJournal} title={t('Open the journal (j)')}>{t('journal')}</button></h3>
+          {quests.length === 0 && <p className="muted small">{t('No open quests. The Vale is wide; go and find trouble.')}</p>}
           <ul className="quests">
             {quests.map((q) => <li key={q.id}><b>{q.title}</b><small>{q.summary}</small></li>)}
           </ul>
@@ -141,8 +146,8 @@ export function WorldPanel(props: PanelProps) {
       </div>
 
       <footer className="wp-actions">
-        <button disabled={!idle || state.shortRestsLeft <= 0} onClick={() => conn.send({ t: 'short_rest' })} title="One hour. Spend a hit die to heal and recover some mana.">⛺ Short rest <span className="cost">{state.shortRestsLeft}</span></button>
-        <button disabled={!idle} onClick={() => conn.send({ t: 'long_rest' })} title={world.safe ? 'Eight hours. Restores everything.' : 'Eight hours. Restores everything, but camping in the wild can be interrupted.'}>🌙 Long rest</button>
+        <button disabled={!idle || state.shortRestsLeft <= 0} onClick={() => conn.send({ t: 'short_rest' })} title={t('One hour. Spend a hit die to heal and recover some mana.')}>{t('⛺ Short rest')} <span className="cost">{state.shortRestsLeft}</span></button>
+        <button disabled={!idle} onClick={() => conn.send({ t: 'long_rest' })} title={world.safe ? t('Eight hours. Restores everything.') : t('Eight hours. Restores everything, but camping in the wild can be interrupted.')}>{t('🌙 Long rest')}</button>
       </footer>
     </aside>
   );
@@ -150,42 +155,43 @@ export function WorldPanel(props: PanelProps) {
 
 /** Everything the party (and the Dungeon Master) remembers: quests, deeds, people and places. */
 export function Journal({ state, onClose }: { state: GameState; onClose: () => void }) {
+  const t = useT();
   const w = state.world!;
   const { quests, deeds, npcs } = state.memory;
-  const placeName = (id: string | null) => w.locations.find((l) => l.id === id)?.name ?? 'parts unknown';
+  const placeName = (id: string | null) => w.locations.find((l) => l.id === id)?.name ?? t('parts unknown');
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="panel journal">
-        <header><h1>Journal</h1><button className="link close" onClick={onClose} title="Close (j or Esc)">✕</button></header>
+        <header><h1>{t('Journal')}</h1><button className="link close" onClick={onClose} title={t('Close (j or Esc)')}>✕</button></header>
         <div className="journal-body">
           <section>
-            <h3>Quests</h3>
-            {quests.length === 0 && <p className="muted">Nothing yet.</p>}
+            <h3>{t('Quests')}</h3>
+            {quests.length === 0 && <p className="muted">{t('Nothing yet.')}</p>}
             {quests.map((q) => (
               <div key={q.id} className={`quest ${q.status}`}>
-                <b>{q.title}</b> <span className="chip">{q.status}</span>
+                <b>{q.title}</b> <span className="chip">{t(q.status)}</span>
                 <p>{q.summary}</p>
                 {q.notes.length > 0 && <ul>{q.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
               </div>
             ))}
-            <h3>Deeds</h3>
-            {deeds.length === 0 && <p className="muted">Your story is still unwritten.</p>}
-            <ul className="deeds">{deeds.map((d) => <li key={d.id}><small>Day {d.day}</small> {d.text}</li>)}</ul>
+            <h3>{t('Deeds')}</h3>
+            {deeds.length === 0 && <p className="muted">{t('Your story is still unwritten.')}</p>}
+            <ul className="deeds">{deeds.map((d) => <li key={d.id}><small>{t('Day')} {d.day}</small> {d.text}</li>)}</ul>
           </section>
           <section>
-            <h3>People</h3>
-            {npcs.length === 0 && <p className="muted">You have met nobody yet.</p>}
+            <h3>{t('People')}</h3>
+            {npcs.length === 0 && <p className="muted">{t('You have met nobody yet.')}</p>}
             {npcs.map((n) => (
               <div key={n.id} className="person">
-                <span className={`disp ${n.disposition}`} title={n.disposition} /> <b>{n.name}</b> <small>{n.role} · {placeName(n.locationId)}</small>
+                <span className={`disp ${n.disposition}`} title={t(n.disposition)} /> <b>{n.name}</b> <small>{n.role} · {placeName(n.locationId)}</small>
                 <p>{n.description}</p>
                 {n.notes.length > 0 && <ul>{n.notes.map((x, i) => <li key={i}>{x}</li>)}</ul>}
               </div>
             ))}
-            <h3>Places</h3>
+            <h3>{t('Places')}</h3>
             {w.locations.map((l) => (
               <div key={l.id} className="person">
-                {KIND_ICON[l.kind]} <b>{l.name}</b> <small>{l.kind}{l.parentId ? ` in ${placeName(l.parentId)}` : ''}{l.visited ? '' : ' · not yet visited'}</small>
+                {KIND_ICON[l.kind]} <b>{l.name}</b> <small>{l.parentId ? t('{kind} in {place}', { kind: t(l.kind), place: placeName(l.parentId) }) : t(l.kind)}{l.visited ? '' : ` · ${t('not yet visited')}`}</small>
                 <p>{l.description}</p>
               </div>
             ))}
@@ -198,10 +204,11 @@ export function Journal({ state, onClose }: { state: GameState; onClose: () => v
 
 /** Full-size map overlay. */
 export function MapOverlay(props: TravelProps & { onClose: () => void }) {
+  const t = useT();
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="panel bigmap">
-        <header><h1>The Emberfall Vale</h1><small className="muted">One hex is {HEX_MILES} miles</small><button className="link close" onClick={props.onClose} title="Close (m or Esc)">✕</button></header>
+        <header><h1>{t('The Emberfall Vale')}</h1><small className="muted">{t('One hex is {n} miles', { n: HEX_MILES })}</small><button className="link close" onClick={props.onClose} title={t('Close (m or Esc)')}>✕</button></header>
         <TravelMap {...props} />
       </div>
     </div>

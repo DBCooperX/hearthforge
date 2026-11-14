@@ -4,6 +4,7 @@
 import { UNKNOWN, findRoute, hexDistance, neighbors, type Hex, type TerrainCode } from '../../../shared/hex';
 import type { Deed, Location, Npc, Quest } from '../../../shared/types';
 import { SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS, START_LOCATION, WORLD_HEIGHT, WORLD_WIDTH, type StageDef } from '../data/world';
+import { tr, type Lang } from '../../../shared/i18n';
 import type { Rng } from './dice';
 
 export interface LocationState extends Omit<Location, 'dungeon'> {
@@ -119,7 +120,9 @@ function generateTerrain(width: number, height: number, rng: Rng): string[] {
   return out;
 }
 
-export function generateWorld(seed: number, rng: Rng): { world: WorldState; memory: MemoryState } {
+export function generateWorld(seed: number, rng: Rng, lang: Lang = 'en'): { world: WorldState; memory: MemoryState } {
+  // Seeded names and descriptions are written once, in the session language. Appearance notes stay English: they are for image prompts.
+  const l = (text: string) => tr(lang, text);
   const width = WORLD_WIDTH, height = WORLD_HEIGHT;
   const cells = generateTerrain(width, height, rng);
   const idx = (h: Hex) => h.r * width + h.q;
@@ -140,9 +143,9 @@ export function generateWorld(seed: number, rng: Rng): { world: WorldState; memo
   }
 
   const locations: LocationState[] = SEED_LOCATIONS.map((l) => ({
-    id: l.id, name: l.name, kind: l.kind, q: l.q, r: l.r, parentId: l.parentId ?? null, description: l.description,
+    id: l.id, name: tr(lang, l.name), kind: l.kind, q: l.q, r: l.r, parentId: l.parentId ?? null, description: tr(lang, l.description),
     visited: false, origin: 'seed', visual: { description: l.appearance, imageId: null }, zone: null,
-    discovered: !!l.known, ...(l.stages ? { stages: l.stages, cleared: 0 } : {}), ...(l.questId ? { questId: l.questId } : {}),
+    discovered: !!l.known, ...(l.stages ? { stages: l.stages.map((st) => ({ ...st, name: tr(lang, st.name), description: tr(lang, st.description) })), cleared: 0 } : {}), ...(l.questId ? { questId: l.questId } : {}),
   }));
   const world: WorldState = {
     seed, width, height, terrain: cells.join(''), explored: '0'.repeat(width * height),
@@ -151,10 +154,10 @@ export function generateWorld(seed: number, rng: Rng): { world: WorldState; memo
   reveal(world, world.party, 2);
   const memory: MemoryState = {
     npcs: SEED_NPCS.map((n) => ({
-      id: n.id, name: n.name, role: n.role, description: n.description, disposition: n.disposition, locationId: n.locationId,
+      id: n.id, name: l(n.name), role: l(n.role), description: l(n.description), disposition: n.disposition, locationId: n.locationId,
       notes: [], origin: 'seed', visual: { description: n.appearance, imageId: null }, met: false,
     })),
-    quests: SEED_QUESTS.map((q) => ({ id: q.id, title: q.title, status: 'active', summary: q.summary, notes: [], rewardXp: q.rewardXp, rewardGold: q.rewardGold })),
+    quests: SEED_QUESTS.map((q) => ({ id: q.id, title: l(q.title), status: 'active', summary: l(q.summary), notes: [], rewardXp: q.rewardXp, rewardGold: q.rewardGold })),
     deeds: [],
     journal: [],
     chronicle: '',
