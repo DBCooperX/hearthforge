@@ -12,6 +12,7 @@ interface Props {
   onPick: (c: Character) => void;
   onGive: (fromCharacterId: string, from: InvLoc, to: Character) => void;
   onSheet: (c: Character) => void;
+  onLevelUp: (c: Character) => void;
 }
 
 function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: number }) {
@@ -25,7 +26,7 @@ function Bar({ kind, value, max }: { kind: 'hp' | 'mana'; value: number; max: nu
   );
 }
 
-export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet }: Props) {
+export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet, onLevelUp }: Props) {
   const t = useT();
   return (
     <aside className="party">
@@ -63,6 +64,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
               <div className="xpbar" title={c.level < MAX_LEVEL ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next: XP_THRESHOLDS[c.level], level: c.level + 1 }) : `${c.xp} XP`}>
                 <div style={{ width: `${c.level < MAX_LEVEL ? Math.min(100, ((c.xp - XP_THRESHOLDS[c.level - 1]) / (XP_THRESHOLDS[c.level] - XP_THRESHOLDS[c.level - 1])) * 100) : 100}%` }} />
               </div>
+              {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}>⬆ {t('Level up')}</button>}
               <div className="conditions">
                 {c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{t(x)}</span>)}
                 {down && !c.conditions.includes('stable') && (

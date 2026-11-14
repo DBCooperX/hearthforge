@@ -1,0 +1,131 @@
+// Level-up choices: a feat (or ability score increase) or a new spell, explained the same
+// way as in the character creator, with a preview of what the choice changes.
+import { useMemo, useState } from 'react';
+import { ABILITIES } from '../../../shared/content';
+import { applyFeat, armorClass, castingAbility, classSpellList, spellOptions, weaponAttack, type Sheet } from '../../../shared/build';
+import { recommendFeat } from '../../../shared/recommend';
+import { ABILITY_HELP, CLASSES, CLASS_GUIDE, FEATS, loc } from '../../../shared/rules';
+import { SLOT_IDS, abilityMod, type Character, type FeatId, type FeatPick } from '../../../shared/types';
+import { ABILITY_NAMES } from '../../../shared/content';
+import { spriteUrl } from '../game/sprites';
+import { useLang, useT } from '../i18n';
+import type { Connection } from '../net';
+import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, featProblem, type Focus } from './Guide';
+
+/** A character in play, in the shape the stat preview understands. */
+export function sheetOf(c: Character): Sheet {
+  const worn = Object.fromEntries(SLOT_IDS.map((s) => [s, c.equipment[s]?.defId])) as Sheet['equipment'];
+  const atk = weaponAttack(c, c.equipment.mainHand?.defId);
+  const cast = castingAbility(c);
+  const hasSpells = c.abilityIds.some((id) => ABILITIES[id]?.spellLevel !== undefined);
+  return {
+    classId: c.classId, level: c.level, abilities: c.abilities, maxHp: c.maxHp, hp: c.hp, maxMana: c.maxMana, mana: c.mana,
+    skills: c.skills, abilityIds: c.abilityIds, feats: c.feats, features: c.features, profBonus: c.profBonus,
+    ac: armorClass(c, worn), speed: c.speed,
+    initiative: abilityMod(c.abilities.dex) + (c.feats.includes('alert') ? c.profBonus : 0),
+    expertise: c.expertise, saves: CLASSES[c.classId].saves, resist: c.resist, equipment: worn, bag: [], gold: 0,
+    attack: { name: atk.name, bonus: atk.bonus, damage: atk.damage, type: atk.type },
+    spell: hasSpells ? { ability: cast, attack: abilityMod(c.abilities[cast]) + c.profBonus, dc: 8 + c.profBonus + abilityMod(c.abilities[cast]) } : null,
+  };
+}
+
+interface Props { character: Character; conn: Connection; onClose: () => void }
+
+export function LevelUp({ character: c, conn, onClose }: Props) {
+  const t = useT();
+  const { lang } = useLang();
+  const choice = c.pending[0];
+  const [feat, setFeat] = useState<FeatPick | undefined>();
+  const [spell, setSpell] = useState<string | undefined>();
+  const [focus, setFocus] = useState<Focus>(null);
+  const [hover, setHover] = useState<{ feat?: FeatPick; spell?: string } | null>(null);
+
+  const now = useMemo(() => sheetOf(c), [c]);
+  const after = (pick: { feat?: FeatPick; spell?: string } | null) => {
+    if (!pick) return null;
+    const copy = structuredClone(c);
+    if (pick.feat) applyFeat(copy, pick.feat, false);
+    if (pick.spell) copy.abilityIds.unshift(pick.spell);
+    return sheetOf(copy);
+  };
+  const next = useMemo(() => after(hover ?? (feat ? { feat } : spell ? { spell } : null)), [hover, feat, spell, c]);
+  if (!choice) return null;
+
+  const list = classSpellList(c.classId);
+  const spells = choice.kind === 'spell' && list ? spellOptions(c, list, choice.pool) : [];
+  const feats = (Object.keys(FEATS) as FeatId[]).filter((f) => f === 'asi' || !c.feats.includes(f));
+  const recommended = recommendFeat(c, false);
+  const problem = choice.kind === 'feat' ? featProblem(c, feat, false) : spell ? null : { en: 'Choose a spell', de: 'Wähle einen Zauber' };
+  const confirm = () => {
+    if (problem) return;
+    conn.send({ t: 'choose', characterId: c.id, choiceId: choice.id, pick: choice.kind === 'feat' ? { feat: feat! } : { spell: spell! } });
+    setFeat(undefined); setSpell(undefined); setFocus(null); setHover(null);
+  };
+  const guide = CLASS_GUIDE[c.classId];
+
+  let detail;
+  if (focus?.kind === 'option') detail = <OptionDetail option={focus.option} kicker={focus.kicker} />;
+  else if (focus?.kind === 'spell') detail = <SpellDetail id={focus.id} sheet={next ?? now} />;
+  else if (focus?.kind === 'ability') {
+    const rank = guide.priority.indexOf(focus.key);
+    detail = (
+      <article className="detail">
+        <header><div><small className="kicker">{t('Ability')}</small><h2>{t(ABILITY_NAMES[focus.key])}</h2><p className="summary">{loc(ABILITY_HELP[focus.key].text, lang)}</p></div></header>
+        <h4>{t('What it is used for')}</h4>
+        <p><Rich text={loc(ABILITY_HELP[focus.key].uses, lang)} /></p>
+        <h4>{t('For a {class}', { class: t(guide.name) })}</h4>
+        <p className="goodfor">{rank === 0 ? t('Your most important ability. Make it as high as you can.') : rank === 1 ? t('Your second most important ability.') : rank >= 4 ? t('Least important for your class. A good place for your lowest score.') : t('Useful, but not a priority.')}</p>
+      </article>
+    );
+  } else {
+    detail = (
+      <article className="detail intro">
+        <header><div><small className="kicker">{t('Level {n}', { n: choice.level })}</small><h2>{choice.kind === 'feat' ? t('A feat, or stronger abilities') : choice.pool === 'cantrip' ? t('A new cantrip') : t('A new spell')}</h2></div></header>
+        <p><Rich text={choice.kind === 'feat'
+          ? t('At this level you either raise your ability scores or learn a feat. Raising your main ability is the strongest choice for most heroes; a feat makes you more versatile. Hover an option to see what it changes.')
+          : t('Your studies pay off: choose one spell to add to those you know. Hover a spell to see its numbers for your hero.')} /></p>
+        {c.pending.length > 1 && <p className="muted small">{t('{n} more choices follow.', { n: c.pending.length - 1 })}</p>}
+      </article>
+    );
+  }
+
+  return (
+    <div className="overlay creator-overlay">
+      <div className="panel creator levelup">
+        <header className="creator-head">
+          <img className="pixel" src={spriteUrl(c.classId)} alt="" />
+          <h1>{t('{name} reaches level {level}', { name: c.name, level: choice.level })}</h1>
+          <span className="spacer" />
+          <button className="link close" onClick={onClose} title={t('Decide later')}>✕</button>
+        </header>
+        <div className="creator-body">
+          <div className="creator-left">
+            {choice.kind === 'feat' ? (
+              <Section title={t('Choose one')}>
+                <FeatPicker build={c} options={feats} recommended={recommended.id} value={feat} focus={focus}
+                  onChange={(p) => { setFeat(p); setHover(null); }}
+                  onFocus={(f, p) => { setFocus(f); setHover(p ? { feat: p } : null); }} />
+              </Section>
+            ) : (
+              <Section title={choice.pool === 'cantrip' ? t('Cantrips') : t('Spells')}>
+                {spells.map((s) => (
+                  <PickRow key={s} icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected={spell === s}
+                    focused={focus?.kind === 'spell' && focus.id === s}
+                    onClick={() => { setSpell(s); setHover(null); }} onFocus={() => { setFocus({ kind: 'spell', id: s }); setHover(spell === s ? null : { spell: s }); }} onLeave={() => setHover(null)} />
+                ))}
+              </Section>
+            )}
+          </div>
+          <div className="creator-mid">{detail}</div>
+          <Preview now={now} next={next} title={c.name} />
+        </div>
+        <footer className="creator-foot">
+          <button type="button" onClick={onClose}>{t('Decide later')}</button>
+          <span className="spacer" />
+          {problem && (feat || spell) && <span className="muted small">{loc(problem, lang)}</span>}
+          <button type="button" className="primary" disabled={!!problem} onClick={confirm}>{t('Confirm choice')}</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
