@@ -164,25 +164,3 @@ export function generateWorld(seed: number, rng: Rng, lang: Lang = 'en'): { worl
   };
   return { world, memory };
 }
-
-// ------------------------------------------------------------ battle maps
-
-/**
- * A small arena for a fight. Obstacles are single tiles that never touch each
- * other or the spawn columns, so the floor is always fully connected.
- */
-export function buildArena(terrain: string, indoors: boolean, rng: Rng): string[] {
-  const width = 22, height = 13;
-  const grid = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => (x === 0 || y === 0 || x === width - 1 || y === height - 1 ? '#' : '.')));
-  const wanted = indoors ? 10 : ({ f: 16, h: 10, m: 12, s: 8, p: 4, r: 3 } as Record<string, number>)[terrain] ?? 6;
-  let placed = 0;
-  for (let tries = 0; tries < 400 && placed < wanted; tries++) {
-    const x = 5 + Math.floor(rng() * (width - 10)), y = 1 + Math.floor(rng() * (height - 2));
-    let clear = true;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (grid[y + dy]?.[x + dx] === '#' && y + dy > 0 && y + dy < height - 1) clear = false;
-    if (!clear) continue;
-    grid[y][x] = '#';
-    placed++;
-  }
-  return grid.map((r) => r.join(''));
-}
