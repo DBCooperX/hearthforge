@@ -35,7 +35,7 @@ import {
   type SceneMeta,
   type SlotId,
 } from '../../../shared/types';
-import { CLASSES, MANA_BY_LEVEL, profBonusFor } from '../data/classes';
+import { CLASSES, MANA_BY_LEVEL, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, type MonsterAttack, type MonsterDef } from '../data/monsters';
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
@@ -145,6 +145,8 @@ export class Game {
     // Saves from before the open world have no map or memory; those tables start over.
     const usable = saved && saved.memory && typeof saved.lastLongRest === 'number' && (saved.phase === 'lobby' || saved.world);
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
+    // Heroes saved before gender existed: premade names get theirs, anything else stays neutral.
+    for (const c of this.s.characters) c.gender ??= defaultGender(c.name, c.classId);
   }
 
   static freshState(room: string, players: PlayerInfo[] = [], language: Lang = 'en'): InternalState {
@@ -321,6 +323,7 @@ export class Game {
       name: clean,
       classId,
       className: cls.name,
+      gender: defaultGender(clean, classId),
       level: 1,
       abilities: { ...cls.abilities },
       profBonus: 2,

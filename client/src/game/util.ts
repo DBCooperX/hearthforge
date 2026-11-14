@@ -50,6 +50,13 @@ export function mod(score: number): string {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
+/** A hero's class in the player's language, in the feminine form where the language has one (Magierin). */
+export function classLabel(c: { className: string; gender?: string }, t: (text: string) => string): string {
+  const key = `${c.className} (female)`;
+  const feminine = c.gender === 'female' ? t(key) : key;
+  return feminine === key ? t(c.className) : feminine;
+}
+
 export function weaponSummary(c: Character, t: (text: string) => string = (x) => x): string {
   const it = c.equipment.mainHand;
   const def = it ? ITEMS[it.defId] : null;

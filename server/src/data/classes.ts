@@ -1,5 +1,5 @@
 // Level 1 pregenerated heroes built from the SRD 5.1 classes with the standard array.
-import type { Abilities, AbilityKey, ClassId, SlotId } from '../../../shared/types';
+import type { Abilities, AbilityKey, ClassId, Gender, SlotId } from '../../../shared/types';
 
 export interface ClassDef {
   id: ClassId;
@@ -17,6 +17,8 @@ export interface ClassDef {
   equipment: Partial<Record<SlotId, string>>;
   bag: { id: string; qty?: number }[];
   defaultNames: string[];
+  /** Gender of each premade name, in the same order. */
+  defaultGenders: Gender[];
   /** What each level after the first grants, keyed by the level reached. */
   levels: Record<number, LevelGain>;
 }
@@ -49,6 +51,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'chain_mail', mainHand: 'longsword', offHand: 'shield' },
     bag: [{ id: 'handaxe' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     defaultNames: ['Brann', 'Kara', 'Thorgar'],
+    defaultGenders: ['male', 'female', 'male'],
     levels: {
       2: { abilities: ['action_surge'] },
       3: { features: ['Improved Critical: weapon attacks crit on 19 or 20'] },
@@ -70,6 +73,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'leather', mainHand: 'shortsword' },
     bag: [{ id: 'shortbow' }, { id: 'dagger' }, { id: 'potion_healing' }, { id: 'thieves_tools' }],
     defaultNames: ['Vex', 'Nim', 'Sable'],
+    defaultGenders: ['female', 'male', 'female'],
     levels: {
       2: { abilities: ['dash'] },
       3: { features: ['Sneak Attack: 2d6'] },
@@ -92,6 +96,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { mainHand: 'quarterstaff' },
     bag: [{ id: 'dagger' }, { id: 'potion_healing' }, { id: 'spellbook' }],
     defaultNames: ['Elowen', 'Mirth', 'Zarek'],
+    defaultGenders: ['female', 'male', 'male'],
     levels: {
       2: { features: ['Arcane Recovery: a short rest restores 1 extra mana'] },
       3: { abilities: ['acid_arrow'] },
@@ -113,6 +118,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     equipment: { armor: 'scale_mail', mainHand: 'mace', offHand: 'shield', amulet: 'holy_symbol' },
     bag: [{ id: 'potion_healing', qty: 2 }],
     defaultNames: ['Osric', 'Maeve', 'Tomas'],
+    defaultGenders: ['male', 'female', 'male'],
     levels: {
       2: { abilities: ['healing_word'] },
       3: { features: ['Disciple of Life: your healing spells restore 3 extra hit points'] },
@@ -121,3 +127,13 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     },
   },
 };
+
+/** The gender of a premade hero, by name. A name the player made up says nothing, so it stays neutral until they choose. */
+export function defaultGender(name: string, classId?: string): Gender {
+  const pools = classId && CLASSES[classId as ClassId] ? [CLASSES[classId as ClassId]] : Object.values(CLASSES);
+  for (const cls of pools) {
+    const i = cls.defaultNames.indexOf(name);
+    if (i >= 0) return cls.defaultGenders[i] ?? 'neutral';
+  }
+  return 'neutral';
+}

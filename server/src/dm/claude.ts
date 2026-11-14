@@ -7,7 +7,7 @@ import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
 import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
-import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, transcript } from './context';
+import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, Scene } from './types';
@@ -331,9 +331,10 @@ export class ClaudeDM implements DungeonMaster {
 
   async respond(game: Game, playerName: string, text: string, onUpdate: () => Promise<void>): Promise<Scene | null> {
     const inCombat = game.s.phase === 'combat';
+    const who = playerHeroes(game, playerName);
     const ask = inCombat
-      ? `In the middle of the fight, the player ${playerName} says to you: ${JSON.stringify(text)}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
-      : `The player ${playerName} says or does this: ${JSON.stringify(text)}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene.`;
+      ? `In the middle of the fight, the player ${playerName}${who} says to you: ${JSON.stringify(text)}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
+      : `The player ${playerName}${who} says or does this: ${JSON.stringify(text)}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. Their message is already shown to everyone, so open with how the world answers it instead of repeating it.`;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
@@ -352,7 +353,7 @@ export class ClaudeDM implements DungeonMaster {
     this.maintaining = true;
     try {
       const old = mem.journal.slice(0, mem.journal.length - JOURNAL_KEEP);
-      const prompt = `Story so far:\n${mem.chronicle || '(nothing yet)'}\n\nNew journal entries, oldest first:\n${old.map((j) => `- Day ${j.day}: ${j.text}`).join('\n')}\n\nRewrite the story so far to include the new entries. Keep names, promises, debts, grudges and unresolved threads; drop colour. At most 250 words of plain prose.`;
+      const prompt = `Story so far:\n${mem.chronicle || '(nothing yet)'}\n\nNew journal entries, oldest first:\n${old.map((j) => `- Day ${j.day}: ${j.text}`).join('\n')}\n\nRewrite the story so far to include the new entries. Keep names, promises, debts, grudges and unresolved threads; drop colour. At most 250 words of plain prose${game.lang === 'de' ? ', written in German' : ''}.\n\nThe heroes and their genders, which must stay exactly as given: ${genderRoster(game)}. Keep the gender of every other person as the entries have it.`;
       const out = await this.converse('memory summary', 'background', prompt, [], async () => null, 'You keep the campaign notes for a Dungeons & Dragons game. You write compact, factual summaries that a Dungeon Master can rely on later.');
       if (out.text) {
         mem.chronicle = out.text.slice(0, 2500);
@@ -364,6 +365,14 @@ export class ClaudeDM implements DungeonMaster {
       this.maintaining = false;
     }
   }
+}
+
+/** Which heroes a player controls, so the DM knows who is speaking without having to guess. */
+function playerHeroes(game: Game, playerName: string): string {
+  const player = game.s.players.find((p) => p.name === playerName);
+  const heroes = player ? game.s.characters.filter((c) => c.ownerId === player.id && !c.dead).map((c) => c.name) : [];
+  if (!heroes.length) return '';
+  return heroes.length === 1 ? ` (who plays ${heroes[0]})` : ` (who plays ${heroes.join(', ')}; unless they say which hero acts, treat it as the party acting)`;
 }
 
 export function createDM(env: NodeJS.ProcessEnv): ClaudeDM | null {
