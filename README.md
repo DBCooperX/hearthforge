@@ -7,7 +7,7 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 ## What's in the game
 
 - **Party panel** on the left: portrait, HP and mana bars, armor class and conditions for every hero.
-- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear.
+- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear. Things the Dungeon Master invents during play (a clue, a letter, a strange key) land in the backpack too, with a fitting icon, a quest marker and their story notes; click an item to read them.
 - **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
 - **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
 - **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal.

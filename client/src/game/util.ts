@@ -1,4 +1,4 @@
-import { ITEMS } from '../../../shared/content';
+import { itemDef } from '../../../shared/items';
 import type { Character, GameState, ItemDef, SlotId } from '../../../shared/types';
 
 export const key = (x: number, y: number) => `${x},${y}`;
@@ -50,9 +50,9 @@ export function mod(score: number): string {
   return m >= 0 ? `+${m}` : `${m}`;
 }
 
-export function weaponSummary(c: Character, t: (text: string) => string = (x) => x): string {
+export function weaponSummary(state: GameState, c: Character, t: (text: string) => string = (x) => x): string {
   const it = c.equipment.mainHand;
-  const def = it ? ITEMS[it.defId] : null;
+  const def = it ? itemDef(state.items, it.defId) : null;
   if (!def?.weapon) return t('Unarmed strike');
   // German dice notation uses W (Würfel) where English uses d.
   const dice = t('d20') === 'W20' ? def.weapon.damage.replace(/d/g, 'W') : def.weapon.damage;

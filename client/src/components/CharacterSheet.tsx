@@ -1,6 +1,7 @@
-import { ABILITIES, ABILITY_NAMES, CLASS_INFO, ITEMS, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
+import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
+import { itemDef } from '../../../shared/items';
 import { weaponSummary } from '../game/util';
 import { useT } from '../i18n';
 
@@ -78,10 +79,10 @@ export function CharacterSheet({ state, character: c, onSelect, onClose }: Props
                 </tbody>
               </table>
               <h3>{t('Equipment')}</h3>
-              <p className="small">{t('Attack')}: {weaponSummary(c, t)}</p>
+              <p className="small">{t('Attack')}: {weaponSummary(state, c, t)}</p>
               <ul className="plain">
                 {worn.length === 0 && <li className="muted">{t('Nothing equipped.')}</li>}
-                {worn.map((s) => <li key={s}><small>{t(SLOT_LABELS[s])}</small> {ITEMS[c.equipment[s]!.defId].icon} {t(ITEMS[c.equipment[s]!.defId].name)}</li>)}
+                {worn.map((s) => <li key={s}><small>{t(SLOT_LABELS[s])}</small> {itemDef(state.items, c.equipment[s]!.defId)?.icon} {t(itemDef(state.items, c.equipment[s]!.defId)?.name ?? '')}</li>)}
               </ul>
             </div>
             <div>
