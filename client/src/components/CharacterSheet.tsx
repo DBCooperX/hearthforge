@@ -1,8 +1,8 @@
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
-import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState } from '../../../shared/types';
+import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
 import { itemDef } from '../../../shared/items';
-import { weaponSummary } from '../game/util';
+import { weaponSummary, classLabel } from '../game/util';
 import { useT } from '../i18n';
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -43,7 +43,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose }: Props
             <img className="pixel" src={spriteUrl(c.classId)} alt="" />
             <div>
               <h1 style={{ color: CLASS_INFO[c.classId].color }}>{c.name}</h1>
-              <p>{t('Level {level} {class}', { level: c.level, class: t(c.className) })}{owner ? ` · ${t('played by {name}', { name: owner.name })}` : ''}</p>
+              <p>{t('Level {level} {class}', { level: c.level, class: classLabel(c, t) })}{c.gender !== 'neutral' ? ` · ${t(PRONOUNS[c.gender])}` : ''}{owner ? ` · ${t('played by {name}', { name: owner.name })}` : ''}</p>
               <div className="xp" title={t('Experience')}>
                 <div className="fill" style={{ width: `${pct}%` }} />
                 <span>{next ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next, level: c.level + 1 }) : t('{xp} XP · highest level', { xp: c.xp })}</span>

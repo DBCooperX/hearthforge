@@ -7,6 +7,7 @@ import type { Connection } from '../net';
 import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
 import { tr } from '../../../shared/i18n';
+import { classLabel } from '../game/util';
 
 // ------------------------------------------------------------- entities
 
@@ -42,7 +43,7 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
   }
   for (const c of state.characters) {
     out.push({
-      name: c.name, kind: 'hero', icon: '🛡️', image: spriteUrl(c.classId), subtitle: t('Level {level} {class}', { level: c.level, class: t(c.className) }), description: t(CLASS_INFO[c.classId].blurb),
+      name: c.name, kind: 'hero', icon: '🛡️', image: spriteUrl(c.classId), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
       facts: [`${t('HP')} ${c.hp}/${c.maxHp} · ${t('AC')} ${c.ac}`, state.players.find((p) => p.id === c.ownerId)?.name ? t('Played by {name}', { name: state.players.find((p) => p.id === c.ownerId)!.name }) : ''].filter(Boolean),
     });
   }

@@ -32,4 +32,13 @@ export function tagged(lang: Lang) {
   };
 }
 
+/**
+ * A class name for one hero. German has a feminine form of each class (Magierin, Kämpferin);
+ * the dictionary lists it as "<Class> (female)". Other languages and genders use the plain name.
+ */
+export function classLabel(lang: Lang, className: string, gender?: string): string {
+  const feminine = gender === 'female' ? DICTS[lang]?.[`${className} (female)`] : undefined;
+  return feminine ?? tr(lang, className);
+}
+
 export const hasTranslation = (lang: Lang, key: string) => lang === 'en' || !!DICTS[lang]?.[key];

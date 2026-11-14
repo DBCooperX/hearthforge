@@ -38,12 +38,13 @@ import {
   type SceneMeta,
   type SlotId,
 } from '../../../shared/types';
-import { CLASSES, MANA_BY_LEVEL, profBonusFor } from '../data/classes';
+import { CLASSES, MANA_BY_LEVEL, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, type MonsterAttack, type MonsterDef } from '../data/monsters';
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
-import { buildArena, generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
+import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
+import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
 
 export class GameError extends Error {}
 
@@ -71,6 +72,8 @@ export interface InternalState {
   phase: Phase;
   /** Battle map rows; empty outside combat. */
   rows: string[];
+  /** What kind of place the battle map shows. Missing in saves from before biomes. */
+  biome?: Biome;
   characters: Character[];
   monsters: Monster[];
   combat: CombatState | null;
@@ -151,6 +154,8 @@ export class Game {
     const usable = saved && saved.memory && typeof saved.lastLongRest === 'number' && (saved.phase === 'lobby' || saved.world);
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
     this.s.items ??= {}; // saves from before story items
+    // Heroes saved before gender existed: premade names get theirs, anything else stays neutral.
+    for (const c of this.s.characters) c.gender ??= defaultGender(c.name, c.classId);
   }
 
   static freshState(room: string, players: PlayerInfo[] = [], language: Lang = 'en'): InternalState {
@@ -214,10 +219,28 @@ export class Game {
     return this.s.rows[y][x];
   }
 
-  private blocksSight(x: number, y: number) { return this.tile(x, y) === '#'; }
+  private blocksSight(x: number, y: number) { return tileBlocksSight(this.tile(x, y)); }
 
   /** Can anything ever stand here? */
-  private walkable(x: number, y: number) { return this.tile(x, y) === '.'; }
+  private walkable(x: number, y: number) { return tileWalkable(this.tile(x, y)); }
+
+  /** The part of a path that a movement budget pays for. Difficult terrain costs double. */
+  private afford(path: Pt[], budget: number): { walked: Pt[]; cost: number } {
+    const walked: Pt[] = [];
+    let cost = 0;
+    for (const p of path) {
+      const c = tileCost(this.tile(p.x, p.y));
+      if (cost + c > budget) break;
+      cost += c;
+      walked.push(p);
+    }
+    return { walked, cost };
+  }
+
+  private pathCost(path: Pt[]) { return path.reduce((n, p) => n + tileCost(this.tile(p.x, p.y)), 0); }
+
+  /** Half cover for the target of a shot: +2 AC behind a tree, boulder or furniture. */
+  private coverBonus(from: Pt, to: Pt) { return cheb(from, to) > 1 && hasCover(this.s.rows, from, to) ? COVER_BONUS : 0; }
 
   char(id: string): Character {
     const c = this.s.characters.find((c) => c.id === id);
@@ -259,35 +282,42 @@ export class Game {
   }
 
   /**
-   * Breadth-first path. `canEnter` decides which tiles may be walked through;
-   * `isGoal` decides where to stop. Returns the path excluding the start tile.
+   * Cheapest path by movement cost (difficult terrain costs double). `canEnter`
+   * decides which tiles may be walked through; `isGoal` decides where to stop.
+   * Returns the path excluding the start tile.
    */
   private bfs(start: Pt, isGoal: (p: Pt) => boolean, canEnter: (p: Pt) => boolean, maxNodes = 4000): Pt[] | null {
     if (isGoal(start)) return [];
-    const prev = new Map<string, string | null>([[key(start.x, start.y), null]]);
-    const queue: Pt[] = [start];
+    const startKey = key(start.x, start.y);
+    const best = new Map<string, { cost: number; prev: string | null }>([[startKey, { cost: 0, prev: null }]]);
+    // Steps cost 1 or 2, so one bucket per total cost is a complete priority queue.
+    const buckets: Pt[][] = [[start]];
     let found: Pt | null = null;
-    while (queue.length && prev.size < maxNodes) {
-      const cur = queue.shift()!;
-      for (const d of DIRS) {
-        const n = { x: cur.x + d.x, y: cur.y + d.y };
-        const k = key(n.x, n.y);
-        if (prev.has(k) || !this.walkable(n.x, n.y) || !canEnter(n)) continue;
-        // No cutting corners around obstacles.
-        if (d.x !== 0 && d.y !== 0 && (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y))) continue;
-        prev.set(k, key(cur.x, cur.y));
-        if (isGoal(n)) { found = n; break; }
-        queue.push(n);
+    for (let cost = 0; cost < buckets.length && !found && best.size < maxNodes; cost++) {
+      for (const cur of buckets[cost] ?? []) {
+        if (best.get(key(cur.x, cur.y))!.cost !== cost) continue;
+        if (isGoal(cur)) { found = cur; break; }
+        for (const d of DIRS) {
+          const n = { x: cur.x + d.x, y: cur.y + d.y };
+          if (!this.walkable(n.x, n.y) || !canEnter(n)) continue;
+          // No cutting corners around obstacles.
+          if (d.x !== 0 && d.y !== 0 && (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y))) continue;
+          const c = cost + tileCost(this.tile(n.x, n.y));
+          const k = key(n.x, n.y);
+          const seen = best.get(k);
+          if (seen && seen.cost <= c) continue;
+          best.set(k, { cost: c, prev: key(cur.x, cur.y) });
+          (buckets[c] ??= []).push(n);
+        }
       }
-      if (found) break;
     }
     if (!found) return null;
     const path: Pt[] = [];
     let k: string | null = key(found.x, found.y);
-    while (k && k !== key(start.x, start.y)) {
+    while (k && k !== startKey) {
       const [x, y] = k.split(',').map(Number);
       path.unshift({ x, y });
-      k = prev.get(k) ?? null;
+      k = best.get(k)?.prev ?? null;
     }
     return path;
   }
@@ -333,6 +363,7 @@ export class Game {
       name: clean,
       classId,
       className: cls.name,
+      gender: defaultGender(clean, classId),
       level: 1,
       abilities: { ...cls.abilities },
       profBonus: 2,
@@ -549,7 +580,7 @@ export class Game {
   // ----------------------------------------------------------------- combat
 
   /** Set up a battle map and roll initiative. Group counts are for a party of four. */
-  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string }) {
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string }) {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
@@ -566,8 +597,9 @@ export class Game {
     if (!chosen.length) throw new GameError(this.t`An encounter needs at least one monster`);
     s.travel = null;
     const place = this.place();
-    const indoors = opts.source === 'dungeon' || (!!place && ['dungeon', 'cave', 'tavern', 'shop', 'temple'].includes(place.kind));
-    s.rows = buildArena(trueTerrain(this.world, this.world.party), indoors, this.rng);
+    const terrain = trueTerrain(this.world, this.world.party);
+    s.biome = chooseBiome({ setting: opts.setting, placeKind: place?.kind, terrain, dungeonDelve: opts.source === 'dungeon' });
+    s.rows = buildBattleMap(s.biome, this.rng, terrain);
     const midY = Math.floor(this.height / 2);
     const column = (xs: number[]) => {
       const out: Pt[] = [];
@@ -849,11 +881,12 @@ export class Game {
     const path = this.bfs(c, (p) => p.x === tx && p.y === ty, canEnter);
     if (!path) throw new GameError(this.t`No path there`);
     if (s.combat.movementLeft <= 0) throw new GameError(this.t`No movement left this turn`);
-    const walked = path.slice(0, s.combat.movementLeft);
+    const { walked, cost } = this.afford(path, s.combat.movementLeft);
+    if (!walked.length) throw new GameError(this.t`Not enough movement left for that ground`);
     const end = walked[walked.length - 1];
     c.x = end.x;
     c.y = end.y;
-    s.combat.movementLeft -= walked.length;
+    s.combat.movementLeft -= cost;
     this.moves.push({ id: c.id, path: walked });
   }
 
@@ -936,9 +969,10 @@ export class Game {
     const r = d20(this.rng, mode);
     const total = r.value + bonus;
     const crit = r.value >= (c.classId === 'fighter' && c.level >= 3 ? 19 : 20);
-    const ac = MONSTERS[m.defId].ac;
+    const cover = ranged ? this.coverBonus(c, m) : 0;
+    const ac = MONSTERS[m.defId].ac + cover;
     const label = w ? this.n(w.name) : this.t`an unarmed strike`;
-    const head = this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
+    const head = this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
       ({ actor: c.name, label: w ? this.n(w.name) : this.t`Unarmed strike`, die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
     if (r.value === 1 || (!crit && total < ac)) {
@@ -1033,8 +1067,9 @@ export class Game {
         const r = d20(this.rng, mode);
         const total = r.value + bonus;
         const crit = r.value === 20;
-        const ac = MONSTERS[m.defId].ac;
-        const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
+        const cover = this.coverBonus(c, m);
+        const ac = MONSTERS[m.defId].ac + cover;
+        const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
         const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
           ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
         if (r.value === 1 || (!crit && total < ac)) this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
@@ -1127,7 +1162,7 @@ export class Game {
 
     let target = targets.find((t) => t.id === intent.targetId);
     if (!target) {
-      const scored = targets.map((t) => ({ t, d: pathToAdjacent(t)?.length ?? 999 }));
+      const scored = targets.map((t) => { const p = pathToAdjacent(t); return { t, d: p ? this.pathCost(p) : 999 }; });
       scored.sort((a, b) => a.d - b.d || cheb(m, a.t) - cheb(m, b.t));
       target = scored[0].t;
     }
@@ -1137,7 +1172,7 @@ export class Game {
     const tactic = intent.tactic ?? 'engage';
     const meleePath = pathToAdjacent(target);
     if (!chosen) {
-      const reachable = meleePath !== null && meleePath.length <= speed;
+      const reachable = meleePath !== null && this.pathCost(meleePath) <= speed;
       chosen = melee && (reachable || !rangedAtk) ? melee : rangedAtk ?? melee!;
       if (tactic === 'retreat' && rangedAtk) chosen = rangedAtk;
     }
@@ -1147,23 +1182,24 @@ export class Game {
     const stepTo = (p: Pt) => { m.x = p.x; m.y = p.y; walked.push(p); };
     if (tactic === 'engage') {
       if (!chosen.ranged) {
-        for (const p of (meleePath ?? []).slice(0, speed)) stepTo(p);
+        for (const p of this.afford(meleePath ?? [], speed).walked) stepTo(p);
       } else {
         const inRange = () => cheb(m, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(m, target!);
         const path = meleePath ?? [];
-        for (const p of path.slice(0, speed)) { if (inRange()) break; stepTo(p); }
+        for (const p of this.afford(path, speed).walked) { if (inRange()) break; stepTo(p); }
       }
     } else if (tactic === 'retreat') {
-      for (let i = 0; i < speed; i++) {
+      for (let left = speed; left > 0; ) {
         const score = (p: Pt) => Math.min(...targets.map((t) => cheb(p, t)));
         let best: Pt | null = null;
         for (const d of DIRS) {
           const n = { x: m.x + d.x, y: m.y + d.y };
-          if (!this.walkable(n.x, n.y) || this.monsterBlocked(n, m)) continue;
+          if (!this.walkable(n.x, n.y) || this.monsterBlocked(n, m) || tileCost(this.tile(n.x, n.y)) > left) continue;
           if (d.x !== 0 && d.y !== 0 && (!this.walkable(m.x + d.x, m.y) || !this.walkable(m.x, m.y + d.y))) continue;
           if (score(n) > score(best ?? m)) best = n;
         }
         if (!best) break;
+        left -= tileCost(this.tile(best.x, best.y));
         stepTo(best);
       }
     }
@@ -1185,10 +1221,12 @@ export class Game {
     const r = d20(this.rng, mode);
     const total = r.value + chosen.toHit;
     const crit = r.value === 20;
-    const head = this.t`${m.name} attacks ${target.name} with ${this.n(chosen.name)}: ${this.d20Text(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${target.ac}.`;
+    const cover = chosen.ranged ? this.coverBonus(m, target) : 0;
+    const ac = target.ac + cover;
+    const head = this.t`${m.name} attacks ${target.name} with ${this.n(chosen.name)}: ${this.d20Text(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${target.name} has half cover.`}` : '');
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-      ({ actor: m.name, label: this.n(chosen!.name), die: r.value, rolls: r.rolls, mode, modifier: chosen!.toHit, total, target: { kind: 'AC', value: target!.ac, name: target!.name }, outcome, damage });
-    if (r.value === 1 || (!crit && total < target.ac)) {
+      ({ actor: m.name, label: this.n(chosen!.name), die: r.value, rolls: r.rolls, mode, modifier: chosen!.toHit, total, target: { kind: 'AC', value: ac, name: target!.name }, outcome, damage });
+    if (r.value === 1 || (!crit && total < ac)) {
       this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
       return { monster: m.name, moved: walked.length, attack: { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false } };
     }
@@ -1730,7 +1768,7 @@ export class Game {
     return {
       room: s.room,
       phase: s.phase,
-      map: { width: this.width, height: this.height, rows: s.rows },
+      map: { width: this.width, height: this.height, rows: s.rows, biome: s.biome ?? 'dungeon' },
       characters: s.characters,
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,

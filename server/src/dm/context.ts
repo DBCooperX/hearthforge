@@ -1,6 +1,8 @@
 // Builds the text the Dungeon Master sees: a stable system prompt, and a compact,
 // factual snapshot of the world, the party and everything the DM should remember.
 import { ITEMS } from '../../../shared/content';
+import { classLabel, type Lang } from '../../../shared/i18n';
+import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import { MONSTERS } from '../data/monsters';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
@@ -24,7 +26,11 @@ Running the game
 
 Writing scenes
 - End every turn by calling the scene tool. It is the only way your narration reaches the players.
-- Keep narration short and concrete: two to five sentences, at most two brief paragraphs, in plain text without markdown. Address the heroes by name. Players already see dice results, so show what the numbers looked like in the fiction instead of repeating them.
+- Keep narration short and concrete: two to five sentences, at most two brief paragraphs, in plain text without markdown. Players already see dice results, so show what the numbers looked like in the fiction instead of repeating them.
+- Begin with what the world does in response. The player's own words are already on screen directly above your scene, so never quote, repeat or paraphrase what they just said or did, and never narrate their hero saying it. Wrong: '"I will help you, Hanno," you say, Elowen. The farmer nods.' Right: 'The farmer looks at you for a long moment, then nods.'
+- Speak to the players as "you". Do not tack the hero's name onto a sentence addressed to them ("you say, Elowen"). Use a hero's name only when you need to tell heroes apart, or when someone in the story speaks to or about them.
+- Each hero's gender is listed in the party state on every turn. Use exactly that for pronouns and gendered words, for the whole game, in your narration and in what other characters say. Never infer it from a name, a class or a portrait, and never switch. Where it says not specified, keep to neutral wording.
+- People you invent keep the gender you first gave them. State it in the description you save with remember_npc so that you see it again later.
 - Give each scene a title (the place, or the moment) and a mood.
 - Suggest two to four next actions, each a short phrase a player might click, such as "Ask Marta about the smithy". Vary them (talk, explore, act) and treat them as prompts, never as the only options.
 - Refer to known people, places and items by their exact names. The interface highlights those names and shows a card about them on hover.
@@ -56,9 +62,29 @@ export function languageNote(game: Game): string[] {
   return [
     'LANGUAGE: This table plays in German. Write everything the players read in natural, idiomatic German, addressing the party as "ihr": scene titles, narration, suggested actions, dialogue, and the names, roles and descriptions of any place, person, quest or story item you create, as well as quest notes, item notes, deeds and journal lines.',
     'Use the established German D&D 5e terms: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Fertigkeitswurf, Vorteil and Nachteil, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
+    'German marks gender in nouns, articles and pronouns, so follow each hero\'s listed gender exactly: the listed German form (for example "die Magierin" or "der Magier") is the only one you may use for that hero.',
     'Tool arguments that are ids or fixed choices (character ids, monster types, item ids, moods, abilities, skills, kinds, statuses) stay exactly as specified in English. Only free text is German. The "appearance" fields stay in English.',
     '',
   ];
+}
+
+/**
+ * A hero's gender as the DM must use it. Stated on every turn so it never drifts,
+ * with the exact German words where the table plays in German.
+ */
+export function genderNote(c: Character, lang: Lang): string {
+  const de = lang === 'de';
+  const cls = classLabel('de', c.className, c.gender);
+  if (c.gender === 'female') return de ? `female, she/her (German: sie/ihr, "die ${cls}")` : 'female, she/her';
+  if (c.gender === 'male') return de ? `male, he/him (German: er/ihm, "der ${cls}")` : 'male, he/him';
+  return de
+    ? 'gender not specified: use the name or "you" (du/ihr) and never a gendered noun, article or pronoun (not "der Magier", not "die Magierin", not er or sie)'
+    : 'gender not specified: use they/them or the name, never he or she';
+}
+
+/** One line naming each hero's gender, for prompts that do not carry the full party state. */
+export function genderRoster(game: Game): string {
+  return game.s.characters.map((c) => `${c.name}: ${genderNote(c, game.lang)}`).join('; ');
 }
 
 function partyLines(game: Game): string[] {
@@ -66,7 +92,7 @@ function partyLines(game: Game): string[] {
     const weapon = c.equipment.mainHand ? game.def(c.equipment.mainHand.defId).name : 'unarmed';
     const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
     const bag = c.bag.filter((b) => !!b).map((b) => `${game.def(b.defId).name}${b.qty > 1 ? ` ×${b.qty}` : ''}`).join(', ');
-    return `- ${c.name} [${c.id}] level ${c.level} ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.join(', ')}, ${status}. Backpack: ${bag || 'empty'}`;
+    return `- ${c.name} [${c.id}] level ${c.level} ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.join(', ')}, ${status}. Gender: ${genderNote(c, game.lang)}. Backpack: ${bag || 'empty'}`;
   });
 }
 
@@ -133,11 +159,12 @@ export function describeCombat(game: Game): string {
   const lines: string[] = languageNote(game);
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
+  lines.push(`The battle map shows: ${s.biome ?? 'dungeon'}. Mud, undergrowth, rubble and shallow water are difficult terrain (double movement); trees, boulders and furniture give half cover (+2 AC) against shots. The server applies both; use them to colour the narration.`);
   lines.push('Party:');
   for (const c of s.characters) {
     const weapon = c.equipment.mainHand?.defId ?? 'unarmed';
     const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
-    lines.push(`- ${c.name} [${c.id}] ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, at (${c.x},${c.y}), wielding ${weapon}, ${status}`);
+    lines.push(`- ${c.name} [${c.id}] ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, at (${c.x},${c.y}), wielding ${weapon}, ${status}. Gender: ${genderNote(c, game.lang)}`);
   }
   const foes = s.monsters.filter((m) => m.alive);
   if (foes.length) {

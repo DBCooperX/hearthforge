@@ -1,4 +1,5 @@
 // Types shared between the server (authoritative game state) and the browser client.
+import type { Biome } from './battlemap';
 
 import type { Lang } from './i18n';
 
@@ -76,12 +77,17 @@ export interface ItemInstance {
 
 export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric';
 
+/** A hero's gender. It fixes the pronouns and, in German, the grammatical forms the story uses for them. */
+export type Gender = 'female' | 'male' | 'neutral';
+export const PRONOUNS: Record<Gender, string> = { female: 'she/her', male: 'he/him', neutral: 'they/them' };
+
 export interface Character {
   id: string;
   ownerId: string;
   name: string;
   classId: ClassId;
   className: string;
+  gender: Gender;
   level: number;
   abilities: Abilities;
   profBonus: number;
@@ -314,7 +320,7 @@ export interface GameState {
   room: string;
   phase: Phase;
   /** The tactical battle map. Only meaningful while phase is 'combat'. */
-  map: { width: number; height: number; rows: string[] };
+  map: { width: number; height: number; rows: string[]; biome: Biome };
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;

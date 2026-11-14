@@ -3,7 +3,7 @@ import { SLOT_LABELS } from '../../../shared/content';
 import { itemDef } from '../../../shared/items';
 import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemInstance, type SlotId } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
-import { mod, slotForItem, weaponSummary } from '../game/util';
+import { mod, slotForItem, weaponSummary, classLabel } from '../game/util';
 import { playerId, type Connection } from '../net';
 import { useT } from '../i18n';
 
@@ -129,7 +129,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               ))}
             </div>
             <p className="muted small">
-              {c.name}, {t('Level {level} {class}', { level: c.level, class: t(c.className) })} · {t('HP')} {c.hp}/{c.maxHp} · {t('Speed')} {c.speed} ft<br />{t('Attack')}: {weaponSummary(state, c, t)}
+              {c.name}, {t('Level {level} {class}', { level: c.level, class: classLabel(c, t) })} · {t('HP')} {c.hp}/{c.maxHp} · {t('Speed')} {c.speed} ft<br />{t('Attack')}: {weaponSummary(state, c, t)}
             </p>
           </section>
           <section className="bag">
