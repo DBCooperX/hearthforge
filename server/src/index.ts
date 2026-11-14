@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ClientMessage } from '../../shared/types';
 import { artManifest, artMode, ensureArt } from './art';
+import { AUDIO_TYPES, byteRange, ensureMusic, musicEnabled, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
@@ -15,6 +16,7 @@ const PORT = Number(process.env.PORT ?? 3000);
 const DATA_DIR = process.env.DATA_DIR ?? resolve('data');
 const ART_DIR = process.env.ART_DIR ?? join(DATA_DIR, 'art');
 const ART_MODE = artMode(process.env);
+const MUSIC_DIR = process.env.MUSIC_DIR ?? join(DATA_DIR, 'music');
 const here = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR =
   process.env.CLIENT_DIR ?? [resolve(here, '../client/dist'), resolve(here, '../../client/dist')].find((p) => existsSync(p)) ?? resolve('client/dist');
@@ -28,6 +30,7 @@ const MIME: Record<string, string> = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
 
 const store = new Store(DATA_DIR);
@@ -66,6 +69,37 @@ const server = createServer((req, res) => {
     }
     res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=3600' });
     createReadStream(file).pipe(res);
+    return;
+  }
+  if (url.pathname === '/api/music') {
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
+    res.end(JSON.stringify(musicManifest(MUSIC_DIR, process.env)));
+    return;
+  }
+  if (url.pathname.startsWith('/music/')) {
+    // Only MUSIC_DIR/<context>/<file> is ever served. Browsers ask for audio in byte ranges.
+    const parts = url.pathname.slice(7).split('/').map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
+    const ok = parts.length === 2 && parts.every((p) => p && !p.startsWith('.') && !/[\\/]/.test(p));
+    const file = ok ? join(MUSIC_DIR, parts[0], parts[1]) : '';
+    const type = AUDIO_TYPES[extname(file).toLowerCase()];
+    if (!ok || !type || !existsSync(file) || !statSync(file).isFile()) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not found');
+      return;
+    }
+    const size = statSync(file).size;
+    const range = byteRange(req.headers.range, size);
+    const headers = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400' };
+    if (req.headers.range && !range) {
+      res.writeHead(416, { 'content-range': `bytes */${size}` });
+      res.end();
+    } else if (range) {
+      res.writeHead(206, { ...headers, 'content-range': `bytes ${range.start}-${range.end}/${size}`, 'content-length': range.end - range.start + 1 });
+      createReadStream(file, range).pipe(res);
+    } else {
+      res.writeHead(200, { ...headers, 'content-length': size });
+      createReadStream(file).pipe(res);
+    }
     return;
   }
   // Static client with SPA fallback.
@@ -112,10 +146,12 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 void ensureArt(ART_DIR, ART_MODE, process.env);
+void ensureMusic(MUSIC_DIR, process.env);
 
 server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
   console.log(`Art: ${ART_MODE === 'generated' ? 'generated pixel art' : `${ART_MODE} pack (falls back to generated art if unavailable)`}`);
+  console.log(`Music: ${musicEnabled(process.env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
   else console.log(`Dungeon Master: Claude. Key moments: ${claude.models.key}. Narration and combat: ${claude.models.standard}. Background: ${claude.models.background}.`);

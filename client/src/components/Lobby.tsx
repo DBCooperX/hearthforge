@@ -5,6 +5,7 @@ import { spriteUrl } from '../game/sprites';
 import { playerId, type Connection } from '../net';
 import { LangSwitch, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
+import { MusicControl } from '../music';
 
 export function JoinScreen({ conn }: { conn: Connection }) {
   const t = useT();
@@ -18,6 +19,7 @@ export function JoinScreen({ conn }: { conn: Connection }) {
   };
   return (
     <div className="splash">
+      <div className="splash-tools"><MusicControl /></div>
       <form className="panel join" onSubmit={submit}>
         <h1>Hearthforge</h1>
         <div className="join-lang"><LangSwitch /></div>
@@ -44,6 +46,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
   const host = state.hostId === playerId;
   return (
     <div className="splash">
+      <div className="splash-tools"><MusicControl /></div>
       <div className="panel setup">
         <h1>{t('Gather your party')}</h1>
         <p className="tagline">
