@@ -1,0 +1,67 @@
+import { ITEMS } from '../../../shared/content';
+import type { Character, GameState, ItemDef, SlotId } from '../../../shared/types';
+
+export const key = (x: number, y: number) => `${x},${y}`;
+export const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+export function tileAt(state: GameState, x: number, y: number): string {
+  if (y < 0 || y >= state.map.height || x < 0 || x >= state.map.width) return '#';
+  return state.map.rows[y][x];
+}
+
+export function fogAt(state: GameState, x: number, y: number): number {
+  return Number(state.fog[y * state.map.width + x] ?? 0);
+}
+
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+/** Tiles the hero can reach with the given number of steps (mirrors the server's pathing rules). */
+export function reachable(state: GameState, c: Character, steps: number): Set<string> {
+  const out = new Set<string>();
+  if (steps <= 0) return out;
+  const walk = (x: number, y: number) => { const t = tileAt(state, x, y); return t === '.' || t === '+'; };
+  const blocked = new Set<string>();
+  for (const m of state.monsters) if (m.alive) blocked.add(key(m.x, m.y));
+  for (const o of state.characters) if (o.id !== c.id && !o.dead && o.hp > 0) blocked.add(key(o.x, o.y));
+  const dist = new Map<string, number>([[key(c.x, c.y), 0]]);
+  const queue = [{ x: c.x, y: c.y }];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    const d = dist.get(key(cur.x, cur.y))!;
+    if (d >= steps) continue;
+    for (const [dx, dy] of DIRS) {
+      const nx = cur.x + dx, ny = cur.y + dy, k = key(nx, ny);
+      if (dist.has(k) || !walk(nx, ny) || blocked.has(k) || fogAt(state, nx, ny) === 0) continue;
+      if (dx && dy) {
+        if (!walk(cur.x + dx, cur.y) || !walk(cur.x, cur.y + dy)) continue;
+        if (tileAt(state, nx, ny) === '+' || tileAt(state, cur.x, cur.y) === '+') continue;
+      }
+      dist.set(k, d + 1);
+      out.add(k);
+      // A closed door ends the move.
+      if (tileAt(state, nx, ny) === '+' && !state.openDoors.includes(k)) continue;
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return out;
+}
+
+export function slotForItem(def: ItemDef): SlotId | null {
+  if (def.kind === 'weapon') return 'mainHand';
+  if (def.kind === 'shield') return 'offHand';
+  if (def.kind === 'armor') return 'armor';
+  if (def.kind === 'wondrous') return def.slot ?? null;
+  return null;
+}
+
+export function mod(score: number): string {
+  const m = Math.floor((score - 10) / 2);
+  return m >= 0 ? `+${m}` : `${m}`;
+}
+
+export function weaponSummary(c: Character): string {
+  const it = c.equipment.mainHand;
+  const def = it ? ITEMS[it.defId] : null;
+  if (!def?.weapon) return 'Unarmed strike';
+  return `${def.name} (${def.weapon.damage} ${def.weapon.damageType})`;
+}
