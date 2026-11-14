@@ -13,6 +13,26 @@ export const BAG_SIZE = 20;
 
 export type ItemKind = 'weapon' | 'armor' | 'shield' | 'consumable' | 'wondrous' | 'misc';
 
+export const ITEM_CATEGORIES = ['quest', 'clue', 'key', 'document', 'trinket', 'material', 'consumable', 'weapon', 'armor', 'tool'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
+export const RARITIES = ['common', 'uncommon', 'rare'] as const;
+
+/** What sets an item the Dungeon Master invented apart from a catalogue item. */
+export interface StoryItemInfo {
+  category: ItemCategory;
+  /** Quest items stay with the party until the story itself uses them up. */
+  quest: boolean;
+  /** Catalogue item whose rules it uses (a strange dagger still fights as a dagger), or null. */
+  baseId: string | null;
+  /** When and where the party came by it. */
+  foundDay: number;
+  foundAt: string | null;
+  /** What the party has learned about it since, oldest first. */
+  notes: { day: number; text: string }[];
+  /** Reserved for phase 3: id of a generated, cached picture of this item. */
+  imageId: string | null;
+}
+
 export interface ItemDef {
   id: string;
   name: string;
@@ -45,6 +65,8 @@ export interface ItemDef {
   consumable?: { heal: string };
   stackable?: boolean;
   rarity?: 'common' | 'uncommon' | 'rare';
+  /** Set on items the Dungeon Master created during play. Their name and description are in the table's language. */
+  story?: StoryItemInfo;
 }
 
 export interface ItemInstance {
@@ -305,6 +327,8 @@ export interface GameState {
   /** The current fight includes a boss. Drives the music. */
   bossFight: boolean;
   gold: number;
+  /** Items the Dungeon Master created for this table, by id. Catalogue items are in shared/content.ts. */
+  items: Record<string, ItemDef>;
   shortRestsLeft: number;
   log: LogEntry[];
   players: PlayerInfo[];

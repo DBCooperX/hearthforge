@@ -1,4 +1,5 @@
-import { ABILITIES, ITEMS } from '../../../shared/content';
+import { ABILITIES } from '../../../shared/content';
+import { itemDef } from '../../../shared/items';
 import type { Character, GameState } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useT } from '../i18n';
@@ -46,8 +47,8 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
   const myTurn = !!actor && (!combat || combat.order[combat.turnIndex]?.id === actor.id);
   const canAct = myTurn && !!actor && actor.hp > 0;
   const actionUsed = !!combat?.actionUsed;
-  const potion = actor?.bag.find((b) => b && ITEMS[b.defId].consumable) ?? null;
-  const potions = actor?.bag.reduce((n, b) => n + (b && ITEMS[b.defId].consumable ? b.qty : 0), 0) ?? 0;
+  const potion = actor?.bag.find((b) => b && itemDef(state.items, b.defId)?.consumable) ?? null;
+  const potions = actor?.bag.reduce((n, b) => n + (b && itemDef(state.items, b.defId)?.consumable ? b.qty : 0), 0) ?? 0;
   const toggle = (t: NonNullable<Targeting>) => setTargeting(JSON.stringify(targeting) === JSON.stringify(t) ? null : t);
   let hotkey = 0;
   const key = () => ++hotkey;
