@@ -3,7 +3,7 @@ import { ITEMS } from '../../shared/content';
 import { CATEGORY_ICONS, ITEM_ICON_IDS, ITEM_ICONS, itemDef, pickIcon } from '../../shared/items';
 import { hasTranslation } from '../../shared/i18n';
 import { BAG_SIZE, ITEM_CATEGORIES } from '../../shared/types';
-import { ClaudeDM } from '../src/dm/claude';
+import { ClaudeDM, DM_TOOLS } from '../src/dm/claude';
 import { describeWorld } from '../src/dm/context';
 import { Game } from '../src/game/engine';
 
@@ -137,7 +137,7 @@ describe('Dungeon Master item tools', () => {
     const names = requests[0].tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining(['give_story_item', 'update_story_item', 'take_item']));
     expect(requests[0].tools.length).toBeLessThanOrEqual(20);
-    expect(requests[0].tools.every((t: any) => t.strict && t.input_schema.additionalProperties === false && t.input_schema.required.length === Object.keys(t.input_schema.properties).length)).toBe(true);
+    expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false && t.input_schema.required.length === Object.keys(t.input_schema.properties).length)).toBe(true);
     expect(requests[0].system[0].text).toMatch(/give_story_item/);
     expect(requests[1].messages[2].content.map((r: any) => !!r.is_error)).toEqual([false, false, true]);
     const def = g.s.items.story_notched_bone_splinter;
@@ -147,5 +147,59 @@ describe('Dungeon Master item tools', () => {
     g.startEncounter([{ defId: 'giant_rat', count: 2 }], { source: 'story', context: 'test' });
     await dm.respond(g, 'Tester', 'hello', async () => {});
     expect(requests[requests.length - 1].tools.map((t: any) => t.name)).toEqual(['skill_check', 'scene']);
+  });
+});
+
+describe('strict tool schemas', () => {
+  // The API compiles all strict tools of a request into one grammar and answers
+  // "400 The compiled grammar is too large" when it outgrows a limit that is not published.
+  // Adding the three item tools as strict crossed it. Anything added later should be a
+  // looseTool, or be tried against the live API before this list or the budgets change.
+  const ACCEPTED = ['advance_time', 'award_xp', 'change_gold', 'create_location', 'delve', 'give_item', 'monster_action', 'move_to_place', 'record_deed', 'remember_npc', 'scene', 'skill_check', 'start_combat', 'update_quest'];
+
+  it('keeps the strict set to the tools that were strict before the item tools', () => {
+    const strict = DM_TOOLS.filter((t) => t.strict);
+    expect(strict.map((t) => t.name).sort()).toEqual(ACCEPTED);
+    for (const name of ['give_story_item', 'update_story_item', 'take_item']) expect(DM_TOOLS.find((t) => t.name === name)?.strict, name).toBeUndefined();
+  });
+
+  it('does not let the strict schemas grow unnoticed', () => {
+    const strict = DM_TOOLS.filter((t) => t.strict);
+    const enumValues = (node: unknown): number => {
+      if (!node || typeof node !== 'object') return 0;
+      if (Array.isArray(node)) return node.reduce((n: number, x) => n + enumValues(x), 0);
+      return Object.entries(node).reduce((n, [k, v]) => n + (k === 'enum' && Array.isArray(v) ? v.length : enumValues(v)), 0);
+    };
+    const params = strict.reduce((n, t) => n + Object.keys((t.input_schema as any).properties).length, 0);
+    // Currently 44 parameters and 66 enum values; the room above that is for new monsters and biomes.
+    // Item ids are plain strings checked by the engine, so the catalogue can grow freely.
+    expect(params).toBeLessThanOrEqual(44);
+    expect(enumValues(strict.map((t) => t.input_schema))).toBeLessThanOrEqual(80);
+    expect(JSON.stringify(DM_TOOLS)).not.toContain('"longsword_plus1"');
+  });
+
+  it('drops strict and carries on if the API still refuses the grammar', async () => {
+    const g = game();
+    const dm = new ClaudeDM({ models: { background: 'b', standard: 's', key: 'k', forced: null }, effort: 'low', apiKey: 'test' });
+    const requests: any[] = [];
+    (dm as any).client = { beta: { messages: { create: async (req: any) => {
+      requests.push(JSON.parse(JSON.stringify(req)));
+      if (req.tools.some((t: any) => t.strict)) throw new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"The compiled grammar is too large, which would cause performance issues."}}');
+      return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 's', name: 'scene', input: { title: 'T', mood: 'calm', narration: 'Still here.', suggested_actions: [], journal_entry: '', important: false } }] };
+    } } } };
+    expect((await dm.respond(g, 'Tester', 'hello', async () => {}))?.text).toBe('Still here.');
+    expect(requests).toHaveLength(2);
+    await dm.respond(g, 'Tester', 'again', async () => {});
+    // It remembers, so later turns do not pay for a failed request first.
+    expect(requests).toHaveLength(3);
+    expect(requests[2].tools.some((t: any) => t.strict)).toBe(false);
+  });
+
+  it('survives loose arguments the model may get wrong', () => {
+    const g = game();
+    const hero = g.s.characters[0];
+    const got = g.giveStoryItem({ characterId: hero.id, name: 'Odd coin', category: 'nonsense' as any, icon: 'nope', rarity: 'legendary', value: NaN, quantity: NaN, baseItemId: 'none' });
+    expect(g.s.items[got.item_id]).toMatchObject({ icon: '🪙', value: 0, story: { category: 'trinket' } });
+    expect(got.quantity).toBe(1);
   });
 });
