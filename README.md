@@ -8,26 +8,40 @@ A self-hosted Dungeons & Dragons 5e game for your browser, run by an AI Dungeon 
 
 You run Hearthforge as one Docker container on your own server. You and your friends open it in a browser, build a party, and set out into an open world: a hex map to travel, a story told in scene cards, and a tactical grid that appears only when a fight breaks out. The server owns the rules and rolls every die. Claude narrates, plays everyone you meet and decides what the monsters do. Play alone with up to four heroes, or share a table with friends. There is always an AI Dungeon Master, never a human one.
 
+> **Version 0.9.0, ready for play-testing.** See the [changelog](CHANGELOG.md) and the [play-test checklist](docs/PLAYTEST.md) of what has not yet been played against the live AI Dungeon Master.
+
 <p align="center">
   <img src="docs/screenshots/story.webp" alt="The story view: party panel, a scene card, the hex map and quests" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/battle.webp" alt="A fight in a dungeon: battle map with light and darkness, initiative order, action bar and the story log" width="820">
 </p>
 
 <table>
   <tr>
     <td><img src="docs/screenshots/lobby.webp" alt="The lobby with the list of tables"></td>
-    <td><img src="docs/screenshots/table-room.webp" alt="A table room: region, opening and world seed"></td>
+    <td><img src="docs/screenshots/table-room.webp" alt="A table room with sixteen premade heroes, the adventure chips and Quick start"></td>
   </tr>
   <tr>
     <td align="center"><sub>Lobby</sub></td>
-    <td align="center"><sub>Table room: pick the region, the opening and the seed</sub></td>
+    <td align="center"><sub>Table room: pick heroes, region, opening and seed</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/inventory.webp" alt="The inventory with paper-doll slots"></td>
-    <td><img src="docs/screenshots/character-sheet.webp" alt="The character sheet"></td>
+    <td><img src="docs/screenshots/character-sheet.webp" alt="The character sheet with skills, features and icons"></td>
   </tr>
   <tr>
     <td align="center"><sub>Inventory with paper-doll</sub></td>
     <td align="center"><sub>Character sheet</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/journal.webp" alt="The journal"></td>
+    <td><img src="docs/screenshots/battle-de.webp" alt="The same fight with the German interface"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Journal</sub></td>
+    <td align="center"><sub>German interface (the story language is a separate table setting)</sub></td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/screenshots/innkeeper.webp" alt="The Innkeeper owner panel"></td>
