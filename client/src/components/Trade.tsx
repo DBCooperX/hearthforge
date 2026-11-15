@@ -91,6 +91,7 @@ export function Trade({ state, shop, character: c, mine, conn, onSelect, onShop,
                 🗣️ {t('Haggle')} <span className="cost">{signed(persuasion)}</span>
               </button>
             </Hint>
+            {shop.factor !== 1 && <span className={shop.factor < 1 ? 'trade-mood good' : 'trade-mood bad'}>{t('Guild standing: prices {percent}', { percent: `${shop.factor > 1 ? '+' : ''}${Math.round((shop.factor - 1) * 100)} %` })}</span>}
             {shop.mood !== 0
               ? <span className={shop.mood > 0 ? 'trade-mood good' : 'trade-mood bad'}>{t(MOOD_TEXT[String(shop.mood) as keyof typeof MOOD_TEXT])}</span>
               : <span className="trade-mood">{shop.markup > 1.01 ? t('Prices are higher here than in town') : shop.markup < 0.99 ? t('Prices are low here') : t('Fair prices')}</span>}

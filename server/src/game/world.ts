@@ -41,6 +41,22 @@ export interface WorldState {
   locations: LocationState[];
 }
 
+/** Something people are saying. It starts in one place and reaches the others over the following days. */
+export interface RumourState {
+  id: string;
+  text: string;
+  /** The day it started. */
+  day: number;
+  /** The hex it started in. */
+  at: Hex;
+  /** The settlement it started in, when there was one. */
+  fromId: string | null;
+  /** About the party's own doings. */
+  aboutParty: boolean;
+  /** The day the party heard it, or null. */
+  heard: number | null;
+}
+
 /** Everything the Dungeon Master should remember between scenes. Saved with the game. */
 export interface MemoryState {
   npcs: NpcState[];
@@ -50,6 +66,8 @@ export interface MemoryState {
   journal: { day: number; text: string }[];
   /** Older journal entries, condensed into a running summary. */
   chronicle: string;
+  /** What people are saying, newest last. Missing in saves from before rumours. */
+  rumours: RumourState[];
 }
 
 /** Where and how this table's story is set. Saved with the game; tables from before start options have none. */
@@ -277,6 +295,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
     deeds: [],
     journal: [],
     chronicle: '',
+    rumours: [],
   };
   const lair = region.locations.find((l) => l.questId);
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';

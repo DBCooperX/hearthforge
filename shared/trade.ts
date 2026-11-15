@@ -40,6 +40,8 @@ export interface ShopView {
   mood: Mood;
   /** The party has already haggled here today. */
   haggled: boolean;
+  /** What the traders' guild makes of the party does to the prices here: 1 is nothing, 0.9 ten percent off. Already part of `markup`. */
+  factor: number;
   /** Days until the shelves are refilled. */
   restockIn: number;
 }

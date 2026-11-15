@@ -286,6 +286,39 @@ describe('a table with several players', () => {
     expect(dm.calls).toHaveLength(1);
   });
 
+  it('lets a player take back a line before the Dungeon Master has begun to answer it', async () => {
+    vi.useFakeTimers();
+    const { r, dm, chris, mira } = await playing();
+    r.handle(ws(chris), { t: 'say', text: 'I smash the barrel' });
+    expect(chris.state.unanswered).toEqual([{ logId: chris.state.log.at(-1)!.id, playerId: 'chris' }]);
+    r.handle(ws(mira), { t: 'unsay' }); // nothing of hers to take back
+    expect(mira.of('error').at(-1)?.message).toMatch(/Too late/);
+    r.handle(ws(chris), { t: 'unsay' });
+    expect(chris.state.log.some((l) => l.text === 'I smash the barrel')).toBe(false);
+    expect(chris.state.unanswered).toEqual([]);
+    expect(chris.state.gathering).toBe(false);
+    r.handle(ws(mira), { t: 'say', text: 'I watch the door' });
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(dm.calls).toEqual([[{ player: 'Mira', text: 'I watch the door' }]]);
+    expect(chris.state.trophies.find((x) => x.id === 'second_thoughts')?.day).toBe(1);
+    r.handle(ws(mira), { t: 'unsay' }); // answered by now
+    expect(mira.of('error').at(-1)?.message).toMatch(/Too late/);
+  });
+
+  it('gives a lone player a short moment to change their mind', async () => {
+    vi.useFakeTimers();
+    const { r, dm, chris, mira } = await playing({ undoGraceMs: 3000 });
+    r.leave(ws(mira));
+    r.handle(ws(chris), { t: 'say', text: 'I open the door' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(dm.calls).toHaveLength(0);
+    expect(chris.state.gathering).toBe(false); // only the grace, not a wait for the others
+    expect(chris.state.unanswered).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(dm.calls).toHaveLength(1);
+    expect(chris.state.unanswered).toEqual([]);
+  });
+
   it('keeps table talk away from the Dungeon Master and whispers away from everyone else', async () => {
     vi.useFakeTimers();
     const { r, dm, chris, mira } = await playing();
