@@ -76,3 +76,23 @@ export function Hint({ text, title, side = 'top', children }: HintProps) {
     </>
   );
 }
+
+/** A small "i" that explains the thing beside it on hover, keyboard focus or tap, so the page itself can stay short. */
+export function Info({ text, title, side }: { text: ReactNode; title?: ReactNode; side?: Side }) {
+  return (
+    <Hint text={text} title={title} side={side}>
+      <span className="info-dot" tabIndex={0} role="note" aria-label={typeof text === 'string' ? text : undefined}>i</span>
+    </Hint>
+  );
+}
+
+/** A choice chip whose explanation waits in a tooltip. The wrapper keeps the tooltip working while the chip is disabled. */
+export function Chip({ on, disabled, hint, onClick, children }: { on: boolean; disabled?: boolean; hint?: ReactNode; onClick: () => void; children: ReactNode }) {
+  return (
+    <Hint text={hint}>
+      <span className="chip-wrap">
+        <button type="button" className={on ? 'on' : ''} aria-pressed={on} disabled={disabled} onClick={onClick}>{children}</button>
+      </span>
+    </Hint>
+  );
+}

@@ -1,5 +1,6 @@
-// The character creator: eight steps, each with explained options, recommended picks for
-// the chosen class and a live preview of the hero. The server checks and builds the result
+// The character creator. By default it is short: class, species, name and looks, and the game
+// picks everything else to suit the class. "Decide everything myself" opens all eight steps, each
+// with explained options, recommended picks, a random pick and a live preview of the hero. The server checks and builds the result
 // with the same shared code the preview uses.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
@@ -7,7 +8,7 @@ import {
   POINT_BUDGET, POINT_COST, STANDARD_ARRAY, applyFeat, boostMap, buildSheet, checkSpec, classSpellList, pointsSpent, spellOptions, startBuild,
   type Build, type Draft, type StepId,
 } from '../../../shared/build';
-import { recommend, recommendFeat, recommendedArray, recommendedBoosts } from '../../../shared/recommend';
+import { fillFeat, recommend, recommendFeat, recommendedArray, recommendedBoosts } from '../../../shared/recommend';
 import {
   ABILITY_HELP, ABILITY_KEYS, BACKGROUNDS, CLASSES, CLASS_GUIDE, FEATS, KITS, ORIGIN_FEATS, SKILL_HELP, SPECIES, STYLES, kitsFor, loc,
 } from '../../../shared/rules';
@@ -16,10 +17,23 @@ import { artOfDraft, heroUrl } from '../game/heroArt';
 import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { CloseButton } from '../ui/Window';
+import { Hint, Info } from '../ui/Hint';
+import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
 import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 
 const STEPS: StepId[] = ['class', 'species', 'background', 'abilities', 'skills', 'talents', 'equipment', 'identity'];
+/** The short creator asks only for these; the rest is chosen to suit the class. */
+const SHORT_STEPS: StepId[] = ['class', 'species', 'identity'];
+const IDENTITY_FIELDS: (keyof CharacterSpec)[] = ['name', 'gender', 'appearance', 'backstory'];
+
+const pickOne = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
+/** `n` different entries in random order. */
+function sample<T>(xs: readonly T[], n: number): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
+}
 
 /** Which draft fields a step decides. "Recommended" re-picks exactly these. */
 const STEP_FIELDS: Record<StepId, (keyof CharacterSpec)[]> = {
@@ -81,17 +95,29 @@ function buildUntil(d: Draft, stage: 'background' | 'origin'): Build | null {
   return b;
 }
 
+/** The short creator's promise: whatever the player was not asked about is chosen for them, and what is already valid stays. */
+function complete(d: Draft, rolled: number[] | undefined): Draft {
+  if (!d.classId || !checkSpec(d, rolled).some((p) => p.step !== 'identity')) return d;
+  return tidy({ ...recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'speciesId', 'backgroundId', ...IDENTITY_FIELDS]), look: d.look, premadeId: d.premadeId });
+}
+
 interface Props { state: GameState; conn: Connection; onClose: () => void; /** Start from these choices, for example a premade hero. */ initial?: Draft }
 
 export function Creator({ state, conn, onClose, initial }: Props) {
   const t = useT();
   const { lang } = useLang();
-  const [d, setD] = useState<Draft>(() => tidy({ name: '', gender: 'neutral', method: 'array', boosts: [], skills: [], spells: [], appearance: '', backstory: '', ...initial }));
+  const rolled = state.rolled[playerId];
+  /** All eight steps instead of the short three. Remembered in this browser. */
+  const [detailed, setDetailed] = useState(() => getPrefs().creatorDetailed);
+  const [d, setD] = useState<Draft>(() => {
+    const first = tidy({ name: '', gender: 'neutral', method: 'array', boosts: [], skills: [], spells: [], appearance: '', backstory: '', ...initial });
+    return detailed ? first : complete(first, rolled);
+  });
   const [step, setStep] = useState<StepId>('class');
   const [focus, setFocus] = useState<Focus>(null);
   const [hover, setHover] = useState<Draft | null>(null);
 
-  const rolled = state.rolled[playerId];
+  const steps = detailed ? STEPS : SHORT_STEPS;
   const cls = d.classId ? CLASSES[d.classId] : undefined;
   const guide = d.classId ? CLASS_GUIDE[d.classId] : undefined;
   const sp = d.speciesId ? SPECIES[d.speciesId] : undefined;
@@ -102,13 +128,20 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   /** What "recommended" would pick, given everything chosen so far. */
   const rec = useMemo(() => (d.classId ? recommend({ ...d, classId: d.classId }, ['classId', 'speciesId', 'backgroundId', 'method', 'base', 'gender']) : null), [d.classId, d.speciesId, d.backgroundId, d.method, d.base]);
 
-  const update = (patch: Draft) => setD((cur) => tidy({ ...cur, ...patch }));
-  const go = (s: StepId) => { setStep(s); setFocus(null); setHover(null); };
-  const stepIndex = STEPS.indexOf(step);
+  const update = (patch: Draft) => setD((cur) => { const next = tidy({ ...cur, ...patch }); return detailed ? next : complete(next, rolled); });
+  const setMode = (all: boolean) => {
+    setDetailed(all);
+    setPrefs({ creatorDetailed: all });
+    if (!all) { setD((cur) => complete(cur, rolled)); if (!SHORT_STEPS.includes(step)) setStep('identity'); }
+    setFocus(null); setHover(null);
+  };
+  /** Opens a step; one that the short creator skips switches to all steps first. */
+  const go = (s: StepId) => { if (!steps.includes(s)) { setDetailed(true); setPrefs({ creatorDetailed: true }); } setStep(s); setFocus(null); setHover(null); };
+  const stepIndex = steps.indexOf(step);
 
   // Freshly rolled scores are laid out by the class's priorities; the player can swap them afterwards.
   useEffect(() => {
-    if (d.method !== 'roll' || !rolled) return;
+    if (d.method !== 'roll' || !rolled || !detailed) return;
     const sorted = [...rolled].sort((a, b) => b - a);
     const order = guide?.priority ?? ABILITY_KEYS;
     const base = {} as Abilities;
@@ -270,7 +303,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     const recSkills = rec?.skills ?? [];
     const toggle = (list: string[], s: string, max: number) => (list.includes(s) ? list.filter((x) => x !== s) : list.length >= max ? [...list.slice(1), s] : [...list, s]);
     const skillRow = (s: string, o: { selected: boolean; patch?: Draft; locked?: string; recommended?: boolean; mark?: 'check' | 'radio'; key?: string }) => (
-      <PickRow key={o.key ?? s} mark={o.mark ?? 'check'} title={t(s)} sub={`${t(SKILLS[s].toUpperCase())} · ${loc(SKILL_HELP[s], lang)}`} selected={o.selected} locked={o.locked} recommended={o.recommended}
+      <PickRow key={o.key ?? s} compact mark={o.mark ?? 'check'} title={t(s)} sub={t(ABILITY_NAMES[SKILLS[s]])} selected={o.selected} locked={o.locked} recommended={o.recommended}
         focused={focus?.kind === 'skill' && focus.id === s}
         onClick={() => o.patch && update(o.patch)}
         onFocus={() => { setFocus({ kind: 'skill', id: s }); hoverPatch(o.selected || !o.patch ? null : o.patch); }}
@@ -382,7 +415,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           </span>
         </label>
         <label>
-          {t('The Dungeon Master refers to your hero as')}
+          <span>{t('The Dungeon Master refers to your hero as')} <Info text={t('Neutral avoids gendered words and uses the name instead.')} /></span>
           <span className="segmented">
             {GENDERS.map((g) => (
               <button key={g} type="button" className={d.gender === g ? 'on' : ''} onClick={() => update({ gender: g })}>
@@ -390,7 +423,6 @@ export function Creator({ state, conn, onClose, initial }: Props) {
               </button>
             ))}
           </span>
-          <small className="muted">{t('Neutral avoids gendered words and uses the name instead.')}</small>
         </label>
         <div className="look">
           <img className="pixel look-portrait" src={heroUrl(artOfDraft(d)!)} alt="" />
@@ -402,14 +434,6 @@ export function Creator({ state, conn, onClose, initial }: Props) {
             <Swatches label={t('Colours')} value={look.color} options={Object.keys(OUTFITS)} colors={OUTFITS} onPick={(color) => update({ look: { ...look, color } })} />
           </div>
         </div>
-        <label>
-          {t('Appearance')}
-          <textarea value={d.appearance ?? ''} maxLength={400} rows={3} onChange={(e) => update({ appearance: e.target.value })} placeholder={t('Build, face, hair, clothing, anything people notice first.')} />
-        </label>
-        <label>
-          {t('Backstory')}
-          <textarea value={d.backstory ?? ''} maxLength={1200} rows={6} onChange={(e) => update({ backstory: e.target.value })} placeholder={t('Where do you come from, what do you want, who or what did you leave behind? A few sentences are enough.')} />
-        </label>
       </div>
     );
   }
@@ -492,7 +516,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   } else {
     detail = (
       <article className="detail intro">
-        <header><div><small className="kicker">{t('Step {n} of {total}', { n: stepIndex + 1, total: STEPS.length })} · {labels[step]}</small><h2>{intro[step][0]}</h2></div></header>
+        <header><div><small className="kicker">{t('Step {n} of {total}', { n: stepIndex + 1, total: steps.length })} · {labels[step]}</small><h2>{intro[step][0]}</h2></div></header>
         <p><Rich text={intro[step][1]} /></p>
         {step === 'identity' && (
           <>
@@ -501,10 +525,33 @@ export function Creator({ state, conn, onClose, initial }: Props) {
                 <h4>{t('Still to do')}</h4>
                 <ul className="todo">{problems.map((p, i) => <li key={i}><button type="button" className="link" onClick={() => go(p.step)}>{labels[p.step]}</button> {loc(p.text, lang)}</li>)}</ul>
               </>
-            ) : <p className="goodfor">✓ {t('Everything is chosen. Your hero is ready.')}</p>}
-            {cls && sp && bg && <p>{t('{species} {class}, {background}', { species: t(sp.name), class: t(cls.name), background: t(bg.name) })}</p>}
-            {guide && <><h4>{t('Your path')}</h4><ol className="path">{guide.path.map((p) => <li key={p.level}><b>{t('Level {n}', { n: p.level })}</b> <Rich text={loc(p.text, lang)} /></li>)}</ol></>}
-            {now && now.features.length > 0 && <Effects effects={[...(sp?.effects ?? [])]} />}
+            ) : <p className="goodfor">✓ {t('Everything is chosen. Your hero is ready.')}{cls && sp && bg && <> {t('{species} {class}, {background}', { species: t(sp.name), class: t(cls.name), background: t(bg.name) })}</>}</p>}
+            {!detailed && now && bg && (
+              <>
+                <h4>{t('Chosen for you')} <Info text={t('The game picked what suits your class. Change anything you like, or tick "Decide everything myself" below to walk through every choice.')} /></h4>
+                <dl className="chosen">
+                  {([
+                    ['background', t(bg.name)],
+                    ['abilities', ABILITY_KEYS.map((k) => `${t(k.toUpperCase())} ${now.abilities[k]}`).join(' · ')],
+                    ['skills', now.skills.map((x) => t(x)).join(', ')],
+                    ['talents', [d.fightingStyle && t(STYLES[d.fightingStyle].name), ...(d.spells ?? []).map((x) => t(ABILITIES[x].name))].filter(Boolean).join(', ')],
+                    ['equipment', d.kit ? t(KITS[d.kit].name) : ''],
+                  ] as [StepId, string][]).filter(([, text]) => text).map(([id, text]) => (
+                    <div key={id}><dt>{labels[id]}</dt><dd className="cap">{text}</dd><button type="button" className="link" onClick={() => go(id)}>{t('change')}</button></div>
+                  ))}
+                </dl>
+              </>
+            )}
+            <div className="identity story">
+              <label>
+                <span>{t('Appearance')} <small className="muted">({t('optional')})</small></span>
+                <textarea value={d.appearance ?? ''} maxLength={400} rows={2} onChange={(e) => update({ appearance: e.target.value })} placeholder={t('Build, face, hair, clothing, anything people notice first.')} />
+              </label>
+              <label>
+                <span>{t('Backstory')} <small className="muted">({t('optional')})</small></span>
+                <textarea value={d.backstory ?? ''} maxLength={1200} rows={detailed ? 6 : 3} onChange={(e) => update({ backstory: e.target.value })} placeholder={t('Where do you come from, what do you want, who or what did you leave behind? A few sentences are enough.')} />
+              </label>
+            </div>
           </>
         )}
       </article>
@@ -526,6 +573,68 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     }
     setD(tidy({ ...d, ...recommend({ ...d, classId: d.classId }, keep) }));
   };
+  /** A random pick for this step. Whatever it knocks over elsewhere is set right again with recommended picks. */
+  const randomStep = () => {
+    let patch: Draft = {};
+    if (step === 'class') {
+      const id = pickOne((Object.keys(CLASS_GUIDE) as ClassId[]).filter((x) => x !== d.classId));
+      patch = { classId: id, ...(d.method === 'array' ? { base: recommendedArray(id), boosts: [] } : {}) };
+    } else if (step === 'species') {
+      patch = { speciesId: pickOne(Object.values(SPECIES).filter((x) => x.id !== d.speciesId)).id };
+    } else if (step === 'background') {
+      const o = pickOne(Object.values(BACKGROUNDS).filter((x) => x.id !== d.backgroundId));
+      patch = { backgroundId: o.id, boosts: d.classId && d.base ? recommendedBoosts(d.classId, d.base, o.abilities) : [], backgroundFeat: undefined };
+    } else if (step === 'abilities' && d.base) {
+      const values = sample(ABILITY_KEYS.map((k) => d.base![k]), ABILITY_KEYS.length);
+      const base = {} as Abilities;
+      ABILITY_KEYS.forEach((k, i) => { base[k] = values[i]; });
+      patch = { base, boosts: d.classId && bg ? recommendedBoosts(d.classId, base, bg.abilities) : d.boosts };
+    } else if (step === 'skills' && cls) {
+      const fromBg = bg?.skills ?? [];
+      const skills = sample(cls.skillList.filter((x) => !fromBg.includes(x)), cls.skillCount);
+      const granted = [...fromBg, ...skills];
+      const open = sp?.skillChoice?.filter((x) => !granted.includes(x)) ?? [];
+      const speciesSkill = open.length ? pickOne(open) : undefined;
+      if (speciesSkill) granted.push(speciesSkill);
+      patch = { skills, speciesSkill, expertise: cls.id === 'rogue' ? sample(granted, 2) : undefined };
+    } else if (step === 'talents' && cls) {
+      if (cls.id === 'fighter') patch.fightingStyle = pickOne(Object.values(STYLES)).id;
+      const list = classSpellList(cls.id);
+      if (list) {
+        const b = startBuild(d, cls.id);
+        patch.spells = [...sample(spellOptions(b, list, 'cantrip'), cls.cantrips.pick), ...sample(spellOptions(b, list, 'spell', 1), cls.spellPicks)];
+      }
+      const b = sp?.originFeat ? buildUntil({ ...d, ...patch }, 'origin') : null;
+      if (b) patch.originFeat = fillFeat(b, pickOne(ORIGIN_FEATS.filter((f) => f !== bg?.feat)));
+    } else if (step === 'equipment' && cls) {
+      patch = { kit: pickOne(kitsFor(cls.id)).id };
+    } else if (step === 'identity') {
+      const names = (sp?.names ?? SPECIES.human.names).filter((x) => x !== d.name);
+      const look = heroLook({ speciesId: d.speciesId ?? 'human', gender: d.gender ?? 'neutral', classId: d.classId ?? 'fighter', name: '', look: d.look });
+      patch = {
+        name: pickOne(names),
+        look: {
+          ...look, skin: pickOne(SPECIES_SKINS[d.speciesId ?? 'human']), hair: pickOne(HAIR_STYLES), hairColor: pickOne(Object.keys(HAIR_COLORS)),
+          beard: d.gender === 'female' ? look.beard : pickOne(BEARDS), color: pickOne(Object.keys(OUTFITS)),
+        },
+      };
+    } else return;
+    setFocus(null); setHover(null);
+    setD((cur) => {
+      const next = tidy({ ...cur, ...patch });
+      if (!detailed) return complete(next, rolled);
+      if (!next.classId) return next;
+      // Steps that were fine before and are not any more get recommended picks again; the random pick itself stays.
+      const before = new Set(checkSpec(cur, rolled).map((p) => p.step));
+      const broken = [...new Set(checkSpec(next, rolled).map((p) => p.step))].filter((x) => x !== 'identity' && (x === step ? step === 'talents' : !before.has(x)));
+      if (!broken.length) return next;
+      // On the talents step itself the one thing the dice did not touch is the background's feat.
+      const refill = new Set<keyof CharacterSpec>(broken.flatMap((x) => (x === step ? ['backgroundFeat'] : STEP_FIELDS[x].filter((f) => !STEP_FIELDS[step].includes(f)))));
+      const keep: (keyof CharacterSpec)[] = ['classId', 'speciesId', 'backgroundId', 'method', 'base', ...IDENTITY_FIELDS, ...ALL_FIELDS.filter((f) => !refill.has(f))];
+      return tidy({ ...recommend({ ...next, classId: next.classId }, keep), look: next.look, premadeId: next.premadeId });
+    });
+  };
+  const canRandom = step === 'class' || step === 'identity' || (!!d.classId && (step !== 'abilities' || !!d.base));
   const quickBuild = () => {
     if (!d.classId) return;
     setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory'])));
@@ -546,7 +655,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           {d.classId && <img className="pixel" src={heroUrl(artOfDraft(d)!)} alt="" />}
           <h1>{t('Create your hero')}</h1>
           <nav className="steps">
-            {STEPS.map((s, i) => {
+            {steps.map((s, i) => {
               const bad = problems.some((p) => p.step === s);
               return (
                 <button key={s} type="button" className={[s === step && 'on', !bad && 'done'].filter(Boolean).join(' ')} onClick={() => go(s)}>
@@ -564,14 +673,18 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           <Preview now={now} next={next} />
         </div>
         <footer className="creator-foot">
-          <button type="button" disabled={stepIndex === 0} onClick={() => go(STEPS[stepIndex - 1])}>← {t('Back')}</button>
-          {canRecommend && <button type="button" onClick={recommendStep} title={t('Fill this step with picks that suit your class')}>★ {t('Recommended picks')}</button>}
-          {d.classId && step !== 'identity' && <button type="button" onClick={quickBuild} title={t('Let the game choose everything that suits your class, then go straight to name and story')}>⚡ {t('Quick build')}</button>}
+          <button type="button" disabled={stepIndex <= 0} onClick={() => go(steps[stepIndex - 1])}>← {t('Back')}</button>
+          {canRecommend && <Hint text={t('Fill this step with picks that suit your class')}><button type="button" onClick={recommendStep}>★ {t('Recommended picks')}</button></Hint>}
+          {canRandom && <Hint text={t('Let the dice decide this step')}><button type="button" className="random-step" onClick={randomStep}>🎲 {t('Random')}</button></Hint>}
+          {detailed && d.classId && step !== 'identity' && <button type="button" onClick={quickBuild} title={t('Let the game choose everything that suits your class, then go straight to name and story')}>⚡ {t('Quick build')}</button>}
+          <Hint text={t('Off: you choose class, species, name and looks, and the game picks the rest to suit your class. On: you walk through all eight steps.')}>
+            <label className="check mode"><input type="checkbox" checked={detailed} onChange={(e) => setMode(e.target.checked)} /><span>{t('Decide everything myself')}</span></label>
+          </Hint>
           <span className="spacer" />
           {problems.filter((p) => p.step === step).slice(0, 1).map((p, i) => <span key={i} className="muted small">{loc(p.text, lang)}</span>)}
           {step === 'identity'
             ? <button type="button" className="primary" disabled={full} onClick={create}>{full ? t('The party is full') : problems.length ? t('Finish the open steps') : t('Create hero')}</button>
-            : <button type="button" className="primary" onClick={() => go(STEPS[stepIndex + 1])}>{t('Next')} →</button>}
+            : <button type="button" className="primary" onClick={() => go(steps[stepIndex + 1])}>{t('Next')} →</button>}
         </footer>
       </div>
     </div>

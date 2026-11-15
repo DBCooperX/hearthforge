@@ -83,6 +83,8 @@ interface PickProps {
   disabled?: boolean;
   focused?: boolean;
   mark?: 'check' | 'radio';
+  /** One line: the title with the short note beside it. */
+  compact?: boolean;
   onClick?: () => void;
   onFocus?: () => void;
   onLeave?: () => void;
@@ -90,9 +92,9 @@ interface PickProps {
 }
 
 /** One selectable row. Hovering it shows its explanation and previews what it would change. */
-export function PickRow({ icon, title, sub, selected, recommended, locked, disabled, focused, mark = 'radio', onClick, onFocus, onLeave, children }: PickProps) {
+export function PickRow({ icon, title, sub, selected, recommended, locked, disabled, focused, mark = 'radio', compact, onClick, onFocus, onLeave, children }: PickProps) {
   const t = useT();
-  const cls = ['pick', selected && 'on', (disabled || locked) && 'off', focused && 'focused'].filter(Boolean).join(' ');
+  const cls = ['pick', compact && 'compact', selected && 'on', (disabled || locked) && 'off', focused && 'focused'].filter(Boolean).join(' ');
   return (
     <div className={cls} onMouseEnter={onFocus} onMouseLeave={onLeave}>
       <button type="button" className="pick-main" disabled={disabled || !!locked} onClick={onClick} onFocus={onFocus} aria-pressed={!!selected}>

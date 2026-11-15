@@ -24,6 +24,9 @@ export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
   lore: 'Nothing written down yet.',
 };
 
+/** The tabs of the Settings window. */
+export const SETTINGS_TABS = { game: 'Game', dm: 'Dungeon Master', keys: 'Keyboard', table: 'Table & server' } as const;
+
 export const TEXT_SIZES = ['normal', 'large', 'larger'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 export const SIZE_LABELS: Record<TextSize, string> = { normal: 'Normal', large: 'Large', larger: 'Larger' };
@@ -81,6 +84,7 @@ export const INN_MISC = { empty: 'Empty' } as const;
 
 /** Every label above, for the translation test. */
 export const ALL_LABELS: string[] = [
+  ...Object.values(SETTINGS_TABS),
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
   ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),

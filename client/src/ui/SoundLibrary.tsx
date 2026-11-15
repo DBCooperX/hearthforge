@@ -120,8 +120,8 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
         const rows = items.filter((i) => i.context === c);
         if (!rows.length) return null;
         return (
-          <section key={c}>
-            <h3>{t(SCENES[c])}</h3>
+          <details key={c} className="snd-scene" open={rows.length <= 4}>
+            <summary><b>{t(SCENES[c])}</b><span className="tabbar-count">{rows.filter((i) => i.ready).length}/{rows.length}</span></summary>
             <ul className="art-packs">
               {rows.map((i) => (
                 <li key={i.id} className={i.enabled && i.ready ? 'art-pack' : 'art-pack snd-off'}>
@@ -144,13 +144,13 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
                 </li>
               ))}
             </ul>
-          </section>
+          </details>
         );
       })}
       {!items.length && <p className="muted">{t(layer === 'music' ? 'No music yet.' : 'No ambient loops yet. Add some below or drop files above.')}</p>}
 
-      <section>
-        <h3>{t('Where to find more')}</h3>
+      <details className="snd-scene">
+        <summary><b>{t('Where to find more')}</b><span className="tabbar-count">{sources.length}</span></summary>
         <ul className="art-packs">
           {sources.map((s) => (
             <li key={s.id} className="art-pack">
@@ -162,7 +162,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
             </li>
           ))}
         </ul>
-      </section>
+      </details>
     </div>
   );
 }
