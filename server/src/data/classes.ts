@@ -1,7 +1,7 @@
 // Class rules live in shared/rules.ts so the character creator in the browser can use them too.
 import type { Gender } from '../../../shared/types';
 
-export { CLASSES, MANA_BY_LEVEL, profBonusFor, type ClassDef, type LevelGain } from '../../../shared/rules';
+export { CLASSES, profBonusFor, type ClassDef, type LevelGain } from '../../../shared/rules';
 
 /** The names heroes had before the character creator, with the gender each was written as. */
 const OLD_NAMES: Record<string, Gender> = {

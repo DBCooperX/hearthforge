@@ -56,7 +56,7 @@ export const LOOK_NAMES: Record<string, string> = {
   red: 'Red', green: 'Green', purple: 'Purple', gold: 'Gold', teal: 'Teal',
 };
 
-const CLASS_COLOR: Record<ClassId, string> = { fighter: 'red', rogue: 'green', wizard: 'blue', cleric: 'white' };
+const CLASS_COLOR: Record<ClassId, string> = { fighter: 'red', rogue: 'green', wizard: 'blue', cleric: 'white', barbarian: 'brown', bard: 'purple', druid: 'green', monk: 'brown', paladin: 'white', ranger: 'green', sorcerer: 'red', warlock: 'purple' };
 const hash = (s: string) => [...s].reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 7) >>> 0;
 
 interface Who { speciesId: SpeciesId; gender: Gender; classId: ClassId; name?: string }

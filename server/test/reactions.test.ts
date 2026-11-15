@@ -192,7 +192,7 @@ describe('opportunity attacks', () => {
     const vex = r.s.characters[0];
     // Cunning Action comes at level 2; before that Disengage takes the action like for anyone.
     expect(vex.abilityIds).not.toContain('dash');
-    vex.abilityIds.push('dash');
+    vex.level = 2;
     heroTurn(r, vex);
     r.disengage('p1', vex.id);
     expect(r.s.combat!.bonusUsed).toBe(true);

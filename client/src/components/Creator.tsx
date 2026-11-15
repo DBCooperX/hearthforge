@@ -5,13 +5,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import {
-  POINT_BUDGET, POINT_COST, STANDARD_ARRAY, applyFeat, boostMap, buildSheet, checkSpec, classSpellList, pointsSpent, spellOptions, startBuild,
+  POINT_BUDGET, POINT_COST, STANDARD_ARRAY, applyFeat, boostMap, buildSheet, checkSpec, classSpellList, pointsSpent, spellOptions, startBuild, startGroups, startOptions,
   type Build, type Draft, type StepId,
 } from '../../../shared/build';
 import { fillFeat, recommend, recommendFeat, recommendedArray, recommendedBoosts } from '../../../shared/recommend';
 import {
-  ABILITY_HELP, ABILITY_KEYS, BACKGROUNDS, CLASSES, CLASS_GUIDE, FEATS, KITS, ORIGIN_FEATS, SKILL_HELP, SPECIES, STYLES, kitsFor, loc,
+  ABILITY_HELP, ABILITY_KEYS, BACKGROUNDS, CLASSES, CLASS_GUIDE, FEATS, KITS, OPTION_CARDS, ORIGIN_FEATS, SKILL_HELP, SPECIES, STYLES, kitsFor, loc, type Option,
 } from '../../../shared/rules';
+import { CLASS_IDS, GROUPS, OPTIONS, grantedChoices } from '../../../shared/classes';
 import { GENDERS, abilityMod, type Abilities, type AbilityKey, type CharacterSpec, type ClassId, type GameState } from '../../../shared/types';
 import { artOfDraft, heroUrl } from '../game/heroArt';
 import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
@@ -42,7 +43,7 @@ const STEP_FIELDS: Record<StepId, (keyof CharacterSpec)[]> = {
   background: ['backgroundId', 'boosts', 'backgroundFeat', 'skills', 'expertise', 'speciesSkill'],
   abilities: ['method', 'base', 'boosts'],
   skills: ['skills', 'speciesSkill', 'expertise'],
-  talents: ['fightingStyle', 'spells', 'backgroundFeat', 'originFeat'],
+  talents: ['fightingStyle', 'classOptions', 'spells', 'backgroundFeat', 'originFeat'],
   equipment: ['kit'],
   identity: [],
 };
@@ -58,8 +59,11 @@ function tidy(d: Draft): Draft {
   const granted = [...(bg?.skills ?? []), ...out.skills];
   if (!sp?.skillChoice || !d.speciesSkill || !sp.skillChoice.includes(d.speciesSkill) || granted.includes(d.speciesSkill)) delete out.speciesSkill;
   else granted.push(d.speciesSkill);
-  out.expertise = cls?.id === 'rogue' ? (d.expertise ?? []).filter((s) => granted.includes(s)) : undefined;
-  if (cls?.id !== 'fighter') delete out.fightingStyle;
+  const first = cls ? grantedChoices(cls.id, 1) : {};
+  out.expertise = first.expertise ? (d.expertise ?? []).filter((s) => granted.includes(s)).slice(0, first.expertise.count) : undefined;
+  if (!first.style) delete out.fightingStyle;
+  if (cls && startGroups(cls.id).length) out.classOptions = startOptions(d, cls.id);
+  else delete out.classOptions;
   if (!sp?.originFeat) delete out.originFeat;
   // A Skilled talent may not repeat a skill the hero has since gained elsewhere.
   const fresh = (skills: string[] | undefined) => {
@@ -165,7 +169,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   };
 
   const hoverPatch = (patch: Draft | null) => setHover(patch ? { ...d, ...patch } : null);
-  const optionRow = (o: (typeof SPECIES)[keyof typeof SPECIES] | (typeof BACKGROUNDS)[keyof typeof BACKGROUNDS] | (typeof KITS)[string] | (typeof STYLES)[string] | (typeof CLASS_GUIDE)[ClassId], patch: Draft, selected: boolean, recommended: boolean, kicker: string, sub?: string) => (
+  const optionRow = (o: Option, patch: Draft, selected: boolean, recommended: boolean, kicker: string, sub?: string) => (
     <PickRow key={o.id} icon={o.icon} title={t(o.name)} sub={sub ?? loc(o.summary, lang)} selected={selected} recommended={recommended}
       focused={focus?.kind === 'option' && focus.option === o}
       onClick={() => { update(patch); setFocus({ kind: 'option', option: o, kicker }); setHover(null); }}
@@ -175,6 +179,8 @@ export function Creator({ state, conn, onClose, initial }: Props) {
 
   // ------------------------------------------------------------- the steps
 
+  const first = cls ? grantedChoices(cls.id, 1) : {};
+  const toggle = (list: string[], s: string, max: number) => (list.includes(s) ? list.filter((x) => x !== s) : list.length >= max ? [...list.slice(1), s] : [...list, s]);
   let left: ReactNode = null;
 
   if (step === 'class') {
@@ -189,7 +195,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   if (step === 'species') {
     left = (
       <Section title={t('Choose a species')}>
-        {Object.values(SPECIES).map((o) => optionRow(o, { speciesId: o.id }, d.speciesId === o.id, !!d.classId && o.recommendedFor.includes(d.classId) && o.recommendedFor.length < 4, t('Species')))}
+        {Object.values(SPECIES).map((o) => optionRow(o, { speciesId: o.id }, d.speciesId === o.id, !!d.classId && o.recommendedFor.includes(d.classId) && o.recommendedFor.length < CLASS_IDS.length, t('Species')))}
       </Section>
     );
   }
@@ -301,7 +307,6 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     const picks = d.skills ?? [];
     const granted = [...fromBg, ...picks, ...(d.speciesSkill ? [d.speciesSkill] : [])];
     const recSkills = rec?.skills ?? [];
-    const toggle = (list: string[], s: string, max: number) => (list.includes(s) ? list.filter((x) => x !== s) : list.length >= max ? [...list.slice(1), s] : [...list, s]);
     const skillRow = (s: string, o: { selected: boolean; patch?: Draft; locked?: string; recommended?: boolean; mark?: 'check' | 'radio'; key?: string }) => (
       <PickRow key={o.key ?? s} compact mark={o.mark ?? 'check'} title={t(s)} sub={t(ABILITY_NAMES[SKILLS[s]])} selected={o.selected} locked={o.locked} recommended={o.recommended}
         focused={focus?.kind === 'skill' && focus.id === s}
@@ -320,10 +325,10 @@ export function Creator({ state, conn, onClose, initial }: Props) {
             {sp.skillChoice.filter((s) => !fromBg.includes(s) && !picks.includes(s)).map((s) => skillRow(s, { key: `sp-${s}`, mark: 'radio', selected: d.speciesSkill === s, patch: { speciesSkill: s }, recommended: rec?.speciesSkill === s }))}
           </Section>
         )}
-        {cls.id === 'rogue' && (
-          <Section title={t('Expertise')} hint={`${d.expertise?.length ?? 0}/2`} done={d.expertise?.length === 2}>
+        {first.expertise && (
+          <Section title={t('Expertise')} hint={`${d.expertise?.length ?? 0}/${first.expertise.count}`} done={d.expertise?.length === first.expertise.count}>
             <p className="muted small"><Rich text={t('Choose two of your skills. Your proficiency bonus counts twice for them.')} /></p>
-            {granted.map((s) => skillRow(s, { key: `ex-${s}`, selected: !!d.expertise?.includes(s), patch: { expertise: toggle(d.expertise ?? [], s, 2) }, recommended: rec?.expertise?.includes(s) }))}
+            {granted.map((s) => skillRow(s, { key: `ex-${s}`, selected: !!d.expertise?.includes(s), patch: { expertise: toggle(d.expertise ?? [], s, first.expertise.count) }, recommended: rec?.expertise?.includes(s) }))}
           </Section>
         )}
       </>
@@ -358,11 +363,22 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     const bgFeat = bg ? FEATS[bg.feat] : undefined;
     left = (
       <>
-        {cls.id === 'fighter' && (
+        {first.style && (
           <Section title={t('Fighting style')} hint={d.fightingStyle ? t('done') : t('choose one')} done={!!d.fightingStyle}>
             {Object.values(STYLES).map((o) => optionRow(o, { fightingStyle: o.id }, d.fightingStyle === o.id, guide?.recStyle === o.id, t('Fighting style')))}
           </Section>
         )}
+        {startGroups(cls.id).map(([group, n]) => {
+          const mine = (d.classOptions ?? []).filter((x) => OPTIONS[x]?.group === group);
+          const others = (d.classOptions ?? []).filter((x) => OPTIONS[x]?.group !== group);
+          return (
+            <Section key={group} title={t(GROUPS[group].name)} hint={mine.length === n ? t('done') : n === 1 ? t('choose one') : `${mine.length}/${n}`} done={mine.length === n}>
+              <p className="muted small">{loc(GROUPS[group].text, lang)}</p>
+              {Object.values(OPTIONS).filter((o) => o.group === group && (o.minLevel ?? 1) <= 1 && !o.needs).map((o) =>
+                optionRow(OPTION_CARDS[o.id], { classOptions: [...others, ...(n === 1 ? [o.id] : toggle(mine, o.id, n))] }, mine.includes(o.id), !!rec?.classOptions?.includes(o.id), t(GROUPS[group].name)))}
+            </Section>
+          );
+        })}
         {known.length > 0 && (
           <Section title={t('You already know')}>
             {known.map((s) => (
@@ -389,7 +405,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
               onFocus={(f, p) => { setFocus(f); hoverPatch(p ? { originFeat: p } : null); }} />
           </Section>
         )}
-        {!list && cls.id !== 'fighter' && !sp?.originFeat && bgFeat && !bgFeat.spellList && bgFeat.id !== 'skilled' && <p className="muted small">{t('Nothing to choose here for this combination. Your background feat is listed above.')}</p>}
+        {!list && !first.style && !startGroups(cls.id).length && !sp?.originFeat && bgFeat && !bgFeat.spellList && bgFeat.id !== 'skilled' && <p className="muted small">{t('Nothing to choose here for this combination. Your background feat is listed above.')}</p>}
       </>
     );
   }
@@ -534,7 +550,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
                     ['background', t(bg.name)],
                     ['abilities', ABILITY_KEYS.map((k) => `${t(k.toUpperCase())} ${now.abilities[k]}`).join(' · ')],
                     ['skills', now.skills.map((x) => t(x)).join(', ')],
-                    ['talents', [d.fightingStyle && t(STYLES[d.fightingStyle].name), ...(d.spells ?? []).map((x) => t(ABILITIES[x].name))].filter(Boolean).join(', ')],
+                    ['talents', [d.fightingStyle && t(STYLES[d.fightingStyle].name), ...(d.classOptions ?? []).map((x) => t(OPTIONS[x].name)), ...(d.spells ?? []).map((x) => t(ABILITIES[x].name))].filter(Boolean).join(', ')],
                     ['equipment', d.kit ? t(KITS[d.kit].name) : ''],
                   ] as [StepId, string][]).filter(([, text]) => text).map(([id, text]) => (
                     <div key={id}><dt>{labels[id]}</dt><dd className="cap">{text}</dd><button type="button" className="link" onClick={() => go(id)}>{t('change')}</button></div>
@@ -596,9 +612,11 @@ export function Creator({ state, conn, onClose, initial }: Props) {
       const open = sp?.skillChoice?.filter((x) => !granted.includes(x)) ?? [];
       const speciesSkill = open.length ? pickOne(open) : undefined;
       if (speciesSkill) granted.push(speciesSkill);
-      patch = { skills, speciesSkill, expertise: cls.id === 'rogue' ? sample(granted, 2) : undefined };
+      patch = { skills, speciesSkill, expertise: grantedChoices(cls.id, 1).expertise ? sample(granted, grantedChoices(cls.id, 1).expertise.count) : undefined };
     } else if (step === 'talents' && cls) {
-      if (cls.id === 'fighter') patch.fightingStyle = pickOne(Object.values(STYLES)).id;
+      if (grantedChoices(cls.id, 1).style) patch.fightingStyle = pickOne(Object.values(STYLES)).id;
+      const groups = startGroups(cls.id);
+      if (groups.length) patch.classOptions = groups.flatMap(([group, n]) => sample(Object.values(OPTIONS).filter((o) => o.group === group && (o.minLevel ?? 1) <= 1 && !o.needs).map((o) => o.id), n));
       const list = classSpellList(cls.id);
       if (list) {
         const b = startBuild(d, cls.id);

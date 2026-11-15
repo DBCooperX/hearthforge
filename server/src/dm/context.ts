@@ -3,6 +3,7 @@
 import { styleText } from '../../../shared/style';
 import { ITEMS } from '../../../shared/content';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
+import { BEAST_FORMS, CLASS_FEATURES, OPTIONS, hasFeature } from '../../../shared/classes';
 import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
 import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
@@ -183,12 +184,17 @@ function playedBy(game: Game, c: Character): string {
 function partyLines(game: Game): string[] {
   return game.s.characters.map((c) => {
     const weapon = c.equipment.mainHand ? game.def(c.equipment.mainHand.defId).name : 'unarmed';
-    const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
+    const form = c.form && BEAST_FORMS[c.form] ? `in the shape of a ${BEAST_FORMS[c.form].name.toLowerCase()}, ` : '';
+    const status = form + (c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine');
     const who = `${SPECIES[c.speciesId]?.name ?? ''} ${c.subclass ?? ''} ${c.className}`.replace(/\s+/g, ' ').trim();
     const bag = c.bag.filter((b) => !!b).map((b) => `${game.def(b.defId).name}${b.qty > 1 ? ` ×${b.qty}` : ''}`).join(', ');
     const line = `- ${c.name} [${c.id}] level ${c.level} ${who} (${BACKGROUNDS[c.backgroundId]?.name ?? 'no'} background), HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.map((s) => (c.expertise.includes(s) ? `${s} (expertise)` : s)).join(', ')}, ${status}. Gender: ${genderNote(c, game.lang)}.${playedBy(game, c)} Backpack: ${bag || 'empty'}`;
     // Story traits are not enforced by the rules engine, so the DM has to honour them.
-    const traits = (SPECIES[c.speciesId]?.effects ?? []).filter((e) => e.by === 'story').map((e) => `${e.name}: ${e.text.en}`);
+    const traits = [
+      ...(SPECIES[c.speciesId]?.effects ?? []).filter((e) => e.by === 'story').map((e) => `${e.name}: ${e.text.en}`),
+      ...(CLASS_FEATURES[c.classId] ?? []).filter((f) => f.by === 'story' && f.text.en && hasFeature(c, f.id)).map((f) => `${f.name}: ${f.text.en}`),
+      ...(c.options ?? []).map((o) => OPTIONS[o]).filter((o) => o?.by === 'story').map((o) => `${o.name}: ${o.text.en}`),
+    ];
     return [
       line,
       ...(traits.length ? [`  Traits to honour in the story: ${traits.join(' ')}`] : []),

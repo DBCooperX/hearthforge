@@ -1,3 +1,4 @@
+import { saveProfs, shownResources } from '../../../shared/classes';
 import { ItemIcon } from '../ui/ItemIcon';
 import { useState } from 'react';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
@@ -35,7 +36,8 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
   const floor = XP_THRESHOLDS[c.level - 1];
   const next = c.level < MAX_LEVEL ? XP_THRESHOLDS[c.level] : null;
   const pct = next ? Math.max(0, Math.min(100, ((c.xp - floor) / (next - floor)) * 100)) : 100;
-  const saves = CLASSES[c.classId]?.saves ?? SAVE_PROFS[c.classId] ?? [];
+  const saves = saveProfs(c);
+  const uses = shownResources(c);
   const owner = state.players.find((p) => p.id === c.ownerId);
   const worn = SLOT_IDS.filter((s) => c.equipment[s]);
   const term = (id: string) => { const g = GLOSSARY.find((x) => x.id === id); return g ? loc(g.text, lang) : ''; };
@@ -48,7 +50,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
   const identity = [t(BACKGROUNDS[c.backgroundId]?.name ?? ''), c.gender !== 'neutral' ? t(PRONOUNS[c.gender]) : '', owner ? t('played by {name}', { name: owner.name }) : ''].filter(Boolean).join(' · ');
 
   const vitals: { key: string; value: string; label: string; hint: string; tone?: string }[] = [
-    { key: 'hp', value: `${c.hp}/${c.maxHp}`, label: t('Hit points'), hint: term('hp'), tone: 'hp' },
+    { key: 'hp', value: `${c.hp}/${c.maxHp}${c.tempHp ? ` +${c.tempHp}` : ''}`, label: t('Hit points'), hint: term('hp'), tone: 'hp' },
     { key: 'ac', value: String(c.ac), label: t('Armor class'), hint: term('ac') },
     { key: 'init', value: signed(initiative), label: t('Initiative'), hint: term('initiative') },
     { key: 'speed', value: `${c.speed} ft`, label: t('Speed'), hint: t('{n} ft of movement', { n: c.speed }) },
@@ -81,6 +83,11 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               </Hint>
             ))}
           </div>
+          {uses.length > 0 && (
+            <div className="sheet-uses">
+              {uses.map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={t(r.def.rest === 'short' ? 'Comes back after a short rest.' : 'Comes back after a long rest.')}>{r.def.icon} {t(r.def.name)} {r.left}/{r.max}</span>)}
+            </div>
+          )}
           {c.conditions.length > 0 && <div className="conditions">{c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}</div>}
         </aside>
 

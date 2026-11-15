@@ -2,7 +2,9 @@
 // Rules text and statistics are adapted from the D&D 5e System Reference Document 5.1
 // (CC-BY-4.0, Wizards of the Coast). See CREDITS.md.
 
-import type { AbilityDef, AbilityKey, ItemDef } from './types';
+import { CLASS_ABILITIES } from './classAbilities';
+import { CLASS_IDS, SRD_CLASSES } from './classes';
+import type { AbilityDef, AbilityKey, ClassId, ItemDef } from './types';
 
 const items: ItemDef[] = [
   // Weapons
@@ -70,12 +72,12 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(items.map((i) =
 
 const abilities: AbilityDef[] = [
   { id: 'dodge', name: 'Dodge', icon: '💨', kind: 'dodge', cost: 0, range: 0, target: 'self', description: 'Until your next turn, attacks against you have disadvantage.' },
-  { id: 'second_wind', name: 'Second Wind', icon: '❤️‍🔥', kind: 'self_heal', cost: 0, range: 0, dice: '1d10', target: 'self', bonusAction: true, oncePerRest: true, description: 'Bonus action. Regain 1d10 + your level hit points. Once per rest.' },
+  { id: 'second_wind', name: 'Second Wind', icon: '❤️‍🔥', kind: 'self_heal', cost: 0, range: 0, dice: '1d10', target: 'self', bonusAction: true, resource: 'second_wind', description: 'Bonus action. Regain 1d10 + your level hit points.' },
   { id: 'fire_bolt', name: 'Fire Bolt', icon: '🔥', kind: 'attack', spellLevel: 0, cost: 0, range: 120, dice: '1d10', damageType: 'fire', target: 'enemy', description: 'Cantrip. Ranged spell attack, 1d10 fire damage.' },
   { id: 'magic_missile', name: 'Magic Missile', icon: '✨', kind: 'auto', spellLevel: 1, cost: 2, range: 120, dice: '3d4+3', damageType: 'force', target: 'enemy', description: '1st-level spell (2 mana). Three darts strike unerringly for 1d4+1 force damage each.' },
   { id: 'sacred_flame', name: 'Sacred Flame', icon: '☀️', kind: 'save', spellLevel: 0, cost: 0, range: 60, dice: '1d8', damageType: 'radiant', saveAbility: 'dex', target: 'enemy', description: 'Cantrip. Target makes a DEX save or takes 1d8 radiant damage.' },
   { id: 'guiding_bolt', name: 'Guiding Bolt', icon: '🌟', kind: 'attack', spellLevel: 1, cost: 2, range: 120, dice: '4d6', damageType: 'radiant', target: 'enemy', description: '1st-level spell (2 mana). Ranged spell attack, 4d6 radiant damage. The next attack against the target has advantage.' },
-  { id: 'action_surge', name: 'Action Surge', icon: '⚡', kind: 'surge', cost: 0, range: 0, target: 'self', oncePerRest: true, description: 'Push past your limits: take one more action this turn. Once per rest.' },
+  { id: 'action_surge', name: 'Action Surge', icon: '⚡', kind: 'surge', cost: 0, range: 0, target: 'self', resource: 'action_surge', description: 'Push past your limits: take one more action this turn.' },
   { id: 'dash', name: 'Cunning Dash', icon: '👟', kind: 'dash', cost: 0, range: 0, target: 'self', bonusAction: true, description: 'Bonus action. Gain extra movement equal to your speed this turn.' },
   { id: 'acid_arrow', name: 'Acid Arrow', icon: '🧫', kind: 'attack', spellLevel: 2, cost: 3, range: 90, dice: '4d4', damageType: 'acid', target: 'enemy', description: '2nd-level spell (3 mana). Ranged spell attack, 4d4 acid damage.' },
   { id: 'healing_word', name: 'Healing Word', icon: '🗣️', kind: 'heal', spellLevel: 1, cost: 2, range: 60, dice: '1d4', target: 'ally', bonusAction: true, description: '1st-level spell (2 mana). Bonus action. A creature within 60 ft regains 1d4 + your spellcasting modifier hit points.' },
@@ -93,11 +95,11 @@ const abilities: AbilityDef[] = [
   { id: 'inflict_wounds', name: 'Inflict Wounds', icon: '🩸', kind: 'attack', spellLevel: 1, cost: 2, range: 5, dice: '3d10', damageType: 'necrotic', target: 'enemy', description: '1st-level spell (2 mana). Melee spell attack, 3d10 necrotic damage.' },
   { id: 'shatter', name: 'Shatter', icon: '🔊', kind: 'save', spellLevel: 2, cost: 3, range: 60, dice: '3d8', damageType: 'thunder', saveAbility: 'con', half: true, area: true, target: 'enemy', description: '2nd-level spell (3 mana). The target and every enemy next to it make a CON save, taking 3d8 thunder damage or half on a success.' },
   // Species traits
-  { id: 'breath_weapon', name: 'Breath Weapon', icon: '🐲', kind: 'save', cost: 0, range: 15, dice: '1d10', damageType: 'fire', saveAbility: 'dex', dcAbility: 'con', half: true, area: true, oncePerRest: true, target: 'enemy', description: 'Exhale fire: the target and every enemy next to it make a DEX save (DC 8 + CON + proficiency), taking 1d10 fire damage or half on a success. 2d10 from level 5. Once per rest.' },
+  { id: 'breath_weapon', name: 'Breath Weapon', icon: '🐲', kind: 'save', cost: 0, range: 15, dice: '1d10', damageType: 'fire', saveAbility: 'dex', dcAbility: 'con', half: true, area: true, oncePerRest: true, target: 'enemy', description: 'Exhale fire: the target and every enemy next to it make a DEX save (DC 8 + CON + proficiency), taking 1d10 fire damage or half on a success. 2d10 from level 5, 3d10 from 11, 4d10 from 17. Once per rest.' },
   { id: 'adrenaline_rush', name: 'Adrenaline Rush', icon: '💢', kind: 'dash', cost: 0, range: 0, target: 'self', bonusAction: true, oncePerRest: true, description: 'Bonus action. Gain extra movement equal to your speed this turn. Once per rest.' },
 ];
 
-export const ABILITIES: Record<string, AbilityDef> = Object.fromEntries(abilities.map((a) => [a.id, a]));
+export const ABILITIES: Record<string, AbilityDef> = Object.fromEntries([...abilities, ...CLASS_ABILITIES].map((a) => [a.id, a]));
 
 export const SLOT_LABELS: Record<string, string> = {
   head: 'Head',
@@ -110,11 +112,19 @@ export const SLOT_LABELS: Record<string, string> = {
   boots: 'Boots',
 };
 
-export const CLASS_INFO: Record<string, { name: string; blurb: string; color: string }> = {
+export const CLASS_INFO: Record<ClassId, { name: string; blurb: string; color: string }> = {
   fighter: { name: 'Fighter', blurb: 'Heavily armored front-liner. Longsword, shield and Second Wind.', color: '#c0392b' },
   rogue: { name: 'Rogue', blurb: 'Quick and precise. Sneak Attack when an ally flanks the target.', color: '#27ae60' },
   wizard: { name: 'Wizard', blurb: 'Fragile arcane caster. Fire Bolt and Magic Missile.', color: '#2980b9' },
   cleric: { name: 'Cleric', blurb: 'Armored healer. Sacred Flame, Guiding Bolt and Cure Wounds.', color: '#f1c40f' },
+  barbarian: { name: 'Barbarian', blurb: 'Raging warrior who shrugs off blows. Greataxe and Rage.', color: '#b9770e' },
+  bard: { name: 'Bard', blurb: 'Inspiring performer with healing magic and a sharp tongue.', color: '#d16ba5' },
+  druid: { name: 'Druid', blurb: 'Nature caster who fights as a wolf or a bear.', color: '#6b8e23' },
+  monk: { name: 'Monk', blurb: 'Unarmored martial artist. Many fast strikes powered by focus.', color: '#5dade2' },
+  paladin: { name: 'Paladin', blurb: 'Holy knight in heavy armor. Lay on Hands and Divine Smite.', color: '#f8e9a1' },
+  ranger: { name: 'Ranger', blurb: 'Wilderness hunter with bow and Hunter\'s Mark.', color: '#1e8449' },
+  sorcerer: { name: 'Sorcerer', blurb: 'Born with magic. Bends spells with sorcery points.', color: '#ff7f50' },
+  warlock: { name: 'Warlock', blurb: 'Bound to a patron. Eldritch Blast and mana that returns on a short rest.', color: '#8e44ad' },
 };
 
 /** The 5e skills and the ability each one uses. */
@@ -129,6 +139,4 @@ export const ABILITY_NAMES: Record<AbilityKey, string> = {
 };
 
 /** Saving throw proficiencies by class. */
-export const SAVE_PROFS: Record<string, AbilityKey[]> = {
-  fighter: ['str', 'con'], rogue: ['dex', 'int'], wizard: ['int', 'wis'], cleric: ['wis', 'cha'],
-};
+export const SAVE_PROFS = Object.fromEntries(CLASS_IDS.map((id) => [id, SRD_CLASSES[id].saves])) as Record<ClassId, AbilityKey[]>;

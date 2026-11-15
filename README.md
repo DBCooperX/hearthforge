@@ -49,7 +49,7 @@ You run Hearthforge as one Docker container on your own server. You and your fri
 
 **Turn-based 5e combat** on a battle map generated for the place where the fight breaks out (swamp, forest, plains, road, bridge, camp, town streets, tavern, cave, ruin, dungeon and more). Initiative, movement, attack rolls, advantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, difficult terrain and cover. Monsters are drawn from a body shape and layered extras, and the Dungeon Master can restyle them, but their numbers always come from a real stat block: all 341 monsters of the SRD 5.2.1, from Challenge 0 to 30, with multiattack, breath weapons and other area effects, conditions (poisoned, grappled, paralysed, frightened and more, with a Break free action), regeneration, resistances, Magic and Legendary Resistance and legendary actions. The Dungeon Master searches the catalogue by name, type and Challenge and is told how hard a fight is for the party before it starts.
 
-**Heroes.** Eight premade heroes, or a guided creator with class (Fighter, Rogue, Wizard, Cleric), nine species, four backgrounds, ability scores, skills, talents, equipment, looks and backstory. Every option explains what it does and who it suits. Portraits and battle tokens are drawn from the hero's looks and gear, so they change when the gear does. Progression runs from level 1 to 5, with a subclass at level 3 and a feat or ability increase at level 4.
+**Heroes.** Sixteen premade heroes, or a guided creator with all twelve classes of the SRD 5.2.1 (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard), nine species, four backgrounds, ability scores, skills, talents, equipment, looks and backstory. Every option explains what it does and who it suits. Portraits and battle tokens are drawn from the hero's looks and gear, so they change when the gear does. Progression runs from level 1 to 20: a subclass at level 3, feats or ability increases along the way, an epic boon at level 19, and the choices each class makes (fighting styles, expertise, metamagic, invocations). The game runs the class features itself: Rage, Wild Shape, focus points, Lay on Hands and Divine Smite, Bardic Inspiration, Channel Divinity, sorcery points, Hunter's Mark and Hex, Cunning Strike, Extra Attack and the rest, each with its own counter on the hero's card.
 
 **Inventory and sheet.** Paper-doll slots, a backpack, shared party gold, drag and drop, and items the Dungeon Master invents in play (a letter, a strange key) with their own notes. A full character sheet on `c`.
 
@@ -239,12 +239,14 @@ With an API key, one short call to the background model rewords a rolled region 
 
 The rules follow the 5e System Reference Document with simplifications:
 
-- Mana is the Spell Points variant: casters have 4, 6, 8, 10 and 14 points at levels 1 to 5.
-- Levels stop at 5 for now, with fixed-average hit points on level-up. Each class has the one SRD subclass.
+- Mana is the Spell Points variant: a caster's mana is the point value of the spell slots in their class table (a wizard has 4, 6, 14, 17 and 27 points at levels 1 to 5, and 133 at level 20). A spell costs 2 points at 1st level and 3 at 2nd. A warlock's mana comes back on a short rest.
+- Levels run to 20, with fixed-average hit points on level-up. Each class has the one SRD subclass.
+- The spell list is still short (cantrips, 1st-level and a few 2nd-level spells), so casters above level 5 grow through class features, cantrip dice and mana rather than new spells until the spell import lands.
+- Weapon Mastery, multiclassing and concentration are not in the game. Wild Shape offers four beasts (wolf, black bear, dire wolf, brown bear). Class features that only matter in the story (Thieves' Cant, Primal Knowledge, a warlock's familiar) are handed to the Dungeon Master.
 - Parties smaller than four get the Hearth's Blessing (+4 max HP per missing hero) and face fewer monsters.
 - Heroes left unconscious when a fight is won get up with 1 HP. A long rest is allowed once every 16 hours.
 - Traits the engine cannot enforce (darkvision, speaking with small beasts) are handed to the Dungeon Master to honour in the story; the creator marks which is which.
-- No opportunity attacks, ammunition, attunement or encumbrance yet.
+- No ammunition, attunement or encumbrance yet.
 
 ## Development
 

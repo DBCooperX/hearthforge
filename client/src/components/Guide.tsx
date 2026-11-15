@@ -365,6 +365,22 @@ export function FeatPicker({ build, fixed, options, recommended, value, onChange
           </div>
         </div>
       )}
+      {def?.boost && def.id !== 'asi' && pick && (
+        <div className="subpick">
+          <small>{t('Raise one ability by 1.')}</small>
+          <div className="asi">
+            {def.boost.map((k) => {
+              const next = { ...pick, abilities: [k] };
+              return (
+                <button key={k} type="button" className={pick.abilities?.[0] === k ? 'on' : ''} disabled={build.abilities[k] >= (def.epic ? 30 : 20)} onClick={() => onChange(next)}
+                  onMouseEnter={() => onFocus({ kind: 'ability', key: k }, next)} onMouseLeave={() => onFocus(focus)}>
+                  {t(k.toUpperCase())} {build.abilities[k]}{pick.abilities?.[0] === k && <b> +1</b>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {def?.id === 'skilled' && pick && (
         <div className="subpick">
           <small>{t('Choose three skills ({n}/3).', { n: pick.skills?.length ?? 0 })}</small>
