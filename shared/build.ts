@@ -95,6 +95,8 @@ export function armorClass(c: Wearer, worn: Partial<Record<SlotId, ItemDef | nul
     if (who && hasFeature(who, 'draconic_resilience')) ac = Math.max(ac, 10 + dex + abilityMod(c.abilities.cha));
   }
   for (const def of Object.values(worn)) ac += def?.acBonus ?? 0;
+  // Bracers of Defense, Robe of the Archmagi: only with no armor and no shield.
+  if (!armor && !Object.values(worn).some((d) => d?.kind === 'shield')) for (const def of Object.values(worn)) ac += def?.unarmored ?? 0;
   if (armor && c.feats.includes('style_defense')) ac += 1;
   return ac;
 }

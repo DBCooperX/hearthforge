@@ -3,7 +3,7 @@ import { classSpellList, maxManaOf, spellOptions } from '../../shared/build';
 import { CHOICES, CLASS_FEATURES, CLASS_IDS, GROUPS, featureLine, optionLine, OPTIONS, RESOURCES, chosenIn, grantedChoices, hasFeature, optionsFor, resourceLeft, resourceMax, saveProfs } from '../../shared/classes';
 import { ABILITIES, SKILLS } from '../../shared/content';
 import { hasTranslation } from '../../shared/i18n';
-import { recommendFeat } from '../../shared/recommend';
+import { recommendFeat, recommendSpells } from '../../shared/recommend';
 import { STYLES } from '../../shared/rules';
 import { MAX_LEVEL, XP_THRESHOLDS, type Character, type ClassId } from '../../shared/types';
 import { Game, GameError } from '../src/game/engine';
@@ -35,7 +35,7 @@ function decide(g: Game, c: Character) {
   for (let i = 0; i < 80 && c.pending.length; i++) {
     const p = c.pending[0];
     if (p.kind === 'feat') g.choose('p1', c.id, p.id, { feat: recommendFeat({ ...c, level: p.level }, false) });
-    else if (p.kind === 'spell') g.choose('p1', c.id, p.id, { spell: spellOptions(c, classSpellList(c.classId)!, p.pool)[0] });
+    else if (p.kind === 'spell') g.choose('p1', c.id, p.id, { spell: recommendSpells(spellOptions(c, classSpellList(c.classId)!, p.pool))[0] });
     else {
       const from = p.group === 'style' ? Object.keys(STYLES).filter((s) => !c.feats.includes(`style_${s}`))
         : p.group === 'expertise' ? c.skills.filter((s) => !c.expertise.includes(s) && (!p.from || p.from.includes(s)))

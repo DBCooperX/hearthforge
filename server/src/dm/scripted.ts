@@ -96,6 +96,9 @@ export function scriptedScene(game: Game, beats: Beat[]): Scene | null {
         out.push(t`You wake on a pallet, bandaged and aching. Someone dragged you out of the fight, and helped themselves to part of your purse for the trouble.`);
         mood = 'somber';
         break;
+      case 'spell':
+        out.push(t`The magic of ${tr(game.lang, b.spell)} takes hold.`);
+        break;
       case 'defeat':
         out.push(t`Darkness closes in. The Vale has claimed another band of would-be heroes.`);
         mood = 'somber';

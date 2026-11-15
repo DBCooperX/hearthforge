@@ -394,7 +394,7 @@ describe("the Dungeon Master's tools", () => {
     g.recordDeed('Paid the debts of the Coppervein family.');
     expect(g.s.memory.deeds).toHaveLength(1);
     expect(g.grantItem(g.s.characters[0].id, 'potion_healing', 99).quantity).toBe(10);
-    expect(() => g.grantItem(g.s.characters[0].id, 'vorpal_sword', 1)).toThrow(/Unknown item/);
+    expect(() => g.grantItem(g.s.characters[0].id, 'sword_of_kas', 1)).toThrow(/Unknown item/);
     const check = g.skillCheck(g.s.characters[1].id, 'dex', 'Stealth', 12);
     // Vex: DEX +3 and Expertise in Stealth (+4).
     expect(check.modifier).toBe(7);

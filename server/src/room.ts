@@ -367,7 +367,7 @@ export class Room {
       case 'start': return g.start(playerId);
       case 'move': return g.move(playerId, String(msg.characterId), Math.round(Number(msg.x)), Math.round(Number(msg.y)));
       case 'attack': return g.attack(playerId, String(msg.characterId), String(msg.targetId));
-      case 'ability': return g.useAbility(playerId, String(msg.characterId), String(msg.abilityId), msg.targetId ? String(msg.targetId) : undefined);
+      case 'ability': return g.useAbility(playerId, String(msg.characterId), String(msg.abilityId), msg.targetId ? String(msg.targetId) : undefined, Number.isFinite(Number(msg.level)) ? Number(msg.level) : undefined);
       case 'use_item': return g.useItem(playerId, String(msg.characterId), String(msg.uid), msg.targetId ? String(msg.targetId) : undefined);
       case 'end_turn': return g.endTurn(playerId, String(msg.characterId));
       case 'disengage': return g.disengage(playerId, String(msg.characterId));

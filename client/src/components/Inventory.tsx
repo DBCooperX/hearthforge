@@ -1,6 +1,7 @@
 import { ItemIcon } from '../ui/ItemIcon';
 import { useEffect, useMemo, useState } from 'react';
-import { SLOT_LABELS } from '../../../shared/content';
+import { ABILITIES, SLOT_LABELS } from '../../../shared/content';
+import { SPELL_BUFFS } from '../../../shared/spells';
 import { weaponAttack } from '../../../shared/build';
 import { INV_FILTERS, INV_SORTS, arrangeBag, carriedWeight, carryCapacity, equipPreview, itemGroup, itemWeight, slotForItem, type InvFilter, type InvSort } from '../../../shared/inventory';
 import { itemDef } from '../../../shared/items';
@@ -20,10 +21,13 @@ import { sfx } from '../ui/sound';
 import { HeroTabs, Window } from '../ui/Window';
 
 const MIME = 'application/x-hearthforge-item';
-const LEFT: SlotId[] = ['head', 'armor', 'mainHand', 'ring'];
-const RIGHT: SlotId[] = ['amulet', 'cloak', 'offHand', 'boots'];
+const LEFT: SlotId[] = ['head', 'armor', 'mainHand', 'hands', 'ring'];
+const RIGHT: SlotId[] = ['amulet', 'cloak', 'offHand', 'waist', 'boots'];
 
 const num = (n: number, lang: Lang) => n.toLocaleString(lang, { maximumFractionDigits: 1 });
+
+/** Creature types that slaying weapons name. */
+const VS_NAMES: Record<string, string> = { dragon: 'dragons', giant: 'giants', undead: 'undead and fiends', fiend: 'fiends and undead' };
 
 export function kindLine(def: ItemDef, t: Translate): string {
   const slot = slotForItem(def);
@@ -33,7 +37,7 @@ export function kindLine(def: ItemDef, t: Translate): string {
     : def.consumable ? t(KIND.consumable)
     : def.kind === 'wondrous' ? t(KIND.wondrous)
     : def.story ? t(def.story.category) : t(KIND.item);
-  const line = [def.rarity && def.rarity !== 'common' ? t(def.rarity) : null, kind, slot && def.kind !== 'shield' ? t(SLOT_LABELS[slot]) : null].filter(Boolean).join(' · ');
+  const line = [def.rarity && def.rarity !== 'common' ? t(def.rarity === 'very_rare' ? 'very rare' : def.rarity) : null, kind, slot && def.kind !== 'shield' ? t(SLOT_LABELS[slot]) : null].filter(Boolean).join(' · ');
   return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
@@ -53,6 +57,21 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: Tip
     def.weapon.ranged && t('Range {normal}/{long} ft', def.weapon.ranged),
     def.weapon.bonus && t('Magic {bonus}', { bonus: signed(def.weapon.bonus) }),
   ].filter(Boolean) as string[] : [];
+  // What a magic item does while worn, and the spell a wand or staff holds.
+  const magic = [
+    def.attune && t('Needs attunement'),
+    def.weapon?.extra && t('+{dice} {type}', { dice: dice(def.weapon.extra.dice, lang), type: t(`${def.weapon.extra.type} damage`) }),
+    def.weapon?.vs && t('+{dice} against {type}', { dice: dice(def.weapon.vs.dice, lang), type: t(VS_NAMES[def.weapon.vs.type] ?? def.weapon.vs.type) }),
+    ...Object.entries(def.scores ?? {}).map(([k, v]) => t('{ability} becomes {n}', { ability: t(k.toUpperCase()), n: v })),
+    def.saveBonus && t('Saving throws {bonus}', { bonus: signed(def.saveBonus) }),
+    def.resist?.length && t('Resists {types}', { types: def.resist.map((x) => t(`${x} damage`)).join(', ') }),
+    def.speed && t('Speed +{n} ft', { n: def.speed }),
+    def.unarmored && t('Armor Class {bonus} without armor or shield', { bonus: signed(def.unarmored) }),
+    def.darkvision && t('Darkvision {n} ft', { n: def.darkvision }),
+    def.casts && t('Casts {spell} (level {level}), {left} of {charges} charges', { spell: t(ABILITIES[def.casts.spell]?.name ?? def.casts.spell), level: def.casts.level, left: def.casts.charges - (item.used ?? 0), charges: def.casts.charges }),
+    def.consumable?.buff && t('Effect: {spell}', { spell: t(SPELL_BUFFS[def.consumable.buff]?.chip ?? def.consumable.buff) }),
+    def.consumable?.temp && t('{n} temporary hit points', { n: def.consumable.temp }),
+  ].filter(Boolean) as string[];
   const action = !mine ? null : equipped ? t('Double-click to take it off') : preview ? t('Double-click to equip') : def.consumable ? t('Double-click to drink') : null;
   return (
     <div className={['item-tip', def.rarity ?? 'common', story?.quest && 'quest'].filter(Boolean).join(' ')}>
@@ -64,16 +83,17 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: Tip
         </div>
       </header>
       {story?.quest && <div className="item-tags"><span className="item-tag quest">{t('Quest item')}</span></div>}
-      {(attack || def.armor || def.acBonus || def.consumable) && (
+      {(attack || def.armor || def.acBonus || def.consumable?.heal) && (
         <dl className="item-stats">
           {attack && <div><dt>{t('To hit')}</dt><dd>{signed(attack.bonus)}</dd></div>}
           {attack && <div><dt>{t('On a hit')}</dt><dd>{dice(attack.damage, lang)} {t(`${attack.type} damage`)}</dd></div>}
           {def.armor && <div><dt>{t('Armor Class')}</dt><dd>{def.armor.baseAc}{def.armor.dexCap === 0 ? '' : ` + ${t('DEX')}`}{def.armor.dexCap ? ` (${t('max {n}', { n: def.armor.dexCap })})` : ''}</dd></div>}
           {def.acBonus ? <div><dt>{t('Armor Class')}</dt><dd>{signed(def.acBonus)}</dd></div> : null}
-          {def.consumable && <div><dt>{t('Heals')}</dt><dd>{dice(def.consumable.heal, lang)} {t('HP')}</dd></div>}
+          {def.consumable?.heal && <div><dt>{t('Heals')}</dt><dd>{dice(def.consumable.heal, lang)} {t('HP')}</dd></div>}
         </dl>
       )}
       {props.length > 0 && <div className="item-props">{props.map((p) => <span key={p}>{p}</span>)}</div>}
+      {magic.length > 0 && <div className="item-props magic">{magic.map((p) => <span key={p}>{p}</span>)}</div>}
       {preview && !equipped && (preview.changes.length > 0 || !preview.usable) && (
         <div className="item-compare">
           <small>{preview.replaces ? t('Instead of {item}', { item: t(preview.replaces.name) }) : t('If equipped')}</small>

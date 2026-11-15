@@ -123,8 +123,11 @@ export function App() {
 
   const pickCharacter = useCallback(
     (c: Character) => {
-      if (actor && targeting?.kind === 'ability' && targetAbility?.target === 'ally') {
-        send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: c.id });
+      if (actor && targeting?.kind === 'ability' && targeting.item && targetAbility?.target === 'ally') {
+        send({ t: 'use_item', characterId: actor.id, uid: targeting.item, targetId: c.id });
+        setTargeting(null);
+      } else if (actor && targeting?.kind === 'ability' && targetAbility?.target === 'ally') {
+        send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: c.id, ...(targeting.level ? { level: targeting.level } : {}) });
         setTargeting(null);
       } else if (actor && targeting?.kind === 'item') {
         send({ t: 'use_item', characterId: actor.id, uid: targeting.uid, targetId: c.id });
@@ -143,7 +146,8 @@ export function App() {
       const hero = state.characters.find((c) => !c.dead && c.x === x && c.y === y);
       if (monster) {
         if (!actor) return conn.toast(t('Wait for your turn'));
-        if (targeting?.kind === 'ability' && targetAbility?.target === 'enemy') send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: monster.id });
+        if (targeting?.kind === 'ability' && targeting.item && targetAbility?.target === 'enemy') send({ t: 'use_item', characterId: actor.id, uid: targeting.item, targetId: monster.id });
+        else if (targeting?.kind === 'ability' && targetAbility?.target === 'enemy') send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: monster.id, ...(targeting.level ? { level: targeting.level } : {}) });
         else send({ t: 'attack', characterId: actor.id, targetId: monster.id });
         setTargeting(null);
         return;
@@ -302,7 +306,8 @@ export function App() {
         )}
         {overlay === 'trade' && focus && shop && <Trade state={state} shop={shop} character={focus} mine={playable.includes(focus)} conn={conn} onSelect={setSelectedId} onShop={setShopId} onClose={() => setOverlay(null)} />}
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
-        {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
+        {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')}
+          onCast={focus.ownerId === playerId ? (abilityId, targetId, level) => send({ t: 'ability', characterId: focus.id, abilityId, ...(targetId ? { targetId } : {}), ...(level ? { level } : {}) }) : undefined} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
         {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={() => { setOverlay(null); setInnkeeper(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined}><StyleSetup bare state={state} conn={conn} /></Settings>}

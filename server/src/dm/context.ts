@@ -1,11 +1,10 @@
 // Builds the text the Dungeon Master sees: a stable system prompt, and a compact,
 // factual snapshot of the world, the party and everything the DM should remember.
 import { styleText } from '../../../shared/style';
-import { ITEMS } from '../../../shared/content';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { BEAST_FORMS, CLASS_FEATURES, OPTIONS, hasFeature } from '../../../shared/classes';
 import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
-import type { Character } from '../../../shared/types';
+import { SLOT_IDS, type Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS, crValue, type MonsterDef } from '../data/monsters';
@@ -15,6 +14,17 @@ import { TIER_TEXT, tierOf } from '../../../shared/reputation';
 import { attitude, factionOfNpc, rumoursHere } from '../game/reputation';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
+import { ABILITIES, ITEMS } from '../../../shared/content';
+import spellRules from '../data/srd/spell-rules.json';
+import itemRules from '../data/srd/magic-item-rules.json';
+
+const SPELL_RULES = spellRules as Record<string, string>;
+const ITEM_RULES = itemRules as Record<string, string>;
+/** The SRD rules of a magic item, shortened for the turn context. */
+export const itemRulesText = (id: string, max = 320) => { const r = ITEM_RULES[id] ?? ''; return r.length > max ? `${r.slice(0, max)}…` : r; };
+
+/** The SRD rules text of a spell, for the Dungeon Master to narrate it by. */
+export const spellRulesText = (id: string, max = 1400) => { const r = SPELL_RULES[id] ?? ''; return r.length > max ? `${r.slice(0, max)}…` : r; };
 import { trueTerrain, type SettingState } from '../game/world';
 
 export const DM_SYSTEM_PROMPT = `You are the Dungeon Master of Hearthforge, a self-hosted Dungeons & Dragons 5th edition game played in a web browser by one or more players who share a party of heroes.
@@ -70,7 +80,24 @@ Choosing a fair fight
 The state you receive each turn gives the party's experience budget for one fight (low, moderate, high). Add up the XP of the monsters you intend to use, for the counts you pass. Stay at or under "high" unless the story has earned a deadly fight and the players had fair warning or a way out. A single creature whose challenge rating is far above the party's level can kill a hero in one round, even inside the budget: the state names the highest challenge rating that is still sensible for one foe. Many weak creatures are a better fight than one creature that is too strong.
 
 Item catalogue (use the id in give_item)
-${Object.values(ITEMS).map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`).join('\n')}`;
+${itemIndex()}`;
+
+/**
+ * The catalogue for the system prompt: everyday gear with its text, then the magic items of the
+ * SRD as ids by rarity. The server runs what they do; their full rules come with the party's gear.
+ */
+export function itemIndex(): string {
+  const plain = Object.values(ITEMS).filter((i) => !i.base && i.srd !== i.id && !/_plus\d$/.test(i.id));
+  const lines = plain.map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`);
+  lines.push('- <weapon, armor or shield id>_plus1, _plus2, _plus3: the same with +1 to +3 (uncommon, rare, very rare; armor one step rarer). Example: greataxe_plus2, plate_plus1, shield_plus3.');
+  const magic = Object.values(ITEMS).filter((i) => i.srd === i.id);
+  lines.push('Magic items of the SRD by rarity. Hand them out sparingly; the rarer, the more the story should have earned it.');
+  for (const r of ['common', 'uncommon', 'rare', 'very_rare', 'legendary', 'artifact']) {
+    const ids = magic.filter((i) => i.rarity === r).map((i) => i.id);
+    if (ids.length) lines.push(`- ${r.replace('_', ' ')}: ${ids.join(', ')}`);
+  }
+  return lines.join('\n');
+}
 
 /** The region and opening of this table. Tables saved before start options play in the classic Vale. */
 /** Every catalogue id, grouped by challenge rating, as compact lines for the system prompt. */
@@ -195,8 +222,17 @@ function partyLines(game: Game): string[] {
       ...(CLASS_FEATURES[c.classId] ?? []).filter((f) => f.by === 'story' && f.text.en && hasFeature(c, f.id)).map((f) => `${f.name}: ${f.text.en}`),
       ...(c.options ?? []).map((o) => OPTIONS[o]).filter((o) => o?.by === 'story').map((o) => `${o.name}: ${o.text.en}`),
     ];
+    // Spells the engine does not run: when one is cast, the DM tells what it does.
+    const story = c.abilityIds.filter((id) => ABILITIES[id]?.kind === 'story').map((id) => ABILITIES[id].name);
+    const magic = c.maxMana > 0 ? `  Mana ${c.mana}/${c.maxMana}.${c.conc ? ` Concentrating on ${ABILITIES[c.conc.spell]?.name ?? c.conc.spell}.` : ''}${story.length ? ` Knows these spells you narrate when cast: ${story.join(', ')}.` : ''}` : '';
+    // Magic items: the engine runs their bonuses and spells; the DM plays out the rest of their rules.
+    const worn = SLOT_IDS.flatMap((s) => (c.equipment[s] ? [game.def(c.equipment[s]!.defId)] : []));
+    const carried = [...worn, ...c.bag.filter((b) => !!b).map((b) => game.def(b!.defId))].filter((d, i, all) => d.srd && all.indexOf(d) === i);
+    const items = carried.map((d) => `${d.name}${worn.includes(d) ? ' (worn)' : ''}: ${itemRulesText(d.srd!)}`);
     return [
       line,
+      ...(magic ? [magic] : []),
+      ...(items.length ? [`  Magic items (the server runs bonuses, resistances and the spells of wands and staffs; you play out the rest): ${items.join(' | ')}`] : []),
       ...(traits.length ? [`  Traits to honour in the story: ${traits.join(' ')}`] : []),
       ...(c.appearance ? [`  Appearance: ${c.appearance}`] : []),
       ...(c.backstory ? [`  Backstory: ${c.backstory}`] : []),
@@ -386,6 +422,7 @@ export function describeBeats(beats: Beat[], game?: Game): string {
         case 'rest': return 'The party has finished a long rest and wakes restored. Describe the morning briefly.';
         case 'rescued': return 'The whole party was struck down. The survivors were carried to safety and wake battered the next morning, lighter of purse. Describe the waking, and who helped them.';
         case 'defeat': return 'Every hero has died. Narrate the end with some dignity.';
+        case 'spell': return `${b.hero} casts ${b.spell}${b.level > (ABILITIES[b.spellId]?.spellLevel ?? b.level) ? ` at level ${b.level}` : ''}${b.target ? ` on ${b.target}` : ''}. The game spent the mana but leaves the effect to you. SRD rules: ${spellRulesText(b.spellId)} Tell what happens in a few lines, true to these rules, and use your tools if it changes the world (an NPC's mood, a found item, a skill check).`;
       }
     })
     .join('\n');

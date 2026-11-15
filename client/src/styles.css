@@ -328,3 +328,17 @@ ul.plain small { color: var(--muted); }
 .party .uses, .sheet-uses { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--muted); }
 .party .uses span, .sheet-uses span { background: #1c1917; border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; white-space: nowrap; }
 .party .uses span.out, .sheet-uses span.out { opacity: 0.45; }
+
+/* Spellbook: the leveled spells above the action bar, grouped by level. */
+.spellbook { display: grid; gap: 6px; max-height: 38vh; overflow-y: auto; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0, 0, 0, 0.25); }
+.spellbook-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.spellbook-head .chip { padding: 2px 8px; font-size: 12px; min-width: 28px; }
+.spellbook-head .chip.on { border-color: var(--gold); color: var(--gold); }
+.spellbook-head .close { margin-left: auto; }
+.spellbook-row { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: start; }
+.spellbook-row .buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.spell-level { font-size: 12px; color: var(--muted); padding-top: 8px; }
+.cs-cast { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.cs-cast select { font-size: 12px; padding: 2px 4px; }
+.cs-actions .spell-group { list-style: none; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 8px; }
+.spell-filter { width: 100%; margin: 4px 0 8px; padding: 6px 8px; }

@@ -15,7 +15,7 @@ import type { TrophyView } from './achievements';
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
 
-export const SLOT_IDS = ['head', 'amulet', 'armor', 'cloak', 'mainHand', 'offHand', 'ring', 'boots'] as const;
+export const SLOT_IDS = ['head', 'amulet', 'armor', 'cloak', 'mainHand', 'offHand', 'ring', 'hands', 'waist', 'boots'] as const;
 export type SlotId = (typeof SLOT_IDS)[number];
 
 export const BAG_SIZE = 20;
@@ -24,6 +24,7 @@ export type ItemKind = 'weapon' | 'armor' | 'shield' | 'consumable' | 'wondrous'
 
 export const ITEM_CATEGORIES = ['quest', 'clue', 'key', 'document', 'trinket', 'material', 'consumable', 'weapon', 'armor', 'tool'] as const;
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
+/** Rarities the Dungeon Master may give an item it invents. */
 export const RARITIES = ['common', 'uncommon', 'rare'] as const;
 
 /** What sets an item the Dungeon Master invented apart from a catalogue item. */
@@ -41,6 +42,8 @@ export interface StoryItemInfo {
   /** Reserved for phase 3: id of a generated, cached picture of this item. */
   imageId: string | null;
 }
+
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'very_rare' | 'legendary' | 'artifact';
 
 export interface ItemDef {
   id: string;
@@ -64,6 +67,10 @@ export interface ItemDef {
     twoHanded?: boolean;
     /** Magic bonus to attack and damage rolls. */
     bonus?: number;
+    /** More damage on every hit (Flame Tongue). */
+    extra?: { dice: string; type: string };
+    /** More damage against one creature type (Dragon Slayer). */
+    vs?: { type: string; dice: string };
   };
   armor?: {
     category: 'light' | 'medium' | 'heavy';
@@ -73,9 +80,27 @@ export interface ItemDef {
   };
   /** Flat AC bonus while worn (shields, protective magic items). */
   acBonus?: number;
-  consumable?: { heal: string };
+  /** A potion: healing, a spell effect of SPELL_BUFFS, temporary hit points. */
+  consumable?: { heal?: string; buff?: string; temp?: number };
   stackable?: boolean;
-  rarity?: 'common' | 'uncommon' | 'rare';
+  rarity?: Rarity;
+  // ---- magic items of the SRD (shared/magicItems.ts)
+  /** The catalogue weapon, armor or shield a magic one is built on: its picture in icon packs. */
+  base?: string;
+  /** The SRD item it stands for, whose rules the Dungeon Master reads. */
+  srd?: string;
+  /** Needs attunement: a hero can be attuned to three such items, counted as those worn. */
+  attune?: boolean;
+  /** Ability scores it raises to at least this while worn. */
+  scores?: Partial<Record<AbilityKey, number>>;
+  saveBonus?: number;
+  resist?: string[];
+  speed?: number;
+  /** Armor class bonus while wearing no armor and no shield. */
+  unarmored?: number;
+  darkvision?: number;
+  /** A wand or staff: the spell it casts, at which level, and the charges that come back with a long rest. */
+  casts?: { spell: string; level: number; charges: number };
   /** Set on items the Dungeon Master created during play. Their name and description are in the table's language. */
   story?: StoryItemInfo;
 }
@@ -149,6 +174,8 @@ export interface ItemInstance {
   uid: string;
   defId: string;
   qty: number;
+  /** Charges of a wand or staff used since the last long rest. */
+  used?: number;
 }
 
 export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric' | 'barbarian' | 'bard' | 'druid' | 'monk' | 'paladin' | 'ranger' | 'sorcerer' | 'warlock';
@@ -219,6 +246,16 @@ export interface Character {
   form?: string | null;
   /** A bard's inspiration die waiting to be used: its size. */
   inspired?: number;
+  /** Spell effects on this hero: Bless, Haste, Mage Armor... `by` is the caster, `level` the slot level it was cast at. */
+  buffs?: { id: string; spell: string; by: string; level: number; n?: number; images?: number; adapted?: string }[];
+  /** What worn magic items add to the ability scores right now, so taking them off can undo it. */
+  boost?: Partial<Record<AbilityKey, number>>;
+  /** The spell this hero concentrates on, if any. */
+  conc?: { spell: string; level: number } | null;
+  /** An area this hero's spell holds on the battle map, struck again at the start of each of the hero's turns. */
+  zone?: { spell: string; level: number; x: number; y: number; radius: number; follow?: boolean } | null;
+  /** A spell this hero may use again each turn for free while it lasts (Spiritual Weapon, Call Lightning). */
+  sustain?: { spell: string; level: number } | null;
   /** The enemy marked by Hunter's Mark or Hex. */
   mark?: { monsterId: string; spell: string } | null;
   premadeId: string | null;
@@ -268,7 +305,9 @@ export interface MonsterView {
 }
 
 /** `feature` is a class feature with rules of its own; the engine runs it by its id. */
-export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward' | 'feature';
+export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward' | 'feature'
+  // Spells beyond damage and healing: effects on allies, cures, raising the dead, reactions, smites, a weapon strike, a jump, and those the Dungeon Master narrates.
+  | 'buff' | 'cure' | 'revive' | 'react' | 'smite' | 'weapon' | 'step' | 'story';
 
 export interface AbilityDef {
   id: string;
@@ -301,6 +340,46 @@ export interface AbilityDef {
   /** Ability that sets the save DC when it is not a spell (a dragonborn's breath). */
   dcAbility?: AbilityKey;
   target: 'enemy' | 'ally' | 'self';
+  // ---- spells of the SRD (shared/spells.ts)
+  school?: string;
+  /** Only one concentration spell at a time; damage can break it. */
+  concentration?: boolean;
+  /** Free outside a fight. */
+  ritual?: boolean;
+  /** Takes a minute or more to cast: not in a fight. */
+  slow?: boolean;
+  /** Cast by itself when its moment comes. */
+  reaction?: 'shield' | 'rebuke' | 'counter';
+  /** Dice when cast with a higher slot, by spell level. */
+  diceAt?: Record<number, string>;
+  /** Every enemy within this many feet of the target is caught too. */
+  radius?: number;
+  /** Targets, and how many more for each spell level above its own. */
+  count?: number;
+  countUp?: number;
+  /** Attack rolls, and how many more for each spell level above its own. */
+  rays?: number;
+  raysUp?: number;
+  /** The casting modifier is added to the damage. */
+  plusMod?: boolean;
+  /** The condition a hit or a failed save leaves. */
+  inflict?: { condition: string; turns?: number; repeat?: boolean; onHurt?: boolean };
+  /** The area stays, around the place it was cast or around the caster, and strikes again at the start of each of the caster's turns. */
+  zone?: { radius: number; follow?: boolean };
+  /** While it lasts it can be used again each turn without paying. */
+  sustain?: 'action' | 'bonus';
+  /** The effect it lays on allies, an id of SPELL_BUFFS. */
+  buff?: string;
+  /** Healing that is not rolled, and how much more per spell level. */
+  flat?: number;
+  flatUp?: number;
+  cures?: string[];
+  /** Raises the dead with this many hit points; 0 for all of them. */
+  revive?: number;
+  /** A jump of this many feet. */
+  step?: number;
+  /** Creature types it works on. */
+  only?: string[];
 }
 
 export interface Combatant {
@@ -610,7 +689,7 @@ export type ClientMessage =
   | { t: 'start' }
   | { t: 'move'; characterId: string; x: number; y: number }
   | { t: 'attack'; characterId: string; targetId: string }
-  | { t: 'ability'; characterId: string; abilityId: string; targetId?: string }
+  | { t: 'ability'; characterId: string; abilityId: string; targetId?: string; level?: number }
   | { t: 'use_item'; characterId: string; uid: string; targetId?: string }
   | { t: 'end_turn'; characterId: string }
   | { t: 'disengage'; characterId: string }

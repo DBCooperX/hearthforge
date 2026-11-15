@@ -5,6 +5,8 @@
   --rar-common: #8d7a5a;
   --rar-uncommon: #4fb86a;
   --rar-rare: #5b93f0;
+  --rar-very_rare: #b06cf0;
+  --rar-legendary: #f08a3c;
   --rar-quest: #e6b765;
   --edge: #564f48;
   --corner: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38' fill='none' stroke='%23d9a851' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M1.5 37V9a7.500 7.500 0 0 1 7.500-7.500h28'/%3E%3Cpath d='M6.500 30V13a6.500 6.500 0 0 1 6.500-6.500h17' opacity='.55'/%3E%3Cpath d='m9 5 4 4-4 4-4-4Z' fill='%23f0c877' stroke='%238e6524' stroke-width='1'/%3E%3C/svg%3E");
@@ -152,8 +154,10 @@
 .cell.filled { --rar: #8a7253; cursor: pointer; background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--rar) 24%, #12110f), #0c0b0a 80%); }
 .cell.uncommon { --rar: var(--rar-uncommon); }
 .cell.rare { --rar: var(--rar-rare); }
+.cell.very_rare { --rar: var(--rar-very_rare); }
+.cell.legendary, .cell.artifact { --rar: var(--rar-legendary); }
 .cell.quest { --rar: var(--rar-quest); }
-.cell.filled.uncommon, .cell.filled.rare, .cell.filled.quest { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 14px color-mix(in srgb, var(--rar) 28%, transparent); }
+.cell.filled.uncommon, .cell.filled.rare, .cell.filled.very_rare, .cell.filled.legendary, .cell.filled.artifact, .cell.filled.quest { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 14px color-mix(in srgb, var(--rar) 28%, transparent); }
 .cell.filled:hover { transform: translateY(-1px); filter: brightness(1.18); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 12px color-mix(in srgb, var(--rar) 60%, transparent), 0 4px 8px rgba(0, 0, 0, 0.5); }
 .cell.picked { box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(230, 183, 101, 0.5); }
 .cell.valid { border-color: var(--ok); box-shadow: 0 0 10px rgba(108, 192, 108, 0.65); }
@@ -200,6 +204,8 @@
 .item-float.interactive .item-tip { overflow-y: auto; }
 .item-tip.uncommon { --rar: var(--rar-uncommon); }
 .item-tip.rare { --rar: var(--rar-rare); }
+.item-tip.very_rare { --rar: var(--rar-very_rare); }
+.item-tip.legendary, .item-tip.artifact { --rar: var(--rar-legendary); }
 .item-tip.quest { --rar: var(--rar-quest); }
 .item-tip header { display: flex; align-items: center; gap: 11px; }
 .item-tip-icon { flex: none; width: 48px; height: 48px; display: grid; place-items: center; font-size: 28px; border-radius: 6px; border: 1px solid var(--rar); background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--rar) 24%, #12110f), #0c0b0a 80%); }
@@ -402,7 +408,7 @@
 .cs-gear { display: grid; gap: 5px; }
 .cs-gear li { display: flex; align-items: baseline; gap: 10px; font-size: 14.5px; }
 .cs-gear small { flex: none; width: 92px; color: var(--muted); }
-.cs-gear .uncommon { color: #7fd68a; } .cs-gear .rare { color: #8fb4ff; }
+.cs-gear .uncommon { color: #7fd68a; } .cs-gear .rare { color: #8fb4ff; } .cs-gear .very_rare { color: #c99af5; } .cs-gear .legendary, .cs-gear .artifact { color: #f5a86a; }
 .sheet .term-tip { z-index: 80; }
 
 /* ---------- map window ---------- */
@@ -656,7 +662,7 @@
 .trade-mood.bad { color: #f08b7e; font-style: normal; font-weight: 700; }
 .trade-list { list-style: none; margin: 0; padding: 6px; flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 4px; align-content: start; border-radius: 8px; border: 1px solid #433e39; background: linear-gradient(#131110, #0f0d0c); box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7); }
 .trade-row { --rar: #5b5148; display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 5px; border-radius: 6px; border: 1px solid transparent; }
-.trade-row.uncommon { --rar: var(--rar-uncommon); } .trade-row.rare { --rar: var(--rar-rare); } .trade-row.quest { --rar: var(--rar-quest); }
+.trade-row.uncommon { --rar: var(--rar-uncommon); } .trade-row.rare { --rar: var(--rar-rare); } .trade-row.very_rare { --rar: var(--rar-very_rare); } .trade-row.legendary, .trade-row.artifact { --rar: var(--rar-legendary); } .trade-row.quest { --rar: var(--rar-quest); }
 .trade-row.on { background: rgba(255, 255, 255, 0.045); border-color: #4a443d; }
 .trade-row.dim .trade-name, .trade-row.dim .trade-icon { opacity: 0.55; }
 .trade-icon { position: relative; flex: none; width: 42px; height: 42px; display: grid; place-items: center; font-size: 24px; border-radius: 6px; border: 1px solid var(--rar); background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--rar) 22%, #12110f), #0c0b0a 80%); }
@@ -664,7 +670,7 @@
 .trade-icon .qty { right: -4px; bottom: -4px; font-size: 11px; }
 .trade-name { flex: 1; min-width: 0; }
 .trade-name b { display: block; font-family: var(--font-story); font-size: 16px; line-height: 1.2; font-weight: 600; color: color-mix(in srgb, var(--rar) 55%, #fff); overflow-wrap: anywhere; }
-.trade-row:not(.uncommon):not(.rare):not(.quest) .trade-name b { color: var(--text); }
+.trade-row:not(.uncommon):not(.rare):not(.very_rare):not(.legendary):not(.artifact):not(.quest) .trade-name b { color: var(--text); }
 .trade-name small { color: var(--muted); font-size: 12.5px; }
 .trade-price { flex: none; min-width: 104px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 5px 9px; color: var(--gold); }
 .trade-price span { margin-right: auto; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }

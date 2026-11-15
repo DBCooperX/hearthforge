@@ -8,7 +8,19 @@ import type { Abilities, AbilityKey, CharacterSpec, ClassId, FeatId, FeatPick } 
 
 const SKILL_ORDER = ['perception', 'stealth', 'insight', 'persuasion', 'athletics', 'investigation', 'survival', 'acrobatics', 'deception', 'arcana', 'medicine', ...Object.keys(SKILLS)];
 const SPELL_ORDER = ['eldritch_blast', 'vicious_mockery', 'produce_flame', 'starry_wisp', 'fire_bolt', 'shocking_grasp', 'ray_of_frost', 'chill_touch', 'acid_splash', 'poison_spray', 'sacred_flame',
-  'healing_word', 'cure_wounds', 'guiding_bolt', 'inflict_wounds', 'magic_missile', 'mage_armor', 'burning_hands', 'thunderwave', 'shatter', 'acid_arrow'];
+  'healing_word', 'cure_wounds', 'guiding_bolt', 'bless', 'shield', 'magic_missile', 'mage_armor', 'sleep', 'burning_hands', 'thunderwave', 'inflict_wounds', 'hex', 'hunters_mark',
+  'faerie_fire', 'entangle', 'command', 'chromatic_orb', 'ice_knife', 'dissonant_whispers', 'hellish_rebuke', 'shield_of_faith', 'searing_smite',
+  // Higher levels: the strongest fight-changers first.
+  'spiritual_weapon', 'misty_step', 'hold_person', 'scorching_ray', 'shatter', 'moonbeam', 'aid', 'web', 'acid_arrow', 'flaming_sphere',
+  'fireball', 'spirit_guardians', 'counterspell', 'hypnotic_pattern', 'haste', 'lightning_bolt', 'call_lightning', 'mass_healing_word', 'revivify', 'slow',
+  'polymorph', 'banishment', 'greater_invisibility', 'wall_of_fire', 'ice_storm', 'death_ward', 'blight', 'conjure_woodland_beings',
+  'hold_monster', 'cone_of_cold', 'synaptic_static', 'flame_strike', 'mass_cure_wounds', 'greater_restoration', 'raise_dead', 'cloudkill', 'insect_plague',
+  'chain_lightning', 'heal', 'harm', 'disintegrate', 'circle_of_death', 'sunbeam', 'blade_barrier', 'conjure_fey', 'heroes_feast',
+  'finger_of_death', 'fire_storm', 'divine_word', 'regenerate', 'resurrection', 'delayed_blast_fireball', 'prismatic_spray',
+  'power_word_stun', 'sunburst', 'incendiary_cloud', 'dominate_monster', 'holy_aura', 'befuddlement',
+  'meteor_swarm', 'power_word_kill', 'mass_heal', 'power_word_heal', 'foresight', 'wish'];
+/** Spells in the order the recommended picks take them. */
+export const recommendSpells = (ids: string[]) => [...ids].sort(byOrder(SPELL_ORDER));
 const byOrder = (order: string[]) => (a: string, b: string) => (order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999);
 
 /** The origin feat recommended for a class, avoiding the one the background already gives. */

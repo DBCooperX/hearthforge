@@ -2,6 +2,8 @@
 // (CC BY 4.0), and what each one does in a fight. The names double as the chips on a
 // hero's card; the help lines are what a player reads when pointing at one.
 
+import { SPELL_BUFF_HELP } from './spells';
+
 /** Conditions the engine applies and lifts by itself. "asleep" is the Unconscious condition of a hero who still has hit points. */
 export const HERO_CONDITIONS = ['blinded', 'charmed', 'deafened', 'frightened', 'grappled', 'incapacitated', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained', 'stunned', 'asleep'] as const;
 export type HeroCondition = (typeof HERO_CONDITIONS)[number];
@@ -60,6 +62,7 @@ export interface HeroEffect {
 
 /** Powers a hero switches on, shown as chips beside the conditions. */
 export const BUFF_HELP: Record<string, string> = {
+  ...SPELL_BUFF_HELP,
   raging: 'Resists bludgeoning, piercing and slashing damage, hits harder with Strength, advantage on Strength checks and saves. No spells.',
   reckless: 'Strength-based attacks have advantage, and so do all attacks against you, until your next turn.',
   'sacred weapon': 'Charisma is added to weapon attack rolls, and the weapon can deal radiant damage.',

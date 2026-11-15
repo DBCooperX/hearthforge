@@ -1,9 +1,11 @@
 import { saveProfs, shownResources } from '../../../shared/classes';
 import { ItemIcon } from '../ui/ItemIcon';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { SLOT_COST, maxSpellLevelFor } from '../../../shared/classes';
+import { castLevel, upcastable } from '../../../shared/spells';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { castingAbility, weaponAttack } from '../../../shared/build';
-import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
+import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityDef, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
 import { classLabel, conditionHelp } from '../game/util';
@@ -24,11 +26,13 @@ interface Props {
   onSelect: (id: string) => void;
   onClose: () => void;
   onLevelUp?: (c: Character) => void;
+  /** Cast a spell outside a fight. */
+  onCast?: (abilityId: string, targetId?: string, level?: number) => void;
   mine?: boolean;
 }
 
 /** The full character sheet: abilities, saves, skills, features, spells and progress to the next level. */
-export function CharacterSheet({ state, character: c, onSelect, onClose, onLevelUp, mine }: Props) {
+export function CharacterSheet({ state, character: c, onSelect, onClose, onLevelUp, onCast, mine }: Props) {
   const t = useT();
   const { lang } = useLang();
   const [side, setSideState] = useState<Side>(lastSide);
@@ -43,7 +47,14 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
   const term = (id: string) => { const g = GLOSSARY.find((x) => x.id === id); return g ? loc(g.text, lang) : ''; };
   const initiative = abilityMod(c.abilities.dex) + (c.feats.includes('alert') ? c.profBonus : 0);
   const attack = weaponAttack(c, c.equipment.mainHand ? itemDef(state.items, c.equipment.mainHand.defId) : null);
-  const actions = c.abilityIds.map((id) => ABILITIES[id]).filter(Boolean);
+  // Actions and cantrips first, then spells by level.
+  const actions = c.abilityIds.map((id) => ABILITIES[id]).filter(Boolean)
+    .sort((a, b) => (a.kind === 'feature' || a.spellLevel === undefined ? -1 : a.spellLevel) - (b.kind === 'feature' || b.spellLevel === undefined ? -1 : b.spellLevel));
+  const top = Math.max(maxSpellLevelFor(c.classId, c.level), ...actions.map((a) => a.spellLevel ?? 0));
+  const calm = state.phase === 'explore';
+  const castable = (a: AbilityDef) => !!onCast && calm && a.spellLevel !== undefined && a.target !== 'enemy' && ['buff', 'heal', 'cure', 'revive', 'story', 'ward'].includes(a.kind) && c.hp > 0;
+  const [castAt, setCastAt] = useState<Record<string, number>>({});
+  const [castOn, setCastOn] = useState<Record<string, string>>({});
   const casts = c.maxMana > 0 || actions.some((a) => a.spellLevel !== undefined);
   const castWith = castingAbility(c);
   const castMod = abilityMod(c.abilities[castWith]);
@@ -173,14 +184,40 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                   <span className="act-icon"><Icon name="sword" size={20} /></span>
                   <div><b>{t(attack.name)}</b><span><Rich text={`${signed(attack.bonus)} ${t('To hit').toLowerCase()} · ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`} /></span></div>
                 </li>
-                {actions.map((a) => (
-                  <li key={a.id}>
+                {actions.map((a, i) => (
+                  <Fragment key={a.id}>
+                  {a.spellLevel && a.kind !== 'feature' && a.spellLevel !== (actions[i - 1]?.kind === 'feature' ? undefined : actions[i - 1]?.spellLevel) ? <li className="spell-group">{t('Spell level {n}', { n: a.spellLevel })}</li> : null}
+                  <li>
                     <span className="act-icon">{a.icon}</span>
                     <div>
                       <b>{t(a.name)}{a.cost > 0 && <span className="cost" title={t('Mana (spell points)')}>{a.cost}</span>}{a.oncePerRest && <span className={c.spent.includes(a.id) ? 'use spent' : 'use'}>{c.spent.includes(a.id) ? t('Used') : t('Ready')}</span>}</b>
                       <span><Rich text={t(a.description)} /></span>
+                      {castable(a) && (() => {
+                        const lv = upcastable(a) ? castLevel(a, castAt[a.id] ?? a.spellLevel, top) : a.spellLevel!;
+                        const cost = a.ritual ? 0 : lv > a.spellLevel! ? SLOT_COST[lv - 1] : a.cost;
+                        const allies = state.characters.filter((h) => (a.kind === 'revive' ? h.dead : !h.dead));
+                        const on = castOn[a.id] ?? (a.kind === 'revive' ? allies[0]?.id : c.id);
+                        return (
+                          <div className="cs-cast">
+                            {a.target === 'ally' && (
+                              <select value={on ?? ''} onChange={(e) => setCastOn({ ...castOn, [a.id]: e.target.value })} aria-label={t('Target')}>
+                                {allies.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                              </select>
+                            )}
+                            {upcastable(a) && top > a.spellLevel! && (
+                              <select value={lv} onChange={(e) => setCastAt({ ...castAt, [a.id]: Number(e.target.value) })} aria-label={t('Cast at level')}>
+                                {Array.from({ length: top - a.spellLevel! + 1 }, (_, k) => a.spellLevel! + k).map((l) => <option key={l} value={l}>{t('Spell level {n}', { n: l })}</option>)}
+                              </select>
+                            )}
+                            <button className="small" disabled={c.mana < cost || (a.target === 'ally' && !on)} onClick={() => onCast!(a.id, a.target === 'ally' ? on : undefined, lv > a.spellLevel! ? lv : undefined)}>
+                              {t('Cast')}{cost > 0 ? ` (${cost} ${t('mana')})` : a.ritual ? ` (${t('ritual')})` : ''}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </li>
+                  </Fragment>
                 ))}
               </ul>
             )}

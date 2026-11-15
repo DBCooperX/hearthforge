@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ABILITIES } from '../../../shared/content';
-import { RESOURCES, hasFeature, resourceLeft } from '../../../shared/classes';
+import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from '../../../shared/classes';
+import { castLevel, diceAtLevel, upcastable } from '../../../shared/spells';
 import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
 import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
@@ -16,7 +17,7 @@ const ACTIVE: Record<string, string> = {
   superior_defense: 'superior defense', holy_nimbus: 'holy nimbus', natures_veil: 'invisible', dodge: 'dodging',
 };
 
-export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string } | { kind: 'item'; uid: string } | null;
+export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string; level?: number; item?: string } | { kind: 'item'; uid: string } | null;
 
 export function TurnBar({ state }: { state: GameState }) {
   const t = useT();
@@ -59,17 +60,129 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
   const myTurn = !!actor && (!combat || combat.order[combat.turnIndex]?.id === actor.id);
   const canAct = myTurn && !!actor && actor.hp > 0;
   const actionUsed = !!combat?.actionUsed;
-  const potion = actor?.bag.find((b) => b && itemDef(state.items, b.defId)?.consumable) ?? null;
-  const potions = actor?.bag.reduce((n, b) => n + (b && itemDef(state.items, b.defId)?.consumable ? b.qty : 0), 0) ?? 0;
+  const potion = actor?.bag.find((b) => b && itemDef(state.items, b.defId)?.consumable?.heal) ?? null;
+  const potions = actor?.bag.reduce((n, b) => n + (b && itemDef(state.items, b.defId)?.consumable?.heal ? b.qty : 0), 0) ?? 0;
+  // Wands from the bag, and staffs, rings and amulets worn, that hold a spell.
+  const wands = actor ? [...Object.values(actor.equipment), ...actor.bag.filter((b) => b && !itemDef(state.items, b.defId)?.slot && !itemDef(state.items, b.defId)?.weapon)]
+    .filter((b): b is NonNullable<typeof b> => !!b && !!itemDef(state.items, b.defId)?.casts && !!ABILITIES[itemDef(state.items, b.defId)!.casts!.spell]) : [];
   const toggle = (t: NonNullable<Targeting>) => setTargeting(JSON.stringify(targeting) === JSON.stringify(t) ? null : t);
   const hasLight = !!actor && LIGHT_ITEMS.some((l) => [...actor.bag, ...Object.values(actor.equipment)].some((b) => b?.defId === l.itemId));
   const held = actor?.effects?.find((e) => e.escapeDc) ?? null;
   let hotkey = 0;
   const key = () => ++hotkey;
+  const [book, setBook] = useState(false);
+  const [castAt, setCastAt] = useState<number | null>(null);
+  const spells = actor ? actor.abilityIds.filter((id) => ABILITIES[id] && (ABILITIES[id].spellLevel ?? 0) > 0 && ABILITIES[id].kind !== 'feature') : [];
+  const levels = [...new Set(spells.map((id) => ABILITIES[id].spellLevel!))].sort((a, b) => a - b);
+  const top = actor ? Math.max(maxSpellLevelFor(actor.classId, actor.level), ...levels, 0) : 0;
+
+  /** One button: an action, a class feature or a spell, with what it costs and why it may be out of reach. */
+  function abilityButton(id: string, inBook = false) {
+    if (!actor || !combat) return null;
+    const ab = ABILITIES[id];
+    // A druid in beast form sees the way back instead of more shapes.
+    if (id.startsWith('wild_shape_') && actor.form) return null;
+    if (id === 'revert_form' && !actor.form) return null;
+    const base = ab.spellLevel ?? 0;
+    const sustained = !!ab.sustain && actor.sustain?.spell === id;
+    const level = sustained ? actor.sustain!.level : base > 0 && upcastable(ab) ? castLevel(ab, castAt ?? base, top) : base;
+    const spent = ab.oncePerRest && actor.spent.includes(id);
+    const bonus = sustained ? ab.sustain === 'bonus' : !!ab.bonusAction;
+    const used = ab.kind === 'surge' ? !actionUsed : ab.free ? false : bonus ? combat.bonusUsed : actionUsed;
+    // Class resources: rages, focus points, Channel Divinity. Some spells have free castings before they cost mana.
+    const pool = id === 'lay_on_hands' ? 'lay_on_hands' : id === 'hunters_mark' ? 'favored_enemy' : id === 'divine_smite' ? 'free_smite' : ab.resource;
+    const left = pool ? resourceLeft(actor, pool) : null;
+    const freeCast = (id === 'hunters_mark' || id === 'divine_smite') && (left ?? 0) > 0;
+    const mana = sustained ? 0 : id === 'hunters_mark' || id === 'divine_smite' ? (freeCast ? 0 : 2) : level > base ? SLOT_COST[level - 1] : ab.cost;
+    const dry = left !== null && !mana && left < (ab.resourceCost ?? 1);
+    const isSpell = ab.spellLevel !== undefined;
+    const barred = isSpell && (actor.conditions.includes('raging') || (!!actor.form && !hasFeature(actor, 'beast_spells')));
+    const passive = ab.kind === 'react' || !!ab.slow;
+    const active = !!ACTIVE[id] && actor.conditions.includes(ACTIVE[id]);
+    const blocked = !canAct || spent || actor.mana < mana || used || dry || barred || active || passive;
+    const on = active || sustained || (targeting?.kind === 'ability' && targeting.abilityId === id);
+    const why = passive ? (ab.kind === 'react' ? t('It casts itself when its moment comes.') : t('Takes minutes to cast, so not in a fight.'))
+      : spent ? t('Already used. It comes back after a rest.')
+      : barred ? (actor.form ? t('No spells in beast form.') : t('No spells while raging.'))
+      : dry ? t('None left. It comes back after a rest.')
+      : actor.mana < mana ? t('Not enough mana.') : '';
+    const facts = [
+      level > base ? t('Cast at level {n}', { n: level }) : '',
+      sustained ? t('Free again this turn') : '',
+      ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(diceAtLevel(ab, level) ?? ab.dice, lang) : '',
+      ab.free ? t('Free') : bonus ? t('Bonus action') : '',
+      ab.concentration ? t('Concentration') : '',
+      left !== null && pool && RESOURCES[pool] ? `${t(RESOURCES[pool].name)}: ${left}` : '',
+    ].filter(Boolean).join(' · ');
+    return (
+      <Hint key={id} title={t(ab.name)} text={<>{t(ab.description)}{facts && <em>{facts}</em>}{why && <em className="warn-line">{why}</em>}</>}>
+        <button
+          className={[on ? 'act on' : 'act', inBook ? 'small' : ''].filter(Boolean).join(' ')}
+          disabled={blocked}
+          data-hotkey={inBook ? undefined : key()}
+          onClick={() => {
+            const lv = level > base ? level : undefined;
+            if (ab.target === 'self') { conn.send({ t: 'ability', characterId: actor.id, abilityId: id, ...(lv ? { level: lv } : {}) }); setTargeting(null); }
+            else toggle({ kind: 'ability', abilityId: id, ...(lv ? { level: lv } : {}) });
+          }}
+        >
+          <span className="icon">{ab.icon}</span>{t(ab.name)}
+          {mana > 0 && <span className="cost">{mana}</span>}
+          {left !== null && !(mana > 0) && <span className="cost uses">{left}</span>}
+        </button>
+      </Hint>
+    );
+  }
+
+  /** A wand or staff: its spell at the item's level, for no mana, while charges last. */
+  function itemButton(uid: string) {
+    if (!actor || !combat) return null;
+    const it = [...Object.values(actor.equipment), ...actor.bag].find((b) => b?.uid === uid)!;
+    const def = itemDef(state.items, it.defId)!;
+    const cast = def.casts!;
+    const ab = ABILITIES[cast.spell];
+    const left = cast.charges - (it.used ?? 0);
+    const used = ab.bonusAction ? combat.bonusUsed : actionUsed;
+    const on = targeting?.kind === 'ability' && targeting.item === uid;
+    const facts = [t('Cast at level {n}', { n: cast.level }), ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : '', ab.dice ? dice(diceAtLevel(ab, cast.level) ?? ab.dice, lang) : ''].filter(Boolean).join(' · ');
+    return (
+      <Hint key={uid} title={t(def.name)} text={<>{t(ab.name)}: {t(ab.description)}<em>{facts}</em>{left <= 0 && <em className="warn-line">{t('No charges left until a long rest.')}</em>}</>}>
+        <button
+          className={on ? 'act on' : 'act'}
+          disabled={!canAct || used || left <= 0}
+          data-hotkey={key()}
+          onClick={() => {
+            if (ab.target === 'self') { conn.send({ t: 'use_item', characterId: actor.id, uid }); setTargeting(null); }
+            else toggle({ kind: 'ability', abilityId: ab.id, item: uid });
+          }}
+        >
+          <span className="icon">{def.icon}</span>{t(ab.name)}
+          <span className="cost uses">{left}</span>
+        </button>
+      </Hint>
+    );
+  }
 
   return (
     <div className="actionbar">
       <div className="hint">{hint}</div>
+      {actor && combat && book && spells.length > 0 && (
+        <div className="spellbook">
+          <div className="spellbook-head">
+            <span>{t('Cast at level')}</span>
+            {[0, ...Array.from({ length: top }, (_, i) => i + 1)].map((l) => (
+              <button key={l} className={(castAt ?? 0) === l ? 'chip on' : 'chip'} onClick={() => setCastAt(l || null)}>{l ? l : t('own')}</button>
+            ))}
+            <button className="chip close" onClick={() => setBook(false)} aria-label={t('Close')}>✕</button>
+          </div>
+          {levels.map((l) => (
+            <div key={l} className="spellbook-row">
+              <span className="spell-level">{t('Spell level {n}', { n: l })}</span>
+              <div className="buttons">{spells.filter((id) => ABILITIES[id].spellLevel === l).map((id) => abilityButton(id, true))}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="buttons">
         {actor && combat && (
           <Hint title={t('Attack')} text={t('Attack with your main-hand weapon. You can also just click an enemy.')}>
@@ -83,53 +196,15 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
             </button>
           </Hint>
         )}
-        {actor?.abilityIds.map((id) => {
-          const ab = ABILITIES[id];
-          if (!ab) return null;
-          if (!combat) return null;
-          // A druid in beast form sees the way back instead of more shapes.
-          if (id.startsWith('wild_shape_') && actor.form) return null;
-          if (id === 'revert_form' && !actor.form) return null;
-          const spent = ab.oncePerRest && actor.spent.includes(id);
-          const used = ab.kind === 'surge' ? !actionUsed : ab.free ? false : ab.bonusAction ? combat.bonusUsed : actionUsed;
-          // Class resources: rages, focus points, Channel Divinity. Some spells have free castings before they cost mana.
-          const pool = id === 'lay_on_hands' ? 'lay_on_hands' : id === 'hunters_mark' ? 'favored_enemy' : id === 'divine_smite' ? 'free_smite' : ab.resource;
-          const left = pool ? resourceLeft(actor, pool) : null;
-          const freeCast = (id === 'hunters_mark' || id === 'divine_smite') && (left ?? 0) > 0;
-          const mana = id === 'hunters_mark' || id === 'divine_smite' ? (freeCast ? 0 : 2) : ab.cost;
-          const dry = left !== null && !mana && left < (ab.resourceCost ?? 1);
-          const isSpell = ab.spellLevel !== undefined;
-          const barred = isSpell && (actor.conditions.includes('raging') || (!!actor.form && !hasFeature(actor, 'beast_spells')));
-          const active = !!ACTIVE[id] && actor.conditions.includes(ACTIVE[id]);
-          const blocked = !canAct || spent || actor.mana < mana || used || dry || barred || active;
-          const on = active || (targeting?.kind === 'ability' && targeting.abilityId === id);
-          const why = spent ? t('Already used. It comes back after a rest.')
-            : barred ? (actor.form ? t('No spells in beast form.') : t('No spells while raging.'))
-            : dry ? t('None left. It comes back after a rest.')
-            : actor.mana < mana ? t('Not enough mana.') : '';
-          const facts = [
-            ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(ab.dice, lang) : '',
-            ab.free ? t('Free') : ab.bonusAction ? t('Bonus action') : '',
-            left !== null && pool && RESOURCES[pool] ? `${t(RESOURCES[pool].name)}: ${left}` : '',
-          ].filter(Boolean).join(' · ');
-          return (
-            <Hint key={id} title={t(ab.name)} text={<>{t(ab.description)}{facts && <em>{facts}</em>}{why && <em className="warn-line">{why}</em>}</>}>
-              <button
-                className={on ? 'act on' : 'act'}
-                disabled={blocked}
-                data-hotkey={key()}
-                onClick={() => {
-                  if (ab.target === 'self') { conn.send({ t: 'ability', characterId: actor.id, abilityId: id }); setTargeting(null); }
-                  else toggle({ kind: 'ability', abilityId: id });
-                }}
-              >
-                <span className="icon">{ab.icon}</span>{t(ab.name)}
-                {mana > 0 && <span className="cost">{mana}</span>}
-                {left !== null && !(mana > 0) && <span className="cost uses">{left}</span>}
-              </button>
-            </Hint>
-          );
-        })}
+        {actor && combat && actor.abilityIds.filter((id) => ABILITIES[id] && !((ABILITIES[id].spellLevel ?? 0) > 0 && ABILITIES[id].kind !== 'feature')).map((id) => abilityButton(id))}
+        {wands.map((w) => itemButton(w.uid))}
+        {actor && combat && spells.length > 0 && (
+          <Hint title={t('Spellbook')} text={t('Your spells of 1st level and higher, grouped by level. Pick a higher level to cast a spell more strongly.')}>
+            <button className={book ? 'act on' : 'act'} data-hotkey={key()} onClick={() => setBook(!book)}>
+              <span className="icon">📖</span>{t('Spells')}<span className="cost uses">{spells.length}</span>
+            </button>
+          </Hint>
+        )}
         {actor && combat && (
           <Hint title={t('Disengage')} text={<>{t('Until the end of your turn, leaving an enemy\'s reach invites no opportunity attack.')}<em>{hasFeature(actor, 'cunning_action') ? t('Bonus action (Cunning Action)') : t('Action')}</em></>}>
             <button
