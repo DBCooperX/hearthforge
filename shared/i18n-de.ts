@@ -870,7 +870,7 @@ export const DE: Record<string, string> = {
   'How strong, quick and clever are you?': 'Wie stark, flink und klug bist du?',
   'Six ability scores describe your hero. What counts in play is the modifier each score gives. Put your best scores where your class needs them: the star marks them.': 'Sechs Attributswerte beschreiben deinen Helden. Im Spiel zählt der Modifikator, den jeder Wert ergibt. Setze deine besten Werte dorthin, wo deine Klasse sie braucht: Der Stern markiert sie.',
   'What are you good at?': 'Worin bist du gut?',
-  'Outside combat the Dungeon Master asks for skill checks: a d20 plus the ability modifier, plus your proficiency bonus if you are proficient. Pick the things you want your hero to be reliable at.': 'Ausserhalb des Kampfes verlangt der Spielleiter Fertigkeitswürfe: ein W20 plus Attributsmodifikator, plus Übungsbonus, wenn du geübt bist. Wähle, worin dein Held verlässlich sein soll.',
+  'Outside combat the Dungeon Master asks for skill checks: a d20 plus the ability modifier, plus your proficiency bonus if you are proficient. Pick the things you want your hero to be reliable at.': 'Ausserhalb des Kampfes verlangt der Spielleiter Attributswürfe: ein W20 plus Attributsmodifikator, plus Übungsbonus, wenn du geübt bist. Wähle, worin dein Held verlässlich sein soll.',
   'What makes you special?': 'Was macht dich besonders?',
   'Fighting styles, spells and feats. Each choice shows what it changes on the right before you commit.': 'Kampfstile, Zauber und Talente. Jede Wahl zeigt rechts, was sie verändert, bevor du dich festlegst.',
   'What do you carry?': 'Was trägst du bei dir?',

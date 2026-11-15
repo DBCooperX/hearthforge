@@ -718,7 +718,7 @@ const feats: FeatDef[] = [
   {
     id: 'skilled', name: 'Skilled', icon: '🎓', origin: true, recommendedFor: ['rogue'], feature: 'Skilled: three extra skill proficiencies',
     summary: L('Proficiency in three more skills.', 'Übung in drei weiteren Fertigkeiten.'),
-    description: L('You have picked up a bit of everything. Outside combat the Dungeon Master asks for skill checks all the time, and being proficient adds your proficiency bonus to each of them.', 'Du hast von allem ein wenig gelernt. Ausserhalb des Kampfes verlangt der Spielleiter ständig Fertigkeitswürfe, und Übung addiert deinen Übungsbonus auf jeden davon.'),
+    description: L('You have picked up a bit of everything. Outside combat the Dungeon Master asks for skill checks all the time, and being proficient adds your proficiency bonus to each of them.', 'Du hast von allem ein wenig gelernt. Ausserhalb des Kampfes verlangt der Spielleiter ständig Attributswürfe, und Übung addiert deinen Übungsbonus auf jeden davon.'),
     effects: [E('Skills', 'Choose three skills you are not yet proficient in.', 'Wähle drei Fertigkeiten, in denen du noch nicht geübt bist.')],
     goodFor: L('Solo players and small parties, where one hero has to cover many situations.', 'Solospieler und kleine Gruppen, in denen ein Held viele Situationen abdecken muss.'),
   },

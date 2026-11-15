@@ -183,7 +183,7 @@ export function languageNote(game: Game): string[] {
   if (game.lang !== 'de') return [];
   return [
     'LANGUAGE: This table plays in German. Write everything the players read in natural, idiomatic German, addressing the party as "ihr": scene titles, narration, suggested actions, dialogue, and the names, roles and descriptions of any place, person, quest or story item you create, as well as quest notes, item notes, deeds and journal lines.',
-    'Use the established German D&D 5e terms: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Fertigkeitswurf, Vorteil and Nachteil, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
+    'Use the German D&D terms, those of the official German System Reference Document 5.2.1: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Attributswurf (for example "Weisheitswurf (Wahrnehmung)"), Vorteil and Nachteil, Bewegungsrate, Zaubertrick, Zauber des 1. Grades, Konzentration, Einstimmung, Gelegenheitsangriff, kurze und lange Rast, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
     ...creatureNamesDe(game),
     'Distances, weights and travel are metric in German, as in the German rulebooks: 5 feet are 1,5 m, 30 feet 9 m, a mile 1,5 km, a pound 0,5 kg. Write Swiss Standard German: "ss" instead of "ß" (gross, Strasse, heisst).',
     'German marks gender in nouns, articles and pronouns, so follow each hero\'s listed gender exactly: the listed German form (for example "die Magierin" or "der Magier") is the only one you may use for that hero.',
