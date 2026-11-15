@@ -109,6 +109,13 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
         </form>
       </details>
 
+      {layer === 'ambient' && (
+        <p className="art-note">
+          {t('With a free Freesound API key (Settings → Playing) the server can fetch CC0 loops for the tavern, town, overworld and dungeon.')}{' '}
+          <button type="button" disabled={!!busy || lib.pending} onClick={() => void run('freesound', () => act({ do: 'freesound' }))}>{busy === 'freesound' ? t('Downloading…') : t('Get CC0 loops from Freesound')}</button>
+        </p>
+      )}
+
       {missing > 0 && (
         <p className="art-note">
           {t('{n} free tracks are not on the server yet.', { n: missing })}{' '}

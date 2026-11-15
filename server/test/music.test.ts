@@ -204,3 +204,49 @@ describe('music library managed by the owner', () => {
     await expect(musicAction(d, {}, { do: 'add_link', url: 'http://127.0.0.1/a.mp3', layer: 'music', context: 'town' }, fetchFn)).rejects.toMatchObject({ code: 'bad_link' });
   });
 });
+
+describe('freesound', () => {
+  const key = { FREESOUND_API_KEY: 'k' };
+  const mk = () => mkdtempSync(join(tmpdir(), 'hf-fs-'));
+  const audio = () => Object.assign(new Uint8Array(20000), { 0: 0x49, 1: 0x44, 2: 0x33 });
+  const fake = (asked: string[]) => (async (input: string | URL | Request) => {
+    const u = String(input);
+    asked.push(u);
+    if (u.includes('/apiv2/search/text/')) {
+      return new Response(JSON.stringify({ results: [1, 2, 3].map((id) => ({ id, name: `Crowd ${id}.wav`, username: 'bob', url: `https://freesound.org/s/${id}/`, previews: { 'preview-hq-mp3': `https://cdn.freesound.org/p/${id}.mp3` } })) }), { status: 200 });
+    }
+    return new Response(audio(), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+  }) as typeof fetch;
+
+  it('needs a key', async () => {
+    const { fetchFreesound } = await import('../src/music');
+    await expect(fetchFreesound(mk(), {})).rejects.toMatchObject({ code: 'no_key' });
+  });
+
+  it('fetches CC0 previews with credits, and never twice', async () => {
+    const { fetchFreesound, musicLibrary } = await import('../src/music');
+    const d = mk();
+    const asked: string[] = [];
+    expect(await fetchFreesound(d, key, ['tavern'], fake(asked))).toBe(2);
+    expect(asked[0]).toContain('Creative+Commons+0');
+    const items = musicLibrary(d, {}).items.filter((i) => i.layer === 'ambient' && !i.builtIn);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ context: 'tavern', license: 'CC0', artist: 'bob (freesound.org)', ready: true });
+    expect(await fetchFreesound(d, key, ['tavern'], fake([]))).toBe(1);
+    await expect(fetchFreesound(d, key, ['tavern'], fake([]))).rejects.toMatchObject({ code: 'download_failed' });
+  });
+
+  it('on start fills only empty scenes, once', async () => {
+    const { ensureFreesound } = await import('../src/music');
+    const d = mk();
+    const asked: string[] = [];
+    await ensureFreesound(d, key, fake(asked));
+    expect(asked.filter((u) => u.includes('/search/')).length).toBe(4);
+    const n = asked.length;
+    await ensureFreesound(d, key, fake(asked));
+    expect(asked.length).toBe(n);
+    const none: string[] = [];
+    await ensureFreesound(mk(), {}, fake(none));
+    expect(none).toEqual([]);
+  });
+});

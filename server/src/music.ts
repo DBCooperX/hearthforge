@@ -105,7 +105,7 @@ export const musicPending = () => fetching;
 
 /** A refusal the interface can explain. `code` is one of the keys of MUSIC_ERRORS. */
 export class MusicError extends Error {
-  constructor(readonly code: 'not_audio' | 'too_big' | 'bad_link' | 'download_failed' | 'unknown_track' | 'bad_request') {
+  constructor(readonly code: 'no_key' | 'not_audio' | 'too_big' | 'bad_link' | 'download_failed' | 'unknown_track' | 'bad_request') {
     super(code);
   }
 }
@@ -123,6 +123,10 @@ interface FileState {
 }
 interface LibraryState {
   files: Record<string, FileState>;
+  /** Freesound sounds already fetched (or removed since), so they are not fetched again. */
+  freesound: number[];
+  /** Scenes the server already filled from Freesound by itself once. */
+  freesoundTried: string[];
   /** Ids of built-in tracks the owner removed, so the server does not fetch them again. */
   removed: string[];
 }
@@ -134,9 +138,11 @@ function loadState(dir: string): LibraryState {
     return {
       files: raw?.files && typeof raw.files === 'object' && !Array.isArray(raw.files) ? raw.files : {},
       removed: Array.isArray(raw?.removed) ? raw.removed.filter((x: unknown) => typeof x === 'string') : [],
+      freesound: Array.isArray(raw?.freesound) ? raw.freesound.filter((x: unknown) => typeof x === 'number') : [],
+      freesoundTried: Array.isArray(raw?.freesoundTried) ? raw.freesoundTried.filter((x: unknown) => typeof x === 'string') : [],
     };
   } catch {
-    return { files: {}, removed: [] };
+    return { files: {}, removed: [], freesound: [], freesoundTried: [] };
   }
 }
 function saveState(dir: string, state: LibraryState) {
@@ -384,6 +390,11 @@ export async function musicAction(dir: string, env: NodeJS.ProcessEnv, m: MusicA
       if (failed && failed === wanted.length) throw new MusicError('download_failed');
       return;
     }
+    case 'freesound': {
+      // The owner pressed "Get CC0 loops from Freesound".
+      await fetchFreesound(dir, env, undefined, fetchFn);
+      return;
+    }
     case 'add_link': {
       const { layer, context } = parseTarget(m.layer, m.context);
       const link = linkAllowed(String(m.url ?? '').trim());
@@ -401,6 +412,94 @@ export async function musicAction(dir: string, env: NodeJS.ProcessEnv, m: MusicA
       throw new MusicError('bad_request');
   }
   saveState(dir, state);
+}
+
+// ---------------------------------------------------------------------------- Freesound (owner's API key)
+
+/** What to look for per scene. Only CC0 sounds are taken, so no credit is owed, though one is recorded. */
+export const FREESOUND_QUERIES: Partial<Record<MusicContext, string>> = {
+  tavern: 'tavern crowd murmur loop',
+  town: 'town market crowd ambience loop',
+  overworld: 'forest birds wind ambience loop',
+  dungeon: 'cave dripping water ambience loop',
+};
+const FREESOUND_PER_SCENE = 2;
+
+interface FreesoundHit { id: number; name: string; username: string; url: string; previews?: Record<string, string> }
+
+/**
+ * Ask Freesound's official API (needs the owner's free API key, FREESOUND_API_KEY) for CC0 loops and
+ * download their high-quality previews straight from Freesound. Returns how many files were added.
+ * Never fetches a sound twice, also not one the owner removed.
+ */
+export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes: MusicContext[] = Object.keys(FREESOUND_QUERIES) as MusicContext[], fetchFn: typeof fetch = fetch): Promise<number> {
+  const key = (env.FREESOUND_API_KEY ?? '').trim();
+  if (!key) throw new MusicError('no_key');
+  const state = loadState(dir);
+  let added = 0;
+  let asked = 0;
+  for (const scene of scenes) {
+    const query = FREESOUND_QUERIES[scene];
+    if (!query) continue;
+    asked++;
+    try {
+      const api = new URL('https://freesound.org/apiv2/search/text/');
+      api.searchParams.set('query', query);
+      api.searchParams.set('filter', 'license:"Creative Commons 0" duration:[15 TO 180]');
+      api.searchParams.set('sort', 'downloads_desc');
+      api.searchParams.set('fields', 'id,name,username,url,previews');
+      api.searchParams.set('page_size', '10');
+      const res = await fetchFn(api, { headers: { authorization: `Token ${key}`, 'user-agent': 'hearthforge-music-fetch' }, signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`Freesound answered ${res.status}`);
+      const hits: FreesoundHit[] = ((await res.json()) as { results?: FreesoundHit[] }).results ?? [];
+      let taken = 0;
+      for (const h of hits) {
+        if (taken >= FREESOUND_PER_SCENE) break;
+        const src = h.previews?.['preview-hq-mp3'];
+        if (!src || state.freesound.includes(h.id) || !src.startsWith('https://')) continue;
+        try {
+          const { bytes } = await fetchAudio(src, fetchFn);
+          const title = text(h.name.replace(/\.[^.]+$/, ''), 120) || `Freesound ${h.id}`;
+          const file = freeFile(dir, 'ambient', scene, title, '.mp3');
+          writeAtomic(file, bytes);
+          state.files[idOf(dir, file)] = { title, artist: `${text(h.username, 60)} (freesound.org)`, license: 'CC0', url: text(h.url, 300) };
+          state.freesound.push(h.id);
+          saveState(dir, state);
+          taken++;
+          added++;
+        } catch (err) {
+          console.warn(`[music] Freesound sound ${h.id}: ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[music] Freesound search for ${scene} failed: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  if (asked && !added) throw Object.assign(new MusicError('download_failed'), { detail: 'Freesound gave no new sound' });
+  return added;
+}
+
+/** On start, with a key: fill each scene that has no ambient loop yet, once. Never throws. */
+export async function ensureFreesound(dir: string, env: NodeJS.ProcessEnv, fetchFn: typeof fetch = fetch): Promise<void> {
+  if (!musicEnabled(env) || !(env.FREESOUND_API_KEY ?? '').trim()) return;
+  try {
+    const state = loadState(dir);
+    const empty = (Object.keys(FREESOUND_QUERIES) as MusicContext[]).filter((c) => {
+      if (state.freesoundTried.includes(c)) return false;
+      const folder = join(dir, 'ambient', c);
+      return !existsSync(folder) || !readdirSync(folder).some((n) => AUDIO_TYPES[extname(n).toLowerCase()]);
+    });
+    if (!empty.length) return;
+    state.freesoundTried.push(...empty);
+    saveState(dir, state);
+    fetching = true;
+    const n = await fetchFreesound(dir, env, empty, fetchFn);
+    console.log(`[music] Fetched ${n} CC0 ambient loop${n === 1 ? '' : 's'} from Freesound.`);
+  } catch (err) {
+    console.warn('[music] Freesound fetch skipped:', err instanceof Error ? err.message : err);
+  } finally {
+    fetching = false;
+  }
 }
 
 /** The byte range to send for a Range header, or null when the header is absent or unusable. */

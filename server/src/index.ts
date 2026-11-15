@@ -10,7 +10,7 @@ import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
-import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
+import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
@@ -440,7 +440,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
 });
 
 void art.start();
-void ensureMusic(MUSIC_DIR, env);
+void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
 admin.start();
 
 server.listen(PORT, () => {
