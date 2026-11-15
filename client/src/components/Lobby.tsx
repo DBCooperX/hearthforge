@@ -9,6 +9,7 @@ import { Creator } from './Creator';
 import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
 import { ChatPanel } from './Chat';
+import { Embers, Logo } from '../ui/Brand';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
 import { MusicControl } from '../music';
@@ -53,11 +54,13 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
 
   return (
     <div className="splash">
+      <Embers />
       <div className="splash-tools"><MusicControl /></div>
       <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>
       <div className="panel lobby">
         <header className="join">
-          <h1>Hearthforge</h1>
+          <h1><Logo /></h1>
+          <div className="rune-line" aria-hidden="true" />
           <div className="join-lang"><LangSwitch /></div>
           <p className="tagline">{t('Dungeons & Dragons at your own hearth, with an AI Dungeon Master.')}</p>
         </header>
@@ -312,6 +315,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
   const close = () => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) conn.send({ t: 'close_table' }); };
   return (
     <div className="splash">
+      <Embers count={14} />
       <div className="splash-tools"><MusicControl /><LangSwitch /></div>
       <div className="panel setup">
         <h1>{state.table.title}</h1>

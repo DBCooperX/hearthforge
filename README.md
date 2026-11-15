@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/hearthforge-logo.jpg" alt="Hearthforge: Unlimited Adventures. A self-hosted AI Dungeon Master." width="820">
+</p>
+
 # Hearthforge
 
 A self-hosted Dungeons & Dragons 5e game for your browser, run by an AI Dungeon Master.
@@ -19,7 +23,7 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **Turn-based 5e combat** on a battle map that is generated for each fight and matches where it breaks out (swamp, forest, plains, hills, mountains, road, bridge, camp, town streets, tavern, cave, ruin or dungeon). Mud, undergrowth, rubble and shallow water are difficult terrain; trees, boulders and furniture give half cover against shots. Also: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
 - **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
 - **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
-- **A seat at the tavern**: dark wood, parchment scene cards, brass and candlelight, with bundled book fonts. Nothing is loaded from the internet by the browser.
+- **A seat at the forge**: the look follows the logo. Frames of dark iron and stone, ember and gold for everything that glows, rune bands on the windows, sparks rising on the front door, and parchment scene cards so the story stays easy to read. Fonts are bundled; nothing is loaded from the internet by the browser.
 - **Background music** that follows the story: tavern, town, the open road, dungeons, fights and boss fights each have their own tracks and crossfade into each other. Every player has a mute button and a volume slider in the top bar, remembered in their browser. See [Music](#music).
 - **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. A lobby lists the tables; each table has a host, a ready check, invite links and an optional invite code, and a table talk chat with whispers that the Dungeon Master never reads. See [Playing together](#playing-together). Games are saved in SQLite and survive restarts.
 

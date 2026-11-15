@@ -27,6 +27,7 @@ import { Settings } from './ui/Settings';
 import { ArtWindow } from './ui/ArtWindow';
 import { Innkeeper } from './ui/Innkeeper';
 import { Kbd, Window } from './ui/Window';
+import { Wordmark } from './ui/Brand';
 
 type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
 
@@ -185,7 +186,7 @@ export function App() {
     <EntityProvider state={state}>
       <div className={combat ? 'game fighting' : 'game'}>
         <header className="topbar">
-          <h1>Hearthforge</h1>
+          <Wordmark />
           <button className="link table-name" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>{state.table.title}</button>
           <span className={conn.connected ? 'dot ok' : 'dot'} title={conn.connected ? t('Connected') : t('Reconnecting…')} />
           {state.players.length > 1 && (

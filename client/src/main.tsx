@@ -10,12 +10,13 @@ import '@fontsource/alegreya-sans/latin-400-italic.css';
 import '@fontsource/alegreya-sans/latin-500.css';
 import '@fontsource/alegreya-sans/latin-700.css';
 import '@fontsource/cinzel/latin-600.css';
-import '@fontsource/grenze-gotisch/latin-600.css';
+import '@fontsource/cinzel/latin-700.css';
 import './styles.css';
 import './theme.css';
 import './creator.css';
 import './table.css';
 import './ui.css';
+import './forge.css';
 import './ui/prefs';
 
 // Art packs are optional; never wait long for them.
