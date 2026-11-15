@@ -2,11 +2,15 @@
 // The engine is synchronous and deterministic for a given RNG; the AI Dungeon
 // Master only chooses monster intents and narrates what the engine resolved.
 
-import { ABILITIES, ABILITY_NAMES, ITEMS } from '../../../shared/content';
-import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isProficient, spellOptions, weaponAttack } from '../../../shared/build';
+import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
+import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
+import {
+  BEAST_FORMS, CLASS_FEATURES, CLASS_IDS, GROUPS, OPTIONS, RESOURCES, SUBCLASS_LEVEL, cantripScale, chosenIn, classAbilities, critFrom, extraAttacks, featureRank,
+  grantedChoices, hasFeature, inspirationDie, martialDie, optionLine, optionsFor, rageDamage, resourceLeft, resourceMax, saveProfs, sneakDice, speedBonus, type BeastForm,
+} from '../../../shared/classes';
 import { DEFAULT_PREMADE, PREMADE_BY_ID } from '../../../shared/premades';
 import { heroLook } from '../../../shared/heroLook';
-import { BACKGROUNDS, CLASSES as CLASS_RULES, EFFECT_LINES, FEATS, SPECIES, loc, type L } from '../../../shared/rules';
+import { BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, STYLES, classFeatureLines, loc, type L } from '../../../shared/rules';
 import { pickIcon } from '../../../shared/items';
 import {
   COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex,
@@ -22,6 +26,7 @@ import {
   SLOT_IDS,
   XP_THRESHOLDS,
   abilityMod,
+  type AbilityDef,
   type AbilityKey,
   type Character,
   type ChatMessage,
@@ -52,7 +57,7 @@ import {
   type SlotId,
   type TableInfo,
 } from '../../../shared/types';
-import { CLASSES, MANA_BY_LEVEL, defaultGender, profBonusFor } from '../data/classes';
+import { CLASSES, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, type LegendaryOption, type MonsterAttack, type MonsterDef, type MonsterSpecial, type Rider } from '../data/monsters';
 import { resolveMonster, suggestMonsters } from '../data/monsterSearch';
 import { inArea } from './areas';
@@ -115,7 +120,28 @@ export interface Monster {
   movedFt?: number;
   /** Heroes who shook off one of its auras for good, as "<aura>:<hero id>". */
   shrugged?: string[];
+  /** Conditions heroes have put on it. */
+  effects?: MonsterEffect[];
+  /** Heroes whose next attack against it has advantage (Studied Attacks, a resisted Stunning Strike). */
+  studiedBy?: string[];
 }
+
+/** One condition on a monster and how it ends. */
+export interface MonsterEffect {
+  condition: string;
+  /** Its own turns it still lasts. */
+  turns?: number;
+  /** The save it repeats at the end of each of its turns. */
+  save?: { ability: AbilityKey; dc: number };
+  /** Ends when this hero's next turn begins. */
+  untilHero?: string;
+  /** Ends when it takes damage. */
+  onHurt?: boolean;
+}
+
+/** Conditions the engine puts on monsters. "rattled" is the sting of Vicious Mockery; "turned" is Turn Undead. */
+const MONSTER_CONDITIONS = ['stunned', 'incapacitated', 'turned', 'prone', 'frightened', 'poisoned', 'rattled', 'paralyzed'];
+const MONSTER_SKIPS = ['stunned', 'incapacitated', 'turned', 'paralyzed'];
 
 /** The fight in progress: where it came from and what winning it is worth. */
 export interface EncounterState {
@@ -330,6 +356,9 @@ export class Game {
       c.premadeId ??= null;
       c.light ??= null; // saves from before light
       if (!OPPORTUNITY_MODES.includes(c.opportunity)) c.opportunity = 'ask';
+      // Saves from before the twelve classes: resources, options and the new class tables.
+      this.refresh(c);
+      this.reconcile(c);
     }
     // A restart drops an unanswered reaction prompt; the monsters' turn runs again from its start.
     if (this.s.combat?.reaction) this.s.combat.reaction = null;
@@ -782,7 +811,15 @@ export class Game {
       premadeId: spec.premadeId && PREMADE_BY_ID[spec.premadeId] ? spec.premadeId : null,
       light: null,
       opportunity: 'ask',
+      uses: {},
+      options: sheet.options ?? [],
+      tempHp: 0,
+      form: null,
+      mark: null,
     };
+    this.refresh(c);
+    c.hp = c.maxHp;
+    c.mana = c.maxMana;
     this.s.characters.push(c);
     this.s.ready = this.s.ready.filter((x) => x !== playerId);
     return c;
@@ -1039,8 +1076,9 @@ export class Game {
     this.placeMonsters(midY);
     this.lightTheField(opts.light);
     s.encounter = { source: opts.source, locationId: opts.locationId ?? null, boss };
+    for (const c of heroes) this.enterFight(c);
     const order = [
-      ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.heroD20(c).value + abilityMod(c.abilities.dex) + (c.feats.includes('alert') ? c.profBonus : 0) })),
+      ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.heroInitiative(c) })),
       ...s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod) })),
     ].sort((a, b) => b.initiative - a.initiative || (a.kind === 'pc' ? -1 : 1));
     s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0 };
@@ -1104,7 +1142,10 @@ export class Game {
     return this.lightCache.grid[p.y * this.width + p.x] ?? ambient;
   }
 
-  heroSenses(c: Character): Senses { return { darkvision: SPECIES_DARKVISION[c.speciesId] ?? 0, blindsight: 0 }; }
+  heroSenses(c: Character): Senses {
+    const dark = Math.max(SPECIES_DARKVISION[c.speciesId] ?? 0, this.opted(c, 'inv_sight') ? 120 : 0, c.feats.includes('boon_truesight') ? 60 : 0);
+    return { darkvision: dark, blindsight: this.feat(c, 'feral_senses') ? 30 : 0 };
+  }
 
   monsterSenses(m: Monster): Senses {
     const d = MONSTERS[m.defId];
@@ -1216,6 +1257,10 @@ export class Game {
       combat.attacksLeft = 0;
       combat.savageUsed = false;
       combat.disengaged = false;
+      combat.once = [];
+      combat.primed = [];
+      combat.lastHit = null;
+      combat.moved = false;
       // A reaction comes back at the start of one's own turn.
       combat.reacted = (combat.reacted ?? []).filter((id) => id !== cur.id);
       if (cur.kind === 'pc') {
@@ -1237,7 +1282,10 @@ export class Game {
 
   private deathSave(c: Character) {
     if (c.conditions.includes('stable')) return;
-    const r = this.heroD20(c).value;
+    // Survivor: death saves with advantage, and 18 to 20 counts as a 20.
+    const tough = this.feat(c, 'survivor');
+    const rolled = this.heroD20(c, tough ? 'advantage' : 'normal').value;
+    const r = tough && rolled >= 18 ? 20 : rolled;
     if (r === 20) {
       this.healChar(c, 1);
       this.log('roll', this.t`${c.name} rolls a natural 20 on a death save and staggers back up with 1 HP!`);
@@ -1264,6 +1312,7 @@ export class Game {
     this.settleDeaths();
     if (!this.consciousChars().length) {
       this.clearEffects();
+      for (const c of s.characters) this.leaveFight(c);
       s.combat = null;
       s.encounter = null;
       s.monsters = [];
@@ -1295,6 +1344,7 @@ export class Game {
     s.phase = 'explore';
     this.clearEffects();
     for (const c of s.characters) {
+      this.leaveFight(c);
       c.conditions = c.conditions.filter((x) => x !== 'dodging');
       if (!c.dead && c.hp <= 0) {
         this.healChar(c, 1);
@@ -1361,19 +1411,19 @@ export class Game {
     const cls = CLASSES[c.classId];
     c.level++;
     const gains: string[] = [];
-    const hp = Math.max(1, cls.hitDie / 2 + 1 + abilityMod(c.abilities.con) + (SPECIES[c.speciesId]?.hpPerLevel ?? 0));
+    let hp = Math.max(1, cls.hitDie / 2 + 1 + abilityMod(c.abilities.con) + (SPECIES[c.speciesId]?.hpPerLevel ?? 0));
+    // Draconic Resilience: one more hit point for every level, counted from the first.
+    if (this.feat(c, 'draconic_resilience')) hp += c.level === SUBCLASS_LEVEL ? c.level : 1;
     c.maxHp += hp;
     if (!c.dead && c.hp > 0) c.hp += hp;
     c.hitDice++;
     gains.push(this.t`+${hp} maximum HP (now ${c.maxHp})`);
     const pb = profBonusFor(c.level);
     if (pb !== c.profBonus) { c.profBonus = pb; gains.push(this.t`Proficiency bonus rises to +${pb}`); }
-    if (cls.maxMana) {
-      const diff = (MANA_BY_LEVEL[c.level - 1] ?? MANA_BY_LEVEL[c.level - 2]) - MANA_BY_LEVEL[c.level - 2];
-      if (diff > 0) { c.maxMana += diff; c.mana += diff; gains.push(this.t`+${diff} maximum mana (now ${c.maxMana})`); }
-    }
+    const mana = maxManaOf(c) - c.maxMana;
+    if (mana > 0) { c.maxMana += mana; c.mana += mana; gains.push(this.t`+${mana} maximum mana (now ${c.maxMana})`); }
     const gain = cls.levels[c.level];
-    if (c.level === 3) {
+    if (c.level === SUBCLASS_LEVEL) {
       c.subclass = cls.subclass.name;
       gains.push(this.t`Subclass: ${this.n(cls.subclass.name)}. ${loc(cls.subclass.text, this.lang)}`);
     }
@@ -1381,29 +1431,38 @@ export class Game {
       if (!c.abilityIds.includes(id)) c.abilityIds.unshift(id);
       gains.push(this.t`New ability: ${this.n(ABILITIES[id].name)}. ${this.n(ABILITIES[id].description)}`);
     }
-    for (const f of gain?.features ?? []) {
-      const prefix = f.split(':')[0];
-      c.features = [...c.features.filter((x) => x.split(':')[0] !== prefix), f];
-      gains.push(this.n(f));
+    for (const f of gain?.features ?? []) gains.push(this.feature(f));
+    for (const name of gain?.improves ?? []) gains.push(this.t`${this.n(name)} improves`);
+    // Primal Champion and Body and Mind lift two abilities beyond the usual limit.
+    const peak: AbilityKey[] = c.level === 20 ? (c.classId === 'barbarian' ? ['str', 'con'] : c.classId === 'monk' ? ['dex', 'wis'] : []) : [];
+    if (peak.length) {
+      const con = abilityMod(c.abilities.con);
+      for (const k of peak) c.abilities[k] = Math.max(c.abilities[k], Math.min(25, c.abilities[k] + 4));
+      const more = (abilityMod(c.abilities.con) - con) * c.level;
+      c.maxHp += more;
+      if (!c.dead && c.hp > 0) c.hp += more;
     }
     for (const kind of gain?.choose ?? []) {
       if (kind === 'feat') {
         c.pending.push({ id: this.uid('ch'), kind: 'feat', level: c.level });
-        gains.push(this.t`Choose a feat or raise your ability scores`);
+        gains.push(c.level >= 19 ? this.t`Choose an epic boon, a feat or raise your ability scores` : this.t`Choose a feat or raise your ability scores`);
         continue;
       }
       const list = classSpellList(c.classId);
       const options = list ? spellOptions(c, list, kind) : [];
       // With a single spell left to learn there is nothing to decide.
-      if (options.length === 1) {
+      // Choices still waiting from earlier levels have a claim on what is left.
+      const waiting = c.pending.filter((p) => p.kind === 'spell' && p.pool === kind).length;
+      if (options.length === 1 && !waiting) {
         c.abilityIds.unshift(options[0]);
         gains.push(this.t`New ability: ${this.n(ABILITIES[options[0]].name)}. ${this.n(ABILITIES[options[0]].description)}`);
-      } else if (options.length > 1) {
+      } else if (options.length > Math.max(1, waiting)) {
         c.pending.push({ id: this.uid('ch'), kind: 'spell', level: c.level, pool: kind });
         gains.push(kind === 'cantrip' ? this.t`Choose a new cantrip` : this.t`Choose a new spell`);
       }
     }
-    c.ac = this.computeAc(c);
+    this.refresh(c);
+    gains.push(...this.reconcile(c));
     const info: LevelUpInfo = { characterId: c.id, name: c.name, className: c.className, level: c.level, gains };
     this.log('levelup', this.t`${c.name} reaches level ${c.level}!`, { levelUp: info });
   }
@@ -1422,6 +1481,16 @@ export class Game {
       const def = FEATS[feat.id];
       const detail = feat.id === 'asi' ? ` (${(feat.abilities ?? []).map((k) => `${this.n(ABILITY_NAMES[k])} +1`).join(', ')})` : '';
       this.log('system', this.t`${c.name} takes ${this.n(def.name)}${detail}.`);
+    } else if (choice.kind === 'option') {
+      const picks = [...new Set(((pick as { options?: string[] })?.options ?? []).map(String))];
+      if (picks.length !== choice.count) throw new GameError(this.t`Choose ${choice.count}: ${this.n(GROUPS[choice.group]?.name ?? choice.group)}`);
+      const before = { feats: [...c.feats], features: [...c.features], expertise: [...c.expertise], skills: [...c.skills], options: [...(c.options ?? [])], logLength: this.s.log.length };
+      for (const id of picks) {
+        if (this.pickable(c, choice.group, choice.from).includes(id)) { this.takeOption(c, choice.group, id); continue; }
+        Object.assign(c, { feats: before.feats, features: before.features, expertise: before.expertise, skills: before.skills, options: before.options });
+        this.s.log.length = before.logLength;
+        throw new GameError(this.t`${c.name} cannot choose that`);
+      }
     } else {
       const spell = String((pick as { spell?: string })?.spell ?? '');
       const list = classSpellList(c.classId);
@@ -1430,7 +1499,7 @@ export class Game {
       this.log('system', this.t`${c.name} learns ${this.n(ABILITIES[spell].name)}.`);
     }
     c.pending = c.pending.filter((p) => p.id !== choiceId);
-    c.ac = this.computeAc(c);
+    this.refresh(c);
   }
 
   /** Validates that this player may act with this character right now. */
@@ -1467,7 +1536,7 @@ export class Game {
     if (!combat || this.s.phase !== 'combat') return;
     if (!combat.actionUsed) {
       combat.actionUsed = true;
-      combat.attacksLeft = c.classId === 'fighter' && c.level >= 5 ? 1 : 0;
+      combat.attacksLeft = extraAttacks(c);
     } else combat.attacksLeft--;
   }
 
@@ -1497,6 +1566,7 @@ export class Game {
     if (!steps.length) throw new GameError(this.t`Not enough movement left for that ground`);
     // Step by step: leaving an enemy's reach without disengaging invites its opportunity attack.
     const walked: Pt[] = [];
+    s.combat.moved = true;
     for (const q of steps) {
       if (!s.combat.disengaged) {
         for (const m of this.monstersLeftBy(c, c, q)) {
@@ -1533,7 +1603,7 @@ export class Game {
     const combat = this.s.combat;
     if (this.s.phase !== 'combat' || !combat) throw new GameError(this.t`Disengage is only useful in combat`);
     if (combat.disengaged) throw new GameError(this.t`${c.name} has already disengaged this turn`);
-    const bonus = c.abilityIds.includes('dash') && !combat.bonusUsed;
+    const bonus = this.feat(c, 'cunning_action') && !combat.bonusUsed;
     this.spendAction(bonus);
     combat.disengaged = true;
     this.log('roll', bonus ? this.t`${c.name} disengages with a cunning step (bonus action).` : this.t`${c.name} takes the Disengage action.`);
@@ -1570,13 +1640,13 @@ export class Game {
     return this.s.monsters.some((m) => m.alive && this.mdist(m, c) <= 1);
   }
 
-  private damageMonster(m: Monster, amount: number, type: string): { dealt: number; note: string } {
+  private damageMonster(m: Monster, amount: number, type: string, pierce = false): { dealt: number; note: string } {
     const def = MONSTERS[m.defId];
     let dealt = amount;
     let note = '';
     if (def.immune?.includes(type)) { dealt = 0; note = ` ${this.t`(immune)`}`; }
     else if (def.vulnerable?.includes(type)) { dealt = amount * 2; note = ` ${this.t`(vulnerable, doubled)`}`; }
-    else if (def.resist?.includes(type)) { dealt = Math.floor(amount / 2); note = ` ${this.t`(resistant, halved)`}`; }
+    else if (def.resist?.includes(type) && !(pierce && ['bludgeoning', 'piercing', 'slashing'].includes(type))) { dealt = Math.floor(amount / 2); note = ` ${this.t`(resistant, halved)`}`; }
     if (dealt > 0 && def.flags?.regeneration?.stop?.includes(type)) m.noRegen = true;
     let hp = Math.max(0, m.hp - dealt);
     // Undead Fortitude: a Constitution save against 5 + the damage keeps it standing at 1, unless the damage was radiant.
@@ -1585,7 +1655,8 @@ export class Game {
       if (r + (def.saves.con ?? 0) >= 5 + dealt) { hp = 1; note += ` ${this.t`${m.name} refuses to fall (Undead Fortitude).`}`; }
     }
     m.hp = hp;
-    if (m.hp === 0 && m.alive) { m.alive = false; m.conditions = []; note += ` ${this.t`${m.name} is slain!`}`; this.fallen.push(m.id); }
+    if (dealt > 0 && m.hp > 0) this.liftMonster(m, (e) => !!e.onHurt);
+    if (m.hp === 0 && m.alive) { m.alive = false; m.conditions = []; m.effects = []; note += ` ${this.t`${m.name} is slain!`}`; this.fallen.push(m.id); }
     return { dealt, note };
   }
 
@@ -1596,8 +1667,18 @@ export class Game {
       c.hp = 1;
       this.log('roll', this.t`${c.name} refuses to fall and stays at 1 HP (Relentless Endurance).`);
     }
+    if (c.hp === 0 && c.conditions.includes('raging') && this.feat(c, 'relentless_rage')) {
+      const tries = c.uses?._relentless ?? 0;
+      (c.uses ??= {})._relentless = tries + 1;
+      c.hp = 1; // on their feet for the save
+      if (this.heroSave(c, 'con', 10 + 5 * tries, this.n('Relentless Rage'))) {
+        c.hp = Math.min(c.maxHp, 2 * c.level);
+        this.log('roll', this.t`${c.name} rages on with ${c.hp} HP.`);
+      } else c.hp = 0;
+    }
     if (c.hp === 0 && !c.conditions.includes('unconscious')) {
-      c.conditions = c.conditions.filter((x) => x !== 'dodging');
+      c.conditions = c.conditions.filter((x) => !['dodging', 'raging', 'reckless', 'invisible'].includes(x));
+      if (c.form) { c.form = null; this.refresh(c); }
       c.conditions.push('unconscious');
       c.deathSaves = { successes: 0, failures: 0 };
       return true;
@@ -1641,6 +1722,14 @@ export class Game {
   attack(playerId: string, characterId: string, targetId: string) {
     const c = this.actor(playerId, characterId);
     if (this.s.phase !== 'combat') throw new GameError(this.t`There is nothing to fight right now`);
+    if (c.form) {
+      this.canAct();
+      const prey = this.targetMonster(c, targetId, 5);
+      this.spendAction();
+      this.beastAttack(c, prey);
+      this.checkCombatOver();
+      return;
+    }
     this.canAttack();
     const ranged = this.weaponOf(c)?.weapon?.ranged;
     const m = this.targetMonster(c, targetId, ranged ? ranged.long : 5);
@@ -1651,67 +1740,195 @@ export class Game {
 
   /**
    * One weapon attack, rolled and resolved. An opportunity attack is always a melee attack,
-   * so a hero holding a bow strikes with a fist instead.
+   * so a hero holding a bow strikes with a fist instead. Returns whether it hit.
    */
-  private strike(c: Character, m: Monster, opts: { reaction?: boolean } = {}) {
-    const held = this.weaponOf(c);
+  private strike(c: Character, m: Monster, opts: { reaction?: boolean; unarmed?: boolean; flurry?: boolean; beast?: BeastForm['attacks'][number]; again?: boolean } = {}): boolean {
+    const held = opts.unarmed || opts.beast ? null : this.weaponOf(c);
     const w = opts.reaction && held?.weapon?.ranged ? null : held;
     const wp = w?.weapon;
     const ranged = wp?.ranged;
+    const beast = opts.beast;
     const dist = this.mdist(m, c) * 5;
-    const strMod = abilityMod(c.abilities.str);
-    const atk = weaponAttack(c, w);
-    const mod = atk.mod, bonus = atk.bonus;
+    const atk = weaponAttack({ ...c, form: null }, w);
+    const mod = atk.mod;
+    const usesStr = !beast && !ranged && mod === this.mod(c, 'str');
+    const fist = !wp && !beast;
+    const monkish = c.classId === 'monk' && !beast && (fist || (!!w && isMonkWeapon(w)));
+    const raging = c.conditions.includes('raging');
+    const reckless = c.conditions.includes('reckless') && usesStr;
+    const brutal = reckless && this.primed(`${c.id}:brutal`);
+    const marked = c.mark?.monsterId === m.id ? c.mark.spell : null;
+    const bonus = (beast ? beast.toHit : atk.bonus) + (c.conditions.includes('sacred weapon') && !beast ? Math.max(1, this.mod(c, 'cha')) : 0);
     const guided = m.conditions.includes('guided');
+    const studied = !!m.studiedBy?.includes(c.id);
+    const aimed = this.primed(`${c.id}:aim`);
     const seen = this.sight(c.name, m.name, this.heroSees(c, m), this.monsterSees(m, c));
-    const mode = rollMode(guided || seen.adv, seen.dis || this.hampered(c) || (!!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c))));
+    const prone = this.mHas(m, 'prone');
+    const adv = guided || seen.adv || studied || aimed || (reckless && !brutal) || this.mHelpless(m) || (prone && dist <= 5) || c.conditions.includes('invisible')
+      || (marked === 'hunters_mark' && this.feat(c, 'precise_hunter'));
+    const dis = seen.dis || this.hampered(c) || (prone && dist > 5) || (!!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c)));
+    const mode = brutal ? (dis ? 'disadvantage' : 'normal') : rollMode(adv, dis);
     if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
-    const r = this.heroD20(c, mode);
-    const total = r.value + bonus;
-    const crit = r.value >= (c.classId === 'fighter' && c.level >= 3 ? 19 : 20);
+    if (studied) m.studiedBy = m.studiedBy!.filter((id) => id !== c.id);
+    if (aimed) this.unprime(`${c.id}:aim`);
+    const critAt = critFrom(c);
     const cover = ranged ? this.coverBonus(c, this.mpoint(m, c)) : 0;
     const ac = MONSTERS[m.defId].ac + cover;
-    const label = w ? this.n(w.name) : this.t`an unarmed strike`;
-    const head = (opts.reaction ? this.t`Opportunity attack! ` : '') + this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note;
+    let r = this.heroD20(c, mode);
+    let total = r.value + bonus;
+    let forced = false;
+    let luck = '';
+    const hits = () => forced || (r.value !== 1 && (r.value >= critAt || total >= ac));
+    if (!hits() && !opts.reaction && this.feat(c, 'heroic_warrior') && this.once(`${c.id}:heroic`)) {
+      const first = r.value;
+      r = this.heroD20(c, mode);
+      total = r.value + bonus;
+      luck += ` ${this.t`Heroic Warrior: the ${first} is rolled again.`}`;
+    }
+    if (!hits() && c.inspired) {
+      const die = rollDie(c.inspired, this.rng);
+      c.inspired = undefined;
+      total += die;
+      if (total >= ac) forced = true;
+      luck += ` ${this.t`Bardic Inspiration adds ${die}.`}`;
+    }
+    if (!hits() && c.feats.includes('boon_combat_prowess') && this.once(`${c.id}:prowess`)) { forced = true; luck += ` ${this.t`Peerless Aim turns the miss into a hit.`}`; }
+    if (!hits() && this.feat(c, 'stroke_of_luck') && this.left(c, 'stroke_of_luck') > 0) { this.spendUse(c, 'stroke_of_luck'); forced = true; luck += ` ${this.t`Stroke of Luck turns the miss into a hit.`}`; }
+    const crit = r.value >= critAt;
+    const label = beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`an unarmed strike`;
+    const head = (opts.reaction ? this.t`Opportunity attack! ` : '') + this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-      ({ actor: c.name, label: (opts.reaction ? `${this.t`Opportunity attack`}: ` : '') + (w ? this.n(w.name) : this.t`Unarmed strike`), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
-    if (r.value === 1 || (!crit && total < ac)) {
+      ({ actor: c.name, label: (opts.reaction ? `${this.t`Opportunity attack`}: ` : '') + (beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`Unarmed strike`), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
+    const horde = () => {
+      if (opts.reaction || opts.again || beast || !wp || !this.opted(c, 'prey_horde') || this.s.phase !== 'combat') return;
+      const reach = ranged ? ranged.long : 5;
+      const other = this.s.monsters.find((o) => o.alive && o.id !== m.id && cheb(this.mpoint(o, m), this.mpoint(m, o)) <= 1 && this.mdist(o, c) * 5 <= reach && this.los(c, this.mpoint(o, c)));
+      if (!other || !this.once(`${c.id}:horde`)) return;
+      this.log('roll', this.t`Horde Breaker: ${c.name} follows through against ${other.name}.`);
+      this.strike(c, other, { again: true });
+    };
+    if (brutal) this.unprime(`${c.id}:brutal`);
+    if (!hits()) {
+      if (this.feat(c, 'studied_attacks')) (m.studiedBy ??= []).push(c.id);
       this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
-      return;
+      horde();
+      return false;
     }
     // Parry: a reaction that lifts its armour class against one melee hit a round.
     const parry = MONSTERS[m.defId].flags?.parry;
-    const reacted = this.s.combat ? (this.s.combat.reacted ??= []) : [];
-    if (parry && !ranged && !crit && total < ac + parry && !reacted.includes(m.id)) {
-      reacted.push(m.id);
+    if (parry && !ranged && !crit && !forced && total < ac + parry && this.canReact(m.id) && !this.mHelpless(m)) {
+      this.useReaction(m.id);
       this.log('roll', this.t`${head} ${m.name} parries the blow.`, { roll: info('miss') });
-      return;
+      return false;
     }
-    let dmg = 1 + strMod;
-    let extra = '';
-    if (wp) {
+    const mdef = MONSTERS[m.defId];
+    const dice = (expr: string) => roll(expr, this.rng, crit).total;
+    let type = beast ? beast.type : wp?.damageType ?? 'bludgeoning';
+    if (fist && this.feat(c, 'empowered_strikes') && (mdef.resist?.includes(type) || mdef.immune?.includes(type))) type = 'force';
+    let dmg: number;
+    const notes: string[] = [];
+    if (beast) dmg = this.rollDmg(beast.damage, crit);
+    else if (!atk.dice) dmg = 1 + this.mod(c, 'str');
+    else {
       // Great Weapon Fighting lifts low dice; Savage Attacker rolls the weapon's dice twice, once per turn.
-      const greatWeapon = c.feats.includes('style_great_weapon') && wp.twoHanded && !ranged;
+      const greatWeapon = c.feats.includes('style_great_weapon') && !!wp?.twoHanded && !ranged;
       const weaponDice = () => {
-        const d = roll(wp.damage, this.rng, crit);
+        const d = roll(atk.dice, this.rng, crit);
         return d.rolls.reduce((sum, x) => sum + (greatWeapon ? Math.max(3, x) : x), 0) + d.modifier;
       };
-      let dice = weaponDice();
+      let rolled = weaponDice();
       const combat = this.s.combat;
       if (c.feats.includes('savage_attacker') && combat && !combat.savageUsed) {
         combat.savageUsed = true;
-        dice = Math.max(dice, weaponDice());
+        rolled = Math.max(rolled, weaponDice());
       }
-      dmg = dice + mod + (wp.bonus ?? 0) + atk.flat;
+      dmg = rolled + mod + (wp?.bonus ?? 0) + atk.flat;
     }
+    if (raging && usesStr) dmg += rageDamage(c);
+    if (raging && reckless && this.feat(c, 'frenzy') && this.once(`${c.id}:frenzy`)) { dmg += dice(`${rageDamage(c)}d6`); notes.push(this.n('Frenzy')); }
+    if (brutal) { dmg += dice(featureRank(c, 'improved_brutal_strike') >= 2 ? '2d10' : '1d10'); notes.push(this.n('Brutal Strike')); }
+    // Sneak Attack, once per turn, with what a Cunning Strike gives up of it.
     const flanked = this.s.characters.some((a) => a.id !== c.id && this.conscious(a) && this.mdist(m, a) <= 1);
-    if (c.classId === 'rogue' && wp && (wp.finesse || ranged) && (flanked || mode === 'advantage')) {
-      dmg += roll(`${Math.ceil(c.level / 2)}d6`, this.rng, crit).total;
-      extra = ` ${this.t`(with Sneak Attack)`}`;
+    let cunning: 'trip' | 'poison' | 'daze' | null = null;
+    if (this.feat(c, 'sneak_attack') && wp && (wp.finesse || ranged) && (flanked || mode === 'advantage') && this.once(`${c.id}:sneak`)) {
+      let n = sneakDice(c);
+      for (const [key, cost] of [['daze', 2], ['trip', 1], ['poison', 1]] as const) {
+        if (!this.primed(`${c.id}:${key}`)) continue;
+        this.unprime(`${c.id}:${key}`);
+        if (!cunning && n > cost) { cunning = key; n -= cost; }
+      }
+      dmg += dice(`${n}d6`);
+      notes.push(this.n('Sneak Attack'));
     }
-    dmg = Math.max(1, dmg);
-    const res = this.damageMonster(m, dmg, wp?.damageType ?? 'bludgeoning');
-    this.log('roll', this.t`${head} ${crit ? this.t`Critical hit` : this.t`Hit`} for ${res.dealt} ${this.n(`${wp?.damageType ?? 'bludgeoning'} damage`)}${extra}.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.dealt, type: wp?.damageType ?? 'bludgeoning' }) });
+    if (this.opted(c, 'prey_colossus') && wp && m.hp < m.maxHp && this.once(`${c.id}:colossus`)) { dmg += dice('1d8'); notes.push(this.n('Colossus Slayer')); }
+    if (crit && r.value === 20 && c.feats.includes('boon_irresistible_offense') && wp) dmg += Math.max(c.abilities.str, c.abilities.dex);
+    const parts = [{ amount: Math.max(1, dmg), type }];
+    const add = (amount: number, t: string, name: string) => { parts.push({ amount, type: t }); notes.push(this.n(name)); };
+    if (this.feat(c, 'blessed_strikes') && !fist && this.once(`${c.id}:blessed`)) add(dice(this.feat(c, 'improved_blessed_strikes') ? '2d8' : '1d8'), 'radiant', 'Blessed Strikes');
+    if (this.feat(c, 'radiant_strikes') && !ranged && !beast) add(dice('1d8'), 'radiant', 'Radiant Strikes');
+    if (this.opted(c, 'fury_strike') && this.feat(c, 'elemental_fury') && this.once(`${c.id}:primal`)) add(dice(this.feat(c, 'improved_elemental_fury') ? '2d8' : '1d8'), 'cold', 'Primal Strike');
+    let markDmg = 0;
+    if (marked === 'hunters_mark' && (wp || beast)) { markDmg = dice(this.feat(c, 'foe_slayer') ? '1d10' : '1d6'); add(markDmg, 'force', "Hunter's Mark"); }
+    if (marked === 'hex') add(dice('1d6'), 'necrotic', 'Hex');
+    let drink = 0;
+    if (this.opted(c, 'inv_lifedrinker') && wp && !ranged && this.once(`${c.id}:lifedrinker`)) { drink = dice('1d6'); add(drink, 'necrotic', 'Lifedrinker'); }
+    const res = this.hitParts(m, parts, c.feats.includes('boon_irresistible_offense') && !!wp);
+    const extra = notes.length ? ` (${notes.join(', ')})` : '';
+    this.log('roll', this.t`${head} ${crit ? this.t`Critical hit` : this.t`Hit`} for ${res.text}${extra}.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.total, type }) });
+    const combat = this.s.combat;
+    if (combat && !ranged && !opts.reaction) combat.lastHit = m.id;
+    if (drink) this.healChar(c, drink);
+    if (!m.alive && this.feat(c, 'dark_ones_blessing')) this.giveTemp(c, Math.max(1, this.mod(c, 'cha') + c.level));
+    // What the hit sets off besides damage.
+    if (m.alive && brutal) this.pushMonster(m, c, 15);
+    if (m.alive && beast?.prone && this.tilesOf(m) <= 2) this.afflict(m, 'prone');
+    if (m.alive && cunning === 'trip' && !this.monsterSave(m, 'dex', this.dcOf(c, 'dex'), this.n('Cunning Strike'))) this.afflict(m, 'prone');
+    if (m.alive && cunning === 'poison' && !this.monsterSave(m, 'con', this.dcOf(c, 'dex'), this.n('Cunning Strike'))) this.afflict(m, 'poisoned', { turns: 10, save: { ability: 'con', dc: this.dcOf(c, 'dex') } });
+    if (m.alive && cunning === 'daze' && !this.monsterSave(m, 'con', this.dcOf(c, 'dex'), this.n('Devious Strikes'))) this.afflict(m, 'incapacitated', { turns: 1 });
+    if (m.alive && opts.flurry && this.feat(c, 'open_hand_technique') && !this.monsterSave(m, 'dex', this.dcOf(c, 'wis'), this.n('Open Hand Technique'))) this.afflict(m, 'prone');
+    if (monkish && this.primed(`${c.id}:stun`)) {
+      this.unprime(`${c.id}:stun`);
+      if (m.alive) {
+        if (this.monsterSave(m, 'con', this.dcOf(c, 'wis'), this.n('Stunning Strike'))) (m.studiedBy ??= []).push(c.id);
+        else this.afflict(m, 'stunned', { untilHero: c.id });
+      }
+    }
+    if (fist && this.primed(`${c.id}:palm`)) {
+      this.unprime(`${c.id}:palm`);
+      if (m.alive) {
+        const ok = this.monsterSave(m, 'con', this.dcOf(c, 'wis'), this.n('Quivering Palm'));
+        const full = roll('10d12', this.rng).total;
+        const hit = this.damageMonster(m, ok ? Math.floor(full / 2) : full, 'force');
+        this.log('roll', this.t`The vibrations tear through ${m.name} for ${hit.dealt} ${this.n('force damage')}.${hit.note}`);
+      }
+    }
+    if (this.primed(`${c.id}:hurl`)) {
+      this.unprime(`${c.id}:hurl`);
+      if (m.alive && !this.monsterSave(m, 'cha', this.dcOf(c, 'cha'), this.n('Hurl Through Hell'))) {
+        const hit = this.damageMonster(m, roll('8d10', this.rng).total, 'psychic');
+        this.log('roll', this.t`${m.name} is hurled through the lower planes and returns with ${hit.dealt} ${this.n('psychic damage')}.${hit.note}`);
+        this.afflict(m, 'incapacitated', { turns: 1 });
+      }
+    }
+    if (markDmg && this.feat(c, 'superior_hunters_prey') && this.once(`${c.id}:prey2`)) {
+      const other = this.s.monsters.filter((o) => o.alive && o.id !== m.id && cheb(this.mpoint(o, m), this.mpoint(m, o)) <= 6).sort((a, b) => this.mdist(a, c) - this.mdist(b, c))[0];
+      if (other) {
+        const hit = this.damageMonster(other, markDmg, 'force');
+        this.log('roll', this.t`The mark's force leaps to ${other.name} for ${hit.dealt} ${this.n('force damage')}.${hit.note}`);
+      }
+    }
+    horde();
+    return true;
+  }
+
+  /** A druid in beast form makes every attack of the beast with one Attack action. */
+  private beastAttack(c: Character, m: Monster) {
+    const form = BEAST_FORMS[c.form!];
+    for (const a of form.attacks) {
+      const target = m.alive ? m : this.s.monsters.find((o) => o.alive && this.mdist(o, c) <= 1);
+      if (!target || this.s.phase !== 'combat') break;
+      this.strike(c, target, { beast: a });
+    }
   }
 
   /** Spells with a saving throw, and Magic Missile, need a target the caster can see. */
@@ -1729,30 +1946,56 @@ export class Game {
     const ab = ABILITIES[abilityId];
     if (!ab || !c.abilityIds.includes(abilityId)) throw new GameError(this.t`${c.name} doesn't know that`);
     const inCombat = this.s.phase === 'combat';
+    const isSpell = ab.spellLevel !== undefined;
+    if (isSpell && c.conditions.includes('raging')) throw new GameError(this.t`${c.name} cannot cast spells while raging`);
+    if (isSpell && c.form && !this.feat(c, 'beast_spells')) throw new GameError(this.t`${c.name} cannot cast spells in beast form`);
     if (ab.target === 'enemy' && !inCombat) throw new GameError(this.t`There is nothing to fight right now`);
     if (ab.kind === 'ward' && c.conditions.includes('mage armor')) throw new GameError(this.t`${this.n(ab.name)} is already active`);
     if (['dodge', 'surge', 'dash'].includes(ab.kind) && !inCombat) throw new GameError(this.t`${this.n(ab.name)} is only useful in combat`);
-    if (ab.kind !== 'surge') this.canAct(ab.bonusAction);
+    // Quickened Spell: the next spell takes the bonus action instead of the action.
+    const quick = isSpell && !ab.bonusAction && this.primed(`${c.id}:quickened`);
+    const asBonus = !!ab.bonusAction || quick;
+    if (ab.kind !== 'surge' && !ab.free) this.canAct(asBonus);
     if (ab.oncePerRest && c.spent.includes(ab.id)) throw new GameError(this.t`${this.n(ab.name)} is spent until you rest`);
-    if (c.mana < ab.cost) throw new GameError(this.t`Not enough mana`);
+    let pay = this.resPlan(c, ab);
+    let cost = ab.cost;
+    // Hunter's Mark and Divine Smite have free castings; after those they cost mana like any 1st-level spell.
+    if (ab.id === 'hunters_mark') { if (this.left(c, 'favored_enemy') > 0) pay = () => this.spendUse(c, 'favored_enemy'); else cost = 2; }
+    if (ab.id === 'divine_smite') { if (this.left(c, 'free_smite') > 0) pay = () => this.spendUse(c, 'free_smite'); else cost = 2; }
+    if (cost > 0 && ((ab.spellLevel === 1 && this.feat(c, 'spell_mastery')) || ((ab.spellLevel === 2 || ab.spellLevel === 3) && this.feat(c, 'signature_spells')))) cost--;
+    if (c.mana < cost) throw new GameError(this.t`Not enough mana`);
     const cmod = this.castingMod(c);
-    // Cantrips grow with the caster; healing magic is stronger in a practised cleric's hands.
-    const potent = ab.cost === 0 && c.level >= 5 && (ab.kind === 'attack' || ab.kind === 'save');
-    const dice = ab.dice && potent ? ab.dice.replace(/^(\d+)/, (n) => String(Number(n) * 2)) : ab.dice;
-    const healBonus = c.classId === 'cleric' && c.level >= 3 ? 3 : 0;
+    // Cantrips grow with the caster: twice the dice at level 5, three times at 11, four times at 17. Eldritch Blast fires more beams instead.
+    const scale = ab.spellLevel === 0 || ab.id === 'breath_weapon' ? cantripScale(c.level) : 1;
+    const beams = ab.id === 'eldritch_blast' ? scale : 1;
+    const dice = ab.dice && scale > 1 && beams === 1 ? ab.dice.replace(/^(\d+)/, (n) => String(Number(n) * scale)) : ab.dice;
+    const healBonus = isSpell && ab.spellLevel! > 0 && this.feat(c, 'disciple_of_life') ? 2 + ab.spellLevel! : 0;
     // An evoker's damaging cantrips still do half damage when they miss or are saved against.
-    const grazes = ab.spellLevel === 0 && c.classId === 'wizard' && c.level >= 3;
+    const grazes = ab.spellLevel === 0 && this.feat(c, 'potent_cantrip');
+    const sorcery = isSpell && c.conditions.includes('innate sorcery');
+    let range = ab.range;
+    if (isSpell && this.primed(`${c.id}:distant`)) range = range <= 5 ? 30 : range * 2;
+    if (ab.id === 'eldritch_blast' && this.opted(c, 'inv_spear')) range = Math.max(range, 300);
+    if (ab.spellLevel === 0 && range > 5 && this.opted(c, 'fury_spellcasting') && this.feat(c, 'improved_elemental_fury')) range += 300;
+    let spent = false;
     const spend = () => {
-      this.spendAction(ab.bonusAction);
-      c.mana -= ab.cost;
+      if (spent) return;
+      spent = true;
+      if (!ab.free) this.spendAction(asBonus);
+      if (cost > 0 && isSpell && ab.spellLevel! <= 4 && c.feats.includes('boon_spell_recall') && this.rng() < 0.25) this.log('roll', this.t`Spell Recall: ${this.n(ab.name)} costs ${c.name} no mana.`);
+      else c.mana -= cost;
+      pay();
       if (ab.oncePerRest) c.spent.push(ab.id);
+      if (quick) this.unprime(`${c.id}:quickened`);
     };
+    const blessing = () => { if (this.feat(c, 'dark_ones_blessing')) this.giveTemp(c, Math.max(1, this.mod(c, 'cha') + c.level)); };
 
     switch (ab.kind) {
       case 'surge': {
         const combat = this.s.combat!;
         if (!combat.actionUsed) throw new GameError(this.t`${c.name} still has an action this turn`);
-        c.spent.push(ab.id);
+        pay();
+        if (ab.oncePerRest) c.spent.push(ab.id);
         combat.actionUsed = false;
         combat.attacksLeft = 0;
         this.log('roll', this.t`${c.name} uses ${this.n(ab.name)} and can act again.`);
@@ -1782,6 +2025,11 @@ export class Game {
         spend();
         const healed = this.healChar(c, roll(ab.dice!, this.rng).total + c.level);
         this.log('roll', this.t`${c.name} uses ${this.n(ab.name)} and regains ${healed} HP.`);
+        // Tactical Shift: a breather is also a chance to reposition.
+        if (ab.id === 'second_wind' && this.feat(c, 'tactical_shift') && this.s.combat) {
+          this.s.combat.movementLeft += Math.floor(c.speed / 10);
+          this.s.combat.disengaged = true;
+        }
         break;
       }
       case 'heal': {
@@ -1790,56 +2038,75 @@ export class Game {
         if (cheb(c, t) * 5 > Math.max(5, ab.range)) throw new GameError(this.t`${t.name} is too far away`);
         if (t.hp >= t.maxHp) throw new GameError(this.t`${t.name} is already at full health`);
         spend();
-        const healed = this.healChar(t, roll(dice!, this.rng).total + cmod + healBonus);
+        const healed = this.healChar(t, (this.feat(c, 'supreme_healing') ? this.maxDice(dice!) : roll(dice!, this.rng).total) + cmod + healBonus);
+        if (t.id !== c.id && isSpell && this.feat(c, 'blessed_healer') && c.hp < c.maxHp) this.healChar(c, 2 + ab.spellLevel!);
         this.log('roll', (t.id === c.id ? this.t`${c.name} casts ${this.n(ab.name)} on themself, restoring ${healed} HP.` : this.t`${c.name} casts ${this.n(ab.name)} on ${t.name}, restoring ${healed} HP.`));
         break;
       }
       case 'attack': {
-        const m = this.targetMonster(c, targetId ?? '', ab.range);
+        const first = this.targetMonster(c, targetId ?? '', range);
         const bonus = cmod + c.profBonus;
-        const guided = m.conditions.includes('guided');
-        // Ranged spells are hard to aim with an enemy in your face; touch spells are not.
-        const seen = this.sight(c.name, m.name, this.heroSees(c, m), this.monsterSees(m, c));
-        const mode = rollMode(guided || seen.adv, seen.dis || this.hampered(c) || (ab.range > 5 && this.hostileAdjacentToChar(c)));
-        if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
         spend();
-        const r = this.heroD20(c, mode);
-        const total = r.value + bonus;
-        const crit = r.value === 20;
-        const cover = this.coverBonus(c, this.mpoint(m, c));
-        const ac = MONSTERS[m.defId].ac + cover;
-        const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note;
-        const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-          ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
-        if (r.value === 1 || (!crit && total < ac)) {
-          if (grazes) {
-            const res = this.damageMonster(m, Math.floor(roll(dice!, this.rng).total / 2), ab.damageType!);
-            this.log('roll', this.t`${head} Miss, but the spell still grazes for ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`, { roll: info('miss', { amount: res.dealt, type: ab.damageType! }) });
-          } else this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
-        } else {
-          const res = this.damageMonster(m, roll(dice!, this.rng, crit).total, ab.damageType!);
-          if (ab.id === 'guiding_bolt' && m.alive) m.conditions.push('guided');
-          this.log('roll', this.t`${head} ${crit ? this.t`Critical hit` : this.t`Hit`} for ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.dealt, type: ab.damageType! }) });
+        for (let beam = 0; beam < beams; beam++) {
+          const m = first.alive ? first : this.s.monsters.find((o) => o.alive && this.mdist(o, c) * 5 <= range && this.los(c, this.mpoint(o, c)));
+          if (!m || this.s.phase !== 'combat') break;
+          const guided = m.conditions.includes('guided');
+          // Ranged spells are hard to aim with an enemy in your face; touch spells are not.
+          const seen = this.sight(c.name, m.name, this.heroSees(c, m), this.monsterSees(m, c));
+          const mode = rollMode(guided || seen.adv || sorcery || this.mHelpless(m) || c.conditions.includes('invisible'), seen.dis || this.hampered(c) || (range > 5 && this.hostileAdjacentToChar(c)));
+          if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
+          const cover = this.coverBonus(c, this.mpoint(m, c));
+          const ac = MONSTERS[m.defId].ac + cover;
+          let r = this.heroD20(c, mode);
+          const missed = () => r.value === 1 || (r.value !== 20 && r.value + bonus < ac);
+          let luck = '';
+          if (missed() && isSpell && this.opted(c, 'meta_seeking') && this.left(c, 'sorcery') > 0) {
+            this.spendUse(c, 'sorcery');
+            r = this.heroD20(c, mode);
+            luck = ` ${this.t`Seeking Spell: the attack is rolled again.`}`;
+          }
+          const total = r.value + bonus;
+          const crit = r.value === 20;
+          const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
+          const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
+            ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
+          if (missed()) {
+            if (grazes) {
+              const res = this.damageMonster(m, Math.floor(this.spellDmg(c, ab, dice!) / 2), ab.damageType!);
+              this.log('roll', this.t`${head} Miss, but the spell still grazes for ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`, { roll: info('miss', { amount: res.dealt, type: ab.damageType! }) });
+            } else this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
+          } else {
+            const parts = [{ amount: this.spellDmg(c, ab, dice!, crit), type: ab.damageType! }];
+            if (c.mark?.monsterId === m.id && c.mark.spell === 'hex') parts.push({ amount: roll('1d6', this.rng, crit).total, type: 'necrotic' });
+            const res = this.hitParts(m, parts);
+            if (ab.id === 'guiding_bolt' && m.alive) m.conditions.push('guided');
+            this.log('roll', this.t`${head} ${crit ? this.t`Critical hit` : this.t`Hit`} for ${res.text}.${res.note}`, { roll: info(crit ? 'crit' : 'hit', { amount: res.total, type: ab.damageType! }) });
+            if (m.alive && ab.id === 'eldritch_blast' && this.opted(c, 'inv_repelling')) this.pushMonster(m, c, 10);
+          }
+          if (!m.alive) blessing();
         }
         break;
       }
       case 'save': {
-        const first = this.targetMonster(c, targetId ?? '', ab.range);
+        const first = this.targetMonster(c, targetId ?? '', range);
         this.mustSee(c, first);
         // Area effects also catch every enemy standing next to the target.
         const targets = ab.area ? this.s.monsters.filter((m) => m.alive && cheb(m, first) <= 1) : [first];
         spend();
-        const dc = 8 + c.profBonus + (ab.dcAbility ? abilityMod(c.abilities[ab.dcAbility]) : cmod);
+        const dc = 8 + c.profBonus + (ab.dcAbility ? abilityMod(c.abilities[ab.dcAbility]) : cmod) + (sorcery ? 1 : 0);
         const save = this.n(ab.saveAbility!.toUpperCase());
-        const full = roll(dice!, this.rng).total;
+        const full = this.spellDmg(c, ab, dice!);
+        const heightened = isSpell && this.primed(`${c.id}:heightened`);
         const verb = ab.spellLevel === undefined ? this.t`${c.name} uses ${this.n(ab.name)} on ${first.name}` : this.t`${c.name} casts ${this.n(ab.name)} at ${first.name}`;
         for (const m of targets) {
           const mdef = MONSTERS[m.defId];
           const saveMod = mdef.saves[ab.saveAbility!] ?? 0;
           // Magic Resistance: advantage on saves against spells.
-          const r = d20(this.rng, mdef.flags?.magicResistance && ab.spellLevel !== undefined ? 'advantage' : 'normal').value;
+          const r = d20(this.rng, rollMode(!!mdef.flags?.magicResistance && isSpell, heightened)).value;
+          const helpless = (ab.saveAbility === 'str' || ab.saveAbility === 'dex') && (this.mHas(m, 'stunned') || this.mHas(m, 'paralyzed'));
           let resisted = false;
-          if (r + saveMod < dc && (m.legRes ?? mdef.flags?.legendaryResistance ?? 0) > 0) {
+          const failed = helpless || r + saveMod < dc;
+          if (failed && (m.legRes ?? mdef.flags?.legendaryResistance ?? 0) > 0) {
             m.legRes = (m.legRes ?? mdef.flags!.legendaryResistance!) - 1;
             resisted = true;
           }
@@ -1849,7 +2116,7 @@ export class Game {
           const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
             ({ actor: m.name, label: this.t`${save} save against ${this.n(ab.name)}`, die: r, rolls: [r], mode: 'normal', modifier: saveMod, total: r + saveMod, target: { kind: 'DC', value: dc }, outcome, damage });
           if (resisted) this.log('roll', this.t`${m.name} fails the save but shrugs it off with Legendary Resistance (${m.legRes} left).`);
-          if (resisted || r + saveMod >= dc) {
+          if (resisted || !failed) {
             if (ab.half || grazes) {
               const res = this.damageMonster(m, Math.floor(full / 2), ab.damageType!);
               this.log('roll', this.t`${head} Saved, half damage: ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`, { roll: info('success', { amount: res.dealt, type: ab.damageType! }) });
@@ -1857,19 +2124,29 @@ export class Game {
           } else {
             const res = this.damageMonster(m, full, ab.damageType!);
             this.log('roll', this.t`${head} Failed, ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`, { roll: info('failure', { amount: res.dealt, type: ab.damageType! }) });
+            // Vicious Mockery leaves its target rattled: disadvantage on its next attack.
+            if (ab.id === 'vicious_mockery' && m.alive) this.afflict(m, 'rattled', { turns: 1 });
           }
+          if (!m.alive) blessing();
         }
         break;
       }
       case 'auto': {
-        const m = this.targetMonster(c, targetId ?? '', ab.range);
+        const m = this.targetMonster(c, targetId ?? '', range);
         this.mustSee(c, m);
         spend();
-        const res = this.damageMonster(m, roll(ab.dice!, this.rng).total, ab.damageType!);
+        const res = this.damageMonster(m, this.spellDmg(c, ab, ab.dice!), ab.damageType!);
         this.log('roll', this.t`${c.name} casts ${this.n(ab.name)} at ${m.name} for ${res.dealt} ${this.n(`${ab.damageType} damage`)}.${res.note}`);
+        if (!m.alive) blessing();
+        break;
+      }
+      case 'feature': {
+        this.classAbility(c, ab, targetId, spend, range);
         break;
       }
     }
+    // What was readied for "the next spell this turn" is used up by it.
+    if (isSpell && ['attack', 'save', 'auto', 'heal', 'ward'].includes(ab.kind)) for (const k of ['overchannel', 'empowered', 'heightened', 'distant']) this.unprime(`${c.id}:${k}`);
     if (inCombat) this.checkCombatOver();
   }
 
@@ -1944,9 +2221,22 @@ export class Game {
     // Its own turn begins: its reaction is back.
     if (this.s.combat) this.s.combat.reacted = (this.s.combat.reacted ?? []).filter((id) => id !== m.id);
     this.monsterTurnStart(m);
+    if (!m.alive) { this.acting = null; this.checkCombatOver(); return { monster: m.name, moved: 0, note: `${m.name} died at the start of its turn` }; }
+    if (this.mHelpless(m)) {
+      const why = [...new Set((m.effects ?? []).filter((e) => MONSTER_SKIPS.includes(e.condition)).map((e) => this.n(e.condition)))].join(', ');
+      this.log('system', this.t`${m.name} is ${why} and loses the turn.`);
+      this.monsterTurnEnd(m);
+      return { monster: m.name, moved: 0, note: `${m.name} is ${why} and loses its turn` };
+    }
     const targets = this.consciousChars();
     if (!targets.length) { this.acting = null; return { monster: m.name, moved: 0, note: 'no targets' }; }
-    const speed = Math.floor(def.speed / 5);
+    let speed = Math.floor(def.speed / 5);
+    if (this.mHas(m, 'prone')) {
+      m.effects = (m.effects ?? []).filter((e) => e.condition !== 'prone');
+      this.syncMonster(m);
+      speed = Math.ceil(speed / 2);
+      this.log('roll', this.t`${m.name} gets back up, which costs half the movement.`);
+    }
     const size = this.tilesOf(m);
     const canEnter = (p: Pt) => !this.monsterBlocked(p, m);
     const pathToAdjacent = (t: Character) => this.bfs(m, (p) => distToFootprint(p, size, t) <= 1 && (p.x === m.x && p.y === m.y || !this.monsterBlocked(p, m)), canEnter);
@@ -2123,6 +2413,14 @@ export class Game {
     const def = MONSTERS[m.defId];
     this.acting = m.id;
     m.movedFt = 0;
+    if (this.s.combat) this.s.combat.once = [];
+    // Holy Nimbus: enemies that start their turn in the paladin's aura burn.
+    for (const p of this.s.characters) {
+      if (!m.alive || !p.conditions.includes('holy nimbus') || !this.conscious(p) || this.mdist(m, p) > (this.feat(p, 'aura_expansion') ? 6 : 2)) continue;
+      const res = this.damageMonster(m, Math.max(1, this.mod(p, 'cha') + p.profBonus), 'radiant');
+      this.log('roll', this.t`${m.name} burns in ${p.name}'s holy nimbus for ${res.dealt} ${this.n('radiant damage')}.${res.note}`);
+    }
+    if (!m.alive) return;
     if (def.legendary) { m.legLeft = def.legendary.uses; m.legCooldown = []; }
     for (const c of this.s.characters) this.endEffects(c, (e) => e.sourceId === m.id && e.ends === 'source_start');
     const regen = def.flags?.regeneration;
@@ -2156,6 +2454,12 @@ export class Game {
           const res = this.hurtHero(c, [{ amount: this.rollDmg(aura.dice), type: aura.type }]);
           this.log('roll', this.t`${c.name} is seared by the aura around ${m.name}: ${this.dmgText(res.parts)}.` + (res.down ? ` ${this.t`${c.name} falls unconscious!`}` : ''));
         }
+      }
+      // Conditions heroes put on it: a save may end them, and the short ones run out.
+      for (const e of [...(m.effects ?? [])]) {
+        if (!m.effects?.includes(e)) continue;
+        if (e.save && this.monsterSave(m, e.save.ability, e.save.dc, this.n(e.condition))) { this.liftMonster(m, (x) => x === e); continue; }
+        if (e.turns !== undefined && --e.turns <= 0) this.liftMonster(m, (x) => x === e);
       }
       // "Until the end of its next turn": effects it caused on this very turn stay for one more.
       for (const c of this.s.characters) {
@@ -2337,6 +2641,7 @@ export class Game {
     if (chosen.spell) this.log('roll', this.t`${m.name} casts ${this.n(chosen.name)}.`);
     let last: NonNullable<MonsterActResult['attack']> | undefined;
     for (let i = 0; i < (chosen.count ?? 1); i++) {
+      if (!m.alive) break;
       if (!this.conscious(target)) {
         const pick = chosen;
         const other = this.consciousChars().filter((c) => inReach(c, pick)).sort(byDist)[0];
@@ -2363,10 +2668,13 @@ export class Game {
       if (!this.conscious(c)) continue;
       const ok = this.heroSave(c, sp.save, sp.dc, label, sp.rider?.condition);
       let dealt = 0, down = false;
-      if (rolled.length && (!ok || sp.half)) {
-        const res = this.hurtHero(c, rolled.map((p) => ({ type: p.type, amount: ok ? Math.floor(p.amount / 2) : p.amount })));
+      // Evasion: nothing on a successful Dexterity save for half, and only half on a failure.
+      const evades = sp.save === 'dex' && !!sp.half && this.feat(c, 'evasion') && !this.incapacitated(c);
+      const halved = ok || evades;
+      if (rolled.length && (!ok || sp.half) && !(ok && evades)) {
+        const res = this.hurtHero(c, rolled.map((p) => ({ type: p.type, amount: halved ? Math.floor(p.amount / 2) : p.amount })));
         dealt = res.total; down = res.down;
-        this.log('roll', (ok ? this.t`${c.name} takes half: ${this.dmgText(res.parts)}.` : this.t`${c.name} takes ${this.dmgText(res.parts)}.`) + (res.resisted ? ` ${this.t`(resisted, halved)`}` : '') + (down ? ` ${this.t`${c.name} falls unconscious!`}` : ''));
+        this.log('roll', (halved ? this.t`${c.name} takes half: ${this.dmgText(res.parts)}.` : this.t`${c.name} takes ${this.dmgText(res.parts)}.`) + (res.resisted ? ` ${this.t`(resisted, halved)`}` : '') + (down ? ` ${this.t`${c.name} falls unconscious!`}` : ''));
       }
       let condition: string | null = null;
       if (!ok && sp.rider && this.conscious(c)) condition = this.applyRider(c, { ...sp.rider, save: undefined }, m, sp.name, { ability: sp.save, dc: sp.dc });
@@ -2383,6 +2691,7 @@ export class Game {
    */
   private legendaryActions() {
     for (const m of this.s.monsters) {
+      if (this.mHelpless(m)) continue;
       if (this.s.phase !== 'combat' || !this.consciousChars().length) return;
       const def = MONSTERS[m.defId];
       if (!m.alive || !def.legendary) continue;
@@ -2506,28 +2815,79 @@ export class Game {
     }
   }
 
-  /** A hero's saving throw bonus: the ability, plus proficiency for the two saves of the class. */
+  /** A hero's saving throw bonus: the ability, proficiency for the saves of the class, and a paladin's Aura of Protection. */
   private heroSaveMod(c: Character, ability: AbilityKey) {
-    return abilityMod(c.abilities[ability]) + (CLASS_RULES[c.classId]?.saves.includes(ability) ? c.profBonus : 0);
+    const aura = Math.max(0, ...this.auras(c, 'aura_of_protection').map((p) => Math.max(1, this.mod(p, 'cha'))));
+    return abilityMod(c.abilities[ability]) + (saveProfs(c).includes(ability) ? c.profBonus : 0) + aura;
   }
 
-  /** A hero's saving throw, rolled and logged. `vs` is the condition at stake, for species that resist it. */
+  /** A hero's saving throw, rolled and logged. `vs` is the condition at stake, for species and features that resist it. */
   private heroSave(c: Character, ability: AbilityKey, dc: number, against: string, vs?: string): boolean {
     const save = this.n(ability.toUpperCase());
+    const ward = this.wards(c, vs);
+    if (ward) {
+      this.log('roll', this.t`${c.name} cannot be ${this.n(vs!)} (${this.n(ward)}).`);
+      return true;
+    }
     if ((ability === 'str' || ability === 'dex') && HELPLESS.some((x) => c.conditions.includes(x))) {
       this.log('roll', this.t`${c.name} cannot resist ${against}: the ${save} save fails automatically.`);
       return false;
     }
     const adv = (vs === 'charmed' && c.speciesId === 'elf') || (vs === 'frightened' && c.speciesId === 'halfling') || (vs === 'poisoned' && c.speciesId === 'dwarf')
-      || (c.speciesId === 'gnome' && (ability === 'int' || ability === 'wis' || ability === 'cha'));
+      || (c.speciesId === 'gnome' && (ability === 'int' || ability === 'wis' || ability === 'cha'))
+      || (ability === 'dex' && this.feat(c, 'danger_sense') && !this.incapacitated(c)) || (ability === 'str' && c.conditions.includes('raging'));
     const mode = rollMode(adv, ability === 'dex' && c.conditions.includes('restrained'));
     const mod = this.heroSaveMod(c, ability);
     const r = this.heroD20(c, mode);
-    const total = r.value + mod;
+    let total = r.value + mod;
+    // Indomitable Might: a Strength save is never lower than the Strength score.
+    if (ability === 'str' && this.feat(c, 'indomitable_might')) total = Math.max(total, c.abilities.str);
     const ok = total >= dc;
     const info: RollInfo = { actor: c.name, label: this.t`${save} save against ${against}`, die: r.value, rolls: r.rolls, mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: ok ? 'success' : 'failure' };
     this.log('roll', this.t`${c.name}: ${save} save against ${against}, ${this.d20Text(r, mode)}${signed(mod)} = ${total} vs DC ${dc}. ${ok ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
-    return ok;
+    if (ok) return true;
+    // Second chances, cheapest first.
+    const verdict = (good: boolean) => (good ? this.t`Success.` : this.t`Failure.`);
+    const add = (what: string, n: number) => {
+      total += n;
+      this.log('roll', this.t`${c.name}: ${this.n(what)} adds ${n}, ${total} vs DC ${dc}. ${verdict(total >= dc)}`);
+      return total >= dc;
+    };
+    const again = (what: string, bonus: number, how: RollMode = 'normal') => {
+      const r2 = this.heroD20(c, how);
+      const t2 = r2.value + mod + bonus;
+      this.log('roll', this.t`${c.name}: ${what} rolls the save again, ${this.d20Text(r2, how)}${signed(mod + bonus)} = ${t2} vs DC ${dc}. ${verdict(t2 >= dc)}`);
+      return t2 >= dc;
+    };
+    if (c.inspired) {
+      const die = rollDie(c.inspired, this.rng);
+      c.inspired = undefined;
+      if (add('Bardic Inspiration', die)) return true;
+    }
+    if (this.feat(c, 'dark_ones_own_luck') && this.left(c, 'dark_luck') > 0) {
+      this.spendUse(c, 'dark_luck');
+      if (add("Dark One's Own Luck", rollDie(10, this.rng))) return true;
+    }
+    if (c.feats.includes('boon_fate') && this.s.phase === 'combat' && !c.uses?.fate) {
+      (c.uses ??= {}).fate = 1;
+      if (add('Boon of Fate', roll('2d4', this.rng).total)) return true;
+    }
+    if (this.feat(c, 'indomitable') && this.left(c, 'indomitable') > 0) {
+      this.spendUse(c, 'indomitable');
+      if (again(this.n('Indomitable'), c.level)) return true;
+    }
+    if (this.feat(c, 'disciplined_survivor') && this.left(c, 'focus') > 0) {
+      this.spendUse(c, 'focus');
+      if (again(this.n('Disciplined Survivor'), 0)) return true;
+    }
+    if (vs === 'charmed' || vs === 'frightened') {
+      const bard = this.s.characters.find((b) => this.feat(b, 'countercharm') && this.conscious(b) && !this.incapacitated(b) && this.canReact(b.id) && (b.id === c.id || cheb(b, c) <= 6));
+      if (bard) {
+        this.useReaction(bard.id);
+        if (again(this.t`${bard.name}'s Countercharm`, 0, 'advantage')) return true;
+      }
+    }
+    return false;
   }
 
   /** "13 slashing damage + 5 fire damage" */
@@ -2535,16 +2895,40 @@ export class Game {
     return parts.map((p) => `${p.amount} ${this.n(`${p.type} damage`)}`).join(' + ');
   }
 
-  /** Damage of one or more types against a hero: resistances halve their share, and a sleeper wakes. */
-  private hurtHero(c: Character, parts: { amount: number; type: string }[]): { total: number; down: boolean; resisted: boolean; parts: { amount: number; type: string }[] } {
+  /**
+   * Damage of one or more types against a hero: resistances halve their share, reactions
+   * blunt an attack, temporary hit points go first, and a sleeper wakes.
+   */
+  private hurtHero(c: Character, parts: { amount: number; type: string }[], opts: { attack?: boolean } = {}): { total: number; down: boolean; resisted: boolean; parts: { amount: number; type: string }[] } {
     let resisted = false;
     const stone = c.conditions.includes('petrified');
-    const dealt = parts.map((p) => {
-      if (stone || c.resist.includes(p.type)) { resisted = true; return { type: p.type, amount: Math.floor(p.amount / 2) }; }
-      return p;
+    let dealt = parts.map((p) => {
+      if (stone || this.resists(c, p.type)) { resisted = true; return { type: p.type, amount: Math.floor(p.amount / 2) }; }
+      return { ...p };
     });
-    const total = dealt.reduce((n, p) => n + p.amount, 0);
-    const down = total > 0 ? this.damageChar(c, total) : false;
+    const sum = () => dealt.reduce((n, p) => n + p.amount, 0);
+    if (opts.attack && sum() > 0 && this.s.combat && !this.incapacitated(c) && this.canReact(c.id)) {
+      const physical = (t: string) => ['bludgeoning', 'piercing', 'slashing'].includes(t);
+      if (this.feat(c, 'uncanny_dodge') || this.feat(c, 'superior_hunters_defense')) {
+        this.useReaction(c.id);
+        dealt = dealt.map((p) => ({ type: p.type, amount: Math.floor(p.amount / 2) }));
+        this.log('roll', this.t`${c.name} twists away and halves the blow.`);
+      } else if (this.feat(c, 'deflect_attacks') && (this.feat(c, 'deflect_energy') || dealt.some((p) => physical(p.type)))) {
+        this.useReaction(c.id);
+        let cut = roll('1d10', this.rng).total + this.mod(c, 'dex') + c.level;
+        const before = sum();
+        for (const p of dealt) {
+          if (!this.feat(c, 'deflect_energy') && !physical(p.type)) continue;
+          const off = Math.min(cut, p.amount);
+          p.amount -= off; cut -= off;
+        }
+        this.log('roll', this.t`${c.name} deflects the attack, reducing the damage by ${before - sum()}.`);
+      }
+    }
+    const total = sum();
+    const soaked = Math.min(c.tempHp ?? 0, total);
+    if (soaked) c.tempHp = (c.tempHp ?? 0) - soaked;
+    const down = total - soaked > 0 ? this.damageChar(c, total - soaked) : false;
     if (total > 0) this.endEffects(c, (e) => e.condition === 'asleep');
     if (down) this.endEffects(c, () => true, true);
     return { total, down, resisted, parts: dealt };
@@ -2585,6 +2969,11 @@ export class Game {
     if (!r.condition) return null;
     const rename = (x: string) => (x === 'unconscious' ? 'asleep' : x);
     const condition = rename(r.condition);
+    const ward = this.wards(c, condition);
+    if (ward) {
+      this.log('roll', this.t`${c.name} cannot be ${this.n(condition)} (${this.n(ward)}).`);
+      return null;
+    }
     const save = repeat ?? r.save;
     let ends: EffectEnd = r.ends ?? 'minute';
     if (ends === 'save_end' && !save) ends = 'minute';
@@ -2623,6 +3012,13 @@ export class Game {
    */
   private heroTurnStart(c: Character): boolean {
     const combat = this.s.combat!;
+    c.conditions = c.conditions.filter((x) => x !== 'reckless');
+    for (const m of this.s.monsters) this.liftMonster(m, (e) => e.untilHero === c.id);
+    // Survivor: a badly hurt champion rallies at the start of every turn.
+    if (this.feat(c, 'survivor') && c.hp > 0 && c.hp * 2 <= c.maxHp) {
+      const healed = this.healChar(c, 5 + this.mod(c, 'con'));
+      if (healed) this.log('roll', this.t`${c.name} rallies and regains ${healed} HP (Survivor).`);
+    }
     this.endEffects(c, (e) => e.ends === 'target_start');
     this.endEffects(c, (e) => e.ends === 'escape' && !this.holds(e, c));
     for (const m of this.s.monsters) {
@@ -2652,6 +3048,12 @@ export class Game {
 
   /** The end of a hero's turn: effects that last until now run out, and saves against lasting ones are repeated. */
   private heroTurnEnd(c: Character) {
+    if (this.feat(c, 'self_restoration')) this.endEffects(c, (e) => ['charmed', 'frightened', 'poisoned'].includes(e.condition));
+    if (c.uses?._veil && --c.uses._veil <= 0) {
+      delete c.uses._veil;
+      c.conditions = c.conditions.filter((x) => x !== 'invisible');
+      this.log('roll', this.t`${c.name} is visible again.`);
+    }
     for (const e of [...(c.effects ?? [])]) {
       if (!c.effects?.includes(e)) continue;
       if (e.ends === 'target_end') { this.endEffects(c, (x) => x === e); continue; }
@@ -2700,7 +3102,7 @@ export class Game {
   private monstersLeftBy(c: Character, from: Pt, to: Pt): Monster[] {
     const reacted = this.s.combat?.reacted ?? [];
     return this.s.monsters.filter((m) => {
-      if (!m.alive || reacted.includes(m.id)) return false;
+      if (!m.alive || reacted.includes(m.id) || this.mHelpless(m)) return false;
       const reach = this.monsterReach(m);
       return reach > 0 && this.mdist(m, from) <= reach && this.mdist(m, to) > reach && this.monsterSees(m, c);
     });
@@ -2709,6 +3111,7 @@ export class Game {
   /** Roll one monster attack against a hero and apply it: damage of every type it deals, then what else a hit does. */
   private monsterStrike(m: Monster, target: Character, chosen: MonsterAttack, opts: { reaction?: boolean } = {}): NonNullable<MonsterActResult['attack']> {
     const def = MONSTERS[m.defId];
+    if (!m.alive) return { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false };
     const dist = this.mdist(m, target) * 5;
     const eye = this.mpoint(m, target);
     const label = this.n(chosen.name);
@@ -2716,11 +3119,17 @@ export class Game {
       const parts = [{ amount: this.rollDmg(chosen.damage, crit), type: chosen.damageType }];
       for (const x of chosen.extra ?? []) if (!x.ifAdv || hadAdv) parts.push({ amount: this.rollDmg(x.dice, crit), type: x.type });
       parts[0].amount = Math.max(1, parts[0].amount);
-      const res = this.hurtHero(target, parts);
+      const res = this.hurtHero(target, parts, { attack: true });
       const dmg = this.dmgText(res.parts) + (res.resisted ? ` ${this.t`(resisted, halved)`}` : '');
       const text = info ? this.t`${head} ${crit ? this.t`Critical hit` : this.t`Hit`} for ${dmg}.` : this.t`${head} ${dmg}.`;
       this.log('roll', text + (res.down ? ` ${this.t`${target.name} falls unconscious!`}` : ''), info ? { roll: info(crit ? 'crit' : 'hit', { amount: res.total, type: chosen.damageType }) } : {});
       const condition = chosen.rider && this.conscious(target) ? this.applyRider(target, chosen.rider, m, chosen.name) : null;
+      // Retaliation: a berserker hurt from close by strikes back at once.
+      if (this.feat(target, 'retaliation') && this.conscious(target) && !this.incapacitated(target) && this.canReact(target.id) && m.alive && this.mdist(m, target) <= 1 && this.s.phase === 'combat') {
+        this.useReaction(target.id);
+        this.log('roll', this.t`${target.name} retaliates!`);
+        this.strike(target, m, { reaction: true });
+      }
       return { name: chosen.name, target: target.name, hit: true, crit, damage: res.total, targetHp: target.hp, targetDown: res.down || !this.conscious(target), ...(condition ? { condition } : {}) };
     };
     if (chosen.auto) return finish(false, false, this.t`${label} strikes ${target.name} unerringly:`);
@@ -2730,8 +3139,12 @@ export class Game {
     const prone = target.conditions.includes('prone');
     const held = (target.effects ?? []).some((e) => e.sourceId === m.id && (e.condition === 'grappled' || e.also === 'grappled'));
     const edge = chosen.advIf === 'grappled' ? held : chosen.advIf === 'wounded' ? target.hp < target.maxHp : chosen.advIf === 'first_round' ? this.s.combat?.round === 1 : false;
-    const adv = pack || seen.adv || edge || EXPOSED.some((x) => target.conditions.includes(x)) || (prone && dist <= 5) || (!!def.flags?.bloodiedFury && m.hp * 2 <= m.maxHp);
-    const dis = seen.dis || target.conditions.includes('dodging') || (prone && dist > 5) || (!!chosen.ranged && (adjacentFoe || dist > chosen.range));
+    // Elusive: nothing gives an attacker advantage against a rogue who can still act.
+    const elusive = this.feat(target, 'elusive') && !this.incapacitated(target);
+    const adv = !elusive && (pack || seen.adv || edge || target.conditions.includes('reckless') || EXPOSED.some((x) => target.conditions.includes(x)) || (prone && dist <= 5) || (!!def.flags?.bloodiedFury && m.hp * 2 <= m.maxHp));
+    const dis = seen.dis || target.conditions.includes('dodging') || target.conditions.includes('invisible') || (prone && dist > 5) || (!!chosen.ranged && (adjacentFoe || dist > chosen.range))
+      || ['frightened', 'poisoned', 'rattled'].some((x) => this.mHas(m, x))
+      || (this.feat(target, 'defensive_tactics') && !!this.s.combat?.once?.includes(`${m.id}:hit:${target.id}`));
     const mode = rollMode(adv, dis);
     const r = d20(this.rng, mode);
     const total = r.value + chosen.toHit;
@@ -2744,15 +3157,590 @@ export class Game {
       this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
       return { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false };
     }
+    // Cutting Words: a bard nearby spends inspiration to turn the hit into a miss, when the die could do it.
+    const bard = r.value === 20 ? undefined : this.s.characters.find((b) => this.feat(b, 'cutting_words') && this.conscious(b) && !this.incapacitated(b) && this.canReact(b.id) && this.left(b, 'inspiration') > 0
+      && this.mdist(m, b) <= 12 && total - inspirationDie(b) < ac);
+    if (bard) {
+      const die = rollDie(inspirationDie(bard), this.rng);
+      this.spendUse(bard, 'inspiration');
+      this.useReaction(bard.id);
+      if (total - die < ac) {
+        this.log('roll', this.t`${head} ${bard.name}'s Cutting Words take ${die} off the roll: Miss.`, { roll: info('miss') });
+        return { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false };
+      }
+      this.log('roll', this.t`${bard.name}'s Cutting Words take ${die} off the roll, but the blow still lands.`);
+    }
+    this.once(`${m.id}:hit:${target.id}`);
     // A hit on a paralysed or sleeping hero from right next to them is a critical hit.
     const crit = r.value === 20 || (dist <= 5 && (target.conditions.includes('paralyzed') || target.conditions.includes('asleep')));
     return finish(crit, mode === 'advantage', head, info);
   }
 
+  // ---------------------------------------------------------- class features
+  // What the twelve classes can do beyond attacking and casting. The tables are in
+  // shared/classes.ts; this is where the engine applies them.
+
+  private feat(c: Character, id: string) { return hasFeature(c, id); }
+  private opted(c: Character, id: string) { return !!c.options?.includes(id); }
+  private left(c: Character, res: string) { return resourceLeft(c, res); }
+  private spendUse(c: Character, res: string, n = 1) { (c.uses ??= {})[res] = (c.uses[res] ?? 0) + n; }
+  private regain(c: Character, res: string, n: number) { if (c.uses?.[res]) c.uses[res] = Math.max(0, c.uses[res] - n); }
+  private mod(c: Character, k: AbilityKey) { return abilityMod(c.abilities[k]); }
+  /** The DC of a class feature: 8 + proficiency + the ability behind it. */
+  private dcOf(c: Character, k: AbilityKey) { return 8 + c.profBonus + this.mod(c, k); }
+
+  /** True the first time it is asked on a turn; the feature is then used up until the next turn begins. */
+  private once(key: string): boolean {
+    const combat = this.s.combat;
+    if (!combat) return true;
+    if ((combat.once ??= []).includes(key)) return false;
+    combat.once.push(key);
+    return true;
+  }
+  private primed(key: string) { return !!this.s.combat?.primed?.includes(key); }
+  private prime(key: string) { const combat = this.s.combat; if (combat && !this.primed(key)) (combat.primed ??= []).push(key); }
+  private unprime(key: string) { const combat = this.s.combat; if (combat?.primed) combat.primed = combat.primed.filter((x) => x !== key); }
+  private canReact(id: string) { return !this.s.combat?.reacted?.includes(id); }
+  private useReaction(id: string) { const combat = this.s.combat; if (combat) (combat.reacted ??= []).push(id); }
+
+  /** Temporary hit points never add up: the larger amount stays. */
+  private giveTemp(c: Character, n: number) { c.tempHp = Math.max(c.tempHp ?? 0, n); }
+
+  private wornKinds(c: Character) {
+    const armor = c.equipment.armor ? this.def(c.equipment.armor.defId).armor?.category : undefined;
+    const shield = !!c.equipment.offHand && this.def(c.equipment.offHand.defId).kind === 'shield';
+    return { armor, shield };
+  }
+
+  /** Paladins whose aura reaches this hero and who have the given aura feature. */
+  private auras(c: Character, feature: string): Character[] {
+    return this.s.characters.filter((p) => p.classId === 'paladin' && this.feat(p, feature) && this.conscious(p)
+      && (p.id === c.id || this.s.phase !== 'combat' || cheb(p, c) <= (this.feat(p, 'aura_expansion') ? 6 : 2)));
+  }
+
+  /** Everything about a hero that follows from class, level, options and gear. Run after any of them changes, and when a save is loaded. */
+  private refresh(c: Character) {
+    c.uses ??= {};
+    c.options ??= [];
+    c.tempHp ??= 0;
+    c.form ??= null;
+    c.mark ??= null;
+    c.profBonus = profBonusFor(c.level);
+    c.subclass = c.level >= SUBCLASS_LEVEL ? CLASSES[c.classId].subclass.name : null;
+    const max = maxManaOf(c);
+    if (max !== c.maxMana) { c.mana = Math.max(0, Math.min(max, c.mana + Math.max(0, max - c.maxMana))); c.maxMana = max; }
+    for (const id of [...classAbilities(c.classId, c.level), ...c.options.flatMap((o) => OPTIONS[o]?.grants ?? [])]) if (!c.abilityIds.includes(id)) c.abilityIds.unshift(id);
+    // Class feature lines are rebuilt from the tables, so old saves read like new heroes.
+    const names = new Set([...CLASS_IDS.flatMap((id) => CLASS_FEATURES[id].map((f) => f.name)), ...Object.values(OPTIONS).map((o) => o.name), 'Empowered Cantrips']);
+    const others = c.features.filter((line) => !names.has(line.split(':')[0]));
+    c.features = [...classFeatureLines(c.classId, c.level), ...c.options.filter((o) => OPTIONS[o]).map((o) => optionLine(OPTIONS[o])), ...others];
+    const land: Record<string, string> = { land_arid: 'fire', land_polar: 'cold', land_temperate: 'lightning', land_tropical: 'poison' };
+    c.resist = [...new Set([
+      ...(SPECIES[c.speciesId]?.resist ?? []),
+      ...c.options.filter((o) => o.startsWith('aff_') || o.startsWith('res_')).map((o) => o.slice(4)),
+      ...(this.feat(c, 'natures_ward') ? c.options.filter((o) => land[o]).map((o) => land[o]) : []),
+    ])];
+    const worn = this.wornKinds(c);
+    const form = c.form ? BEAST_FORMS[c.form] : undefined;
+    c.speed = form ? form.speed : (SPECIES[c.speciesId]?.speed ?? 30) + speedBonus(c, worn);
+    c.ac = this.computeAc(c);
+  }
+
+  /** Skills, styles and options a hero could still pick for a group. */
+  private pickable(c: Character, group: string, from?: string[]): string[] {
+    if (group === 'style') return Object.keys(STYLES).filter((id) => !c.feats.includes(`style_${id}`));
+    if (group === 'expertise') return c.skills.filter((s) => !c.expertise.includes(s) && (!from || from.includes(s)));
+    if (group === 'lore') return Object.keys(SKILLS).filter((s) => !c.skills.includes(s));
+    return optionsFor(c, group).map((o) => o.id);
+  }
+
+  /** Queue the choices the class has granted and the hero has not made yet. Returns what to announce. */
+  private reconcile(c: Character): string[] {
+    const out: string[] = [];
+    for (const [group, g] of Object.entries(grantedChoices(c.classId, c.level))) {
+      const waiting = c.pending.filter((p) => p.kind === 'option' && p.group === group).reduce((n, p) => n + (p.kind === 'option' ? p.count : 0), 0);
+      const count = Math.min(g.count - chosenIn(c, group) - waiting, this.pickable(c, group, g.from).length);
+      if (count <= 0) continue;
+      c.pending.push({ id: this.uid('ch'), kind: 'option', level: c.level, group, count, ...(g.from ? { from: g.from } : {}) });
+      out.push(this.t`Choose: ${this.n(GROUPS[group]?.name ?? group)}`);
+    }
+    return out;
+  }
+
+  private takeOption(c: Character, group: string, id: string) {
+    if (group === 'style') {
+      c.feats.push(`style_${id}`);
+      c.features.push(STYLES[id].feature);
+      this.log('system', this.t`${c.name} takes ${this.n(STYLES[id].name)}.`);
+    } else if (group === 'expertise') {
+      c.expertise.push(id);
+      this.log('system', this.t`${c.name} gains Expertise in ${this.n(id)}.`);
+    } else if (group === 'lore') {
+      c.skills.push(id);
+      (c.options ??= []).push('lore');
+      this.log('system', this.t`${c.name} becomes proficient in ${this.n(id)}.`);
+    } else {
+      (c.options ??= []).push(id);
+      this.log('system', this.t`${c.name} takes ${this.n(OPTIONS[id].name)}.`);
+    }
+  }
+
+  /** Initiative, with the features that sharpen it. */
+  private heroInitiative(c: Character) {
+    const adv = this.feat(c, 'remarkable_athlete') || this.feat(c, 'feral_instinct');
+    return this.heroD20(c, adv ? 'advantage' : 'normal').value + this.mod(c, 'dex') + (c.feats.includes('alert') ? c.profBonus : 0);
+  }
+
+  /** What rolling initiative sets off: resources that come back, and powers that start with a fight. */
+  private enterFight(c: Character) {
+    const back = (feature: string, res: string, when: boolean, to?: number) => {
+      if (!this.feat(c, feature) || !when) return;
+      c.uses![res] = to === undefined ? 0 : Math.max(0, resourceMax(c, res) - to);
+      this.log('roll', this.t`${c.name}: ${this.n(CLASS_FEATURES[c.classId].find((f) => f.id === feature)!.name)} restores ${this.n(RESOURCES[res].name)}.`);
+    };
+    c.uses ??= {};
+    delete c.uses.fate;
+    if (this.left(c, 'persistent_rage') > 0 && this.left(c, 'rage') === 0 && this.feat(c, 'persistent_rage')) { back('persistent_rage', 'rage', true); this.spendUse(c, 'persistent_rage'); }
+    back('superior_inspiration', 'inspiration', this.left(c, 'inspiration') < 2, 2);
+    back('archdruid', 'wild_shape', this.left(c, 'wild_shape') === 0, 1);
+    back('perfect_focus', 'focus', this.left(c, 'focus') <= 3, 4);
+    if (this.feat(c, 'uncanny_metabolism') && this.left(c, 'uncanny_metabolism') > 0 && this.left(c, 'focus') * 2 < resourceMax(c, 'focus')) {
+      this.spendUse(c, 'uncanny_metabolism');
+      c.uses.focus = 0;
+      const healed = this.healChar(c, roll(`1d${martialDie(c)}`, this.rng).total + c.level);
+      this.log('roll', this.t`${c.name}'s Uncanny Metabolism restores all focus and ${healed} HP.`);
+    }
+    if (this.opted(c, 'inv_vigor')) this.giveTemp(c, 12);
+  }
+
+  /** When the fight is over, what lasted "until the fight ends" is gone. */
+  private leaveFight(c: Character) {
+    const gone = ['raging', 'reckless', 'sacred weapon', 'innate sorcery', 'superior defense', 'holy nimbus', 'invisible'];
+    c.conditions = c.conditions.filter((x) => !gone.includes(x));
+    c.mark = null;
+    if (c.uses) { delete c.uses._veil; delete c.uses.fate; }
+    if (c.form) { c.form = null; this.refresh(c); }
+  }
+
+  // -------------------------------------------------- conditions on monsters
+
+  private syncMonster(m: Monster) {
+    const own = m.conditions.filter((x) => !MONSTER_CONDITIONS.includes(x));
+    m.conditions = [...own, ...new Set((m.effects ?? []).map((e) => e.condition))];
+  }
+
+  private mHas(m: Monster, condition: string) { return (m.effects ?? []).some((e) => e.condition === condition); }
+  /** Stunned, dazed or turned: it loses its turn and cannot react. */
+  private mHelpless(m: Monster) { return (m.effects ?? []).some((e) => MONSTER_SKIPS.includes(e.condition)); }
+
+  /** Put a condition on a monster, unless its kind is immune to it. */
+  private afflict(m: Monster, condition: string, e: Omit<MonsterEffect, 'condition'> = {}): boolean {
+    if (!m.alive) return false;
+    const def = MONSTERS[m.defId];
+    const immune = def.conditionImmune ?? [];
+    if (immune.includes(condition) || (condition === 'turned' && immune.includes('frightened')) || (condition === 'incapacitated' && immune.includes('stunned'))) {
+      this.log('roll', this.t`${m.name} cannot be ${this.n(condition)}.`);
+      return false;
+    }
+    const had = this.mHas(m, condition);
+    m.effects = [...(m.effects ?? []).filter((x) => x.condition !== condition), { condition, ...e }];
+    this.syncMonster(m);
+    if (!had) this.log('roll', this.t`${m.name} is now ${this.n(condition)}.`);
+    return true;
+  }
+
+  private liftMonster(m: Monster, which: (e: MonsterEffect) => boolean) {
+    const gone = (m.effects ?? []).filter(which);
+    if (!gone.length) return;
+    m.effects = (m.effects ?? []).filter((e) => !gone.includes(e));
+    this.syncMonster(m);
+    if (m.alive) this.log('roll', this.t`${m.name} is no longer ${gone.map((e) => this.n(e.condition)).join(', ')}.`);
+  }
+
+  /** A monster's saving throw against a hero's feature, with Magic Resistance and Legendary Resistance. */
+  private monsterSave(m: Monster, ability: AbilityKey, dc: number, against: string, opts: { spell?: boolean; dis?: boolean } = {}): boolean {
+    const def = MONSTERS[m.defId];
+    const save = this.n(ability.toUpperCase());
+    if ((ability === 'str' || ability === 'dex') && (this.mHas(m, 'stunned') || this.mHas(m, 'paralyzed'))) {
+      this.log('roll', this.t`${m.name} cannot resist ${against}: the ${save} save fails automatically.`);
+      return false;
+    }
+    const mod = def.saves[ability] ?? 0;
+    const mode = rollMode(!!def.flags?.magicResistance && !!opts.spell, !!opts.dis);
+    const r = d20(this.rng, mode);
+    const total = r.value + mod;
+    let ok = total >= dc;
+    const info: RollInfo = { actor: m.name, label: this.t`${save} save against ${against}`, die: r.value, rolls: r.rolls, mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: ok ? 'success' : 'failure' };
+    this.log('roll', this.t`${m.name}: ${save} save against ${against}, ${this.d20Text(r, mode)}${signed(mod)} = ${total} vs DC ${dc}. ${ok ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
+    if (!ok && (m.legRes ?? def.flags?.legendaryResistance ?? 0) > 0) {
+      m.legRes = (m.legRes ?? def.flags!.legendaryResistance!) - 1;
+      this.log('roll', this.t`${m.name} fails the save but shrugs it off with Legendary Resistance (${m.legRes} left).`);
+      ok = true;
+    }
+    return ok;
+  }
+
+  /** Shove a monster straight away from a point, as far as the ground allows. */
+  private pushMonster(m: Monster, from: Pt, feet: number) {
+    const centre = this.mcentre(m);
+    const sx = Math.sign(Math.round(centre.x - from.x)), sy = Math.sign(Math.round(centre.y - from.y));
+    if ((!sx && !sy) || !m.alive) return;
+    const path: Pt[] = [];
+    for (let i = 0; i < Math.floor(feet / 5); i++) {
+      const next = { x: m.x + sx, y: m.y + sy };
+      if (this.monsterBlocked(next, m)) break;
+      m.x = next.x; m.y = next.y; path.push(next);
+    }
+    if (path.length) {
+      this.moves.push({ id: m.id, path });
+      this.log('roll', this.t`${m.name} is hurled ${path.length * 5} ft back.`);
+    }
+  }
+
+  /** Damage of several types against one monster. Returns what got through, as text and in total. */
+  private hitParts(m: Monster, parts: { amount: number; type: string }[], pierce = false) {
+    const dealt: { amount: number; type: string }[] = [];
+    let note = '';
+    for (const p of parts) {
+      if (p.amount <= 0) continue;
+      const res = this.damageMonster(m, p.amount, p.type, pierce);
+      const same = dealt.find((d) => d.type === p.type);
+      if (same) same.amount += res.dealt; else dealt.push({ amount: res.dealt, type: p.type });
+      if (res.note && !note.includes(res.note)) note += res.note;
+    }
+    return { total: dealt.reduce((n, p) => n + p.amount, 0), text: this.dmgText(dealt.length ? dealt : [{ amount: 0, type: parts[0]?.type ?? 'bludgeoning' }]), note };
+  }
+
+  /** How a class resource is paid for, or why it cannot be. */
+  private resPlan(c: Character, ab: AbilityDef): () => void {
+    const res = ab.id === 'innate_sorcery' ? 'innate_sorcery' : ab.resource;
+    if (!res) return () => {};
+    const n = ab.resourceCost ?? 1;
+    if (ab.id.startsWith('meta_') && this.feat(c, 'arcane_apotheosis') && c.conditions.includes('innate sorcery') && !this.s.combat?.once?.includes(`${c.id}:apotheosis`)) return () => { this.once(`${c.id}:apotheosis`); };
+    if (this.left(c, res) >= n) return () => this.spendUse(c, res, n);
+    if (res === 'wild_shape' && this.feat(c, 'wild_resurgence') && c.mana >= 2) return () => { c.mana -= 2; };
+    if (res === 'innate_sorcery' && this.feat(c, 'sorcery_incarnate') && this.left(c, 'sorcery') >= 2) return () => this.spendUse(c, 'sorcery', 2);
+    throw new GameError(this.t`${c.name} has no ${this.n(RESOURCES[res].name)} left`);
+  }
+
+  /** The highest total a dice expression can show. */
+  private maxDice(expr: string, crit = false) {
+    const m = /^(\d+)d(\d+)([+-]\d+)?$/.exec(expr.replace(/\s+/g, ''));
+    return m ? Number(m[1]) * (crit ? 2 : 1) * Number(m[2]) + Number(m[3] ?? 0) : 0;
+  }
+
+  /** Damage of a spell or cantrip with everything a caster's features add to it. */
+  private spellDmg(c: Character, ab: AbilityDef, dice: string, crit = false): number {
+    const isSpell = ab.spellLevel !== undefined;
+    const one = () => (isSpell && this.primed(`${c.id}:overchannel`) ? this.maxDice(dice, crit) : roll(dice, this.rng, crit).total);
+    let n = one();
+    if (isSpell && this.primed(`${c.id}:empowered`)) n = Math.max(n, one());
+    if (!isSpell) return n;
+    if (this.feat(c, 'empowered_evocation')) n += Math.max(0, this.mod(c, 'int'));
+    if (ab.spellLevel === 0 && this.opted(c, 'fury_spellcasting') && this.feat(c, 'elemental_fury')) n += Math.max(0, this.mod(c, 'wis'));
+    if (ab.damageType && this.opted(c, `aff_${ab.damageType}`)) n += Math.max(0, this.mod(c, 'cha'));
+    if (ab.id === 'eldritch_blast' && this.opted(c, 'inv_agonizing')) n += Math.max(0, this.mod(c, 'cha'));
+    if (ab.spellLevel === 0 && this.feat(c, 'blessed_strikes') && this.once(`${c.id}:blessed`)) n += roll(this.feat(c, 'improved_blessed_strikes') ? '2d8' : '1d8', this.rng).total;
+    return n;
+  }
+
+  /** A class feature on the action bar. `spend` takes the action and pays for it once the use is certain. */
+  private classAbility(c: Character, ab: AbilityDef, targetId: string | undefined, spend: () => void, range: number) {
+    const combat = this.s.combat;
+    const inCombat = this.s.phase === 'combat' && !!combat;
+    const needFight = () => { if (!inCombat) throw new GameError(this.t`${this.n(ab.name)} is only useful in combat`); };
+    const name = this.n(ab.name);
+    const buff = (condition: string, text: string) => {
+      needFight();
+      if (c.conditions.includes(condition)) throw new GameError(this.t`${name} is already active`);
+      spend();
+      c.conditions.push(condition);
+      this.log('roll', text);
+    };
+    const ally = (reach: number, self = true) => {
+      const t = this.char(targetId ?? c.id);
+      if (t.dead) throw new GameError(this.t`${t.name} is beyond healing`);
+      if (!self && t.id === c.id) throw new GameError(this.t`Choose an ally`);
+      if (inCombat && cheb(c, t) * 5 > Math.max(5, reach)) throw new GameError(this.t`${t.name} is too far away`);
+      return t;
+    };
+    const near = (feet: number) => this.s.monsters.filter((m) => m.alive && this.mdist(m, c) * 5 <= feet);
+    const primeIt = (key: string, text: string) => { needFight(); if (this.primed(`${c.id}:${key}`)) throw new GameError(this.t`${name} is already active`); spend(); this.prime(`${c.id}:${key}`); this.log('roll', text); };
+    const sparkDice = `${1 + (c.level >= 7 ? 1 : 0) + (c.level >= 13 ? 1 : 0) + (c.level >= 18 ? 1 : 0)}d8`;
+
+    switch (ab.id) {
+      case 'rage': {
+        if (this.wornKinds(c).armor === 'heavy') throw new GameError(this.t`${c.name} cannot rage in heavy armor`);
+        buff('raging', this.t`${c.name} flies into a rage!`);
+        if (this.feat(c, 'instinctive_pounce')) combat!.movementLeft += Math.floor(c.speed / 10);
+        if (this.feat(c, 'mindless_rage')) this.endEffects(c, (e) => e.condition === 'charmed' || e.condition === 'frightened');
+        break;
+      }
+      case 'reckless': buff('reckless', this.t`${c.name} attacks recklessly.`); break;
+      case 'brutal_strike': {
+        if (!c.conditions.includes('reckless')) throw new GameError(this.t`${name} needs a Reckless Attack first`);
+        primeIt('brutal', this.t`${c.name} winds up a Brutal Strike.`);
+        break;
+      }
+      case 'intimidating_presence': {
+        needFight();
+        spend();
+        this.log('roll', this.t`${c.name} lets out a terrible roar.`);
+        const dc = this.dcOf(c, 'str');
+        for (const m of near(30)) if (!this.monsterSave(m, 'wis', dc, name)) this.afflict(m, 'frightened', { turns: 10, save: { ability: 'wis', dc } });
+        break;
+      }
+      case 'bardic_inspiration': {
+        const t = ally(60, false);
+        if (!this.conscious(t)) throw new GameError(this.t`${t.name} cannot hear it`);
+        spend();
+        t.inspired = inspirationDie(c);
+        this.log('roll', this.t`${c.name} inspires ${t.name}: a d${t.inspired} waits for the next attack or save that fails.`);
+        break;
+      }
+      case 'divine_spark_heal': {
+        const t = ally(30);
+        if (t.hp >= t.maxHp) throw new GameError(this.t`${t.name} is already at full health`);
+        spend();
+        const healed = this.healChar(t, roll(sparkDice, this.rng).total + this.mod(c, 'wis'));
+        this.log('roll', this.t`${c.name}'s Divine Spark restores ${healed} HP to ${t.name}.`);
+        break;
+      }
+      case 'divine_spark_harm': {
+        const m = this.targetMonster(c, targetId ?? '', range);
+        this.mustSee(c, m);
+        spend();
+        const ok = this.monsterSave(m, 'con', this.dcOf(c, 'wis'), name);
+        const full = roll(sparkDice, this.rng).total + this.mod(c, 'wis');
+        const res = this.damageMonster(m, ok ? Math.floor(full / 2) : full, 'radiant');
+        this.log('roll', this.t`${c.name}'s Divine Spark sears ${m.name} for ${res.dealt} ${this.n('radiant damage')}.${res.note}`);
+        break;
+      }
+      case 'turn_undead': {
+        needFight();
+        const undead = near(30).filter((m) => MONSTERS[m.defId].type === 'undead');
+        if (!undead.length) throw new GameError(this.t`There are no undead within 30 ft`);
+        spend();
+        this.log('roll', this.t`${c.name} presents the holy symbol and speaks a prayer against the undead.`);
+        const dc = this.dcOf(c, 'wis');
+        for (const m of undead) {
+          if (this.monsterSave(m, 'wis', dc, name)) continue;
+          if (this.feat(c, 'sear_undead')) {
+            const res = this.damageMonster(m, roll(`${Math.max(1, this.mod(c, 'wis'))}d8`, this.rng).total, 'radiant');
+            this.log('roll', this.t`${m.name} is seared for ${res.dealt} ${this.n('radiant damage')}.${res.note}`);
+          }
+          this.afflict(m, 'turned', { turns: 10, onHurt: true });
+        }
+        break;
+      }
+      case 'preserve_life': {
+        const hurt = this.s.characters.filter((t) => !t.dead && t.hp * 2 < t.maxHp && (!inCombat || cheb(c, t) <= 6)).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+        if (!hurt.length) throw new GameError(this.t`Nobody nearby is below half their hit points`);
+        spend();
+        let pool = 5 * c.level;
+        const done: string[] = [];
+        for (const t of hurt) {
+          if (pool <= 0) break;
+          const healed = this.healChar(t, Math.min(pool, Math.floor(t.maxHp / 2) - t.hp));
+          pool -= healed;
+          if (healed) done.push(`${t.name} +${healed}`);
+        }
+        this.log('roll', this.t`${c.name} channels life into the wounded: ${done.join(', ')} HP.`);
+        break;
+      }
+      case 'wild_shape_wolf': case 'wild_shape_black_bear': case 'wild_shape_dire_wolf': case 'wild_shape_brown_bear': {
+        const id = ab.id.replace('wild_shape_', '');
+        if (c.form === id) throw new GameError(this.t`${name} is already active`);
+        spend();
+        c.form = id;
+        this.giveTemp(c, c.level);
+        this.refresh(c);
+        this.log('roll', this.t`${c.name} takes the shape of a ${this.n(BEAST_FORMS[id].name)} (AC ${c.ac}, ${c.level} temporary HP).`);
+        break;
+      }
+      case 'revert_form': {
+        if (!c.form) throw new GameError(this.t`${c.name} is not in beast form`);
+        spend();
+        c.form = null;
+        this.refresh(c);
+        this.log('roll', this.t`${c.name} returns to their own shape.`);
+        break;
+      }
+      case 'lands_aid': {
+        const first = this.targetMonster(c, targetId ?? '', range);
+        spend();
+        const dice = c.level >= 14 ? '4d6' : c.level >= 10 ? '3d6' : '2d6';
+        const full = roll(dice, this.rng).total;
+        this.log('roll', this.t`Thorns and vines burst from the ground around ${first.name}.`);
+        for (const m of this.s.monsters.filter((x) => x.alive && cheb(x, first) <= 1)) {
+          const ok = this.monsterSave(m, 'con', this.dcOf(c, 'wis'), name);
+          const res = this.damageMonster(m, ok ? Math.floor(full / 2) : full, 'necrotic');
+          this.log('roll', this.t`${m.name} takes ${res.dealt} ${this.n('necrotic damage')}.${res.note}`);
+        }
+        const t = this.s.characters.filter((x) => !x.dead && x.hp < x.maxHp && cheb(c, x) <= 12).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (t) this.log('roll', this.t`The land restores ${this.healChar(t, roll(dice, this.rng).total)} HP to ${t.name}.`);
+        break;
+      }
+      case 'martial_strike': case 'flurry_of_blows': {
+        const m = this.targetMonster(c, targetId ?? '', 5);
+        spend();
+        const n = ab.id === 'martial_strike' ? 1 : this.feat(c, 'heightened_focus') ? 3 : 2;
+        for (let i = 0; i < n; i++) {
+          const t = m.alive ? m : this.s.monsters.find((o) => o.alive && this.mdist(o, c) <= 1);
+          if (!t || this.s.phase !== 'combat') break;
+          this.strike(c, t, { unarmed: true, flurry: n > 1 });
+        }
+        break;
+      }
+      case 'patient_defense': {
+        needFight();
+        spend();
+        if (!c.conditions.includes('dodging')) c.conditions.push('dodging');
+        combat!.disengaged = true;
+        if (this.feat(c, 'heightened_focus')) this.giveTemp(c, roll(`2d${martialDie(c)}`, this.rng).total);
+        this.log('roll', this.t`${c.name} settles into Patient Defense.`);
+        break;
+      }
+      case 'step_of_the_wind': {
+        needFight();
+        spend();
+        combat!.movementLeft += Math.floor(c.speed / 5);
+        combat!.disengaged = true;
+        this.log('roll', this.t`${c.name} moves with the Step of the Wind, gaining ${c.speed} ft of movement.`);
+        break;
+      }
+      case 'stunning_strike': {
+        needFight();
+        if (combat!.once?.includes(`${c.id}:stunned`)) throw new GameError(this.t`${name} can be used once per turn`);
+        primeIt('stun', this.t`${c.name} gathers focus for a Stunning Strike.`);
+        this.once(`${c.id}:stunned`);
+        break;
+      }
+      case 'wholeness_of_body': {
+        if (c.hp >= c.maxHp) throw new GameError(this.t`${c.name} is already at full health`);
+        spend();
+        const healed = this.healChar(c, roll(`1d${martialDie(c)}`, this.rng).total + Math.max(1, this.mod(c, 'wis')));
+        this.log('roll', this.t`${c.name} uses ${name} and regains ${healed} HP.`);
+        break;
+      }
+      case 'quivering_palm': primeIt('palm', this.t`${c.name} readies the Quivering Palm.`); break;
+      case 'superior_defense': buff('superior defense', this.t`${c.name} hardens body and mind against all harm.`); break;
+      case 'lay_on_hands': {
+        const t = ally(5);
+        const pool = this.left(c, 'lay_on_hands');
+        const cures = ['poisoned', ...(this.feat(c, 'restoring_touch') ? ['blinded', 'charmed', 'deafened', 'frightened', 'paralyzed', 'stunned'] : [])];
+        const sick = (t.effects ?? []).some((e) => cures.includes(e.condition));
+        const amount = Math.min(pool, t.maxHp - t.hp);
+        if (amount <= 0 && !sick) throw new GameError(pool <= 0 ? this.t`${c.name} has no ${this.n('Lay on Hands')} left` : this.t`${t.name} is already at full health`);
+        spend();
+        const healed = amount > 0 ? this.healChar(t, amount) : 0;
+        this.spendUse(c, 'lay_on_hands', healed);
+        this.log('roll', this.t`${c.name} lays hands on ${t.name}, restoring ${healed} HP (${this.left(c, 'lay_on_hands')} left in the pool).`);
+        this.endEffects(t, (e) => cures.includes(e.condition));
+        break;
+      }
+      case 'divine_smite': {
+        needFight();
+        const m = this.s.monsters.find((x) => x.id === combat!.lastHit && x.alive);
+        if (!m) throw new GameError(this.t`${name} follows a melee hit of yours this turn`);
+        spend();
+        combat!.lastHit = null;
+        const res = this.damageMonster(m, roll(['undead', 'fiend'].includes(MONSTERS[m.defId].type) ? '3d8' : '2d8', this.rng).total, 'radiant');
+        this.log('roll', this.t`${c.name} smites ${m.name} for ${res.dealt} ${this.n('radiant damage')}.${res.note}`);
+        break;
+      }
+      case 'sacred_weapon': buff('sacred weapon', this.t`${c.name}'s weapon blazes with sacred light.`); break;
+      case 'abjure_foes': {
+        needFight();
+        spend();
+        this.log('roll', this.t`${c.name} raises the holy symbol against the enemy.`);
+        const dc = this.dcOf(c, 'cha');
+        for (const m of near(60).sort((a, b) => this.mdist(a, c) - this.mdist(b, c)).slice(0, Math.max(1, this.mod(c, 'cha')))) {
+          if (!this.monsterSave(m, 'wis', dc, name)) this.afflict(m, 'frightened', { turns: 10, onHurt: true });
+        }
+        break;
+      }
+      case 'holy_nimbus': buff('holy nimbus', this.t`${c.name} is wreathed in a holy nimbus.`); break;
+      case 'hunters_mark': case 'hex': {
+        const m = this.targetMonster(c, targetId ?? '', range);
+        this.mustSee(c, m);
+        spend();
+        c.mark = { monsterId: m.id, spell: ab.id };
+        this.log('roll', ab.id === 'hex' ? this.t`${c.name} lays a hex on ${m.name}.` : this.t`${c.name} marks ${m.name} as prey.`);
+        break;
+      }
+      case 'tireless': {
+        spend();
+        this.giveTemp(c, roll('1d8', this.rng).total + Math.max(1, this.mod(c, 'wis')));
+        this.log('roll', this.t`${c.name} shakes off weariness and has ${c.tempHp} temporary HP.`);
+        break;
+      }
+      case 'natures_veil': {
+        buff('invisible', this.t`${c.name} fades from sight.`);
+        c.uses!._veil = 2;
+        break;
+      }
+      case 'steady_aim': {
+        needFight();
+        if (combat!.moved) throw new GameError(this.t`${name} only works before you move`);
+        primeIt('aim', this.t`${c.name} takes careful aim.`);
+        combat!.movementLeft = 0;
+        break;
+      }
+      case 'cunning_trip': primeIt('trip', this.t`${c.name} looks for a chance to trip the target.`); break;
+      case 'cunning_poison': primeIt('poison', this.t`${c.name} readies a poisoned strike.`); break;
+      case 'cunning_daze': primeIt('daze', this.t`${c.name} readies a dazing strike.`); break;
+      case 'innate_sorcery': buff('innate sorcery', this.t`${c.name}'s innate magic flares up.`); break;
+      case 'font_of_magic': {
+        if (c.mana >= c.maxMana) throw new GameError(this.t`${c.name}'s mana is already full`);
+        spend();
+        c.mana = Math.min(c.maxMana, c.mana + 2);
+        this.log('roll', this.t`${c.name} turns sorcery points into mana (now ${c.mana}).`);
+        break;
+      }
+      case 'meta_quickened': primeIt('quickened', this.t`${c.name} quickens the next spell.`); break;
+      case 'meta_empowered': primeIt('empowered', this.t`${c.name} empowers the next spell.`); break;
+      case 'meta_heightened': primeIt('heightened', this.t`${c.name} heightens the next spell.`); break;
+      case 'meta_distant': primeIt('distant', this.t`${c.name} stretches the reach of the next spell.`); break;
+      case 'magical_cunning': {
+        if (inCombat) throw new GameError(this.t`${name} takes a minute of quiet`);
+        if (c.mana >= c.maxMana) throw new GameError(this.t`${c.name}'s mana is already full`);
+        spend();
+        c.mana = this.feat(c, 'eldritch_master') ? c.maxMana : Math.min(c.maxMana, c.mana + Math.ceil(c.maxMana / 2));
+        this.log('roll', this.t`${c.name} performs an esoteric rite and has ${c.mana} mana again.`);
+        break;
+      }
+      case 'hurl_through_hell': primeIt('hurl', this.t`${c.name} opens a rift to the lower planes.`); break;
+      case 'overchannel': primeIt('overchannel', this.t`${c.name} draws more power than is wise.`); break;
+      default: throw new GameError(this.t`${c.name} doesn't know that`);
+    }
+  }
+
+  // ------------------------------------------------- defences of the heroes
+
+  /** Damage a hero resists by a feature or a state, beyond the species' own resistances. */
+  private resists(c: Character, type: string): boolean {
+    if (c.resist.includes(type)) return true;
+    if (c.conditions.includes('raging') && ['bludgeoning', 'piercing', 'slashing'].includes(type)) return true;
+    if (c.conditions.includes('superior defense') && type !== 'force') return true;
+    if (c.feats.includes('boon_night_spirit') && this.s.phase === 'combat' && type !== 'psychic' && type !== 'radiant' && this.lightAt(c) !== 'bright') return true;
+    return false;
+  }
+
+  /** A hero who cannot be given this condition, and why. */
+  private wards(c: Character, condition?: string): string | null {
+    if (!condition) return null;
+    if ((condition === 'charmed' || condition === 'frightened') && c.conditions.includes('raging') && this.feat(c, 'mindless_rage')) return 'Mindless Rage';
+    if (condition === 'charmed' && this.auras(c, 'aura_of_devotion').length) return 'Aura of Devotion';
+    if (condition === 'frightened' && this.auras(c, 'aura_of_courage').length) return 'Aura of Courage';
+    if (condition === 'poisoned' && this.feat(c, 'natures_ward')) return "Nature's Ward";
+    return null;
+  }
+
   // -------------------------------------------------------------- inventory
 
   private proficient(c: Character, def: ItemDef): boolean {
-    return isProficient(c.classId, def);
+    return isProficient(c, def);
   }
 
   private slotFor(def: ItemDef): SlotId | null {
@@ -2875,7 +3863,7 @@ export class Game {
     if (cheb(c, t) > 1) throw new GameError(this.t`${t.name} is too far away`);
     if (t.hp >= t.maxHp) throw new GameError(this.t`${t.name} is already at full health`);
     // A thief's Fast Hands: potions only cost the bonus action.
-    const fast = c.classId === 'rogue' && c.level >= 3;
+    const fast = this.feat(c, 'fast_hands');
     this.canAct(fast);
     this.spendAction(fast);
     const healed = this.healChar(t, roll(def.consumable.heal, this.rng).total);
@@ -2898,7 +3886,23 @@ export class Game {
         healed = this.healChar(c, Math.max(1, roll(`1d${CLASSES[c.classId].hitDie}`, this.rng).total + abilityMod(c.abilities.con)));
       }
       c.spent = [];
-      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, c.classId === 'wizard' && c.level >= 2 ? 3 : 2) : 0;
+      c.inspired = undefined;
+      // Class resources: some come back whole, some one use at a time.
+      for (const [id, used] of Object.entries(c.uses ?? {})) {
+        const def = RESOURCES[id];
+        if (!def || !used) continue;
+        if (def.rest === 'short' || (id === 'inspiration' && this.feat(c, 'font_of_inspiration'))) c.uses![id] = 0;
+        else if (def.shortGain) this.regain(c, id, def.shortGain);
+      }
+      if (c.uses) delete c.uses._relentless;
+      // A warlock's pact magic returns in full. Others recover a little, and once per long rest a caster's recovery feature adds more.
+      let back = c.classId === 'warlock' ? c.maxMana : 2;
+      if (this.left(c, 'recovery') > 0 && (c.mana < c.maxMana || this.feat(c, 'sorcerous_restoration'))) {
+        this.spendUse(c, 'recovery');
+        if (this.feat(c, 'sorcerous_restoration')) this.regain(c, 'sorcery', Math.floor(c.level / 2));
+        else back += c.level;
+      }
+      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, back) : 0;
       c.mana += mana;
       parts.push(this.t`${c.name} +${healed} HP` + (mana ? this.t`, +${mana} mana` : ''));
     }
@@ -2927,6 +3931,9 @@ export class Game {
       c.mana = c.maxMana;
       c.hitDice = c.level;
       c.spent = [];
+      c.uses = {};
+      c.tempHp = 0;
+      c.inspired = undefined;
       c.conditions = c.conditions.filter((x) => x !== 'mage armor');
       c.ac = this.computeAc(c);
     }
@@ -3167,15 +4174,31 @@ export class Game {
     const c = this.char(characterId);
     if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
     const name = skill.trim().toLowerCase();
-    const prof = c.skills.includes(name) ? c.profBonus * (c.expertise.includes(name) ? 2 : 1) : 0;
-    const mod = abilityMod(c.abilities[ability]) + prof;
-    const r = this.heroD20(c, c.conditions.includes('poisoned') ? 'disadvantage' : 'normal').value;
-    const total = r + mod;
-    const success = total >= dc;
+    const proficient = c.skills.includes(name);
+    // Jack of All Trades: half proficiency where there is none.
+    const prof = proficient ? c.profBonus * (c.expertise.includes(name) ? 2 : 1) : this.feat(c, 'jack_of_all_trades') ? Math.floor(c.profBonus / 2) : 0;
+    let mod = abilityMod(c.abilities[ability]) + prof;
+    if ((this.opted(c, 'order_thaumaturge') && ['arcana', 'religion'].includes(name)) || (this.opted(c, 'primal_magician') && ['arcana', 'nature'].includes(name))) mod += Math.max(1, this.mod(c, 'wis'));
+    const adv = (name === 'athletics' && this.feat(c, 'remarkable_athlete')) || (ability === 'str' && c.conditions.includes('raging'));
+    const mode = rollMode(adv, c.conditions.includes('poisoned'));
+    let r = this.heroD20(c, mode).value;
+    // Reliable Talent: a practised rogue never rolls below 10.
+    if (proficient && this.feat(c, 'reliable_talent') && r < 10) r = 10;
+    let total = r + mod;
+    if (ability === 'str' && this.feat(c, 'indomitable_might')) total = Math.max(total, c.abilities.str);
+    let success = total >= dc;
     const skillName = name ? this.n(name) : '';
     const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
-    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode: 'normal', modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
+    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
     this.log('roll', this.t`${c.name}: ${label}, ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
+    // Peerless Skill: a failed check gets an inspiration die, spent only if it turns the result.
+    if (!success && this.feat(c, 'peerless_skill') && this.left(c, 'inspiration') > 0) {
+      const die = rollDie(inspirationDie(c), this.rng);
+      total += die;
+      success = total >= dc;
+      if (success) this.spendUse(c, 'inspiration');
+      this.log('roll', this.t`${c.name}: ${this.n('Peerless Skill')} adds ${die}, ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`);
+    }
     return { character: c.name, roll: r, modifier: mod, total, dc, success };
   }
 

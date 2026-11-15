@@ -2,6 +2,7 @@
 // for the live preview and the server uses the very same code to build the hero, so what
 // the preview shows is what the player gets.
 import { ABILITIES, ITEMS, SKILLS } from './content';
+import { BEAST_FORMS, GROUPS, OPTIONS, grantedChoices, hasFeature, manaFor, martialDie, optionLine } from './classes';
 import { BACKGROUNDS, CLASSES, FEATS, KITS, SPECIES, SPELL_LISTS, STYLES, effectLine, maxSpellLevel, type L } from './rules';
 import { abilityMod, type Abilities, type AbilityKey, type CharacterSpec, type ClassId, type FeatPick, type ItemDef, type SlotId } from './types';
 
@@ -33,6 +34,8 @@ export interface Build {
   abilityIds: string[];
   feats: string[];
   features: string[];
+  /** Class options chosen so far: a Divine Order, invocations, metamagic. */
+  options?: string[];
 }
 
 export interface Sheet extends Build {
@@ -57,47 +60,94 @@ export function castingAbility(c: { classId: ClassId; abilities: Abilities }): A
   return (['int', 'wis', 'cha'] as AbilityKey[]).reduce((best, k) => (c.abilities[k] > c.abilities[best] ? k : best), 'int' as AbilityKey);
 }
 
-export function isProficient(classId: ClassId, def: ItemDef): boolean {
-  const cls = CLASSES[classId];
-  if (def.kind === 'weapon') return cls.weaponProf.includes(def.weapon!.category) || !!cls.weaponProfIds?.some((id) => (def.story?.baseId ?? def.id).startsWith(id));
-  if (def.kind === 'armor') return cls.armorProf.includes(def.armor!.category);
+type Who = { classId: ClassId; options?: string[] };
+
+export function isProficient(who: ClassId | Who, def: ItemDef): boolean {
+  const c: Who = typeof who === 'string' ? { classId: who } : who;
+  const cls = CLASSES[c.classId];
+  const has = (o: string) => !!c.options?.includes(o);
+  const martial = has('order_protector') || has('primal_warden');
+  if (def.kind === 'weapon') {
+    return cls.weaponProf.includes(def.weapon!.category) || martial || (has('inv_blade') && !def.weapon!.ranged)
+      || !!cls.weaponProfIds?.some((id) => (def.story?.baseId ?? def.id).startsWith(id));
+  }
+  if (def.kind === 'armor') return cls.armorProf.includes(def.armor!.category) || (def.armor!.category === 'heavy' && has('order_protector')) || (def.armor!.category === 'medium' && has('primal_warden'));
   if (def.kind === 'shield') return cls.armorProf.includes('shield');
   return true;
 }
 
-/** Armor class from what is worn, plus the Defense style and Mage Armor. */
-export function armorClass(c: { abilities: Abilities; feats: string[]; conditions?: string[] }, worn: Partial<Record<SlotId, ItemDef | null | undefined>>): number {
+type Wearer = { abilities: Abilities; feats: string[]; conditions?: string[]; classId?: ClassId; level?: number; options?: string[]; form?: string | null };
+
+/** Armor class from what is worn, plus the Defense style, Mage Armor and the unarmored defenses of some classes. */
+export function armorClass(c: Wearer, worn: Partial<Record<SlotId, ItemDef | null | undefined>>): number {
+  if (c.form && BEAST_FORMS[c.form]) return BEAST_FORMS[c.form].ac;
   const dex = abilityMod(c.abilities.dex);
   const armor = worn.armor?.armor;
-  let ac = armor ? armor.baseAc + (armor.dexCap === null ? dex : Math.min(dex, armor.dexCap)) : (c.conditions?.includes('mage armor') ? 13 : 10) + dex;
+  let ac: number;
+  if (armor) ac = armor.baseAc + (armor.dexCap === null ? dex : Math.min(dex, armor.dexCap));
+  else {
+    const who = c.classId ? { classId: c.classId, level: c.level ?? 1 } : null;
+    const shield = Object.values(worn).some((d) => d?.kind === 'shield');
+    ac = 10 + dex;
+    if (c.conditions?.includes('mage armor') || c.options?.includes('inv_armor')) ac = 13 + dex;
+    if (who?.classId === 'barbarian' && hasFeature(who, 'unarmored_defense')) ac = Math.max(ac, 10 + dex + abilityMod(c.abilities.con));
+    if (who?.classId === 'monk' && hasFeature(who, 'unarmored_defense') && !shield) ac = Math.max(ac, 10 + dex + abilityMod(c.abilities.wis));
+    if (who && hasFeature(who, 'draconic_resilience')) ac = Math.max(ac, 10 + dex + abilityMod(c.abilities.cha));
+  }
   for (const def of Object.values(worn)) ac += def?.acBonus ?? 0;
   if (armor && c.feats.includes('style_defense')) ac += 1;
   return ac;
 }
 
-/** The weapon attack a hero makes with what they hold: bonus to hit and damage. */
-export function weaponAttack(c: { classId: ClassId; abilities: Abilities; feats: string[]; profBonus: number }, def: ItemDef | null | undefined) {
+/** Weapons a monk fights with as if they were fists: simple melee weapons, and the light blades monks train with. */
+export const isMonkWeapon = (def: ItemDef) => !!def.weapon && !def.weapon.ranged && !def.weapon.twoHanded
+  && (def.weapon.category === 'simple' || ['shortsword', 'scimitar'].some((id) => (def.story?.baseId ?? def.id).startsWith(id)));
+
+type Attacker = { classId: ClassId; abilities: Abilities; feats: string[]; profBonus: number; level?: number; options?: string[]; form?: string | null };
+
+/** The weapon attack a hero makes with what they hold: bonus to hit and damage. `dice` are the damage dice alone. */
+export function weaponAttack(c: Attacker, def: ItemDef | null | undefined) {
+  const form = c.form ? BEAST_FORMS[c.form] : undefined;
+  if (form) {
+    const a = form.attacks[0];
+    return { name: a.name, bonus: Math.max(a.toHit, 0), damage: a.damage, dice: a.damage, type: a.type, mod: 0, flat: 0, toHit: 0 };
+  }
   const wp = def?.weapon;
   const str = abilityMod(c.abilities.str), dex = abilityMod(c.abilities.dex);
-  if (!def || !wp) return { name: 'Unarmed strike', bonus: str + c.profBonus, damage: String(Math.max(1, 1 + str)), type: 'bludgeoning', mod: str, flat: 0, toHit: 0 };
-  const mod = wp.ranged ? dex : wp.finesse ? Math.max(str, dex) : str;
+  const die = c.classId === 'monk' ? martialDie({ classId: c.classId, level: c.level ?? 1 }) : 0;
+  if (!def || !wp) {
+    if (die) {
+      const m = Math.max(str, dex);
+      return { name: 'Unarmed strike', bonus: m + c.profBonus, damage: `1d${die}${m ? (m > 0 ? `+${m}` : m) : ''}`, dice: `1d${die}`, type: 'bludgeoning', mod: m, flat: 0, toHit: 0 };
+    }
+    return { name: 'Unarmed strike', bonus: str + c.profBonus, damage: String(Math.max(1, 1 + str)), dice: '', type: 'bludgeoning', mod: str, flat: 0, toHit: 0 };
+  }
+  const monk = die > 0 && isMonkWeapon(def);
+  let mod = wp.ranged ? dex : wp.finesse || monk ? Math.max(str, dex) : str;
+  if (c.options?.includes('inv_blade') && !wp.ranged) mod = Math.max(mod, abilityMod(c.abilities.cha));
+  const sides = Number(/^1d(\d+)$/.exec(wp.damage)?.[1] ?? 99);
+  const dice = monk && sides < die ? `1d${die}` : wp.damage;
   const toHit = wp.ranged && c.feats.includes('style_archery') ? 2 : 0;
   const flat = !wp.ranged && !wp.twoHanded && c.feats.includes('style_dueling') ? 2 : 0;
-  const bonus = mod + (isProficient(c.classId, def) ? c.profBonus : 0) + (wp.bonus ?? 0) + toHit;
+  const bonus = mod + (isProficient(c, def) ? c.profBonus : 0) + (wp.bonus ?? 0) + toHit;
   const plus = mod + (wp.bonus ?? 0) + flat;
-  return { name: def.name, bonus, damage: `${wp.damage}${plus ? (plus > 0 ? `+${plus}` : plus) : ''}`, type: wp.damageType, mod, flat, toHit };
+  return { name: def.name, bonus, damage: `${dice}${plus ? (plus > 0 ? `+${plus}` : plus) : ''}`, dice, type: wp.damageType, mod, flat, toHit };
 }
 
 /** Spells of a list the hero could still learn. */
-export function spellOptions(c: { abilityIds: string[]; level: number }, list: 'wizard' | 'cleric', pool: 'cantrip' | 'spell', maxLevel = maxSpellLevel(c.level)): string[] {
+export function spellOptions(c: { abilityIds: string[]; level: number }, list: ClassId, pool: 'cantrip' | 'spell', maxLevel = maxSpellLevel(list, c.level)): string[] {
   const levels = pool === 'cantrip' ? [0] : Array.from({ length: maxLevel }, (_, i) => i + 1);
-  return levels.flatMap((l) => SPELL_LISTS[list][l] ?? []).filter((id) => !c.abilityIds.includes(id));
+  return levels.flatMap((l) => SPELL_LISTS[list]?.[l] ?? []).filter((id) => !c.abilityIds.includes(id));
 }
 
-export const classSpellList = (classId: ClassId): 'wizard' | 'cleric' | null => (classId === 'wizard' || classId === 'cleric' ? classId : null);
+export const classSpellList = (classId: ClassId): ClassId | null => (SPELL_LISTS[classId] ? classId : null);
+
+/** Mana of a rested hero: the class table, plus 2 for each Magic Initiate feat. */
+export const maxManaOf = (c: { classId: ClassId; level: number; feats: string[] }) =>
+  manaFor(c.classId, c.level) + 2 * c.feats.filter((f) => FEATS[f as keyof typeof FEATS]?.spellList).length;
 
 /** What a Magic Initiate pick has to contain for this hero: how many cantrips and spells, and from where. */
-export function initiateNeeds(c: { abilityIds: string[]; level: number }, list: 'wizard' | 'cleric') {
+export function initiateNeeds(c: { abilityIds: string[]; level: number }, list: ClassId) {
   const cantrips = spellOptions(c, list, 'cantrip');
   const spells = spellOptions(c, list, 'spell', 1);
   return { cantrips, spells, needCantrip: cantrips.length ? 1 : 0, needSpell: spells.length ? 1 : 0 };
@@ -120,18 +170,29 @@ export function applyFeat(c: Build, pick: FeatPick, origin: boolean): L | null {
   const def = FEATS[pick?.id];
   if (!def) return L('Choose a feat', 'Wähle ein Talent');
   if (origin && !def.origin) return L('That feat is only available from level 4', 'Dieses Talent gibt es erst ab Stufe 4');
-  if (c.feats.includes(def.id)) return L(`You already have ${def.name}`, `Du hast dieses Talent bereits`);
+  if (def.epic && c.level < 19) return L('Epic boons are only available from level 19', 'Epische Gaben gibt es erst ab Stufe 19');
+  if (def.id !== 'asi' && c.feats.includes(def.id)) return L(`You already have ${def.name}`, `Du hast dieses Talent bereits`);
+  const raise = (next: Abilities) => {
+    const con = abilityMod(next.con) - abilityMod(c.abilities.con);
+    c.abilities = next;
+    c.maxHp += con * c.level;
+    c.hp += con * c.level;
+  };
   if (def.id === 'asi') {
     const ks = pick.abilities ?? [];
     if (ks.length !== 2 || !ks.every((k) => KEYS.includes(k))) return L('Choose which ability scores to raise', 'Wähle, welche Attributswerte du erhöhst');
     const next = { ...c.abilities };
     for (const k of ks) next[k]++;
     if (KEYS.some((k) => next[k] > MAX_SCORE)) return L('An ability score cannot go above 20', 'Ein Attributswert kann nicht über 20 steigen');
-    const con = abilityMod(next.con) - abilityMod(c.abilities.con);
-    c.abilities = next;
-    c.maxHp += con * c.level;
-    c.hp += con * c.level;
+    raise(next);
     return null;
+  }
+  if (def.boost) {
+    const k = pick.abilities?.[0];
+    const cap = def.epic ? 30 : MAX_SCORE;
+    if (!k || pick.abilities!.length !== 1 || !def.boost.includes(k)) return L(`${def.name}: choose the ability score to raise`, 'Wähle, welchen Attributswert du erhöhst');
+    if (c.abilities[k] >= cap) return L(`That ability score cannot go above ${cap}`, `Dieser Attributswert kann nicht über ${cap} steigen`);
+    raise({ ...c.abilities, [k]: c.abilities[k] + 1 });
   }
   if (def.id === 'skilled') {
     const ss = pick.skills ?? [];
@@ -155,6 +216,7 @@ export function applyFeat(c: Build, pick: FeatPick, origin: boolean): L | null {
   return null;
 }
 
+const GROUP_NAMES: Record<string, L> = Object.fromEntries(Object.values(GROUPS).map((g) => [g.id, L(g.name, g.de)]));
 const emptyAbilities = (): Abilities => ({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
 
 /** Everything wrong or still missing in a draft, by wizard step. An empty list means the hero can be created. */
@@ -196,15 +258,23 @@ export function checkSpec(d: Draft, rolled?: number[]): Problem[] {
       if (!d.speciesSkill || !sp.skillChoice.includes(d.speciesSkill) || granted.includes(d.speciesSkill)) bad('skills', `Choose the skill your species grants`, 'Wähle die Fertigkeit, die deine Spezies verleiht');
       else granted.push(d.speciesSkill);
     }
-    if (cls.id === 'rogue') {
+    const exCount = grantedChoices(cls.id, 1).expertise?.count ?? 0;
+    if (exCount) {
       const ex = d.expertise ?? [];
-      if (ex.length !== 2 || !uniq(ex) || !ex.every((s) => granted.includes(s))) bad('skills', 'Choose two of your skills for Expertise', 'Wähle zwei deiner Fertigkeiten für Expertise');
+      if (ex.length !== exCount || !uniq(ex) || !ex.every((s) => granted.includes(s))) bad('skills', 'Choose two of your skills for Expertise', 'Wähle zwei deiner Fertigkeiten für Expertise');
     }
   }
 
   // Talents: fighting style, spells and feats. Built up in order so later picks see earlier ones.
   if (cls && sp && bg) {
-    if (cls.id === 'fighter' && !(d.fightingStyle && STYLES[d.fightingStyle])) bad('talents', 'Choose a fighting style', 'Wähle einen Kampfstil');
+    if (grantedChoices(cls.id, 1).style && !(d.fightingStyle && STYLES[d.fightingStyle])) bad('talents', 'Choose a fighting style', 'Wähle einen Kampfstil');
+    const picked = d.classOptions ?? [];
+    const groups = startGroups(cls.id);
+    for (const [group, n] of groups) {
+      const mine = picked.filter((o) => OPTIONS[o]?.group === group && (OPTIONS[o].minLevel ?? 1) <= 1 && !OPTIONS[o].needs);
+      if (mine.length !== n) bad('talents', `Choose your ${GROUP_NAMES[group]?.en ?? group}`, `Wähle: ${GROUP_NAMES[group]?.de ?? group}`);
+    }
+    if (!uniq(picked) || picked.some((o) => !groups.some(([g]) => OPTIONS[o]?.group === g))) bad('talents', 'Choose your class options again', 'Wähle deine Klassenoptionen erneut');
     const b = startBuild(d, cls.id);
     const list = classSpellList(cls.id);
     if (list) {
@@ -229,6 +299,19 @@ export function checkSpec(d: Draft, rolled?: number[]): Problem[] {
   return out;
 }
 
+/** The option groups a class picks from at level 1, with how many picks each. Styles and expertise have their own fields. */
+export const startGroups = (classId: ClassId): [string, number][] =>
+  Object.entries(grantedChoices(classId, 1)).filter(([g]) => !['style', 'expertise', 'lore'].includes(g)).map(([g, v]) => [g, v.count]);
+
+/** The valid level-1 class options of a draft. */
+export function startOptions(d: Draft, classId: ClassId): string[] {
+  const out: string[] = [];
+  for (const [group, n] of startGroups(classId)) {
+    out.push(...[...new Set(d.classOptions ?? [])].filter((o) => OPTIONS[o]?.group === group && (OPTIONS[o].minLevel ?? 1) <= 1 && !OPTIONS[o].needs).slice(0, n));
+  }
+  return out;
+}
+
 /** The hero before spells and feats: class and species basics with the chosen skills. */
 export function startBuild(d: Draft, classId: ClassId): Build {
   const cls = CLASSES[classId];
@@ -238,12 +321,14 @@ export function startBuild(d: Draft, classId: ClassId): Build {
   for (const [k, n] of Object.entries(boostMap(bg ? d.boosts : []))) abilities[k as AbilityKey] = Math.min(MAX_SCORE, abilities[k as AbilityKey] + (n ?? 0));
   const maxHp = Math.max(1, cls.hitDie + abilityMod(abilities.con) + (sp?.hpPerLevel ?? 0));
   const skills = [...new Set([...(bg?.skills ?? []), ...(d.skills ?? []), ...(sp?.skillChoice && d.speciesSkill ? [d.speciesSkill] : [])])];
-  const abilityIds = [...new Set([...cls.cantrips.fixed, ...(sp?.grants ?? []), ...cls.abilityIds])];
-  const style = cls.id === 'fighter' && d.fightingStyle ? STYLES[d.fightingStyle] : undefined;
+  const options = startOptions(d, classId);
+  const abilityIds = [...new Set([...cls.cantrips.fixed, ...(sp?.grants ?? []), ...options.flatMap((o) => OPTIONS[o].grants ?? []), ...cls.abilityIds])];
+  const style = grantedChoices(classId, 1).style && d.fightingStyle ? STYLES[d.fightingStyle] : undefined;
   return {
     classId, level: 1, abilities, maxHp, hp: maxHp, maxMana: cls.maxMana, mana: cls.maxMana, skills, abilityIds,
     feats: style ? [`style_${style.id}`] : [],
-    features: [...cls.features, ...(style ? [style.feature] : [])],
+    features: [...cls.features, ...(style ? [style.feature] : []), ...options.map((o) => optionLine(OPTIONS[o]))],
+    options,
   };
 }
 
@@ -292,7 +377,7 @@ export function buildSheet(d: Draft): Sheet | null {
     ac: armorClass(b, Object.fromEntries(Object.entries(equipment).map(([slot, id]) => [slot, id ? ITEMS[id] : null]))),
     speed: sp?.speed ?? 30,
     initiative: abilityMod(b.abilities.dex) + (b.feats.includes('alert') ? profBonus : 0),
-    expertise: cls.id === 'rogue' ? (d.expertise ?? []).filter((s) => b.skills.includes(s)) : [],
+    expertise: grantedChoices(cls.id, 1).expertise ? (d.expertise ?? []).filter((s) => b.skills.includes(s)) : [],
     saves: cls.saves,
     resist: [...(sp?.resist ?? [])],
     equipment, bag,

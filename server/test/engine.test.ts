@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sneakDice } from '../../shared/classes';
 import { ITEMS } from '../../shared/content';
 import { TERRAIN, findRoute, summarizeRoute, type TerrainCode } from '../../shared/hex';
 import type { Character, ClassId } from '../../shared/types';
@@ -226,15 +227,15 @@ describe('progression', () => {
     expect(cards[0].levelUp).toMatchObject({ name: fighter.name, level: 2 });
     expect(cards[0].levelUp!.gains.join(' ')).toMatch(/maximum HP.*Action Surge/);
     expect(g.takeBeats()).toEqual([{ kind: 'level_up', heroes: g.s.characters.map((c) => c.name) }]);
-    // Level 5: proficiency +3, the ability score increase from level 4, and the cap holds.
-    g.grantXp(4 * 100000, 'a test');
+    // Level 5: proficiency +3 and the ability score increase from level 4.
+    g.grantXp(4 * 6500, 'a test');
     expect(fighter.level).toBe(5);
     expect(fighter.profBonus).toBe(3);
     expect(fighter.abilities.str).toBe(16);
     expect(fighter.pending).toMatchObject([{ kind: 'feat', level: 4 }]);
     expect(fighter.subclass).toBe('Champion');
-    expect(rogue.features).toContain('Sneak Attack: 3d6');
-    expect(rogue.features).not.toContain('Sneak Attack: 1d6');
+    expect(sneakDice(rogue)).toBe(3);
+    expect(rogue.features.filter((f) => f.startsWith('Sneak Attack')).length).toBe(1);
     expect(fighter.hitDice).toBe(5);
   });
 
@@ -257,7 +258,7 @@ describe('progression', () => {
     expect(() => g.attack('p1', f.id, target())).toThrow(/Action already used/);
     g.useAbility('p1', f.id, 'action_surge');
     g.attack('p1', f.id, target());
-    expect(() => g.useAbility('p1', f.id, 'action_surge')).toThrow(/spent/);
+    expect(() => g.useAbility('p1', f.id, 'action_surge')).toThrow(/no Action Surge left/);
     expect(g.s.log.filter((l) => l.roll?.actor === f.name).length).toBeGreaterThanOrEqual(3);
     expect(g.s.log.find((l) => l.roll?.actor === f.name)!.roll).toMatchObject({ target: { kind: 'AC', value: 8 }, modifier: 7 });
   });

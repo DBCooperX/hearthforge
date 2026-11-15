@@ -57,3 +57,15 @@ export interface HeroEffect {
   /** Set while the monster that caused it is still on the turn it caused it in. */
   skip?: boolean;
 }
+
+/** Powers a hero switches on, shown as chips beside the conditions. */
+export const BUFF_HELP: Record<string, string> = {
+  raging: 'Resists bludgeoning, piercing and slashing damage, hits harder with Strength, advantage on Strength checks and saves. No spells.',
+  reckless: 'Strength-based attacks have advantage, and so do all attacks against you, until your next turn.',
+  'sacred weapon': 'Charisma is added to weapon attack rolls, and the weapon can deal radiant damage.',
+  'innate sorcery': 'Spell save DC +1 and advantage on spell attack rolls.',
+  'superior defense': 'Resists all damage except force.',
+  'holy nimbus': 'Enemies that start their turn close by take radiant damage; advantage on saves against fiends and undead.',
+  invisible: 'Cannot be seen: own attacks have advantage, attacks against you have disadvantage.',
+  
+};

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ABILITIES } from '../../../shared/content';
+import { RESOURCES, hasFeature, resourceLeft } from '../../../shared/classes';
 import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
 import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
@@ -8,6 +9,12 @@ import { useLang, useT } from '../i18n';
 import { dice } from './Guide';
 import { Hint } from '../ui/Hint';
 import { Kbd } from '../ui/Window';
+
+/** Powers that stay on once used, and the chip that shows them. */
+const ACTIVE: Record<string, string> = {
+  rage: 'raging', reckless: 'reckless', sacred_weapon: 'sacred weapon', innate_sorcery: 'innate sorcery',
+  superior_defense: 'superior defense', holy_nimbus: 'holy nimbus', natures_veil: 'invisible', dodge: 'dodging',
+};
 
 export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string } | { kind: 'item'; uid: string } | null;
 
@@ -80,12 +87,31 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
           const ab = ABILITIES[id];
           if (!ab) return null;
           if (!combat) return null;
+          // A druid in beast form sees the way back instead of more shapes.
+          if (id.startsWith('wild_shape_') && actor.form) return null;
+          if (id === 'revert_form' && !actor.form) return null;
           const spent = ab.oncePerRest && actor.spent.includes(id);
-          const used = ab.kind === 'surge' ? !actionUsed : ab.bonusAction ? combat.bonusUsed : actionUsed;
-          const blocked = !canAct || spent || actor.mana < ab.cost || used;
-          const on = targeting?.kind === 'ability' && targeting.abilityId === id;
-          const why = spent ? t('Already used. It comes back after a rest.') : actor.mana < ab.cost ? t('Not enough mana.') : '';
-          const facts = [ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(ab.dice, lang) : '', ab.bonusAction ? t('Bonus action') : ''].filter(Boolean).join(' · ');
+          const used = ab.kind === 'surge' ? !actionUsed : ab.free ? false : ab.bonusAction ? combat.bonusUsed : actionUsed;
+          // Class resources: rages, focus points, Channel Divinity. Some spells have free castings before they cost mana.
+          const pool = id === 'lay_on_hands' ? 'lay_on_hands' : id === 'hunters_mark' ? 'favored_enemy' : id === 'divine_smite' ? 'free_smite' : ab.resource;
+          const left = pool ? resourceLeft(actor, pool) : null;
+          const freeCast = (id === 'hunters_mark' || id === 'divine_smite') && (left ?? 0) > 0;
+          const mana = id === 'hunters_mark' || id === 'divine_smite' ? (freeCast ? 0 : 2) : ab.cost;
+          const dry = left !== null && !mana && left < (ab.resourceCost ?? 1);
+          const isSpell = ab.spellLevel !== undefined;
+          const barred = isSpell && (actor.conditions.includes('raging') || (!!actor.form && !hasFeature(actor, 'beast_spells')));
+          const active = !!ACTIVE[id] && actor.conditions.includes(ACTIVE[id]);
+          const blocked = !canAct || spent || actor.mana < mana || used || dry || barred || active;
+          const on = active || (targeting?.kind === 'ability' && targeting.abilityId === id);
+          const why = spent ? t('Already used. It comes back after a rest.')
+            : barred ? (actor.form ? t('No spells in beast form.') : t('No spells while raging.'))
+            : dry ? t('None left. It comes back after a rest.')
+            : actor.mana < mana ? t('Not enough mana.') : '';
+          const facts = [
+            ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(ab.dice, lang) : '',
+            ab.free ? t('Free') : ab.bonusAction ? t('Bonus action') : '',
+            left !== null && pool && RESOURCES[pool] ? `${t(RESOURCES[pool].name)}: ${left}` : '',
+          ].filter(Boolean).join(' · ');
           return (
             <Hint key={id} title={t(ab.name)} text={<>{t(ab.description)}{facts && <em>{facts}</em>}{why && <em className="warn-line">{why}</em>}</>}>
               <button
@@ -98,16 +124,17 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
                 }}
               >
                 <span className="icon">{ab.icon}</span>{t(ab.name)}
-                {ab.cost > 0 && <span className="cost">{ab.cost}</span>}
+                {mana > 0 && <span className="cost">{mana}</span>}
+                {left !== null && !(mana > 0) && <span className="cost uses">{left}</span>}
               </button>
             </Hint>
           );
         })}
         {actor && combat && (
-          <Hint title={t('Disengage')} text={<>{t('Until the end of your turn, leaving an enemy\'s reach invites no opportunity attack.')}<em>{actor.abilityIds.includes('dash') ? t('Bonus action (Cunning Action)') : t('Action')}</em></>}>
+          <Hint title={t('Disengage')} text={<>{t('Until the end of your turn, leaving an enemy\'s reach invites no opportunity attack.')}<em>{hasFeature(actor, 'cunning_action') ? t('Bonus action (Cunning Action)') : t('Action')}</em></>}>
             <button
               className={combat.disengaged ? 'act on' : 'act'}
-              disabled={!canAct || !!combat.disengaged || (actor.abilityIds.includes('dash') ? combat.bonusUsed && actionUsed : actionUsed)}
+              disabled={!canAct || !!combat.disengaged || (hasFeature(actor, 'cunning_action') ? combat.bonusUsed && actionUsed : actionUsed)}
               data-hotkey={key()}
               onClick={() => conn.send({ t: 'disengage', characterId: actor.id })}
             >

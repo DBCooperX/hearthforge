@@ -83,12 +83,13 @@ export interface ItemDef {
 export type SpeciesId = 'human' | 'dwarf' | 'elf' | 'halfling' | 'gnome' | 'orc' | 'dragonborn' | 'tiefling' | 'goliath';
 export type BackgroundId = 'acolyte' | 'criminal' | 'sage' | 'soldier';
 export const GENDERS: Gender[] = ['female', 'male', 'neutral'];
-export type FeatId = 'asi' | 'alert' | 'savage_attacker' | 'skilled' | 'magic_initiate_cleric' | 'magic_initiate_wizard';
+export type FeatId = 'asi' | 'alert' | 'savage_attacker' | 'skilled' | 'magic_initiate_cleric' | 'magic_initiate_wizard' | 'grappler'
+  | 'boon_combat_prowess' | 'boon_irresistible_offense' | 'boon_spell_recall' | 'boon_fate' | 'boon_truesight' | 'boon_night_spirit' | 'boon_dimensional_travel';
 
 /** A feat together with the sub-choices it asks for. */
 export interface FeatPick {
   id: FeatId;
-  /** Ability Score Improvement: the same ability twice (+2) or two different ones (+1 each). */
+  /** Ability Score Improvement: the same ability twice (+2) or two different ones (+1 each). Grappler and the epic boons: one ability (+1). */
   abilities?: AbilityKey[];
   /** Skilled: three skills. */
   skills?: string[];
@@ -117,6 +118,8 @@ export interface CharacterSpec {
   expertise?: string[];
   /** Fighter: fighting style id. */
   fightingStyle?: string;
+  /** What the class chooses at level 1 besides a fighting style: a cleric's or druid's order, a warlock's invocation. */
+  classOptions?: string[];
   /** Human: the extra origin feat. */
   originFeat?: FeatPick;
   /** Sub-choices of the background's feat. */
@@ -136,9 +139,11 @@ export interface CharacterSpec {
 /** A choice from a level-up that the player still has to make. */
 export type PendingChoice =
   | { id: string; kind: 'feat'; level: number }
-  | { id: string; kind: 'spell'; level: number; pool: 'cantrip' | 'spell' };
+  | { id: string; kind: 'spell'; level: number; pool: 'cantrip' | 'spell' }
+  /** Picks from a group of class options: a fighting style, metamagic, invocations, skills for expertise. */
+  | { id: string; kind: 'option'; level: number; group: string; count: number; from?: string[] };
 
-export type ChoicePick = { feat: FeatPick } | { spell: string };
+export type ChoicePick = { feat: FeatPick } | { spell: string } | { options: string[] };
 
 export interface ItemInstance {
   uid: string;
@@ -146,7 +151,7 @@ export interface ItemInstance {
   qty: number;
 }
 
-export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric';
+export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric' | 'barbarian' | 'bard' | 'druid' | 'monk' | 'paladin' | 'ranger' | 'sorcerer' | 'warlock';
 
 /** A hero's gender. It fixes the pronouns and, in German, the grammatical forms the story uses for them. */
 export type Gender = 'female' | 'male' | 'neutral';
@@ -204,6 +209,18 @@ export interface Character {
   backstory: string;
   /** Level-up choices the player has not made yet. */
   pending: PendingChoice[];
+  /** How much of each class resource is spent: rages, focus points, the Lay on Hands pool. Missing in old saves: nothing. */
+  uses?: Record<string, number>;
+  /** Class options chosen: an order, metamagic, invocations. Fighting styles are feats, expertise is in `expertise`. */
+  options?: string[];
+  /** Temporary hit points: lost before real ones, never healed, gone after a long rest. */
+  tempHp?: number;
+  /** The beast a druid has turned into, as an id of BEAST_FORMS. */
+  form?: string | null;
+  /** A bard's inspiration die waiting to be used: its size. */
+  inspired?: number;
+  /** The enemy marked by Hunter's Mark or Hex. */
+  mark?: { monsterId: string; spell: string } | null;
   premadeId: string | null;
   /** The light this hero holds up, or null. Lit from a torch or lantern in the backpack. */
   light: LightKindId | null;
@@ -250,7 +267,8 @@ export interface MonsterView {
   light: LightKindId | null;
 }
 
-export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward';
+/** `feature` is a class feature with rules of its own; the engine runs it by its id. */
+export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward' | 'feature';
 
 export interface AbilityDef {
   id: string;
@@ -269,6 +287,11 @@ export interface AbilityDef {
   bonusAction?: boolean;
   /** Usable once per rest. */
   oncePerRest?: boolean;
+  /** Takes neither action nor bonus action. */
+  free?: boolean;
+  /** The class resource it spends, as an id of RESOURCES, and how much (1 if left out). */
+  resource?: string;
+  resourceCost?: number;
   /** Spell level: 0 for a cantrip. Absent for things that are not spells. */
   spellLevel?: number;
   /** A successful save still takes half damage. */
@@ -302,6 +325,14 @@ export interface CombatState {
   reacted?: string[];
   /** The acting hero took the Disengage action: leaving reach provokes nothing this turn. */
   disengaged?: boolean;
+  /** Once-per-turn features the acting hero has used this turn. */
+  once?: string[];
+  /** Features the acting hero has readied for the next attack or spell this turn. */
+  primed?: string[];
+  /** The enemy the acting hero last hit in melee this turn, for a Divine Smite. */
+  lastHit?: string | null;
+  /** The acting hero has moved this turn. */
+  moved?: boolean;
   /** An enemy is leaving a hero's reach, and that hero's player decides whether to strike. */
   reaction?: ReactionPrompt | null;
 }
@@ -637,5 +668,5 @@ export function abilityMod(score: number): number {
 }
 
 /** Total experience needed to reach each level; index 0 is level 1. */
-export const XP_THRESHOLDS = [0, 300, 900, 2700, 6500];
+export const XP_THRESHOLDS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 export const MAX_LEVEL = XP_THRESHOLDS.length;

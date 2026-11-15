@@ -323,3 +323,8 @@ ul.plain small { color: var(--muted); }
 .act.small { padding: 6px 10px; font-size: 13px; }
 .act.small .icon { font-size: 15px; }
 .map-legend .light-note { color: #f3c98b; }
+.cost.uses { color: #e8c170; }
+.bar.hp .temp { position: absolute; right: 4px; top: 0; font-size: 10px; color: #bfe3ff; }
+.party .uses, .sheet-uses { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.party .uses span, .sheet-uses span { background: #1c1917; border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; white-space: nowrap; }
+.party .uses span.out, .sheet-uses span.out { opacity: 0.45; }

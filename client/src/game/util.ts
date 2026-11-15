@@ -1,4 +1,4 @@
-import { CONDITION_HELP } from '../../../shared/conditions';
+import { BUFF_HELP, CONDITION_HELP } from '../../../shared/conditions';
 import { movementCosts } from '../../../shared/battlemap';
 import { SPECIES_DARKVISION, canSee, lightGrid, type LightLevel, type Senses } from '../../../shared/light';
 import { distToFootprint, nearestFootprintTile } from '../../../shared/monsterLook';
@@ -111,6 +111,6 @@ export function weaponSummary(state: GameState, c: Character, t: (text: string) 
 
 /** What a condition on a hero does, for the tooltip of its chip. */
 export function conditionHelp(condition: string, t: (text: string) => string): string | undefined {
-  const help = (CONDITION_HELP as Record<string, string>)[condition];
+  const help = (CONDITION_HELP as Record<string, string>)[condition] ?? BUFF_HELP[condition];
   return help ? t(help) : undefined;
 }

@@ -2,6 +2,17 @@
 // so untranslated strings fall back to English instead of breaking.
 import { DE } from './i18n-de';
 import { DE_SRD } from './i18n-de-srd';
+import { DE_CLASSES } from './i18n-de-classes';
+import { CLASS_ABILITIES_DE } from './classAbilities';
+import { CLASS_DE, CLASS_FEATURES, CLASS_IDS, OPTIONS, featureLine, optionLine } from './classes';
+
+/** German for what the class tables generate: feature and option names, their sheet lines, and the class actions. */
+const DE_GENERATED: Record<string, string> = {
+  ...CLASS_DE,
+  ...CLASS_ABILITIES_DE,
+  ...Object.fromEntries(CLASS_IDS.flatMap((id) => CLASS_FEATURES[id]).map((f) => [featureLine(f), `${f.de}: ${f.text.de}`])),
+  ...Object.fromEntries(Object.values(OPTIONS).map((o) => [optionLine(o), `${o.de}: ${o.text.de}`])),
+};
 
 export type Lang = 'en' | 'de';
 export const LANGS: { id: Lang; label: string }[] = [
@@ -10,7 +21,7 @@ export const LANGS: { id: Lang; label: string }[] = [
 ];
 export const isLang = (x: unknown): x is Lang => x === 'en' || x === 'de';
 
-const DICTS: Record<Lang, Record<string, string> | null> = { en: null, de: { ...DE_SRD, ...DE } };
+const DICTS: Record<Lang, Record<string, string> | null> = { en: null, de: { ...DE_GENERATED, ...DE_SRD, ...DE_CLASSES, ...DE } };
 
 /** Translate `text`, filling `{name}` placeholders from `vars`. */
 export function tr(lang: Lang, text: string, vars?: Record<string, string | number>): string {
