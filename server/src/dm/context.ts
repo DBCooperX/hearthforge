@@ -90,13 +90,23 @@ export function genderRoster(game: Game): string {
   return game.s.characters.map((c) => `${c.name}: ${genderNote(c, game.lang)}`).join('; ');
 }
 
+/** Who plays a hero, once more than one player sits at the table, and whether they are there right now. */
+function playedBy(game: Game, c: Character): string {
+  if (game.s.players.length < 2) return '';
+  const p = game.player(c.ownerId);
+  if (!p) return '';
+  return p.connected
+    ? ` Played by ${p.name}.`
+    : ` Played by ${p.name}, who is AWAY from the table right now: keep this hero in the background, safe and with the party, and do not decide, speak or roll for them beyond that.`;
+}
+
 function partyLines(game: Game): string[] {
   return game.s.characters.map((c) => {
     const weapon = c.equipment.mainHand ? game.def(c.equipment.mainHand.defId).name : 'unarmed';
     const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
     const who = `${SPECIES[c.speciesId]?.name ?? ''} ${c.subclass ?? ''} ${c.className}`.replace(/\s+/g, ' ').trim();
     const bag = c.bag.filter((b) => !!b).map((b) => `${game.def(b.defId).name}${b.qty > 1 ? ` ×${b.qty}` : ''}`).join(', ');
-    const line = `- ${c.name} [${c.id}] level ${c.level} ${who} (${BACKGROUNDS[c.backgroundId]?.name ?? 'no'} background), HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.map((s) => (c.expertise.includes(s) ? `${s} (expertise)` : s)).join(', ')}, ${status}. Gender: ${genderNote(c, game.lang)}. Backpack: ${bag || 'empty'}`;
+    const line = `- ${c.name} [${c.id}] level ${c.level} ${who} (${BACKGROUNDS[c.backgroundId]?.name ?? 'no'} background), HP ${c.hp}/${c.maxHp}, AC ${c.ac}, wielding ${weapon}, skilled in ${c.skills.map((s) => (c.expertise.includes(s) ? `${s} (expertise)` : s)).join(', ')}, ${status}. Gender: ${genderNote(c, game.lang)}.${playedBy(game, c)} Backpack: ${bag || 'empty'}`;
     // Story traits are not enforced by the rules engine, so the DM has to honour them.
     const traits = (SPECIES[c.speciesId]?.effects ?? []).filter((e) => e.by === 'story').map((e) => `${e.name}: ${e.text.en}`);
     return [

@@ -14,6 +14,7 @@ import '@fontsource/grenze-gotisch/latin-600.css';
 import './styles.css';
 import './theme.css';
 import './creator.css';
+import './table.css';
 
 // Art packs are optional; never wait long for them.
 void Promise.race([loadArtPack(), new Promise((r) => setTimeout(r, 4000))]).then(() => {

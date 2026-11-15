@@ -12,7 +12,7 @@ import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
 import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
-import type { DungeonMaster, Scene } from './types';
+import type { DungeonMaster, PlayerLine, Scene } from './types';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -413,12 +413,16 @@ export class ClaudeDM implements DungeonMaster {
     return text;
   }
 
-  async respond(game: Game, playerName: string, text: string, onUpdate: () => Promise<void>): Promise<Scene | null> {
+  async respond(game: Game, said: PlayerLine[], onUpdate: () => Promise<void>): Promise<Scene | null> {
     const inCombat = game.s.phase === 'combat';
-    const who = playerHeroes(game, playerName);
+    const one = said.length === 1 ? said[0] : null;
+    const who = one ? `the player ${one.player}${playerHeroes(game, one.player)}` : '';
+    const lines = said.map((l) => `- ${l.player}${playerHeroes(game, l.player)}: ${JSON.stringify(l.text)}`).join('\n');
+    // Several players who answered the same scene get one reply, so nobody is narrated over.
+    const together = `These players act at the same moment, each for their own hero:\n${lines}\n\nResolve all of it in one scene, in whatever order makes sense in the story. Give every one of them a result of their own and about the same weight; do not let the first or the loudest decide for the others. If two of them want things that cannot both happen, let the world settle it (a roll, or a character in the scene reacting) instead of picking a favourite.`;
     const ask = inCombat
-      ? `In the middle of the fight, the player ${playerName}${who} says to you: ${JSON.stringify(text)}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
-      : `The player ${playerName}${who} says or does this: ${JSON.stringify(text)}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. Their message is already shown to everyone, so open with how the world answers it instead of repeating it.`;
+      ? `${one ? `In the middle of the fight, ${who} says to you: ${JSON.stringify(one.text)}` : `In the middle of the fight, several players speak to you:\n${lines}`}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
+      : `${one ? `The player ${one.player}${playerHeroes(game, one.player)} says or does this: ${JSON.stringify(one.text)}` : together}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. ${one ? 'Their message is' : 'Their messages are'} already shown to everyone, so open with how the world answers ${one ? 'it' : 'them'} instead of repeating ${one ? 'it' : 'them'}.`;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;

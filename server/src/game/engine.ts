@@ -16,12 +16,15 @@ import {
   BAG_SIZE,
   GENDERS,
   ITEM_CATEGORIES,
+  JOIN_ERRORS,
+  MAX_SEATS,
   MAX_LEVEL,
   SLOT_IDS,
   XP_THRESHOLDS,
   abilityMod,
   type AbilityKey,
   type Character,
+  type ChatMessage,
   type CharacterSpec,
   type ChoicePick,
   type FeatPick,
@@ -45,6 +48,7 @@ import {
   type RollInfo,
   type SceneMeta,
   type SlotId,
+  type TableInfo,
 } from '../../../shared/types';
 import { CLASSES, MANA_BY_LEVEL, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, type MonsterAttack, type MonsterDef } from '../data/monsters';
@@ -56,6 +60,12 @@ import { POWER, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootpri
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
 
 export class GameError extends Error {}
+/** A refused seat. The message is one of JOIN_ERRORS, in English; the browser translates it. */
+export class JoinError extends GameError {}
+
+const cleanName = (raw: unknown) => String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, 24);
+const sameName = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
+const MAX_CHAT = 200;
 
 export interface Monster {
   id: string;
@@ -115,6 +125,15 @@ export interface InternalState {
   language: Lang;
   /** Ability scores rolled in the character creator, by player id. */
   rolled: Record<string, number[]>;
+  /** Missing in saves from before the lobby. */
+  table: TableInfo;
+  hostId: string | null;
+  /** Hash of each player's secret token, by player id. Whoever presents the token owns the seat. */
+  seats: Record<string, string>;
+  ready: string[];
+  /** Table talk between the players, whispers included. Never part of the public state. */
+  chat: ChatMessage[];
+  chatSeq: number;
 }
 
 export type Beat =
@@ -173,6 +192,13 @@ export class Game {
     const usable = saved && saved.memory && typeof saved.lastLongRest === 'number' && (saved.phase === 'lobby' || saved.world);
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
     this.s.rolled ??= {};
+    // Tables saved before the lobby: open to anyone, run by whoever sat down first.
+    this.s.table ??= { title: room, maxPlayers: MAX_SEATS, code: null };
+    this.s.hostId ??= this.s.players[0]?.id ?? null;
+    this.s.seats ??= {};
+    this.s.ready ??= [];
+    this.s.chat ??= [];
+    this.s.chatSeq ??= 0;
     this.s.items ??= {}; // saves from before story items
     // Heroes saved before the character creator existed get the fields it added.
     for (const c of this.s.characters) {
@@ -214,6 +240,12 @@ export class Game {
       lastLongRest: -100000,
       language,
       rolled: {},
+      table: { title: room, maxPlayers: MAX_SEATS, code: null },
+      hostId: players[0]?.id ?? null,
+      seats: {},
+      ready: [],
+      chat: [],
+      chatSeq: 0,
     };
   }
 
@@ -234,7 +266,7 @@ export class Game {
   /** The host (whoever opened the table) picks the language everyone's story is told in. */
   setLanguage(playerId: string, lang: unknown) {
     if (!isLang(lang)) throw new GameError(this.t`Unknown language`);
-    if (this.s.players[0]?.id !== playerId) throw new GameError(this.t`Only the host can change the language`);
+    if (this.s.hostId !== playerId) throw new GameError(this.t`Only the host can change the language`);
     this.s.language = lang;
   }
 
@@ -375,6 +407,127 @@ export class Game {
     const p = this.s.players.find((p) => p.id === id);
     if (p) { p.name = name || p.name; p.connected = connected; }
     else this.s.players.push({ id, name: name || 'Adventurer', connected });
+    this.s.hostId ??= id;
+  }
+
+  player(id: string) { return this.s.players.find((p) => p.id === id); }
+
+  /**
+   * Sit a player down, or let them back onto the seat they already have. `key` is the hash of
+   * their secret token: the seat belongs to whoever first presented it.
+   */
+  seat(id: string, key: string, rawName: string, code?: string) {
+    const s = this.s;
+    const name = cleanName(rawName);
+    const clash = (n: string) => s.players.some((p) => p.id !== id && sameName(p.name, n));
+    const mine = this.player(id);
+    if (mine) {
+      if (s.seats[id] && s.seats[id] !== key) throw new JoinError(JOIN_ERRORS.seatTaken);
+      s.seats[id] = key;
+      // Coming back never fails over a name: a taken or empty one just keeps the old name.
+      if (name && !clash(name)) mine.name = name;
+      mine.connected = true;
+      return mine;
+    }
+    if (!name) throw new JoinError(JOIN_ERRORS.noName);
+    if (s.table.code && String(code ?? '').trim().toUpperCase() !== s.table.code) throw new JoinError(JOIN_ERRORS.wrongCode);
+    if (s.players.length >= s.table.maxPlayers) throw new JoinError(JOIN_ERRORS.full);
+    if (clash(name)) throw new JoinError(JOIN_ERRORS.nameTaken);
+    const p: PlayerInfo = { id, name, connected: true };
+    s.players.push(p);
+    s.seats[id] = key;
+    if (!s.hostId || !this.player(s.hostId)) s.hostId = id;
+    return p;
+  }
+
+  /** Take a player's seat away. Before the adventure their heroes go with them; later the host looks after them. */
+  unseat(id: string) {
+    const s = this.s;
+    const p = this.player(id);
+    if (!p) return;
+    s.players = s.players.filter((x) => x.id !== id);
+    delete s.seats[id];
+    delete s.rolled[id];
+    s.ready = s.ready.filter((x) => x !== id);
+    if (s.hostId === id) s.hostId = (s.players.find((x) => x.connected) ?? s.players[0])?.id ?? null;
+    const heroes = s.characters.filter((c) => c.ownerId === id);
+    if (s.phase === 'lobby') {
+      s.characters = s.characters.filter((c) => c.ownerId !== id);
+      return;
+    }
+    this.log('system', this.t`${p.name} has left the table.`);
+    const host = s.hostId ? this.player(s.hostId) : undefined;
+    if (host && heroes.length) {
+      for (const c of heroes) c.ownerId = host.id;
+      this.log('system', this.t`${host.name} now plays ${heroes.map((c) => c.name).join(', ')}.`);
+    }
+  }
+
+  requireHost(playerId: string) {
+    if (this.s.hostId !== playerId) throw new GameError(this.t`Only the host can do that`);
+  }
+
+  kick(playerId: string, targetId: string) {
+    this.requireHost(playerId);
+    if (targetId === playerId || !this.player(targetId)) throw new GameError(this.t`No such player at this table`);
+    this.unseat(targetId);
+  }
+
+  makeHost(playerId: string, targetId: string) {
+    this.requireHost(playerId);
+    const target = this.player(targetId);
+    if (!target) throw new GameError(this.t`No such player at this table`);
+    this.s.hostId = target.id;
+    if (this.s.phase !== 'lobby') this.log('system', this.t`${target.name} is now the host of this table.`);
+  }
+
+  /** The host has gone: the player who has sat here longest and is still connected takes over. */
+  handOverHost(): boolean {
+    const s = this.s;
+    const host = s.hostId ? this.player(s.hostId) : undefined;
+    if (host?.connected) return false;
+    const next = s.players.find((p) => p.connected);
+    if (!next) return false;
+    s.hostId = next.id;
+    if (s.phase !== 'lobby') this.log('system', this.t`${next.name} is now the host of this table.`);
+    return true;
+  }
+
+  /** Give the table an invite code, or open it to anyone who can reach the server. */
+  setCode(playerId: string, code: string | null) {
+    this.requireHost(playerId);
+    this.s.table.code = code;
+  }
+
+  setReady(playerId: string, ready: boolean) {
+    const s = this.s;
+    if (s.phase !== 'lobby') throw new GameError(this.t`The adventure has already begun`);
+    if (ready && !s.characters.some((c) => c.ownerId === playerId)) throw new GameError(this.t`Choose a hero before you say you are ready`);
+    s.ready = s.ready.filter((x) => x !== playerId);
+    if (ready) s.ready.push(playerId);
+  }
+
+  /** A player may act for their own heroes, and for those of a player who is away, so a dropped connection never stalls a fight. */
+  mayControl(playerId: string, c: Character): boolean {
+    return c.ownerId === playerId || !this.player(c.ownerId)?.connected;
+  }
+
+  /** Table talk. `toId` makes it a whisper only that player and the sender get to see. */
+  addChat(fromId: string, raw: string, toId?: string): ChatMessage {
+    const from = this.player(fromId);
+    const text = String(raw ?? '').trim().slice(0, 500);
+    if (!from || !text) throw new GameError(this.t`Nothing to say`);
+    const to = toId ? this.player(toId) : undefined;
+    if (toId && (!to || to.id === fromId)) throw new GameError(this.t`No such player at this table`);
+    const msg: ChatMessage = { id: ++this.s.chatSeq, from: from.id, name: from.name, text, to: to?.id ?? null, toName: to?.name ?? null, at: Date.now() };
+    this.s.chat.push(msg);
+    if (this.s.chat.length > MAX_CHAT) this.s.chat.splice(0, this.s.chat.length - MAX_CHAT);
+    return msg;
+  }
+
+  /** The table talk one player is allowed to read. */
+  chatFor(playerId: string): ChatMessage[] {
+    return this.s.chat.filter((m) => !m.to || m.to === playerId || m.from === playerId);
   }
 
   setConnected(id: string, connected: boolean) {
@@ -476,6 +629,7 @@ export class Game {
       premadeId: spec.premadeId && PREMADE_BY_ID[spec.premadeId] ? spec.premadeId : null,
     };
     this.s.characters.push(c);
+    this.s.ready = this.s.ready.filter((x) => x !== playerId);
     return c;
   }
 
@@ -484,9 +638,12 @@ export class Game {
     const c = this.char(characterId);
     if (c.ownerId !== playerId) throw new GameError(this.t`That hero belongs to another player`);
     this.s.characters = this.s.characters.filter((x) => x.id !== characterId);
+    this.s.ready = this.s.ready.filter((x) => x !== playerId);
   }
 
-  start() {
+  /** `playerId` is who asked. Only the host may; without it (tests, scripts) nobody is checked. */
+  start(playerId?: string) {
+    if (playerId !== undefined) this.requireHost(playerId);
     if (this.s.phase !== 'lobby') throw new GameError(this.t`The adventure has already begun`);
     if (!this.s.characters.length) throw new GameError(this.t`Add at least one hero first`);
     const s = this.s;
@@ -511,9 +668,10 @@ export class Game {
     this.beats.push({ kind: 'start' });
   }
 
-  reset() {
-    const players = this.s.players;
-    this.s = Game.freshState(this.s.room, players, this.lang);
+  reset(playerId?: string) {
+    if (playerId !== undefined) this.requireHost(playerId);
+    const { players, table, hostId, seats, chat, chatSeq } = this.s;
+    this.s = { ...Game.freshState(this.s.room, players, this.lang), table, hostId, seats, chat, chatSeq };
     this.beats = [];
     this.moves = [];
   }
@@ -1012,7 +1170,7 @@ export class Game {
   /** Validates that this player may act with this character right now. */
   private actor(playerId: string, characterId: string, needsTurn = true): Character {
     const c = this.char(characterId);
-    if (c.ownerId !== playerId) throw new GameError(this.t`That hero belongs to another player`);
+    if (!this.mayControl(playerId, c)) throw new GameError(this.t`That hero belongs to another player`);
     if (this.s.phase === 'lobby') throw new GameError(this.t`The adventure has not started`);
     if (this.s.phase === 'defeat') throw new GameError(this.t`The party has fallen. Start a new adventure.`);
     if (!this.conscious(c)) throw new GameError(c.dead ? this.t`${c.name} is dead` : this.t`${c.name} is unconscious`);
@@ -1993,7 +2151,7 @@ export class Game {
 
   // ------------------------------------------------------------ public view
 
-  publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null }): GameState {
+  publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean }): GameState {
     const s = this.s;
     const w = s.world;
     return {
@@ -2015,7 +2173,10 @@ export class Game {
       log: s.log.slice(-150),
       players: s.players,
       language: this.lang,
-      hostId: s.players[0]?.id ?? null,
+      hostId: s.hostId,
+      table: s.table,
+      ready: s.ready,
+      gathering: !!dm.gathering,
       rolled: s.rolled,
       world: w && {
         width: w.width,

@@ -132,7 +132,7 @@ describe('Dungeon Master item tools', () => {
       }
       return { stop_reason: 'tool_use', content: [use('s', 'scene', { title: 'In the reeds', mood: 'mystery', narration: 'You pocket the Notched bone splinter.', suggested_actions: [], journal_entry: '', important: false })] };
     } } } };
-    const scene = await dm.respond(g, 'Tester', 'I take the splinter', async () => {});
+    const scene = await dm.respond(g, [{ player: 'Tester', text: 'I take the splinter' }], async () => {});
     expect(scene?.text).toMatch(/splinter/);
     const names = requests[0].tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining(['give_story_item', 'update_story_item', 'take_item']));
@@ -145,7 +145,7 @@ describe('Dungeon Master item tools', () => {
     expect(hero.bag.some((b) => b?.defId === def.id)).toBe(true);
     // In a fight the DM cannot hand out items.
     g.startEncounter([{ defId: 'giant_rat', count: 2 }], { source: 'story', context: 'test' });
-    await dm.respond(g, 'Tester', 'hello', async () => {});
+    await dm.respond(g, [{ player: 'Tester', text: 'hello' }], async () => {});
     expect(requests[requests.length - 1].tools.map((t: any) => t.name)).toEqual(['skill_check', 'scene']);
   });
 });
@@ -189,9 +189,9 @@ describe('strict tool schemas', () => {
       if (req.tools.some((t: any) => t.strict)) throw new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"The compiled grammar is too large, which would cause performance issues."}}');
       return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 's', name: 'scene', input: { title: 'T', mood: 'calm', narration: 'Still here.', suggested_actions: [], journal_entry: '', important: false } }] };
     } } } };
-    expect((await dm.respond(g, 'Tester', 'hello', async () => {}))?.text).toBe('Still here.');
+    expect((await dm.respond(g, [{ player: 'Tester', text: 'hello' }], async () => {}))?.text).toBe('Still here.');
     expect(requests).toHaveLength(2);
-    await dm.respond(g, 'Tester', 'again', async () => {});
+    await dm.respond(g, [{ player: 'Tester', text: 'again' }], async () => {});
     // It remembers, so later turns do not pay for a failed request first.
     expect(requests).toHaveLength(3);
     expect(requests[2].tools.some((t: any) => t.strict)).toBe(false);

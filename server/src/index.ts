@@ -4,13 +4,16 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ClientMessage } from '../../shared/types';
+import { randomBytes } from 'node:crypto';
+import { isLang } from '../../shared/i18n';
+import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { artManifest, artMode, ensureArt } from './art';
 import { AUDIO_TYPES, byteRange, ensureMusic, musicEnabled, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
-import { Room } from './room';
+import { JoinError } from './game/engine';
+import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DATA_DIR = process.env.DATA_DIR ?? resolve('data');
@@ -37,14 +40,78 @@ const store = new Store(DATA_DIR);
 const claude = createDM(process.env);
 const dm = claude ?? new ScriptedDM();
 const rooms = new Map<string, Room>();
+/** Connections looking at the list of tables. */
+const lobby = new Set<WebSocket>();
+/** The table each connection sits at. */
+const seated = new Map<WebSocket, Room>();
 
-function roomFor(raw: string): Room {
-  const name = raw.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'hearth';
-  let room = rooms.get(name);
-  if (!room) {
-    room = new Room(name, dm, store);
-    rooms.set(name, room);
+const num = (raw: string | undefined, fallback: number) => (raw !== undefined && raw !== '' && Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : fallback);
+const TIMING = {
+  turnWaitMs: num(process.env.HEARTHFORGE_TURN_WAIT, DEFAULT_TIMING.turnWaitMs / 1000) * 1000,
+};
+
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // nothing that reads two ways aloud
+function newCode(): string {
+  for (;;) {
+    const code = Array.from(randomBytes(5), (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+    if (![...rooms.values()].some((r) => r.game.s.table.code === code)) return code;
   }
+}
+
+let listTimer: NodeJS.Timeout | null = null;
+const tableList = (): ServerMessage => ({ t: 'tables', tables: [...rooms.values()].map((r) => r.summary()) });
+/** Tell everyone in the lobby that the list of tables changed, at most a few times a second. */
+function pushTables() {
+  if (listTimer) return;
+  listTimer = setTimeout(() => {
+    listTimer = null;
+    const payload = JSON.stringify(tableList());
+    for (const ws of lobby) if (ws.readyState === ws.OPEN) ws.send(payload);
+  }, 150);
+}
+
+const hooks: RoomHooks = {
+  changed: pushTables,
+  detached: (ws) => void seated.delete(ws),
+  closed: (room) => { rooms.delete(room.name); pushTables(); },
+  newCode,
+};
+
+const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
+// Every saved table is listed in the lobby. A table costs nothing until somebody sits down at it.
+for (const id of store.names()) rooms.set(id, openRoom(id));
+
+const tableId = (raw: unknown) => String(raw ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+
+function createTable(msg: Extract<ClientMessage, { t: 'create_table' }>, ws: WebSocket, playerId: string, token: string): Room {
+  const title = String(msg.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!title) throw new JoinError(JOIN_ERRORS.titleNeeded);
+  const base = tableId(title.replace(/\s+/g, '-')) || 'table';
+  let id = base;
+  for (let n = 2; rooms.has(id); n++) id = `${base.slice(0, 28)}-${n}`;
+  const room = openRoom(id);
+  const s = room.game.s;
+  s.table = { title, maxPlayers: Math.min(MAX_SEATS, Math.max(1, Math.round(Number(msg.maxPlayers)) || MAX_SEATS)), code: null };
+  if (isLang(msg.language)) s.language = msg.language;
+  // The founder sits down before the code exists, so they never have to enter their own code.
+  room.join(ws, playerId, token, String(msg.name ?? ''));
+  if (msg.locked) s.table.code = newCode();
+  rooms.set(id, room);
+  room.flush();
+  pushTables();
+  return room;
+}
+
+function findTable(msg: Extract<ClientMessage, { t: 'join' }>): Room {
+  const id = tableId(msg.room);
+  if (id) {
+    const room = rooms.get(id);
+    if (!room) throw new JoinError(JOIN_ERRORS.noTable);
+    return room;
+  }
+  const code = String(msg.code ?? '').trim().toUpperCase();
+  const room = code ? [...rooms.values()].find((r) => r.game.s.table.code === code) : undefined;
+  if (!room) throw new JoinError(JOIN_ERRORS.noCode);
   return room;
 }
 
@@ -122,7 +189,7 @@ const server = createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
 wss.on('connection', (ws: WebSocket) => {
-  let room: Room | null = null;
+  const send = (msg: ServerMessage) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg)); };
   ws.on('message', (data) => {
     let msg: ClientMessage;
     try {
@@ -131,18 +198,42 @@ wss.on('connection', (ws: WebSocket) => {
       return;
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
-    if (msg.t === 'join') {
+    if (msg.t === 'lobby') {
+      seated.get(ws)?.leave(ws);
+      seated.delete(ws);
+      lobby.add(ws);
+      return send(tableList());
+    }
+    if (msg.t === 'join' || msg.t === 'create_table') {
       const playerId = String(msg.playerId ?? '').slice(0, 64);
-      if (!playerId) return;
-      room?.leave(ws);
-      room = roomFor(String(msg.room ?? ''));
-      room.join(ws, playerId, String(msg.name ?? ''));
+      const token = String(msg.token ?? '').slice(0, 128);
+      if (!playerId || token.length < 16) return;
+      try {
+        const before = seated.get(ws);
+        let room: Room;
+        if (msg.t === 'create_table') room = createTable(msg, ws, playerId, token);
+        else {
+          room = findTable(msg);
+          room.join(ws, playerId, token, String(msg.name ?? ''), msg.code);
+        }
+        if (before && before !== room) before.leave(ws);
+        seated.set(ws, room);
+        lobby.delete(ws);
+      } catch (err) {
+        if (!(err instanceof JoinError)) throw err;
+        send({ t: 'error', message: err.message, join: true });
+      }
       return;
     }
-    room?.handle(ws, msg);
+    seated.get(ws)?.handle(ws, msg);
   });
-  ws.on('close', () => room?.leave(ws));
-  ws.on('error', () => room?.leave(ws));
+  const gone = () => {
+    lobby.delete(ws);
+    seated.get(ws)?.leave(ws);
+    seated.delete(ws);
+  };
+  ws.on('close', gone);
+  ws.on('error', gone);
 });
 
 void ensureArt(ART_DIR, ART_MODE, process.env);

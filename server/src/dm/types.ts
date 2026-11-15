@@ -10,6 +10,12 @@ export interface Scene {
   actions: string[];
 }
 
+/** Something a player said or tried, as typed into the story box. */
+export interface PlayerLine {
+  player: string;
+  text: string;
+}
+
 export interface DungeonMaster {
   readonly mode: 'claude' | 'scripted';
   /** Model shown to players: the one used for ordinary narration. */
@@ -21,8 +27,11 @@ export interface DungeonMaster {
    * acts so clients can animate it. Returns narration for the block.
    */
   runMonsters(game: Game, block: Monster[], onAction: () => Promise<void>): Promise<string | null>;
-  /** Respond to something a player says or tries. `onUpdate` is awaited whenever the DM changes the game. */
-  respond(game: Game, playerName: string, text: string, onUpdate: () => Promise<void>): Promise<Scene | null>;
+  /**
+   * Respond to what the players say or try. Several lines mean they acted at the same moment
+   * and get one answer together. `onUpdate` is awaited whenever the DM changes the game.
+   */
+  respond(game: Game, said: PlayerLine[], onUpdate: () => Promise<void>): Promise<Scene | null>;
   /** Background housekeeping, such as condensing old memory. Never throws. */
   maintain(game: Game): Promise<void>;
 }

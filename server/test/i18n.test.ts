@@ -5,7 +5,7 @@ import { ABILITIES, ABILITY_NAMES, CLASS_INFO, ITEMS, SKILLS, SLOT_LABELS } from
 import { COMPASS, TERRAIN, formatHours, formatTime } from '../../shared/hex';
 import { classLabel, hasTranslation, tagged, tr } from '../../shared/i18n';
 import { DE } from '../../shared/i18n-de';
-import { DISPOSITIONS, LOCATION_KINDS, MOODS } from '../../shared/types';
+import { DISPOSITIONS, JOIN_ERRORS, LOCATION_KINDS, MOODS } from '../../shared/types';
 import { LOOK_NAMES } from '../../shared/heroLook';
 import { BACKGROUNDS, CLASS_GUIDE, FEATS, GLOSSARY, KITS, SPECIES, STYLES } from '../../shared/rules';
 import { PREMADES } from '../../shared/premades';
@@ -54,11 +54,13 @@ describe('translations', () => {
     const missing: string[] = [];
     for (const f of files('client/src')) {
       const src = readFileSync(join(root, f), 'utf8');
-      for (const m of src.matchAll(/\bt\('((?:[^'\\]|\\.)*)'/g)) {
+      for (const m of src.matchAll(/\b(?:t|toast)\('((?:[^'\\]|\\.)*)'/g)) {
         const key = m[1].replace(/\\'/g, "'");
         if (!hasTranslation('de', key)) missing.push(`${f}: ${key}`);
       }
     }
+    // Reasons a seat is refused reach the browser in English and are translated there.
+    for (const reason of Object.values(JOIN_ERRORS)) if (!hasTranslation('de', reason)) missing.push(reason);
     expect(missing).toEqual([]);
   });
 

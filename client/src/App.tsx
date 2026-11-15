@@ -5,7 +5,8 @@ import type { Character } from '../../shared/types';
 import { CharacterSheet } from './components/CharacterSheet';
 import { ActionBar, TurnBar, type Targeting } from './components/Hud';
 import { Inventory } from './components/Inventory';
-import { JoinScreen, PartySetup } from './components/Lobby';
+import { ChatPanel, lastForeignChat } from './components/Chat';
+import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
@@ -20,7 +21,7 @@ import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
 import { playerId, useConnection } from './net';
 
-type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | null;
+type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | null;
 
 export function App() {
   const t = useT();
@@ -32,13 +33,26 @@ export function App() {
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
   useMusic(musicContext(state));
 
+  const [chatOpen, setChatOpen] = useState(false);
+  /** The newest message from someone else that this player has had on screen. */
+  const [chatSeen, setChatSeen] = useState(0);
+  const newestChat = lastForeignChat(conn);
+  const chatShown = chatOpen || state?.phase === 'lobby';
+  useEffect(() => { if (chatShown || !state) setChatSeen(newestChat); }, [chatShown, newestChat, !state]);
+  const unread = conn.chat.filter((m) => m.from !== playerId && m.id > chatSeen).length;
+
   const mine = useMemo(() => state?.characters.filter((c) => c.ownerId === playerId) ?? [], [state]);
+  /** My heroes, plus those of players who are away: anyone at the table may act for them so a fight never stalls. */
+  const playable = useMemo(
+    () => state?.characters.filter((c) => c.ownerId === playerId || !state.players.find((p) => p.id === c.ownerId)?.connected) ?? [],
+    [state],
+  );
   const combat = state?.phase === 'combat' ? state.combat : null;
   const activeId = combat?.order[combat.turnIndex]?.id ?? null;
-  const turnChar = mine.find((c) => c.id === activeId) ?? null;
+  const turnChar = playable.find((c) => c.id === activeId) ?? null;
   const selected = state?.characters.find((c) => c.id === selectedId) ?? null;
   /** The hero the player's clicks and buttons control right now. */
-  const actor: Character | null = combat ? turnChar : selected && selected.ownerId === playerId ? selected : null;
+  const actor: Character | null = combat ? turnChar : selected && playable.includes(selected) ? selected : null;
 
   // Follow the turn order: when one of my heroes is up, select them.
   useEffect(() => {
@@ -100,7 +114,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { if (e.key === 'Escape') el.blur(); return; }
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') { if (e.key === 'Escape') el.blur(); return; }
       if (!state || state.phase === 'lobby' || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const toggles: Record<string, Overlay> = { i: 'inventory', c: 'sheet', m: 'map', j: 'journal' };
@@ -130,14 +144,14 @@ export function App() {
     return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)) };
   }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine]);
 
-  if (!state) return <><JoinScreen conn={conn} /><Toasts conn={conn} /></>;
+  if (!state) return <><LobbyScreen conn={conn} /><Toasts conn={conn} /></>;
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} /><Toasts conn={conn} /></>;
 
   let hint: string;
   if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
-  else if (combat && turnChar) hint = `${t("{name}'s turn", { name: turnChar.name })} · ${t('{n} ft of movement', { n: combat.movementLeft * 5 })} · ${combat.actionUsed ? (combat.attacksLeft > 0 ? t('one more attack') : t('action used')) : t('action ready')}`;
+  else if (combat && turnChar) hint = `${turnChar.ownerId === playerId ? t("{name}'s turn", { name: turnChar.name }) : t("{name}'s turn. Their player is away, so anyone may act for them.", { name: turnChar.name })} · ${t('{n} ft of movement', { n: combat.movementLeft * 5 })} · ${combat.actionUsed ? (combat.attacksLeft > 0 ? t('one more attack') : t('action used')) : t('action ready')}`;
   else if (combat) hint = t('Waiting for {name}…', { name: state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
   else hint = '';
 
@@ -150,15 +164,27 @@ export function App() {
       <div className={combat ? 'game fighting' : 'game'}>
         <header className="topbar">
           <h1>Hearthforge</h1>
-          <span className="muted">{t('Table')} {state.room}</span>
+          <button className="link table-name" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>{state.table.title}</button>
           <span className={conn.connected ? 'dot ok' : 'dot'} title={conn.connected ? t('Connected') : t('Reconnecting…')} />
+          {state.players.length > 1 && (
+            <button className="presence" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>
+              {state.players.map((p) => (
+                <span key={p.id} className={p.connected ? 'who here' : 'who'} title={p.connected ? t('At the table') : t('Away')}>{p.name}</span>
+              ))}
+            </button>
+          )}
           <span className="spacer" />
+          {state.table.maxPlayers > 1 && (
+            <button className={unread ? 'link chat-toggle unread' : 'link chat-toggle'} onClick={() => setChatOpen((o) => !o)} title={t('Talk to the other players, out of character')}>
+              {t('Table talk')}{unread > 0 && <span className="badge">{unread}</span>}
+            </button>
+          )}
           <button className="link" onClick={() => setOverlay('sheet')} title={t('Character sheet (c)')}>{t('Character')}</button>
           <button className="link" onClick={() => setOverlay('inventory')} title={t('Inventory (i)')}>{t('Inventory')}</button>
           <button className="link" onClick={() => setOverlay('journal')} title={t('Journal (j)')}>{t('Journal')}</button>
           <MusicControl />
           <LangSwitch />
-          <button className="link" onClick={newAdventure}>{t('New adventure')}</button>
+          {state.hostId === playerId && <button className="link" onClick={newAdventure}>{t('New adventure')}</button>}
         </header>
         <PartyPanel
           state={state}
@@ -185,7 +211,9 @@ export function App() {
               {state.phase === 'defeat' && (
                 <div className="banner defeat">
                   <b>{t('Your party has fallen.')}</b>
-                  <button onClick={() => send({ t: 'reset' })}>{t('New adventure')}</button>
+                  {state.hostId === playerId
+                    ? <button onClick={() => send({ t: 'reset' })}>{t('New adventure')}</button>
+                    : <span className="muted">{t('The host can start a new adventure.')}</span>}
                 </div>
               )}
               <StoryFeed state={state} conn={conn} />
@@ -197,6 +225,25 @@ export function App() {
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} />}
+        {overlay === 'table' && (
+          <div className="overlay" onClick={() => setOverlay(null)}>
+            <div className="panel table-sheet" onClick={(e) => e.stopPropagation()}>
+              <header>
+                <h2>{state.table.title}</h2>
+                <span className="spacer" />
+                <button className="link" onClick={() => setOverlay(null)} aria-label={t('Close')}>✕</button>
+              </header>
+              <Players state={state} conn={conn} />
+              <p className="muted small">{t('A player who is away keeps their seat and their heroes. Until they are back, anyone may play their heroes in a fight, and the Dungeon Master keeps them in the background of the story.')}</p>
+              <Invite state={state} conn={conn} />
+              <div className="row">
+                <button onClick={() => { setOverlay(null); conn.leave(); }} title={t('Your seat and your heroes stay yours. Come back from the list of tables.')}>{t('Back to the tables')}</button>
+                {state.hostId === playerId && <button className="link danger" onClick={() => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) send({ t: 'close_table' }); }}>{t('Close the table')}</button>}
+              </div>
+            </div>
+          </div>
+        )}
+        {chatOpen && state.table.maxPlayers > 1 && <div className="chat-float panel"><ChatPanel state={state} conn={conn} onClose={() => setChatOpen(false)} /></div>}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
         <Toasts conn={conn} />
       </div>
@@ -205,9 +252,11 @@ export function App() {
 }
 
 function Toasts({ conn }: { conn: ReturnType<typeof useConnection> }) {
+  const t = useT();
+  // Messages about the table itself arrive in English; the game's own are already in the story language.
   return (
     <div className="toasts">
-      {conn.toasts.map((t) => <div key={t.id} className="toast">{t.text}</div>)}
+      {conn.toasts.map((x) => <div key={x.id} className="toast">{t(x.text)}</div>)}
     </div>
   );
 }
