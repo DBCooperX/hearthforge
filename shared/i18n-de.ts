@@ -1160,6 +1160,13 @@ export const DE: Record<string, string> = {
   'Chronicle of deeds': 'Chronik der Taten', '{n} entries': '{n} Einträge', 'Still unwritten': 'Noch ungeschrieben',
   'The story so far': 'Die bisherige Geschichte', 'Clues and keepsakes': 'Hinweise und Fundstücke', 'What you know': 'Was ihr wisst',
   'No leads yet. Ask around, or go and look.': 'Noch keine Spur. Hört euch um oder seht selbst nach.',
+  'Clues': 'Hinweise', 'Open questions': 'Offene Fragen', 'Solved': 'Gelöst', 'Unsolved': 'Ungelöst', '{n} clues': '{n} Hinweise', '1 clue': '1 Hinweis',
+  'No clues yet. What you find out about the mysteries of this region is written here.': 'Noch keine Hinweise. Was ihr über die Rätsel dieser Gegend herausfindet, steht hier.',
+  'Present: {names}': 'Anwesend: {names}',
+  'A clue for your journal: {0}': 'Neuer Hinweis im Tagebuch: {0}', 'Solved: {0}': 'Gelöst: {0}',
+  'Name the question this clue belongs to': 'Nenne die Frage, zu der dieser Hinweis gehört',
+  'Describe what the party found out': 'Beschreibe, was die Gruppe herausgefunden hat',
+  'The journal has no room for another open question': 'Im Tagebuch ist kein Platz für eine weitere offene Frage',
   'Yes': 'Ja', 'Not yet': 'Noch nicht', 'Places inside': 'Orte darin', 'People you met here': 'Wen ihr hier getroffen habt',
   'Show on the map': 'Auf der Karte zeigen', 'Found': 'Gefunden', 'Now': 'Jetzt', 'Choose an entry on the left page.': 'Wähle links einen Eintrag.',
   // ---- character sheet and action bar

@@ -233,3 +233,14 @@ ul.plain li { font-size: 14.5px; }
   .music input[type='range'] { width: 60px; }
 }
 @media (prefers-reduced-motion: reduce) { body::after { animation: none !important; } }
+
+/* Where the scene plays, when, and who is there: the line under a scene card's title. */
+.scene .scene-where {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: -4px;
+  font-family: var(--font-story); font-style: italic; font-size: 14.5px; line-height: 1.3; color: var(--ink-soft);
+}
+.scene .scene-where svg { flex: none; opacity: 0.75; }
+.story:not(.compact) .scene .scene-where + p::first-letter {
+  font-family: var(--font-head); font-weight: 600; font-size: 2.9em; line-height: 0.82; float: left; padding: 6px 4px 0 0; color: color-mix(in srgb, var(--mood) 60%, #2a180a);
+}
+.story.compact .scene .scene-where { font-size: 12px; margin-top: -2px; }

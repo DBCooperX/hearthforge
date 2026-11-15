@@ -437,6 +437,12 @@ export interface SceneMeta {
   actions: string[];
   /** Reserved for phase 3: id of a generated image for this scene. */
   imageId: string | null;
+  /** Where the scene plays, such as "Zollhaus, upper floor". Missing in saves from before scene headers. */
+  where?: string;
+  /** Time of day when it played: dawn, morning, afternoon, evening or night. */
+  time?: string;
+  /** The people in the scene besides the heroes. */
+  present?: string[];
 }
 
 /** A d20 roll the server made, with everything needed to show its breakdown. */
@@ -610,11 +616,31 @@ export interface WorldView {
   safe: boolean;
 }
 
+/** Something the party found out, filed under the question it helps to answer. */
+export interface Clue {
+  day: number;
+  text: string;
+  /** Who or what it came from: "Griet Möllner", "the wet coin". */
+  source: string;
+  /** Where the party learned it. */
+  place: string;
+}
+
+/** An open question of the story and everything the party knows about it. */
+export interface Mystery {
+  id: string;
+  question: string;
+  solved: boolean;
+  clues: Clue[];
+}
+
 export interface MemoryView {
   /** People the party has met. */
   npcs: Npc[];
   quests: Quest[];
   deeds: Deed[];
+  /** The open questions of the story, with the clues the party has found. */
+  mysteries: Mystery[];
 }
 
 export interface GameState {

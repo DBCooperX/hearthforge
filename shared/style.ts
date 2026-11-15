@@ -58,7 +58,7 @@ export const TONE_INFO: StyleInfo<Tone>[] = [
     id: 'mysterious', icon: '🔍',
     label: { en: 'Mysterious', de: 'Geheimnisvoll' },
     blurb: { en: 'Secrets, clues and an uneasy sense that something is hidden.', de: 'Geheimnisse, Hinweise und das ungute Gefühl, dass etwas verborgen bleibt.' },
-    prompt: 'Mysterious and uncanny. Plant clues and secrets, let strange details accumulate, reward curiosity and keep some questions unanswered. Build suspense through what is hinted at rather than shown.',
+    prompt: 'Mysterious and uncanny. Plant clues and secrets, reward curiosity and keep some questions unanswered. Let strange details build up over the session, one at a time and always against a clear, ordinary scene, and build suspense through what is hinted at rather than shown.',
   },
 ];
 

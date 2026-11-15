@@ -2,7 +2,7 @@ import { itemArtUrl } from '../game/itemArt';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
-import type { GameState, LogEntry, RollInfo } from '../../../shared/types';
+import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl } from '../game/monsterArt';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
@@ -11,6 +11,7 @@ import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
 import { tr } from '../../../shared/i18n';
 import { classLabel } from '../game/util';
+import { Icon } from '../ui/icons';
 
 // ------------------------------------------------------------- entities
 
@@ -222,7 +223,10 @@ function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean
     case 'dm':
       return (
         <article className={`scene mood-${entry.scene?.mood ?? 'plain'} ${animate ? 'enter' : ''}`}>
-          {entry.scene && <header><span className="mood-dot" />{entry.scene.title}<small>{t(entry.scene.mood)}</small></header>}
+          {entry.scene && (
+            <header><span className="mood-dot" />{entry.scene.title}<small>{t(entry.scene.mood)}</small></header>
+          )}
+          {entry.scene?.where && <SceneStage scene={entry.scene} />}
           {entry.text.split(/\n{2,}/).map((p, i) => <p key={i}><RichText text={p} /></p>)}
         </article>
       );
@@ -240,6 +244,19 @@ function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean
     default:
       return <p className="line system"><RichText text={entry.text} /></p>;
   }
+}
+
+/** Where a scene plays, when, and who is there besides the heroes: the line under a scene card's title. */
+function SceneStage({ scene }: { scene: SceneMeta }) {
+  const t = useT();
+  const parts = [scene.where!, ...(scene.time ? [t(scene.time)] : [])];
+  return (
+    <div className="scene-where">
+      <Icon name="pin" size={14} />
+      <span>{parts.join(' · ')}</span>
+      {scene.present && scene.present.length > 0 && <span className="present">· <RichText text={t('Present: {names}', { names: scene.present.join(', ') })} /></span>}
+    </div>
+  );
 }
 
 interface FeedProps {

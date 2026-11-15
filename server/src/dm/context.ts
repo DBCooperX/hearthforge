@@ -49,7 +49,17 @@ Running the game
 
 Writing scenes
 - End every turn by calling the scene tool. It is the only way your narration reaches the players.
-- Keep narration short and concrete: two to five sentences, at most two brief paragraphs, in plain text without markdown. Players already see dice results, so show what the numbers looked like in the fiction instead of repeating them.
+- Keep narration short and concrete: two to five sentences, at most two brief paragraphs (three when people talk), in plain text without markdown. Players already see dice results, so show what the numbers looked like in the fiction instead of repeating them.
+
+Telling a story the players can follow
+You are a game master at a table, not the author of a literary mystery. The players only know what is on their screen, and they must always be able to say where they are, who is with them, who is talking and what they have learned. Clarity comes first; atmosphere is the seasoning.
+- Stage every scene. When the heroes arrive somewhere, step into another room or out of the door, say so plainly in the first sentence: are they outside or inside, upstairs or down, at the counter or by the fire, and who is there. Never leave the players guessing whether they have arrived yet. When the place or the people in it change, also call set_stage, so the header above the scene shows it.
+- Write dialogue like a well-made role-playing game: before or around every line of speech, say who speaks and how they move and sound. 'Griet stops at the door, turns halfway and says quietly: "…"'. Give each speaker their own paragraph, and name the speaker when a paragraph starts.
+- Use a pronoun only when the person it means was named in the same or the sentence before, and no one else in the scene would fit it. Never use a pronoun or "the one who" for someone the heroes have not met or who is not in the scene ("when she comes back"). Name them, or say who they are.
+- Explain what the heroes would plainly know. Locals know their town's history, everyone knows a trade's common sign, and a hero's background or class may explain more. When such a thing first comes up, give it in one plain sentence ("The silver mine above the town flooded thirty years ago and has been shut ever since; the miners' guild stamped its coins with a hammer.") instead of treating it as already known or hinting at it. The mystery lies in what nobody knows, never in what any local could tell them.
+- Add at most one new mystery to a scene: one strange detail, one unanswered question, one hint. Let the rest of the scene be ordinary and solid. Do not stack omens (wet prints, a bell nobody rang, a dripping pocket and a vanishing ring all at once), and do not end a scene on a cryptic line; end it on a situation the heroes can act on.
+- People react to what the heroes actually said or did, as a real person would. They answer the question that was asked, at the length a real person would, and they do not volunteer secrets, warnings or where to go next to strangers who did not ask. They open up when the heroes ask, persuade, pay, help or earn their trust, and what they reveal matches that. A hook reaches the heroes through what they can notice and choose to ask about, never through someone pushing it on them.
+- When the heroes learn something that helps answer an open question of the story (a fact, a lead, a name, something odd they saw), call note_clue in the same response, so it is written in their journal. Keep each clue to one sentence of plain fact. Build on the clues already listed under "Open questions" and reuse their exact wording.
 - Begin with what the world does in response. The player's own words are already on screen directly above your scene, so never quote, repeat or paraphrase what they just said or did, and never narrate their hero saying it. Wrong: '"I will help you, Hanno," you say, Elowen. The farmer nods.' Right: 'The farmer looks at you for a long moment, then nods.'
 - Speak to the players as "you". Do not tack the hero's name onto a sentence addressed to them ("you say, Elowen"). Use a hero's name only when you need to tell heroes apart, or when someone in the story speaks to or about them.
 - Each hero's gender is listed in the party state on every turn. Use exactly that for pronouns and gendered words, for the whole game, in your narration and in what other characters say. Never infer it from a name, a class or a portrait, and never switch. Where it says not specified, keep to neutral wording.
@@ -187,6 +197,7 @@ export function languageNote(game: Game): string[] {
     'Use the German D&D terms, those of the official German System Reference Document 5.2.1: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Attributswurf (for example "Weisheitswurf (Wahrnehmung)"), Vorteil and Nachteil, Bewegungsrate, Zaubertrick, Zauber des 1. Grades, Konzentration, Einstimmung, Gelegenheitsangriff, kurze und lange Rast, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
     ...creatureNamesDe(game),
     'Distances, weights and travel are metric in German, as in the German rulebooks: 5 feet are 1,5 m, 30 feet 9 m, a mile 1,5 km, a pound 0,5 kg. Write Swiss Standard German: "ss" instead of "ß" (gross, Strasse, heisst).',
+    'Stage dialogue the German way of a good role-playing game: who speaks, what they do, how they sound, then the words. For example: Griet bleibt an der Tür stehen, dreht sich halb zu euch um und sagt leise: „Fragt Hendrick im Zollhaus.“ Use German quotation marks „…“ consistently. In German "sie" can mean she, they or the polite you, so use a name whenever "sie" could be misread.',
     'German marks gender in nouns, articles and pronouns, so follow each hero\'s listed gender exactly: the listed German form (for example "die Magierin" or "der Magier") is the only one you may use for that hero.',
     'Tool arguments that are ids or fixed choices (character ids, monster types, item ids, moods, abilities, skills, kinds, statuses) stay exactly as specified in English. Only free text is German. The "appearance" fields stay in English.',
     '',
@@ -311,6 +322,8 @@ export function describeWorld(game: Game): string {
       lines.push(`- ${sh.name} [${sh.id}], ${sh.kind}, ${v.merchant ? `kept by ${v.merchant}` : 'keeper not named yet'}, ${v.purse} gp to buy with. For sale: ${wares || 'nothing left'}${v.stock.length > 16 ? ', and more' : ''}.`);
     }
   }
+  const stage = game.stage();
+  lines.push(`The scene now (shown to the players above your narration; change it with set_stage): ${stage.where}. With the heroes: ${stage.present.length ? stage.present.join(', ') : 'nobody else'}.`);
   const present = game.presentNpcs();
   if (present.length) {
     lines.push('People here:');
@@ -328,6 +341,13 @@ export function describeWorld(game: Game): string {
   if (s.factions.length) {
     lines.push('Standing with the factions of the region (from -100 to 100; only change_standing moves it, and the attitudes listed for people already count it):');
     for (const f of s.factions) lines.push(`- ${f.name} [${f.id}]: ${f.standing > 0 ? '+' : ''}${f.standing}, ${tierOf(f.standing)}. ${f.blurb}${f.history.length ? ` Lately: ${f.history.slice(-3).map((h) => `${h.delta > 0 ? '+' : ''}${h.delta} ${h.why}`).join('; ')}.` : ''}`);
+  }
+  const open = mem.mysteries.filter((m) => !m.solved);
+  const solved = mem.mysteries.filter((m) => m.solved);
+  if (open.length || solved.length) {
+    lines.push('Open questions and what the party knows about each (from their journal; add with note_clue):');
+    for (const m of open) lines.push(`- ${m.question} ${m.clues.length ? m.clues.slice(-6).map((c) => `${c.text}${c.source ? ` (${c.source})` : ''}`).join(' / ') : '(nothing yet)'}`);
+    if (solved.length) lines.push(`Solved: ${solved.slice(-6).map((m) => m.question).join(' / ')}`);
   }
   const talk = rumoursHere(game);
   if (talk.length) {
@@ -426,7 +446,7 @@ export function describeBeats(beats: Beat[], game?: Game): string {
   return beats
     .map((b) => {
       switch (b.kind) {
-        case 'start': return `The adventure begins. Open the story. ${game ? settingOf(game).opening : 'The heroes have just arrived at this place.'} Set the scene, hint at what is going on in the region, and leave the players free to choose what to do first.`;
+        case 'start': return `The adventure begins. Open the story. ${game ? settingOf(game).opening : 'The heroes have just arrived at this place.'} Set the scene: say plainly where the heroes are, what kind of place it is and who is around. Let one concrete thing they can see or hear hint at what is going on in the region, and leave the players free to choose what to do first.`;
         case 'arrive': return `The party ${b.journey ? `arrives after ${b.journey}` : 'steps inside'}: ${b.location}${b.firstVisit ? ', for the first time. Establish the place and who is there' : '. They have been here before, so keep it brief and note anything that has changed'}.`;
         case 'travel_end': return b.reason === 'blocked' ? `After ${b.journey} the party can find no way onward and stops.` : `The party stops in the wilderness after ${b.journey}. Describe where they are in a sentence or two.`;
         case 'discover': return `After ${b.journey}, the party sights something new and halts: ${b.locations.join('; ')}. Describe what they can see from here.`;
