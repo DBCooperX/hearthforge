@@ -111,7 +111,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
           ? t('At this level you either raise your ability scores or learn a feat. Raising your main ability is the strongest choice for most heroes; a feat makes you more versatile. Hover an option to see what it changes.')
           : choice.kind === 'option' ? `${loc(GROUPS[group]?.text ?? { en: '', de: '' }, lang)} ${t('Choose {n}.', { n: want })}`
           : t('Your studies pay off: choose one spell to add to those you know. Hover a spell to see its numbers for your hero.')} /></p>
-        {c.pending.length > 1 && <p className="muted small">{t('{n} more choices follow.', { n: c.pending.length - 1 })}</p>}
+        {c.pending.length > 1 && <p className="muted small">{c.pending.length === 2 ? t('One more choice follows.') : t('{n} more choices follow.', { n: c.pending.length - 1 })}</p>}
       </article>
     );
   }

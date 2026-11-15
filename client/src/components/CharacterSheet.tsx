@@ -8,8 +8,8 @@ import { castingAbility, weaponAttack } from '../../../shared/build';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityDef, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
-import { classLabel, conditionHelp } from '../game/util';
-import { ABILITY_HELP, BACKGROUNDS, CLASSES, GLOSSARY, SKILL_HELP, SPECIES, loc } from '../../../shared/rules';
+import { conditionHelp, heroTitle } from '../game/util';
+import { ABILITY_HELP, BACKGROUNDS, CLASSES, GLOSSARY, SKILL_HELP, loc } from '../../../shared/rules';
 import { useLang, useT } from '../i18n';
 import { Rich, dice, featureText, signed } from './Guide';
 import { Hint } from '../ui/Hint';
@@ -65,7 +65,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
     { key: 'hp', value: `${c.hp}/${c.maxHp}${c.tempHp ? ` +${c.tempHp}` : ''}`, label: t('Hit points'), hint: term('hp'), tone: 'hp' },
     { key: 'ac', value: String(c.ac), label: t('Armor class'), hint: term('ac') },
     { key: 'init', value: signed(initiative), label: t('Initiative'), hint: term('initiative') },
-    { key: 'speed', value: `${c.speed} ft`, label: t('Speed'), hint: t('{n} ft of movement', { n: c.speed }) },
+    { key: 'speed', value: t('{n} ft', { n: c.speed }), label: t('Speed'), hint: t('{n} ft of movement', { n: c.speed }) },
     { key: 'prof', value: signed(c.profBonus), label: t('Proficiency'), hint: term('proficiency') },
     { key: 'hd', value: `${c.hitDice}/${c.level}`, label: t('Hit dice'), hint: term('hitdie') },
     ...(c.maxMana > 0 ? [{ key: 'mana', value: `${c.mana}/${c.maxMana}`, label: t('Mana'), hint: term('mana'), tone: 'mana' }] : []),
@@ -81,7 +81,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
             <span className="cs-level" title={t('Level {n}', { n: c.level })}>{c.level}</span>
           </div>
           <h2>{c.name}</h2>
-          <p className="cs-line">{`${t(SPECIES[c.speciesId]?.name ?? '')} ${classLabel(c, t)}`.trim()}{c.subclass ? ` · ${t(c.subclass)}` : ''}</p>
+          <p className="cs-line">{heroTitle(c, t)}{c.subclass ? ` · ${t(c.subclass)}` : ''}</p>
           {identity && <p className="cs-line soft">{identity}</p>}
           <div className="xp" title={t('Experience')}>
             <div className="fill" style={{ width: `${pct}%` }} />
@@ -157,8 +157,8 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                 <div tabIndex={0}><span className="cs-glyph">◈</span><b>{8 + castMod + c.profBonus}</b><small>{t('Spell save DC')}</small></div>
               </Hint>
             )}
-            <Hint title={t('Resistance')} text={term('resistance')}>
-              <div tabIndex={0}><Icon name="shield" size={20} /><b className={c.resist.length ? 'words cap' : ''}>{c.resist.length ? c.resist.map((r) => t(`${r} damage`)).join(', ') : '–'}</b><small>{t('Resistance')}</small></div>
+            <Hint title={t('Resistances')} text={term('resistance')}>
+              <div tabIndex={0}><Icon name="shield" size={20} /><b className={c.resist.length ? 'words cap' : ''}>{c.resist.length ? c.resist.map((r) => t(`${r} damage`)).join(', ') : '–'}</b><small>{t('Resistances')}</small></div>
             </Hint>
           </div>
         </section>
@@ -184,7 +184,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               <ul className="cs-actions">
                 <li>
                   <span className="act-icon"><Icon name="sword" size={20} /></span>
-                  <div><b>{t(attack.name)}</b><span><Rich text={`${signed(attack.bonus)} ${t('To hit').toLowerCase()} · ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`} /></span></div>
+                  <div><b>{t(attack.name)}</b><span><Rich text={`${signed(attack.bonus)} ${lang === 'de' ? t('To hit') : t('To hit').toLowerCase()} · ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`} /></span></div>
                 </li>
                 {actions.map((a, i) => (
                   <Fragment key={a.id}>

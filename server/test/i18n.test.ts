@@ -50,6 +50,19 @@ describe('translations', () => {
     expect(formatHours(50, 'de')).toBe('2 Tage 2 h');
   });
 
+  it('measures in metres in German, like the German rulebooks', () => {
+    expect(tr('de', '{n} ft of movement', { n: 30 })).toBe('9 m Bewegung');
+    expect(tr('de', 'Range {normal}/{long} ft', { normal: 80, long: 320 })).toBe('Reichweite 24/96 m');
+    expect(tr('de', 'Touch (5 ft)')).toBe('Berührung (1,5 m)');
+    expect(tr('de', '{n} miles', { n: 6 })).toBe('9 km');
+    expect(tr('de', '{n} lb', { n: 3 })).toBe('1,5 kg');
+    expect(tr('en', '{n} ft of movement', { n: 30 })).toBe('30 ft of movement');
+  });
+
+  it('writes Swiss Standard German, without ß', () => {
+    for (const de of [...Object.values(DE), ...Object.values(DE_SRD)]) expect(de).not.toContain('ß');
+  });
+
   it('keeps every placeholder in the German text', () => {
     const placeholders = (s: string) => [...s.matchAll(/\{\w+\}/g)].map((m) => m[0]).sort().join();
     for (const [en, de] of [...Object.entries(DE), ...Object.entries(DE_SRD)]) expect(placeholders(de), en).toBe(placeholders(en));

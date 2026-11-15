@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ABILITIES, CLASS_INFO } from '../../../shared/content';
 import { buildSheet, type Draft } from '../../../shared/build';
 import { PREMADES, type Premade } from '../../../shared/premades';
-import { ABILITY_KEYS, BACKGROUNDS, CLASSES, SPECIES, loc } from '../../../shared/rules';
+import { ABILITY_KEYS, BACKGROUNDS, CLASSES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
@@ -17,7 +17,7 @@ import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
 import { Chip, Hint, Info } from '../ui/Hint';
 import { TabBar } from '../ui/Window';
 import { MusicControl } from '../music';
-import { classLabel } from '../game/util';
+import { classLabel, heroTitle } from '../game/util';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
 export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeeper: () => void }) {
@@ -397,7 +397,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
                       <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
                       <span className="slot-text">
                         <b>{c.name}</b>
-                        <small>{t(SPECIES[c.speciesId]?.name ?? '')} {classLabel(c, t)}</small>
+                        <small>{heroTitle(c, t)}</small>
                         {shared && <small className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</small>}
                       </span>
                       {c.ownerId === playerId && <button type="button" className="slot-x" title={t('remove')} aria-label={`${t('remove')}: ${c.name}`} onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>×</button>}
@@ -422,7 +422,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
                       onClick={() => setPicked(picked === p.id ? null : p.id)}>
                       <img className="pixel" src={heroUrl(artOfDraft(p.spec)!)} alt="" />
                       <b style={{ color: CLASS_INFO[p.spec.classId].color }}>{p.spec.name}</b>
-                      <small>{taken ? `✓ ${t('In the party')}` : t(CLASSES[p.spec.classId].name)}</small>
+                      <small>{taken ? `✓ ${t('In the party')}` : classLabel({ className: CLASSES[p.spec.classId].name, gender: p.spec.gender }, t)}</small>
                     </button>
                   );
                 })}
@@ -480,7 +480,7 @@ function PremadeDetail({ premade: p, taken, full, onClose, onAdd, onCustomize }:
   const { lang } = useLang();
   const sheet = useMemo(() => buildSheet(p.spec)!, [p]);
   const spec = p.spec;
-  const title = `${t(SPECIES[spec.speciesId].name)} ${t(CLASSES[spec.classId].name)}`;
+  const title = heroTitle({ className: CLASSES[spec.classId].name, gender: spec.gender, speciesId: spec.speciesId }, t);
   const spells = sheet.abilityIds.filter((id) => ABILITIES[id]?.spellLevel !== undefined || ABILITIES[id]?.oncePerRest);
   return (
     <div className="hero-detail">
@@ -494,7 +494,7 @@ function PremadeDetail({ premade: p, taken, full, onClose, onAdd, onCustomize }:
         <p className="hero-stats"><b>{sheet.maxHp}</b> {t('HP')} · <b>{sheet.ac}</b> {t('AC')}{sheet.maxMana > 0 && <> · <b>{sheet.maxMana}</b> {t('Mana')}</>}</p>
         <p className="abil">{ABILITY_KEYS.map((k) => <span key={k}>{t(k.toUpperCase())} <b>{sheet.abilities[k]}</b></span>)}</p>
         <p><b>{t('Skills')}:</b> {sheet.skills.map((s) => t(s)).join(', ')}</p>
-        {spells.length > 0 && <p><b>{t('Spells')}:</b> {spells.map((id) => t(ABILITIES[id].name)).join(', ')}</p>}
+        {spells.length > 0 && <p><b>{t('Spells and abilities')}:</b> {spells.map((id) => t(ABILITIES[id].name)).join(', ')}</p>}
         {sheet.attack && <p><b>{t('Attack')}:</b> {t(sheet.attack.name)} {sheet.attack.bonus >= 0 ? '+' : ''}{sheet.attack.bonus}</p>}
       </div>
       <div className="hero-actions">

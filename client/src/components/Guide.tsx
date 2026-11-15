@@ -176,7 +176,7 @@ export function SpellDetail({ id, sheet }: { id: string; sheet: Pick<Sheet, 'spe
   const rows: [string, string][] = [
     [t('Cost'), a.cost ? t('{n} mana', { n: a.cost }) : a.oncePerRest ? t('Once per rest') : t('Free, every turn')],
     [t('Uses'), a.bonusAction ? t('Bonus action') : t('Action')],
-    [t('Range'), a.range === 0 ? t('Self') : a.range <= 5 ? t('Touch (5 ft)') : `${a.range} ft`],
+    [t('Range'), a.range === 0 ? t('Self') : a.range <= 5 ? t('Touch (5 ft)') : t('{n} ft', { n: a.range })],
   ];
   if (a.dice && a.damageType) rows.push([t('Damage'), `${dice(a.dice, lang)} ${t(`${a.damageType} damage`)}`]);
   if (a.kind === 'heal') rows.push([t('Healing'), `${dice(a.dice ?? '', lang)} + ${t('spellcasting modifier')}`]);
@@ -243,7 +243,7 @@ export function Preview({ now, next, title }: { now: Sheet | null; next: Sheet |
         <Stat label={t('Hit points')} now={base.maxHp} next={s.maxHp} />
         <Stat label={t('Armor class')} now={base.ac} next={s.ac} />
         <Stat label={t('Initiative')} now={base.initiative} next={s.initiative} text={signed} />
-        <Stat label={t('Speed')} now={base.speed} next={s.speed} text={(n) => `${n} ft`} />
+        <Stat label={t('Speed')} now={base.speed} next={s.speed} text={(n) => t('{n} ft', { n })} />
         {(s.maxMana > 0 || base.maxMana > 0) && <Stat label={t('Mana')} now={base.maxMana} next={s.maxMana} />}
         {(s.spell || base.spell) && <Stat label={t('Spell DC')} now={base.spell?.dc} next={s.spell?.dc} />}
       </div>
@@ -282,7 +282,7 @@ export function Preview({ now, next, title }: { now: Sheet | null; next: Sheet |
       <ul className="pv-skills">
         {spells.map((id) => <li key={id} className={base.abilityIds.includes(id) ? '' : 'up'}><AbilityGlyph def={ABILITIES[id]} /> {t(ABILITIES[id].name)}</li>)}
       </ul>
-      {s.resist.length > 0 && <p className="pv-line"><small>{t('Resistance')}</small> {s.resist.map((r) => t(`${r} damage`)).join(', ')}</p>}
+      {s.resist.length > 0 && <p className="pv-line"><small>{t('Resistances')}</small> {s.resist.map((r) => t(`${r} damage`)).join(', ')}</p>}
     </aside>
   );
 }

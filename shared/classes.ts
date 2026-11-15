@@ -272,7 +272,7 @@ const options: ClassOption[] = [
   // Druid: Circle of the Land
   opt('land_arid', 'land', 'Arid Land', 'Trockenes Land', '🏜️', 'engine', 'Deserts and badlands. Nature\'s Ward will make you resist fire.', 'Wüsten und Ödland. Schutz der Natur macht dich später resistent gegen Feuer.'),
   opt('land_polar', 'land', 'Polar Land', 'Polares Land', '🧊', 'engine', 'Ice and tundra. Nature\'s Ward will make you resist cold.', 'Eis und Tundra. Schutz der Natur macht dich später resistent gegen Kälte.'),
-  opt('land_temperate', 'land', 'Temperate Land', 'Gemäßigtes Land', '🌳', 'engine', 'Forests and meadows. Nature\'s Ward will make you resist lightning.', 'Wälder und Wiesen. Schutz der Natur macht dich später resistent gegen Blitz.'),
+  opt('land_temperate', 'land', 'Temperate Land', 'Gemässigtes Land', '🌳', 'engine', 'Forests and meadows. Nature\'s Ward will make you resist lightning.', 'Wälder und Wiesen. Schutz der Natur macht dich später resistent gegen Blitz.'),
   opt('land_tropical', 'land', 'Tropical Land', 'Tropisches Land', '🌴', 'engine', 'Jungles and swamps. Nature\'s Ward will make you resist poison.', 'Dschungel und Sümpfe. Schutz der Natur macht dich später resistent gegen Gift.'),
   // Druid: Elemental Fury
   opt('fury_spellcasting', 'fury', 'Potent Spellcasting', 'Mächtiges Zauberwirken', '🌩️', 'engine', 'Your Wisdom modifier is added to the damage of your cantrips.', 'Dein Weisheitsmodifikator wird auf den Schaden deiner Zaubertricks addiert.'),
@@ -300,7 +300,7 @@ const options: ClassOption[] = [
   opt('inv_tome', 'invocation', 'Pact of the Tome', 'Pakt des Buches', '📕', 'story', 'A book of shadows with extra cantrips and rituals. It takes effect with the spell import.', 'Ein Buch der Schatten mit zusätzlichen Zaubertricks und Ritualen. Das wird mit dem Zauberimport wirksam.'),
   opt('inv_mind', 'invocation', 'Eldritch Mind', 'Schauerlicher Geist', '🧠', 'story', 'Advantage on saves to keep your concentration. The game has no concentration checks.', 'Vorteil auf Rettungswürfe, um deine Konzentration zu halten. Das Spiel kennt keine Konzentrationswürfe.'),
   opt('inv_agonizing', 'invocation', 'Agonizing Blast', 'Qualvoller Strahl', '💢', 'engine', 'Each beam of your Eldritch Blast adds your Charisma modifier to its damage.', 'Jeder Strahl deines Schaurigen Strahls addiert deinen Charismamodifikator auf seinen Schaden.', { minLevel: 2 }),
-  opt('inv_repelling', 'invocation', 'Repelling Blast', 'Abstoßender Strahl', '🌬️', 'engine', 'Each beam of your Eldritch Blast that hits pushes the target 10 ft away.', 'Jeder Strahl deines Schaurigen Strahls, der trifft, stößt das Ziel 10 ft zurück.', { minLevel: 2 }),
+  opt('inv_repelling', 'invocation', 'Repelling Blast', 'Abstossender Strahl', '🌬️', 'engine', 'Each beam of your Eldritch Blast that hits pushes the target 10 ft away.', 'Jeder Strahl deines Schaurigen Strahls, der trifft, stösst das Ziel 10 ft zurück.', { minLevel: 2 }),
   opt('inv_spear', 'invocation', 'Eldritch Spear', 'Schauerlicher Speer', '📏', 'engine', 'Your Eldritch Blast reaches 300 ft.', 'Dein Schauriger Strahl reicht 300 ft weit.', { minLevel: 2 }),
   opt('inv_sight', 'invocation', "Devil's Sight", 'Teufelssicht', '👁️', 'engine', 'You see normally in darkness out to 120 ft.', 'Du siehst in Dunkelheit bis 120 ft normal.', { minLevel: 2 }),
   opt('inv_vigor', 'invocation', 'Fiendish Vigor', 'Unholde Lebenskraft', '🫀', 'engine', 'You start every fight with 12 temporary hit points.', 'Du beginnst jeden Kampf mit 12 temporären Trefferpunkten.', { minLevel: 2 }),
@@ -325,7 +325,7 @@ const groups: GroupDef[] = [
   { id: 'order', name: 'Divine Order', de: 'Göttliche Ordnung', text: L('The sacred role you were trained for.', 'Die heilige Rolle, für die du ausgebildet wurdest.') },
   { id: 'primal', name: 'Primal Order', de: 'Urtümliche Ordnung', text: L('The sacred role you were trained for.', 'Die heilige Rolle, für die du ausgebildet wurdest.') },
   { id: 'land', name: 'Land', de: 'Land', text: L('The land your circle draws its power from.', 'Das Land, aus dem dein Zirkel seine Kraft zieht.') },
-  { id: 'fury', name: 'Elemental Fury', de: 'Elementare Wut', text: L('How the might of the elements flows through you.', 'Wie die Macht der Elemente durch dich fließt.') },
+  { id: 'fury', name: 'Elemental Fury', de: 'Elementare Wut', text: L('How the might of the elements flows through you.', 'Wie die Macht der Elemente durch dich fliesst.') },
   { id: 'prey', name: "Hunter's Prey", de: 'Beute des Jägers', text: L('The kind of quarry you have learned to bring down.', 'Die Art von Beute, die du zu erlegen gelernt hast.') },
   { id: 'metamagic', name: 'Metamagic', de: 'Metamagie', text: L('Ways to bend your spells with sorcery points.', 'Wege, deine Zauber mit Zauberpunkten zu formen.') },
   { id: 'affinity', name: 'Elemental Affinity', de: 'Elementare Affinität', text: L('The element of your draconic ancestor.', 'Das Element deines drakonischen Ahnen.') },

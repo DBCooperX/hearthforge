@@ -6,6 +6,7 @@
 // Coast. See CREDITS.md. Every explanation is written for Hearthforge in its own words, and
 // says where this game simplifies a rule.
 import type { Lang } from './i18n';
+import { metric } from './units';
 import { SRD_SPELL_LISTS } from './spells';
 import { CASTING, GROUPS, OPTIONS, optionLine, CLASS_FEATURES, CLASS_IDS, EPIC_BOON_LEVEL, SUBCLASS_LEVEL, LEVEL_ABILITIES, SRD_CLASSES, featureLine, featuresAt, manaFor, maxSpellLevelFor, profBonusFor } from './classes';
 import type { Abilities, AbilityKey, BackgroundId, ClassId, FeatId, SlotId, SpeciesId } from './types';
@@ -20,7 +21,7 @@ const SKILL_ABILITY: Record<string, AbilityKey> = {
 /** Text in both interface languages. */
 export interface L { en: string; de: string }
 const L = (en: string, de: string): L => ({ en, de });
-export const loc = (l: L, lang: Lang) => l[lang] || l.en;
+export const loc = (l: L, lang: Lang) => (lang === 'de' ? metric(l.de || l.en) : l.en);
 
 /**
  * One thing an option does. `engine` effects are enforced by the server's rules engine;
@@ -169,20 +170,20 @@ export const SPELL_TIPS: Record<string, L> = {
   vicious_mockery: L('Little damage, but it targets Wisdom instead of armor and works from 60 ft.', 'Wenig Schaden, zielt aber auf Weisheit statt auf die Rüstung und wirkt auf 60 ft.'),
   eldritch_blast: L('The warlock\'s bread and butter: force damage almost nothing resists, more beams as you level, and invocations make it stronger still.', 'Das tägliche Brot des Hexenmeisters: Energieschaden, dem kaum etwas widersteht, mehr Strahlen mit jeder Stufe, und Anrufungen machen ihn noch stärker.'),
   produce_flame: L('A solid ranged attack for a druid who is not in beast form.', 'Ein solider Fernangriff für einen Druiden, der nicht in Tiergestalt ist.'),
-  starry_wisp: L('Radiant damage at range, which very few monsters resist.', 'Gleißender Schaden auf Distanz, dem kaum ein Monster widersteht.'),
-  fire_bolt: L('The hardest-hitting cantrip and the longest range. A safe first pick.', 'Der stärkste Zaubertrick mit der größten Reichweite. Eine sichere erste Wahl.'),
+  starry_wisp: L('Radiant damage at range, which very few monsters resist.', 'Gleissender Schaden auf Distanz, dem kaum ein Monster widersteht.'),
+  fire_bolt: L('The hardest-hitting cantrip and the longest range. A safe first pick.', 'Der stärkste Zaubertrick mit der grössten Reichweite. Eine sichere erste Wahl.'),
   ray_of_frost: L('Slightly less damage than Fire Bolt, but a second damage type for enemies that shrug off fire.', 'Etwas weniger Schaden als Feuerpfeil, dafür eine zweite Schadensart gegen Gegner, denen Feuer nichts ausmacht.'),
-  chill_touch: L('Long range and necrotic damage, which very few monsters resist.', 'Große Reichweite und nekrotischer Schaden, dem kaum ein Monster widersteht.'),
+  chill_touch: L('Long range and necrotic damage, which very few monsters resist.', 'Grosse Reichweite und nekrotischer Schaden, dem kaum ein Monster widersteht.'),
   shocking_grasp: L('Your answer when a monster stands next to you: ranged spells are rolled with disadvantage then, this one is not.', 'Deine Antwort, wenn ein Monster neben dir steht: Fernzauber haben dann Nachteil, dieser nicht.'),
   acid_splash: L('Low damage, but it hits a whole cluster of enemies and targets a saving throw instead of armor.', 'Wenig Schaden, trifft aber eine ganze Gruppe von Gegnern und zielt auf einen Rettungswurf statt auf die Rüstung.'),
-  poison_spray: L('The biggest cantrip die, but only at 10 ft, and many undead are immune to poison.', 'Der größte Würfel unter den Zaubertricks, aber nur auf 10 ft, und viele Untote sind immun gegen Gift.'),
+  poison_spray: L('The biggest cantrip die, but only at 10 ft, and many undead are immune to poison.', 'Der grösste Würfel unter den Zaubertricks, aber nur auf 10 ft, und viele Untote sind immun gegen Gift.'),
   sacred_flame: L('Every cleric knows it. It ignores armor: the target has to dodge instead.', 'Jeder Kleriker beherrscht sie. Sie ignoriert Rüstung: Das Ziel muss stattdessen ausweichen.'),
   magic_missile: L('Never misses. The reliable way to finish a wounded enemy.', 'Verfehlt nie. Der verlässliche Weg, einen angeschlagenen Gegner zu erledigen.'),
   burning_hands: L('Best damage for 2 mana when enemies bunch up. You have to get close.', 'Der meiste Schaden für 2 Mana, wenn Gegner dicht beisammenstehen. Du musst nah heran.'),
   thunderwave: L('Like Burning Hands, but against Constitution and with thunder damage. Good against nimble enemies.', 'Wie Brennende Hände, aber gegen Konstitution und mit Schallschaden. Gut gegen flinke Gegner.'),
   mage_armor: L('Raises a robed wizard from AC 10 + DEX to 13 + DEX for the whole day. Strongly recommended for your first adventures.', 'Hebt einen Magier in Robe von RK 10 + GES auf 13 + GES, und das den ganzen Tag. Für die ersten Abenteuer sehr zu empfehlen.'),
-  acid_arrow: L('High single-target damage at long range.', 'Hoher Schaden gegen ein einzelnes Ziel auf große Entfernung.'),
-  shatter: L('A strong area spell with 60 ft range, so you can stay out of harm\'s way.', 'Ein starker Flächenzauber mit 60 ft Reichweite, du bleibst also außer Gefahr.'),
+  acid_arrow: L('High single-target damage at long range.', 'Hoher Schaden gegen ein einzelnes Ziel auf grosse Entfernung.'),
+  shatter: L('A strong area spell with 60 ft range, so you can stay out of harm\'s way.', 'Ein starker Flächenzauber mit 60 ft Reichweite, du bleibst also ausser Gefahr.'),
   cure_wounds: L('The strongest heal at this level, but you must stand next to the patient.', 'Die stärkste Heilung auf diesem Grad, aber du musst neben dem Patienten stehen.'),
   healing_word: L('A small heal at range that only costs your bonus action: bring a fallen friend back and still attack.', 'Eine kleine Heilung auf Entfernung, die nur deine Bonusaktion kostet: Hol einen gefallenen Freund zurück und greif trotzdem an.'),
   guiding_bolt: L('Heavy damage, and the next attack against the target has advantage. Set up your rogue.', 'Hoher Schaden, und der nächste Angriff gegen das Ziel hat Vorteil. Bereite deinem Schurken den Weg.'),
@@ -242,7 +243,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'rogue', name: 'Rogue', icon: '🗡️', recommendedFor: ALL,
     role: L('Precise striker · skill expert', 'Präziser Angreifer · Fertigkeitsexperte'),
     summary: L('A cunning specialist who strikes where it hurts and knows a trick for every lock.', 'Ein gerissener Spezialist, der dort zuschlägt, wo es wehtut, und für jedes Schloss einen Kniff kennt.'),
-    description: L('Rogues deal one very strong hit per turn instead of many. Sneak Attack adds extra dice when an ally stands next to your target or you attack with advantage. Outside combat no one has more skills: sneaking, lockpicking, lying and spotting traps are your trade.', 'Schurken landen pro Runde einen sehr starken Treffer statt vieler. Der Hinterhältige Angriff fügt Extrawürfel hinzu, wenn ein Verbündeter neben deinem Ziel steht oder du mit Vorteil angreifst. Außerhalb des Kampfes hat niemand mehr Fertigkeiten: Schleichen, Schlösserknacken, Lügen und Fallenfinden sind dein Handwerk.'),
+    description: L('Rogues deal one very strong hit per turn instead of many. Sneak Attack adds extra dice when an ally stands next to your target or you attack with advantage. Outside combat no one has more skills: sneaking, lockpicking, lying and spotting traps are your trade.', 'Schurken landen pro Runde einen sehr starken Treffer statt vieler. Der Hinterhältige Angriff fügt Extrawürfel hinzu, wenn ein Verbündeter neben deinem Ziel steht oder du mit Vorteil angreifst. Ausserhalb des Kampfes hat niemand mehr Fertigkeiten: Schleichen, Schlösserknacken, Lügen und Fallenfinden sind dein Handwerk.'),
     effects: [
       E('Hit die d8', '8 + CON modifier hit points at level 1, then 5 + CON per level.', '8 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 5 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Dexterity and Intelligence saves.', 'Geübt in Geschicklichkeits- und Intelligenzrettungswürfen.'),
@@ -266,7 +267,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'wizard', name: 'Wizard', icon: '🔮', recommendedFor: ALL,
     role: L('Ranged damage · fragile', 'Fernkampfschaden · zerbrechlich'),
     summary: L('A scholar of arcane magic who ends fights from a distance, as long as nothing reaches them.', 'Ein Gelehrter der arkanen Magie, der Kämpfe aus der Ferne beendet, solange ihn nichts erreicht.'),
-    description: L('Wizards have the widest choice of spells. Cantrips cost nothing and can be cast every turn; stronger spells cost mana, which returns when you rest. You have few hit points and no armor, so stay behind your friends.', 'Magier haben die größte Auswahl an Zaubern. Zaubertricks kosten nichts und können jede Runde gewirkt werden; stärkere Zauber kosten Mana, das bei einer Rast zurückkehrt. Du hast wenige Trefferpunkte und keine Rüstung, bleib also hinter deinen Freunden.'),
+    description: L('Wizards have the widest choice of spells. Cantrips cost nothing and can be cast every turn; stronger spells cost mana, which returns when you rest. You have few hit points and no armor, so stay behind your friends.', 'Magier haben die grösste Auswahl an Zaubern. Zaubertricks kosten nichts und können jede Runde gewirkt werden; stärkere Zauber kosten Mana, das bei einer Rast zurückkehrt. Du hast wenige Trefferpunkte und keine Rüstung, bleib also hinter deinen Freunden.'),
     effects: [
       E('Hit die d6', '6 + CON modifier hit points at level 1, then 4 + CON per level.', '6 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 4 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Intelligence and Wisdom saves.', 'Geübt in Intelligenz- und Weisheitsrettungswürfen.'),
@@ -329,7 +330,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'bard', name: 'Bard', icon: '🎻', recommendedFor: ALL,
     role: L('Support · voice of the party', 'Unterstützer · Stimme der Gruppe'),
     summary: L('A performer whose words and music heal friends, unsettle foes and open doors.', 'Ein Künstler, dessen Worte und Musik Freunde heilen, Gegner verunsichern und Türen öffnen.'),
-    description: L('Bards make everyone around them better. Bardic Inspiration turns an ally\'s near miss into a hit, your spells heal, and Vicious Mockery spoils an enemy\'s next attack. Outside combat you are the one who talks: nobody has more skills.', 'Barden machen alle um sich herum besser. Bardische Inspiration macht aus dem knappen Fehlschlag eines Verbündeten einen Treffer, deine Zauber heilen, und Gehässiger Spott verdirbt einem Gegner den nächsten Angriff. Außerhalb des Kampfes führst du das Wort: Niemand hat mehr Fertigkeiten.'),
+    description: L('Bards make everyone around them better. Bardic Inspiration turns an ally\'s near miss into a hit, your spells heal, and Vicious Mockery spoils an enemy\'s next attack. Outside combat you are the one who talks: nobody has more skills.', 'Barden machen alle um sich herum besser. Bardische Inspiration macht aus dem knappen Fehlschlag eines Verbündeten einen Treffer, deine Zauber heilen, und Gehässiger Spott verdirbt einem Gegner den nächsten Angriff. Ausserhalb des Kampfes führst du das Wort: Niemand hat mehr Fertigkeiten.'),
     effects: [
       E('Hit die d8', '8 + CON modifier hit points at level 1, then 5 + CON per level.', '8 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 5 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Dexterity and Charisma saves.', 'Geübt in Geschicklichkeits- und Charismarettungswürfen.'),
@@ -353,7 +354,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
       E('Spellcasting', 'Wisdom sets your spell attack bonus, save DC and healing. You start with 2 cantrips, 2 spells and 4 mana.', 'Weisheit bestimmt deinen Zauberangriffsbonus, Rettungswurf-SG und deine Heilung. Du beginnst mit 2 Zaubertricks, 2 Zaubern und 4 Mana.'),
       E('Wild Shape', 'From level 2: become a beast as a bonus action, twice per long rest.', 'Ab Stufe 2: Werde als Bonusaktion zu einem Tier, zweimal pro langer Rast.'),
     ],
-    goodFor: L('Players who want a healer who can also bite.', 'Spieler, die einen Heiler wollen, der auch zubeißen kann.'),
+    goodFor: L('Players who want a healer who can also bite.', 'Spieler, die einen Heiler wollen, der auch zubeissen kann.'),
     priority: ['wis', 'con', 'dex', 'int', 'cha', 'str'],
     armor: L('Light armor, shields', 'Leichte Rüstung, Schilde'), weapons: L('Simple weapons', 'Einfache Waffen'),
     recSkills: ['perception', 'nature', 'survival', 'medicine'], recSpells: ['produce_flame', 'starry_wisp', 'cure_wounds', 'healing_word'], recOptions: ['primal_magician'],
@@ -363,7 +364,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'monk', name: 'Monk', icon: '🥋', recommendedFor: ALL,
     role: L('Skirmisher · fast and precise', 'Plänkler · schnell und präzise'),
     summary: L('A martial artist who needs neither weapon nor armor and strikes more often than anyone.', 'Ein Kampfkünstler, der weder Waffe noch Rüstung braucht und öfter zuschlägt als jeder andere.'),
-    description: L('Monks fight with Dexterity and bare hands. Every turn you attack and then strike again as a bonus action. From level 2 focus points pay for a Flurry of Blows, a dodge or a dash, and they return after every rest. You are fast, hard to pin down and from level 5 you can stun.', 'Mönche kämpfen mit Geschicklichkeit und bloßen Händen. In jedem Zug greifst du an und schlägst als Bonusaktion noch einmal zu. Ab Stufe 2 bezahlen Fokuspunkte einen Schlaghagel, ein Ausweichen oder einen Spurt, und sie kehren nach jeder Rast zurück. Du bist schnell, schwer festzunageln und kannst ab Stufe 5 betäuben.'),
+    description: L('Monks fight with Dexterity and bare hands. Every turn you attack and then strike again as a bonus action. From level 2 focus points pay for a Flurry of Blows, a dodge or a dash, and they return after every rest. You are fast, hard to pin down and from level 5 you can stun.', 'Mönche kämpfen mit Geschicklichkeit und blossen Händen. In jedem Zug greifst du an und schlägst als Bonusaktion noch einmal zu. Ab Stufe 2 bezahlen Fokuspunkte einen Schlaghagel, ein Ausweichen oder einen Spurt, und sie kehren nach jeder Rast zurück. Du bist schnell, schwer festzunageln und kannst ab Stufe 5 betäuben.'),
     effects: [
       E('Hit die d8', '8 + CON modifier hit points at level 1, then 5 + CON per level.', '8 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 5 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Strength and Dexterity saves.', 'Geübt in Stärke- und Geschicklichkeitsrettungswürfen.'),
@@ -380,14 +381,14 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'paladin', name: 'Paladin', icon: '⚜️', recommendedFor: ALL,
     role: L('Front line · healer and striker', 'Frontkämpfer · Heiler und Angreifer'),
     summary: L('A holy knight in heavy armor who heals with a touch and smites with divine fire.', 'Ein heiliger Ritter in schwerer Rüstung, der mit einer Berührung heilt und mit göttlichem Feuer niederstreckt.'),
-    description: L('Paladins are as sturdy as fighters and bring healing along. Lay on Hands is a pool of hit points you hand out as a bonus action. From level 2 Divine Smite turns mana into a burst of radiant damage right after you hit. Later your aura protects everyone near you.', 'Paladine sind so robust wie Kämpfer und bringen Heilung mit. Handauflegen ist ein Vorrat an Trefferpunkten, den du als Bonusaktion verteilst. Ab Stufe 2 verwandelt Göttliches Niederstrecken Mana in gleißenden Schaden, direkt nachdem du getroffen hast. Später schützt deine Aura alle in deiner Nähe.'),
+    description: L('Paladins are as sturdy as fighters and bring healing along. Lay on Hands is a pool of hit points you hand out as a bonus action. From level 2 Divine Smite turns mana into a burst of radiant damage right after you hit. Later your aura protects everyone near you.', 'Paladine sind so robust wie Kämpfer und bringen Heilung mit. Handauflegen ist ein Vorrat an Trefferpunkten, den du als Bonusaktion verteilst. Ab Stufe 2 verwandelt Göttliches Niederstrecken Mana in gleissenden Schaden, direkt nachdem du getroffen hast. Später schützt deine Aura alle in deiner Nähe.'),
     effects: [
       E('Hit die d10', '10 + CON modifier hit points at level 1, then 6 + CON per level.', '10 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 6 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Wisdom and Charisma saves.', 'Geübt in Weisheits- und Charismarettungswürfen.'),
       E('Lay on Hands', 'Bonus action: heal by touch from a pool of five times your level.', 'Bonusaktion: Heile durch Berührung aus einem Vorrat in Höhe deiner fünffachen Stufe.'),
       E('Spellcasting', 'Charisma is your spellcasting ability. You start with Cure Wounds and 4 mana.', 'Charisma ist dein Zauberattribut. Du beginnst mit Wunden heilen und 4 Mana.'),
     ],
-    goodFor: L('Players who want to protect the party and still land the biggest single hits.', 'Spieler, die die Gruppe beschützen und trotzdem die größten Einzeltreffer landen wollen.'),
+    goodFor: L('Players who want to protect the party and still land the biggest single hits.', 'Spieler, die die Gruppe beschützen und trotzdem die grössten Einzeltreffer landen wollen.'),
     priority: ['str', 'cha', 'con', 'wis', 'dex', 'int'],
     armor: L('All armor and shields', 'Alle Rüstungen und Schilde'), weapons: L('All weapons', 'Alle Waffen'),
     recSkills: ['athletics', 'persuasion', 'insight', 'intimidation'], recStyle: 'defense', recSpells: [],
@@ -518,7 +519,7 @@ const species: SpeciesDef[] = [
   },
   {
     id: 'elf', name: 'Elf', icon: '🧝', size: 'Medium', speed: 35, recommendedFor: ['rogue', 'wizard', 'ranger', 'druid'], skillChoice: ['insight', 'perception', 'survival'],
-    summary: L('Graceful, long-lived and sharp-eyed. Faster on their feet, with an extra skill.', 'Anmutig, langlebig und scharfäugig. Schneller zu Fuß, mit einer zusätzlichen Fertigkeit.'),
+    summary: L('Graceful, long-lived and sharp-eyed. Faster on their feet, with an extra skill.', 'Anmutig, langlebig und scharfäugig. Schneller zu Fuss, mit einer zusätzlichen Fertigkeit.'),
     description: L('Elves live for centuries and it shows: they move with unhurried grace and notice what others miss. Hearthforge uses the wood elf lineage, whose members are especially swift.', 'Elfen leben Jahrhunderte, und das merkt man: Sie bewegen sich mit ruhiger Anmut und bemerken, was anderen entgeht. Hearthforge verwendet die Abstammung der Waldelfen, die besonders flink sind.'),
     effects: [
       E('Fleet of Foot', 'Your speed is 35 ft instead of 30 ft: one more tile of movement each turn.', 'Deine Bewegungsrate beträgt 35 ft statt 30 ft: ein Feld mehr Bewegung pro Zug.'),
@@ -527,17 +528,17 @@ const species: SpeciesDef[] = [
       S('Fey Ancestry', 'You have advantage on saves against being charmed.', 'Du hast Vorteil bei Rettungswürfen dagegen, bezaubert zu werden.'),
       S('Trance', 'You do not sleep; four hours of meditation are a long rest for you.', 'Du schläfst nicht; vier Stunden Meditation sind für dich eine lange Rast.'),
     ],
-    goodFor: L('Rogues and wizards, who both live from staying out of reach.', 'Schurken und Magier, die beide davon leben, außer Reichweite zu bleiben.'),
+    goodFor: L('Rogues and wizards, who both live from staying out of reach.', 'Schurken und Magier, die beide davon leben, ausser Reichweite zu bleiben.'),
     names: ['Elowen', 'Thalion', 'Sariel', 'Faelar', 'Lirael', 'Aerendyl', 'Naivara', 'Ilmar'],
   },
   {
     id: 'halfling', name: 'Halfling', icon: '🍀', size: 'Small', speed: 30, recommendedFor: ['rogue', 'bard'],
     summary: L('Small, cheerful and uncannily lucky. Rerolls natural 1s.', 'Klein, fröhlich und unheimlich vom Glück verfolgt. Würfelt natürliche Einsen neu.'),
-    description: L('Halflings prefer a warm hearth to a cold road, but when they do go adventuring, fortune seems to walk beside them. They slip past larger folk and are not easily scared.', 'Halblinge ziehen den warmen Herd der kalten Straße vor, doch wenn sie auf Abenteuer gehen, scheint das Glück an ihrer Seite zu wandern. Sie schlüpfen an größeren Leuten vorbei und lassen sich nicht leicht einschüchtern.'),
+    description: L('Halflings prefer a warm hearth to a cold road, but when they do go adventuring, fortune seems to walk beside them. They slip past larger folk and are not easily scared.', 'Halblinge ziehen den warmen Herd der kalten Strasse vor, doch wenn sie auf Abenteuer gehen, scheint das Glück an ihrer Seite zu wandern. Sie schlüpfen an grösseren Leuten vorbei und lassen sich nicht leicht einschüchtern.'),
     effects: [
       E('Luck', 'When you roll a 1 on the d20 of an attack, ability check or death save, you roll again and use the new result.', 'Wenn du bei einem Angriff, Attributswurf oder Todesrettungswurf eine 1 auf dem W20 würfelst, würfelst du erneut und nimmst das neue Ergebnis.'),
       S('Brave', 'You have advantage on saves against being frightened.', 'Du hast Vorteil bei Rettungswürfen dagegen, verängstigt zu werden.'),
-      S('Naturally Stealthy', 'You can hide behind a creature that is larger than you.', 'Du kannst dich hinter einer Kreatur verstecken, die größer ist als du.'),
+      S('Naturally Stealthy', 'You can hide behind a creature that is larger than you.', 'Du kannst dich hinter einer Kreatur verstecken, die grösser ist als du.'),
     ],
     goodFor: L('Rogues above all, but luck never hurts anyone who rolls dice.', 'Vor allem Schurken, aber Glück schadet niemandem, der Würfel wirft.'),
     names: ['Vex', 'Nim', 'Rosie', 'Milo', 'Sable', 'Pip', 'Callie', 'Finnan'],
@@ -545,7 +546,7 @@ const species: SpeciesDef[] = [
   {
     id: 'gnome', name: 'Gnome', icon: '🧙', size: 'Small', speed: 30, recommendedFor: ['wizard'],
     summary: L('Curious tinkerers with a mind that is hard to fool. Mostly story benefits.', 'Neugierige Tüftler mit einem Verstand, der sich kaum täuschen lässt. Vor allem erzählerische Vorteile.'),
-    description: L('Gnomes meet the world with wide eyes and a notebook. Their quick minds resist magic that tries to bend thought. In this game their gifts mostly matter in the story, not on the battle grid.', 'Gnome begegnen der Welt mit großen Augen und einem Notizbuch. Ihr wacher Verstand widersteht Magie, die Gedanken verbiegen will. In diesem Spiel zählen ihre Gaben vor allem in der Geschichte, weniger auf dem Kampffeld.'),
+    description: L('Gnomes meet the world with wide eyes and a notebook. Their quick minds resist magic that tries to bend thought. In this game their gifts mostly matter in the story, not on the battle grid.', 'Gnome begegnen der Welt mit grossen Augen und einem Notizbuch. Ihr wacher Verstand widersteht Magie, die Gedanken verbiegen will. In diesem Spiel zählen ihre Gaben vor allem in der Geschichte, weniger auf dem Kampffeld.'),
     effects: [
       darkvision(60),
       S('Gnomish Cunning', 'You have advantage on Intelligence, Wisdom and Charisma saves.', 'Du hast Vorteil bei Intelligenz-, Weisheits- und Charismarettungswürfen.'),
@@ -594,11 +595,11 @@ const species: SpeciesDef[] = [
   {
     id: 'goliath', name: 'Goliath', icon: '🏔️', size: 'Medium', speed: 35, recommendedFor: ['fighter', 'barbarian', 'monk'],
     summary: L('Towering mountain folk, distantly related to giants. Long strides.', 'Hünenhaftes Bergvolk, entfernt mit Riesen verwandt. Lange Schritte.'),
-    description: L('Goliaths grow up on high peaks where every day is a contest. They are taller than any other people, and a single step of theirs covers a lot of ground.', 'Goliaths wachsen auf hohen Gipfeln auf, wo jeder Tag ein Wettstreit ist. Sie sind größer als jedes andere Volk, und ein einziger ihrer Schritte überwindet viel Boden.'),
+    description: L('Goliaths grow up on high peaks where every day is a contest. They are taller than any other people, and a single step of theirs covers a lot of ground.', 'Goliaths wachsen auf hohen Gipfeln auf, wo jeder Tag ein Wettstreit ist. Sie sind grösser als jedes andere Volk, und ein einziger ihrer Schritte überwindet viel Boden.'),
     effects: [
       E('Long Stride', 'Your speed is 35 ft instead of 30 ft: one more tile of movement each turn.', 'Deine Bewegungsrate beträgt 35 ft statt 30 ft: ein Feld mehr Bewegung pro Zug.'),
-      S('Powerful Build', 'You lift, carry and push like a creature one size larger, and break free of a grapple more easily.', 'Du hebst, trägst und schiebst wie eine Kreatur der nächsten Größenkategorie und befreist dich leichter aus einem Haltegriff.'),
-      S('Giant Ancestry', 'The blood of giants lets you shrug off a blow or shove a foe now and then, as the Dungeon Master sees fit.', 'Das Blut der Riesen lässt dich hin und wieder einen Schlag abschütteln oder einen Gegner wegstoßen, wie es der Spielleiter für passend hält.'),
+      S('Powerful Build', 'You lift, carry and push like a creature one size larger, and break free of a grapple more easily.', 'Du hebst, trägst und schiebst wie eine Kreatur der nächsten Grössenkategorie und befreist dich leichter aus einem Haltegriff.'),
+      S('Giant Ancestry', 'The blood of giants lets you shrug off a blow or shove a foe now and then, as the Dungeon Master sees fit.', 'Das Blut der Riesen lässt dich hin und wieder einen Schlag abschütteln oder einen Gegner wegstossen, wie es der Spielleiter für passend hält.'),
     ],
     goodFor: L('Melee fighters who need to reach the enemy quickly.', 'Nahkämpfer, die schnell beim Gegner sein müssen.'),
     names: ['Aukan', 'Thalai', 'Vimak', 'Orilo', 'Keothi', 'Gae-Al', 'Manneo', 'Paavu'],
@@ -710,14 +711,14 @@ const feats: FeatDef[] = [
   {
     id: 'savage_attacker', name: 'Savage Attacker', icon: '🩸', origin: true, recommendedFor: ['fighter'], feature: 'Savage Attacker: once per turn, roll weapon damage twice and keep the higher',
     summary: L('Once per turn, roll weapon damage twice and keep the higher result.', 'Einmal pro Zug Waffenschaden zweimal würfeln und das höhere Ergebnis behalten.'),
-    description: L('You have learned to make every hit count. The bigger your weapon\'s dice, the more this is worth: a greatsword gains far more than a dagger.', 'Du hast gelernt, jeden Treffer auszukosten. Je größer die Würfel deiner Waffe, desto mehr ist das wert: Ein Zweihänder profitiert weit mehr als ein Dolch.'),
+    description: L('You have learned to make every hit count. The bigger your weapon\'s dice, the more this is worth: a greatsword gains far more than a dagger.', 'Du hast gelernt, jeden Treffer auszukosten. Je grösser die Würfel deiner Waffe, desto mehr ist das wert: Ein Zweihänder profitiert weit mehr als ein Dolch.'),
     effects: [E('Damage', 'On your first weapon hit each turn, the weapon\'s damage dice are rolled twice and the higher total is used.', 'Bei deinem ersten Waffentreffer in jedem Zug werden die Schadenswürfel der Waffe zweimal gewürfelt und das höhere Ergebnis zählt.')],
-    goodFor: L('Fighters with big weapons. No effect on spells.', 'Kämpfer mit großen Waffen. Keine Wirkung auf Zauber.'),
+    goodFor: L('Fighters with big weapons. No effect on spells.', 'Kämpfer mit grossen Waffen. Keine Wirkung auf Zauber.'),
   },
   {
     id: 'skilled', name: 'Skilled', icon: '🎓', origin: true, recommendedFor: ['rogue'], feature: 'Skilled: three extra skill proficiencies',
     summary: L('Proficiency in three more skills.', 'Übung in drei weiteren Fertigkeiten.'),
-    description: L('You have picked up a bit of everything. Outside combat the Dungeon Master asks for skill checks all the time, and being proficient adds your proficiency bonus to each of them.', 'Du hast von allem ein wenig gelernt. Außerhalb des Kampfes verlangt der Spielleiter ständig Fertigkeitswürfe, und Übung addiert deinen Übungsbonus auf jeden davon.'),
+    description: L('You have picked up a bit of everything. Outside combat the Dungeon Master asks for skill checks all the time, and being proficient adds your proficiency bonus to each of them.', 'Du hast von allem ein wenig gelernt. Ausserhalb des Kampfes verlangt der Spielleiter ständig Fertigkeitswürfe, und Übung addiert deinen Übungsbonus auf jeden davon.'),
     effects: [E('Skills', 'Choose three skills you are not yet proficient in.', 'Wähle drei Fertigkeiten, in denen du noch nicht geübt bist.')],
     goodFor: L('Solo players and small parties, where one hero has to cover many situations.', 'Solospieler und kleine Gruppen, in denen ein Held viele Situationen abdecken muss.'),
   },
@@ -777,7 +778,7 @@ const feats: FeatDef[] = [
   {
     id: 'boon_spell_recall', name: 'Boon of Spell Recall', icon: '♻️', origin: false, epic: true, recommendedFor: ['wizard', 'cleric', 'bard', 'druid', 'sorcerer', 'warlock'], boost: ['int', 'wis', 'cha'], feature: 'Boon of Spell Recall: a spell of 1st to 4th level has a one in four chance to cost no mana',
     summary: L('+1 Intelligence, Wisdom or Charisma; one spell in four costs no mana.', '+1 Intelligenz, Weisheit oder Charisma; jeder vierte Zauber kostet kein Mana.'),
-    description: L('Magic sometimes flows back into you. Each time you cast a spell of 1st to 4th level there is a one in four chance that it costs nothing.', 'Manchmal fließt die Magie in dich zurück. Jedes Mal, wenn du einen Zauber des 1. bis 4. Grades wirkst, kostet er mit einer Chance von eins zu vier nichts.'),
+    description: L('Magic sometimes flows back into you. Each time you cast a spell of 1st to 4th level there is a one in four chance that it costs nothing.', 'Manchmal fliesst die Magie in dich zurück. Jedes Mal, wenn du einen Zauber des 1. bis 4. Grades wirkst, kostet er mit einer Chance von eins zu vier nichts.'),
     effects: [
       E('Increase', 'Raise Intelligence, Wisdom or Charisma by 1, to a maximum of 30.', 'Erhöhe Intelligenz, Weisheit oder Charisma um 1, bis höchstens 30.'),
       E('Free Casting', 'A spell of 1st to 4th level costs no mana one time in four.', 'Ein Zauber des 1. bis 4. Grades kostet in einem von vier Fällen kein Mana.'),
@@ -787,7 +788,7 @@ const feats: FeatDef[] = [
   {
     id: 'boon_fate', name: 'Boon of Fate', icon: '🎲', origin: false, epic: true, recommendedFor: [], boost: ['str', 'dex', 'con', 'int', 'wis', 'cha'], feature: 'Boon of Fate: once per fight, add 2d4 to a saving throw you would fail',
     summary: L('+1 to an ability score, and fate tips one saving throw per fight your way.', '+1 auf einen Attributswert, und das Schicksal neigt einen Rettungswurf pro Kampf zu deinen Gunsten.'),
-    description: L('You can nudge what is about to happen. The first saving throw you would fail in each fight gets 2d4 added.', 'Du kannst dem, was gleich geschieht, einen Stoß geben. Der erste Rettungswurf, der dir in jedem Kampf misslingen würde, erhält 2W4 dazu.'),
+    description: L('You can nudge what is about to happen. The first saving throw you would fail in each fight gets 2d4 added.', 'Du kannst dem, was gleich geschieht, einen Stoss geben. Der erste Rettungswurf, der dir in jedem Kampf misslingen würde, erhält 2W4 dazu.'),
     effects: [
       E('Increase', 'Raise one ability score by 1, to a maximum of 30.', 'Erhöhe einen Attributswert um 1, bis höchstens 30.'),
       E('Improve Fate', 'Once per fight, 2d4 is added to a saving throw you would fail.', 'Einmal pro Kampf werden 2W4 auf einen Rettungswurf addiert, der dir misslingen würde.'),
@@ -806,11 +807,11 @@ const feats: FeatDef[] = [
   },
   {
     id: 'boon_night_spirit', name: 'Boon of the Night Spirit', icon: '🌒', origin: false, epic: true, recommendedFor: [], boost: ['str', 'dex', 'con', 'int', 'wis', 'cha'], feature: 'Boon of the Night Spirit: in dim light or darkness you resist all damage except psychic and radiant',
-    summary: L('+1 to an ability score; outside bright light you resist almost all damage.', '+1 auf einen Attributswert; außerhalb von hellem Licht bist du gegen fast jeden Schaden resistent.'),
-    description: L('The night takes you in. While you stand in dim light or darkness in a fight, you take half damage from everything but psychic and radiant damage.', 'Die Nacht nimmt dich auf. Solange du im Kampf in schwachem Licht oder Dunkelheit stehst, erleidest du halben Schaden durch alles außer psychischem und gleißendem Schaden.'),
+    summary: L('+1 to an ability score; outside bright light you resist almost all damage.', '+1 auf einen Attributswert; ausserhalb von hellem Licht bist du gegen fast jeden Schaden resistent.'),
+    description: L('The night takes you in. While you stand in dim light or darkness in a fight, you take half damage from everything but psychic and radiant damage.', 'Die Nacht nimmt dich auf. Solange du im Kampf in schwachem Licht oder Dunkelheit stehst, erleidest du halben Schaden durch alles ausser psychischem und gleissendem Schaden.'),
     effects: [
       E('Increase', 'Raise one ability score by 1, to a maximum of 30.', 'Erhöhe einen Attributswert um 1, bis höchstens 30.'),
-      E('Shadowy Form', 'In dim light or darkness you resist all damage except psychic and radiant.', 'In schwachem Licht oder Dunkelheit bist du gegen jeden Schaden außer psychischem und gleißendem resistent.'),
+      E('Shadowy Form', 'In dim light or darkness you resist all damage except psychic and radiant.', 'In schwachem Licht oder Dunkelheit bist du gegen jeden Schaden ausser psychischem und gleissendem resistent.'),
     ],
     goodFor: L('Heroes who fight underground and at night.', 'Helden, die unter der Erde und bei Nacht kämpfen.'),
   },
@@ -836,7 +837,7 @@ const styles: StyleDef[] = [
   {
     id: 'defense', name: 'Defense', icon: '🛡️', recommendedFor: ['fighter'], feature: 'Fighting Style (Defense): +1 AC while wearing armor',
     summary: L('+1 armor class while you wear armor.', '+1 Rüstungsklasse, solange du Rüstung trägst.'),
-    description: L('You know how to turn a blow with your armor. One point of AC sounds small, but it makes about one in twenty attacks against you miss, in every fight, forever.', 'Du weißt, wie man Schläge mit der Rüstung ablenkt. Ein Punkt RK klingt gering, lässt aber etwa jeden zwanzigsten Angriff gegen dich danebengehen, in jedem Kampf, für immer.'),
+    description: L('You know how to turn a blow with your armor. One point of AC sounds small, but it makes about one in twenty attacks against you miss, in every fight, forever.', 'Du weisst, wie man Schläge mit der Rüstung ablenkt. Ein Punkt RK klingt gering, lässt aber etwa jeden zwanzigsten Angriff gegen dich danebengehen, in jedem Kampf, für immer.'),
     effects: [E('Armor class', '+1 AC while you wear any armor. Works with every weapon.', '+1 RK, solange du irgendeine Rüstung trägst. Funktioniert mit jeder Waffe.')],
     goodFor: L('The safe choice, and the best one for a sword-and-shield fighter who holds the line.', 'Die sichere Wahl und die beste für einen Kämpfer mit Schwert und Schild, der die Linie hält.'),
   },
@@ -850,14 +851,14 @@ const styles: StyleDef[] = [
   {
     id: 'great_weapon', name: 'Great Weapon Fighting', icon: '⚔️', recommendedFor: [], feature: 'Fighting Style (Great Weapon Fighting): damage dice of two-handed melee weapons never roll below 3',
     summary: L('Two-handed melee weapons never roll below 3 on a damage die.', 'Zweihändige Nahkampfwaffen würfeln bei Schadenswürfeln nie unter 3.'),
-    description: L('You swing the biggest weapons with practised force. Bad damage rolls become rare, which makes your hits more reliable.', 'Du schwingst die größten Waffen mit geübter Wucht. Schlechte Schadenswürfe werden selten, deine Treffer also verlässlicher.'),
+    description: L('You swing the biggest weapons with practised force. Bad damage rolls become rare, which makes your hits more reliable.', 'Du schwingst die grössten Waffen mit geübter Wucht. Schlechte Schadenswürfe werden selten, deine Treffer also verlässlicher.'),
     effects: [E('Damage', 'When you roll a 1 or 2 on a damage die of a two-handed melee weapon, it counts as 3.', 'Wenn du bei einem Schadenswürfel einer zweihändigen Nahkampfwaffe eine 1 oder 2 würfelst, zählt sie als 3.')],
     goodFor: L('Fighters with a greatsword. You give up the shield for it.', 'Kämpfer mit Zweihänder. Dafür verzichtest du auf den Schild.'),
   },
   {
     id: 'archery', name: 'Archery', icon: '🏹', recommendedFor: [], feature: 'Fighting Style (Archery): +2 to attack rolls with ranged weapons',
     summary: L('+2 to attack rolls with ranged weapons.', '+2 auf Angriffswürfe mit Fernkampfwaffen.'),
-    description: L('Your arrows find their mark. +2 to hit is a large bonus: it turns roughly one miss in ten into a hit.', 'Deine Pfeile finden ihr Ziel. +2 auf den Trefferwurf ist ein großer Bonus: Er macht etwa aus jedem zehnten Fehlschuss einen Treffer.'),
+    description: L('Your arrows find their mark. +2 to hit is a large bonus: it turns roughly one miss in ten into a hit.', 'Deine Pfeile finden ihr Ziel. +2 auf den Trefferwurf ist ein grosser Bonus: Er macht etwa aus jedem zehnten Fehlschuss einen Treffer.'),
     effects: [E('Attack', '+2 to attack rolls with bows and other ranged weapons.', '+2 auf Angriffswürfe mit Bögen und anderen Fernkampfwaffen.')],
     goodFor: L('Fighters who build on Dexterity and fight with a longbow.', 'Kämpfer, die auf Geschicklichkeit setzen und mit dem Langbogen kämpfen.'),
   },
@@ -882,11 +883,11 @@ const kits: KitDef[] = [
     L('Strength fighters who want to be the party\'s wall.', 'Stärke-Kämpfer, die die Mauer der Gruppe sein wollen.')),
   kit('fighter_greatsword', 'fighter', 'Greatsword', '⚔️', false, { armor: 'chain_mail', mainHand: 'greatsword' }, [{ id: 'handaxe' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Chain mail and a two-handed greatsword. Less armor, much more damage.', 'Kettenpanzer und ein zweihändiger Zweihänder. Weniger Rüstung, deutlich mehr Schaden.'),
-    L('2d6 damage instead of 1d8, at the price of the shield (AC 16 instead of 18). Pairs with Great Weapon Fighting and Savage Attacker.', '2W6 Schaden statt 1W8, zum Preis des Schilds (RK 16 statt 18). Passt zu Kampf mit großen Waffen und Wilder Angreifer.'),
+    L('2d6 damage instead of 1d8, at the price of the shield (AC 16 instead of 18). Pairs with Great Weapon Fighting and Savage Attacker.', '2W6 Schaden statt 1W8, zum Preis des Schilds (RK 16 statt 18). Passt zu Kampf mit grossen Waffen und Wilder Angreifer.'),
     L('Strength fighters who want fights to end quickly.', 'Stärke-Kämpfer, die Kämpfe schnell beenden wollen.')),
   kit('fighter_archer', 'fighter', 'Longbow', '🏹', false, { armor: 'studded_leather', mainHand: 'longbow' }, [{ id: 'shortsword' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Studded leather, a longbow and a shortsword for close quarters.', 'Beschlagenes Leder, ein Langbogen und ein Kurzschwert für den Nahkampf.'),
-    L('You fight from 150 ft away. Light armor adds your full Dexterity to AC, so put your best score there. Pairs with the Archery style.', 'Du kämpfst aus 150 ft Entfernung. Leichte Rüstung addiert deine volle Geschicklichkeit auf die RK, setze also deinen besten Wert dorthin. Passt zum Kampfstil Bogenschießen.'),
+    L('You fight from 150 ft away. Light armor adds your full Dexterity to AC, so put your best score there. Pairs with the Archery style.', 'Du kämpfst aus 150 ft Entfernung. Leichte Rüstung addiert deine volle Geschicklichkeit auf die RK, setze also deinen besten Wert dorthin. Passt zum Kampfstil Bogenschiessen.'),
     L('Fighters with Dexterity as their highest ability.', 'Kämpfer mit Geschicklichkeit als höchstem Attribut.')),
   kit('rogue_duelist', 'rogue', 'Rapier and Bow', '🤺', true, { armor: 'leather', mainHand: 'rapier' }, [{ id: 'shortbow' }, { id: 'dagger' }, { id: 'potion_healing' }, { id: 'thieves_tools' }],
     L('Leather armor, a rapier for melee, a shortbow for range and thieves\' tools.', 'Lederrüstung, ein Rapier für den Nahkampf, ein Kurzbogen für die Distanz und Diebeswerkzeug.'),
@@ -902,7 +903,7 @@ const kits: KitDef[] = [
     L('Most wizards.', 'Die meisten Magier.')),
   kit('wizard_survivor', 'wizard', 'Survivor\'s Pack', '🧪', false, { mainHand: 'dagger' }, [{ id: 'potion_healing', qty: 3 }, { id: 'spellbook' }, { id: 'torch', qty: 3 }],
     L('Dagger, spellbook and three healing potions.', 'Dolch, Zauberbuch und drei Heiltränke.'),
-    L('A wizard\'s biggest weakness is low hit points. Three potions buy you a lot of second chances.', 'Die größte Schwäche eines Magiers sind wenige Trefferpunkte. Drei Tränke verschaffen dir einige zweite Chancen.'),
+    L('A wizard\'s biggest weakness is low hit points. Three potions buy you a lot of second chances.', 'Die grösste Schwäche eines Magiers sind wenige Trefferpunkte. Drei Tränke verschaffen dir einige zweite Chancen.'),
     L('Solo wizards and small parties without a healer.', 'Solo-Magier und kleine Gruppen ohne Heiler.')),
   kit('cleric_battle', 'cleric', 'Mace and Shield', '🔨', true, { armor: 'scale_mail', mainHand: 'mace', offHand: 'shield', amulet: 'holy_symbol' }, [{ id: 'potion_healing', qty: 2 }],
     L('Scale mail, mace, shield and a holy symbol.', 'Schuppenpanzer, Streitkolben, Schild und ein heiliges Symbol.'),
@@ -914,7 +915,7 @@ const kits: KitDef[] = [
     L('Clerics who stay in the back and cast.', 'Kleriker, die hinten bleiben und zaubern.')),
   kit('barbarian_greataxe', 'barbarian', 'Greataxe', '🪓', true, { mainHand: 'greataxe' }, [{ id: 'handaxe', qty: 2 }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('A greataxe, two handaxes and no armor at all.', 'Eine Zweihandaxt, zwei Handbeile und überhaupt keine Rüstung.'),
-    L('1d12 damage, the biggest weapon die in the game. Your Unarmored Defense replaces armor, so Dexterity and Constitution are your protection.', '1W12 Schaden, der größte Waffenwürfel im Spiel. Deine Ungerüstete Verteidigung ersetzt die Rüstung, Geschicklichkeit und Konstitution sind also dein Schutz.'),
+    L('1d12 damage, the biggest weapon die in the game. Your Unarmored Defense replaces armor, so Dexterity and Constitution are your protection.', '1W12 Schaden, der grösste Waffenwürfel im Spiel. Deine Ungerüstete Verteidigung ersetzt die Rüstung, Geschicklichkeit und Konstitution sind also dein Schutz.'),
     L('Barbarians who want every hit to hurt.', 'Barbaren, bei denen jeder Treffer wehtun soll.')),
   kit('barbarian_shield', 'barbarian', 'Axe and Shield', '🛡️', false, { mainHand: 'battleaxe', offHand: 'shield' }, [{ id: 'handaxe', qty: 2 }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('A battleaxe and a shield, without armor.', 'Eine Streitaxt und ein Schild, ohne Rüstung.'),
@@ -951,10 +952,10 @@ const kits: KitDef[] = [
   kit('paladin_greatsword', 'paladin', 'Greatsword', '⚔️', false, { armor: 'chain_mail', mainHand: 'greatsword', amulet: 'holy_symbol' }, [{ id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Chain mail, a greatsword and a holy symbol.', 'Kettenpanzer, ein Zweihänder und ein heiliges Symbol.'),
     L('2d6 damage and a Divine Smite on top. You give up the shield for it.', '2W6 Schaden und obendrauf ein Göttliches Niederstrecken. Dafür verzichtest du auf den Schild.'),
-    L('Paladins who want the biggest hits in the party.', 'Paladine, die die größten Treffer der Gruppe wollen.')),
+    L('Paladins who want the biggest hits in the party.', 'Paladine, die die grössten Treffer der Gruppe wollen.')),
   kit('ranger_archer', 'ranger', 'Longbow', '🏹', true, { armor: 'studded_leather', mainHand: 'longbow' }, [{ id: 'shortsword' }, { id: 'potion_healing' }, { id: 'rope_hemp' }, { id: 'torch', qty: 3 }],
     L('Studded leather, a longbow, a shortsword, a rope and a potion.', 'Beschlagenes Leder, ein Langbogen, ein Kurzschwert, ein Seil und ein Trank.'),
-    L('You fight from 150 ft away, with Hunter\'s Mark on your target. Pairs with the Archery style at level 2.', 'Du kämpfst aus 150 ft Entfernung, mit dem Zeichen des Jägers auf deinem Ziel. Passt zum Kampfstil Bogenschießen auf Stufe 2.'),
+    L('You fight from 150 ft away, with Hunter\'s Mark on your target. Pairs with the Archery style at level 2.', 'Du kämpfst aus 150 ft Entfernung, mit dem Zeichen des Jägers auf deinem Ziel. Passt zum Kampfstil Bogenschiessen auf Stufe 2.'),
     L('Most rangers.', 'Die meisten Waldläufer.')),
   kit('ranger_warden', 'ranger', 'Sword and Shield', '🗡️', false, { armor: 'scale_mail', mainHand: 'longsword', offHand: 'shield' }, [{ id: 'shortbow' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Scale mail, longsword, shield and a shortbow for range.', 'Schuppenpanzer, Langschwert, Schild und ein Kurzbogen für die Distanz.'),
@@ -1013,7 +1014,7 @@ export const ABILITY_HELP: Record<AbilityKey, { text: L; uses: L }> = {
 
 /** What each skill is used for at the table. */
 export const SKILL_HELP: Record<string, L> = {
-  acrobatics: L('Keep your balance, tumble past danger, land on your feet.', 'Das Gleichgewicht halten, an Gefahren vorbeirollen, auf den Füßen landen.'),
+  acrobatics: L('Keep your balance, tumble past danger, land on your feet.', 'Das Gleichgewicht halten, an Gefahren vorbeirollen, auf den Füssen landen.'),
   'animal handling': L('Calm a frightened horse, read a beast\'s mood, ride through trouble.', 'Ein scheuendes Pferd beruhigen, die Stimmung eines Tieres deuten, sicher durch Gefahr reiten.'),
   arcana: L('Recognise spells, magic items, runes and creatures of magic.', 'Zauber, magische Gegenstände, Runen und magische Wesen erkennen.'),
   athletics: L('Climb, swim, jump, grapple and force things open.', 'Klettern, schwimmen, springen, ringen und Dinge aufstemmen.'),
@@ -1046,7 +1047,7 @@ export const GLOSSARY: Term[] = [
   { id: 'proficiency', name: L('Proficiency bonus', 'Übungsbonus'), match: { en: 'proficiency bonus|proficiency|proficient', de: 'Übungsbonus|Übung|geübt' },
     text: L('A bonus for things you are trained in: +2 at levels 1 to 4, +3 from level 5. It is added to attacks with weapons you know, your spells, your proficient skills and your proficient saving throws.', 'Ein Bonus auf alles, worin du ausgebildet bist: +2 auf den Stufen 1 bis 4, +3 ab Stufe 5. Er wird auf Angriffe mit vertrauten Waffen, deine Zauber, deine geübten Fertigkeiten und deine geübten Rettungswürfe addiert.') },
   { id: 'save', name: L('Saving throw', 'Rettungswurf'), match: { en: 'saving throws?|saves?', de: 'Rettungsw(?:urf|ürfe|ürfen|urfs)' },
-    text: L('A d20 roll to resist something that happens to you: dodging a fireball (Dexterity), enduring poison (Constitution), shaking off a charm (Wisdom). You add the ability modifier, plus your proficiency bonus for the two saves your class is trained in.', 'Ein W20-Wurf, um etwas zu widerstehen, das dir zustößt: einem Feuerball ausweichen (Geschicklichkeit), Gift aushalten (Konstitution), eine Bezauberung abschütteln (Weisheit). Du addierst den Attributsmodifikator und bei den zwei Rettungswürfen deiner Klasse zusätzlich den Übungsbonus.') },
+    text: L('A d20 roll to resist something that happens to you: dodging a fireball (Dexterity), enduring poison (Constitution), shaking off a charm (Wisdom). You add the ability modifier, plus your proficiency bonus for the two saves your class is trained in.', 'Ein W20-Wurf, um etwas zu widerstehen, das dir zustösst: einem Feuerball ausweichen (Geschicklichkeit), Gift aushalten (Konstitution), eine Bezauberung abschütteln (Weisheit). Du addierst den Attributsmodifikator und bei den zwei Rettungswürfen deiner Klasse zusätzlich den Übungsbonus.') },
   { id: 'dc', name: L('Difficulty Class (DC)', 'Schwierigkeitsgrad (SG)'), match: { en: 'DCs?', de: 'SG' },
     text: L('The number a check or saving throw has to reach. Your own spells set a DC of 8 + proficiency bonus + spellcasting modifier for the enemy to beat.', 'Die Zahl, die ein Wurf erreichen muss. Deine eigenen Zauber setzen einen SG von 8 + Übungsbonus + Zaubermodifikator, den der Gegner erreichen muss.') },
   { id: 'ac', name: L('Armor Class (AC)', 'Rüstungsklasse (RK)'), match: { en: 'armor class|AC', de: 'Rüstungsklasse|RK' },

@@ -191,7 +191,7 @@ export const TOWNS: TownTpl[] = [
     id: 'market',
     description: {
       en: 'A walled market town at the meeting of two roads. Farmers, tinkers and caravan guards crowd its square on market days.',
-      de: 'Eine ummauerte Marktstadt an der Kreuzung zweier Straßen. An Markttagen drängen sich Bauern, Kesselflicker und Karawanenwachen auf ihrem Platz.',
+      de: 'Eine ummauerte Marktstadt an der Kreuzung zweier Strassen. An Markttagen drängen sich Bauern, Kesselflicker und Karawanenwachen auf ihrem Platz.',
     },
     appearance: 'A small medieval market town ringed by a low grey stone wall, timber-framed houses with slate roofs, a cobbled square with a stone well, warm lamplight in the windows.',
     title: { en: 'Reeve', de: ['Vögtin', 'Vogt'] }, role: { en: 'reeve of {town}', de: ['Vögtin von {town}', 'Vogt von {town}'] },
@@ -200,7 +200,7 @@ export const TOWNS: TownTpl[] = [
     id: 'harbour', themes: ['coast'], water: true,
     description: {
       en: 'A harbour town of tarred sheds and gull-white roofs around a stone quay. Half its people fish, and the other half trade in what the ships bring.',
-      de: 'Eine Hafenstadt aus geteerten Schuppen und möwenweißen Dächern rings um einen steinernen Kai. Die eine Hälfte ihrer Leute fischt, die andere handelt mit dem, was die Schiffe bringen.',
+      de: 'Eine Hafenstadt aus geteerten Schuppen und möwenweissen Dächern rings um einen steinernen Kai. Die eine Hälfte ihrer Leute fischt, die andere handelt mit dem, was die Schiffe bringen.',
     },
     appearance: 'A small medieval harbour town around a stone quay, tarred boat sheds, whitewashed houses with steep roofs, fishing boats at anchor, nets drying on racks, gulls overhead.',
     title: { en: 'Harbourmaster', de: ['Hafenmeisterin', 'Hafenmeister'] }, role: { en: 'harbourmaster of {town}', de: ['Hafenmeisterin von {town}', 'Hafenmeister von {town}'] },
@@ -218,7 +218,7 @@ export const TOWNS: TownTpl[] = [
     id: 'mining', themes: ['highlands', 'vale'],
     description: {
       en: 'A mining town terraced into the hillside, all soot, ore carts and hammering. The mine pays for everything here, and everyone knows it.',
-      de: 'Eine Bergbaustadt, in Terrassen an den Hang gebaut, voller Ruß, Erzkarren und Hämmern. Die Mine bezahlt hier alles, und jeder weiß es.',
+      de: 'Eine Bergbaustadt, in Terrassen an den Hang gebaut, voller Russ, Erzkarren und Hämmern. Die Mine bezahlt hier alles, und jeder weiss es.',
     },
     appearance: 'A small mining town terraced into a steep hillside, stone houses stained with soot, ore carts on wooden rails, a tall smelter chimney, a timber headframe above the roofs.',
     title: { en: 'Warden', de: ['Bergmeisterin', 'Bergmeister'] }, role: { en: 'mine warden of {town}', de: ['Bergmeisterin von {town}', 'Bergmeister von {town}'] },
@@ -264,7 +264,7 @@ export const INNKEEPER = {
     },
     {
       en: 'Runs the house with a loud laugh and a long memory for unpaid tabs. Lost a regular to the roads this season and has not forgiven whoever is behind it.',
-      de: 'Führt das Haus mit lautem Lachen und einem langen Gedächtnis für offene Zechen. Hat in dieser Saison einen Stammgast an die Landstraße verloren und verzeiht es denen nicht, die dahinterstecken.',
+      de: 'Führt das Haus mit lautem Lachen und einem langen Gedächtnis für offene Zechen. Hat in dieser Saison einen Stammgast an die Landstrasse verloren und verzeiht es denen nicht, die dahinterstecken.',
     },
   ] as L[],
   clothes: 'a flour-dusted leather apron and rolled sleeves',
@@ -290,13 +290,13 @@ export const VILLAGES: VillageTpl[] = [
     id: 'fishing', themes: ['coast', 'vale', 'marsh', 'highlands'], site: { dist: [4, 7], water: true }, gist: 'a fishing village',
     description: {
       en: "A fishing village of tarred boats and drying nets at the water's edge. Its folk are close-mouthed with strangers and generous with smoked fish.",
-      de: 'Ein Fischerdorf aus geteerten Booten und trocknenden Netzen am Wasser. Die Leute sind Fremden gegenüber wortkarg und mit Räucherfisch großzügig.',
+      de: 'Ein Fischerdorf aus geteerten Booten und trocknenden Netzen am Wasser. Die Leute sind Fremden gegenüber wortkarg und mit Räucherfisch grosszügig.',
     },
     appearance: 'A small fishing village of weathered wooden houses beside grey water, nets drying on racks, flat-bottomed boats pulled up on a muddy shore, morning mist.',
     role: { en: 'net-mender of {village}', de: ['Netzflickerin aus {village}', 'Netzflicker aus {village}'] },
     person: {
       en: 'Has worked these waters for forty years and swears something large moved under the boat last month.',
-      de: 'Arbeitet seit vierzig Jahren auf diesem Wasser und schwört, dass sich letzten Monat etwas Großes unter dem Boot bewegt hat.',
+      de: 'Arbeitet seit vierzig Jahren auf diesem Wasser und schwört, dass sich letzten Monat etwas Grosses unter dem Boot bewegt hat.',
     },
     clothes: 'a patched oilskin coat and a wide-brimmed straw hat',
   },
@@ -310,7 +310,7 @@ export const VILLAGES: VillageTpl[] = [
     role: { en: 'head shepherd of {village}', de: ['Oberschäferin von {village}', 'Oberschäfer von {village}'] },
     person: {
       en: 'Counts the flock every dusk and comes up short too often. Knows every path through the hills and who has been using them.',
-      de: 'Zählt jeden Abend die Herde und kommt zu oft nicht auf die volle Zahl. Kennt jeden Pfad durch die Hügel und weiß, wer sie in letzter Zeit benutzt.',
+      de: 'Zählt jeden Abend die Herde und kommt zu oft nicht auf die volle Zahl. Kennt jeden Pfad durch die Hügel und weiss, wer sie in letzter Zeit benutzt.',
     },
     clothes: 'a heavy undyed wool cloak and a long crook',
   },
@@ -318,7 +318,7 @@ export const VILLAGES: VillageTpl[] = [
     id: 'charcoal', themes: ['forest', 'vale', 'highlands'], site: { dist: [4, 7], prefer: 'f' }, gist: 'a hamlet of charcoal burners',
     description: {
       en: 'A forest hamlet of charcoal burners, wrapped in sweet smoke. Its people trust the woods more than the town, and say the woods have changed.',
-      de: 'Ein Waldweiler der Köhler, eingehüllt in süßen Rauch. Seine Leute trauen dem Wald mehr als der Stadt und sagen, der Wald habe sich verändert.',
+      de: 'Ein Waldweiler der Köhler, eingehüllt in süssen Rauch. Seine Leute trauen dem Wald mehr als der Stadt und sagen, der Wald habe sich verändert.',
     },
     appearance: 'A forest hamlet of bark-roofed huts in a clearing, smoking earth-covered charcoal kilns, stacked cordwood, tall dark trees all around, blue haze.',
     role: { en: 'charcoal burner of {village}', de: ['Köhlerin aus {village}', 'Köhler aus {village}'] },
@@ -332,13 +332,13 @@ export const VILLAGES: VillageTpl[] = [
     id: 'peat', themes: ['marsh', 'coast'], site: { dist: [4, 7], prefer: 's', water: true }, gist: 'a stilt village of peat cutters',
     description: {
       en: 'A village on stilts above the reeds, joined by plank walks. Peat cutters and eel trappers live here and keep a lantern lit for those still out at dusk.',
-      de: 'Ein Dorf auf Pfählen über dem Schilf, verbunden durch Bohlenstege. Hier leben Torfstecher und Aalfänger und lassen eine Laterne brennen für alle, die in der Dämmerung noch draußen sind.',
+      de: 'Ein Dorf auf Pfählen über dem Schilf, verbunden durch Bohlenstege. Hier leben Torfstecher und Aalfänger und lassen eine Laterne brennen für alle, die in der Dämmerung noch draussen sind.',
     },
     appearance: 'A marsh village of wooden houses on stilts above reed beds, plank walkways, stacked peat bricks, eel traps, a lantern on a tall pole, evening mist.',
     role: { en: 'peat cutter of {village}', de: ['Torfstecherin aus {village}', 'Torfstecher aus {village}'] },
     person: {
       en: 'Knows the safe paths through the mire and charges fairly to show them. Has seen lights out on the water where no one lives.',
-      de: 'Kennt die sicheren Pfade durchs Moor und verlangt einen fairen Preis dafür, sie zu zeigen. Hat Lichter draußen auf dem Wasser gesehen, wo niemand wohnt.',
+      de: 'Kennt die sicheren Pfade durchs Moor und verlangt einen fairen Preis dafür, sie zu zeigen. Hat Lichter draussen auf dem Wasser gesehen, wo niemand wohnt.',
     },
     clothes: 'mud-stained waders and a reed hat',
   },
@@ -486,7 +486,7 @@ export const MINOR_SITES: MinorTpl[] = [
     appearance: 'A dark cave mouth under the roots of a huge fallen pine, gnawed bones scattered on the slope below, paw prints in the mud, thick forest.',
     stages: [
       { name: { en: 'the Bone Slope', de: 'Knochenhang' }, description: { en: 'A scree of gnawed bones below the cave mouth. Yellow eyes watch from the brush.', de: 'Ein Geröllhang aus abgenagten Knochen unter dem Höhleneingang. Aus dem Gestrüpp beobachten euch gelbe Augen.' }, monsters: [{ defId: 'wolf', count: 4 }] },
-      { name: { en: 'the Deep Den', de: 'Tiefer Bau' }, description: { en: 'The cave narrows, then opens into a warm, rank hollow. Something much larger than a wolf uncurls.', de: 'Die Höhle wird eng und öffnet sich dann zu einer warmen, stinkenden Mulde. Etwas viel Größeres als ein Wolf richtet sich auf.' }, monsters: [{ defId: 'dire_wolf', count: 1 }, { defId: 'wolf', count: 2 }] },
+      { name: { en: 'the Deep Den', de: 'Tiefer Bau' }, description: { en: 'The cave narrows, then opens into a warm, rank hollow. Something much larger than a wolf uncurls.', de: 'Die Höhle wird eng und öffnet sich dann zu einer warmen, stinkenden Mulde. Etwas viel Grösseres als ein Wolf richtet sich auf.' }, monsters: [{ defId: 'dire_wolf', count: 1 }, { defId: 'wolf', count: 2 }] },
     ],
   },
   {
@@ -542,7 +542,7 @@ export const THREATS: ThreatTpl[] = [
         name: { en: (r) => `${r} Mill`, de: (r) => `${r}mühle`, g: 'f' },
         description: {
           en: 'An abandoned watermill on the hill road, its wheel rotted still. A hatch in the grain cellar leads down into tunnels the goblins have made their warren.',
-          de: 'Eine verlassene Wassermühle an der Hügelstraße, das Rad längst verrottet. Eine Luke im Kornkeller führt hinab in Gänge, in denen sich die Goblins eingenistet haben.',
+          de: 'Eine verlassene Wassermühle an der Hügelstrasse, das Rad längst verrottet. Eine Luke im Kornkeller führt hinab in Gänge, in denen sich die Goblins eingenistet haben.',
         },
         appearance: 'A large abandoned stone watermill on a hillside, a broken wheel green with moss, shuttered windows, a sagging roof, a dark cellar hatch standing open.',
       },
@@ -564,10 +564,10 @@ export const THREATS: ThreatTpl[] = [
       },
     },
     stages: [
-      { name: { en: 'the Rat-Gnawed Storeroom', de: 'Rattenzernagter Lagerraum' }, description: { en: 'Rotten grain sacks and splintered barrels. The floor is carpeted in droppings and something large rustles in the dark.', de: 'Verfaulte Kornsäcke und zersplitterte Fässer. Der Boden ist mit Kot bedeckt, und im Dunkeln raschelt etwas Großes.' }, monsters: [{ defId: 'giant_rat', count: 4 }] },
+      { name: { en: 'the Rat-Gnawed Storeroom', de: 'Rattenzernagter Lagerraum' }, description: { en: 'Rotten grain sacks and splintered barrels. The floor is carpeted in droppings and something large rustles in the dark.', de: 'Verfaulte Kornsäcke und zersplitterte Fässer. Der Boden ist mit Kot bedeckt, und im Dunkeln raschelt etwas Grosses.' }, monsters: [{ defId: 'giant_rat', count: 4 }] },
       { name: { en: 'the Goblin Guardroom', de: 'Goblin-Wachstube' }, description: { en: 'A smoky guardroom with a dying cookfire, gnawed bones and crude bedrolls.', de: 'Eine verräucherte Wachstube mit verlöschendem Kochfeuer, abgenagten Knochen und groben Schlafstätten.' }, monsters: [{ defId: 'goblin', count: 3 }] },
       { name: { en: 'the Old Crypt', de: 'Alte Gruft' }, description: { en: 'A vaulted crypt far older than the walls above. Burial niches line the walls and the air smells of dry dust.', de: 'Eine gewölbte Gruft, weit älter als die Mauern darüber. Grabnischen säumen die Wände, und die Luft riecht nach trockenem Staub.' }, monsters: [{ defId: 'skeleton', count: 2 }] },
-      { name: { en: "the Chief's Den", de: 'Höhle des Häuptlings' }, description: { en: "The warren's great chamber, lit by braziers. A throne of scrap iron stands at its heart, draped in wolf pelts.", de: 'Die große Kammer des Baus, von Kohlebecken erhellt. In ihrer Mitte steht ein Thron aus Alteisen, mit Wolfsfellen behängt.' }, monsters: [{ defId: 'bugbear', count: 1 }, { defId: 'goblin', count: 2 }] },
+      { name: { en: "the Chief's Den", de: 'Höhle des Häuptlings' }, description: { en: "The warren's great chamber, lit by braziers. A throne of scrap iron stands at its heart, draped in wolf pelts.", de: 'Die grosse Kammer des Baus, von Kohlebecken erhellt. In ihrer Mitte steht ein Thron aus Alteisen, mit Wolfsfellen behängt.' }, monsters: [{ defId: 'bugbear', count: 1 }, { defId: 'goblin', count: 2 }] },
     ],
   },
   {
@@ -577,7 +577,7 @@ export const THREATS: ThreatTpl[] = [
         name: { en: (r) => `${r} Keep`, de: (r) => `${r}feste`, g: 'f' },
         description: {
           en: "A border keep abandoned when the garrison's pay stopped coming. Men who used to guard the roads from it now rob them.",
-          de: 'Eine Grenzfeste, aufgegeben, als der Sold der Besatzung ausblieb. Männer, die von hier aus einst die Straßen bewachten, rauben sie nun aus.',
+          de: 'Eine Grenzfeste, aufgegeben, als der Sold der Besatzung ausblieb. Männer, die von hier aus einst die Strassen bewachten, rauben sie nun aus.',
         },
         appearance: 'A small weathered stone keep on a rise, a cracked curtain wall patched with timber, a ragged banner, campfire smoke, stolen wagons in the yard.',
       },
@@ -595,11 +595,11 @@ export const THREATS: ThreatTpl[] = [
       title: { en: 'Break the Toll', de: 'Brecht den Wegzoll' },
       summary: {
         en: 'Outlaws holed up {inSite} rob every wagon on the roads and call it a toll. {authority} of {town} will pay well to see their captain brought down.',
-        de: 'Gesetzlose, die sich {inSite} festgesetzt haben, plündern jeden Wagen auf den Straßen und nennen es Wegzoll. {authority} von {town} zahlt gut dafür, dass ihr Hauptmann zu Fall gebracht wird.',
+        de: 'Gesetzlose, die sich {inSite} festgesetzt haben, plündern jeden Wagen auf den Strassen und nennen es Wegzoll. {authority} von {town} zahlt gut dafür, dass ihr Hauptmann zu Fall gebracht wird.',
       },
     },
     stages: [
-      { name: { en: 'the Outer Pickets', de: 'Äußere Posten' }, description: { en: 'A barricade of felled trunks and a bored watch dicing by a fire.', de: 'Eine Barrikade aus gefällten Stämmen und eine gelangweilte Wache, die am Feuer würfelt.' }, monsters: [{ defId: 'bandit', count: 4 }] },
+      { name: { en: 'the Outer Pickets', de: 'Äussere Posten' }, description: { en: 'A barricade of felled trunks and a bored watch dicing by a fire.', de: 'Eine Barrikade aus gefällten Stämmen und eine gelangweilte Wache, die am Feuer würfelt.' }, monsters: [{ defId: 'bandit', count: 4 }] },
       { name: { en: 'the Kennels', de: 'Zwinger' }, description: { en: "Stolen wagons drawn into a ring, with the gang's half-wild dogs chained between them.", de: 'Gestohlene Wagen, zu einem Ring zusammengeschoben, und dazwischen angekettet die halbwilden Hunde der Bande.' }, monsters: [{ defId: 'bandit', count: 2 }, { defId: 'wolf', count: 2, name: { en: 'Guard dog', de: 'Wachhund' }, description: { en: 'A half-wild mastiff on a broken chain.', de: 'Eine halbwilde Dogge an einer zerrissenen Kette.' } }] },
       { name: { en: 'the Armoury', de: 'Rüstkammer' }, description: { en: "Racks of mismatched arms and the gang's hardest hands, sober and waiting.", de: 'Gestelle voller zusammengewürfelter Waffen und die härtesten Kerle der Bande, nüchtern und wartend.' }, monsters: [{ defId: 'hobgoblin', count: 2, name: { en: 'Deserter', de: 'Deserteur' }, description: { en: 'A hard-eyed former soldier in the remains of a uniform.', de: 'Ein ehemaliger Soldat mit hartem Blick in den Resten einer Uniform.' } }] },
       { name: { en: "the Captain's Hall", de: 'Halle des Hauptmanns' }, description: { en: 'A hall hung with looted banners. The captain sits at the high table as if it had always been his.', de: 'Eine Halle, behängt mit erbeuteten Bannern. Der Hauptmann sitzt an der Tafel, als hätte sie schon immer ihm gehört.' }, monsters: [{ defId: 'bugbear', count: 1, name: { en: 'Toll Captain', de: 'Zollhauptmann' }, description: { en: "A huge, scarred deserter in a captain's battered breastplate.", de: 'Ein riesiger, vernarbter Deserteur im verbeulten Brustpanzer eines Hauptmanns.' } }, { defId: 'bandit', count: 2 }] },
@@ -671,8 +671,8 @@ export const THREATS: ThreatTpl[] = [
     stages: [
       { name: { en: 'the Trapped Adit', de: 'Fallenstollen' }, description: { en: 'A low tunnel strung with wires and propped with suspicious care.', de: 'Ein niedriger Gang, mit Drähten durchzogen und verdächtig sorgfältig abgestützt.' }, monsters: [{ defId: 'kobold', count: 5 }] },
       { name: { en: 'the Fungus Gallery', de: 'Pilzgalerie' }, description: { en: 'A wet gallery of pale mushrooms. The rustling in them has too many legs.', de: 'Eine feuchte Galerie voller bleicher Pilze. Was darin raschelt, hat zu viele Beine.' }, monsters: [{ defId: 'giant_centipede', count: 3 }] },
-      { name: { en: 'the Shrine of Scales', de: 'Schuppenschrein' }, description: { en: 'A cavern painted with a dragon in soot and ochre. The faithful are many and very loud.', de: 'Eine Kaverne, bemalt mit einem Drachen aus Ruß und Ocker. Die Gläubigen sind zahlreich und sehr laut.' }, monsters: [{ defId: 'kobold', count: 6 }] },
-      { name: { en: "the Hatchling's Lair", de: 'Hort des Jungdrachen' }, description: { en: 'A heat-cracked chamber heaped with stolen metal. Something the size of a pony uncoils on top of it.', de: 'Eine von Hitze gesprungene Kammer, vollgehäuft mit gestohlenem Metall. Obenauf entrollt sich etwas von der Größe eines Ponys.' }, monsters: [{ defId: 'wyrmling', count: 1, power: 'weaker', boss: true }, { defId: 'kobold', count: 2 }] },
+      { name: { en: 'the Shrine of Scales', de: 'Schuppenschrein' }, description: { en: 'A cavern painted with a dragon in soot and ochre. The faithful are many and very loud.', de: 'Eine Kaverne, bemalt mit einem Drachen aus Russ und Ocker. Die Gläubigen sind zahlreich und sehr laut.' }, monsters: [{ defId: 'kobold', count: 6 }] },
+      { name: { en: "the Hatchling's Lair", de: 'Hort des Jungdrachen' }, description: { en: 'A heat-cracked chamber heaped with stolen metal. Something the size of a pony uncoils on top of it.', de: 'Eine von Hitze gesprungene Kammer, vollgehäuft mit gestohlenem Metall. Obenauf entrollt sich etwas von der Grösse eines Ponys.' }, monsters: [{ defId: 'wyrmling', count: 1, power: 'weaker', boss: true }, { defId: 'kobold', count: 2 }] },
     ],
   },
   {
@@ -697,17 +697,17 @@ export const THREATS: ThreatTpl[] = [
     ],
     premise: 'Giant spiders have spread out {fromSite}, {dist} of {town}. People and cattle vanish along the forest road, and an old brood mother at the heart of the webs grows fat.',
     quest: {
-      title: { en: 'Cut the Web', de: 'Zerreißt das Netz' },
+      title: { en: 'Cut the Web', de: 'Zerreisst das Netz' },
       summary: {
         en: 'People and cattle vanish along the forest road, and the webs {atSite} grow thicker every week. {authority} of {town} will pay whoever burns out the nest.',
-        de: 'An der Waldstraße verschwinden Menschen und Vieh, und {atSite} werden die Netze jede Woche dichter. {authority} von {town} bezahlt den, der das Nest ausräuchert.',
+        de: 'An der Waldstrasse verschwinden Menschen und Vieh, und {atSite} werden die Netze jede Woche dichter. {authority} von {town} bezahlt den, der das Nest ausräuchert.',
       },
     },
     stages: [
       { name: { en: 'the Leaf Litter', de: 'Laubstreu' }, description: { en: 'A hollow deep in rotting leaves. The leaves ripple toward you.', de: 'Eine Senke, tief voll mit moderndem Laub. Das Laub wogt auf euch zu.' }, monsters: [{ defId: 'giant_centipede', count: 3 }] },
       { name: { en: 'the Web-Hung Path', de: 'Netzverhangener Pfad' }, description: { en: 'Silk across every gap, and bundles hanging from the branches. Some of the bundles still move.', de: 'Seide über jeder Lücke und Bündel, die von den Ästen hängen. Manche der Bündel bewegen sich noch.' }, monsters: [{ defId: 'giant_spider', count: 1 }, { defId: 'giant_centipede', count: 2 }] },
-      { name: { en: 'the Larder', de: 'Speisekammer' }, description: { en: 'Cocoons in rows, man-sized and cow-sized. One of them is calling for help.', de: 'Kokons in Reihen, mannsgroß und kuhgroß. Aus einem davon ruft jemand um Hilfe.' }, monsters: [{ defId: 'giant_spider', count: 2 }] },
-      { name: { en: "the Brood Mother's Web", de: 'Netz der Brutmutter' }, description: { en: 'A funnel of silk as wide as a barn, dropping into the dark. The whole web trembles as she comes.', de: 'Ein Trichter aus Seide, breit wie eine Scheune, der ins Dunkel abfällt. Das ganze Netz zittert, als sie kommt.' }, monsters: [{ defId: 'giant_spider', count: 1, power: 'stronger', boss: true, name: { en: 'Brood Mother', de: 'Brutmutter' }, description: { en: 'A bloated, scarred spider the size of a cart, mother of everything in these webs.', de: 'Eine aufgedunsene, vernarbte Spinne von der Größe eines Karrens, Mutter von allem, was in diesen Netzen lebt.' } }, { defId: 'giant_centipede', count: 2, name: { en: 'Spiderling', de: 'Jungspinne' }, description: { en: 'A pale, quick spider no bigger than a dog.', de: 'Eine bleiche, flinke Spinne, nicht größer als ein Hund.' } }] },
+      { name: { en: 'the Larder', de: 'Speisekammer' }, description: { en: 'Cocoons in rows, man-sized and cow-sized. One of them is calling for help.', de: 'Kokons in Reihen, mannsgross und kuhgross. Aus einem davon ruft jemand um Hilfe.' }, monsters: [{ defId: 'giant_spider', count: 2 }] },
+      { name: { en: "the Brood Mother's Web", de: 'Netz der Brutmutter' }, description: { en: 'A funnel of silk as wide as a barn, dropping into the dark. The whole web trembles as she comes.', de: 'Ein Trichter aus Seide, breit wie eine Scheune, der ins Dunkel abfällt. Das ganze Netz zittert, als sie kommt.' }, monsters: [{ defId: 'giant_spider', count: 1, power: 'stronger', boss: true, name: { en: 'Brood Mother', de: 'Brutmutter' }, description: { en: 'A bloated, scarred spider the size of a cart, mother of everything in these webs.', de: 'Eine aufgedunsene, vernarbte Spinne von der Grösse eines Karrens, Mutter von allem, was in diesen Netzen lebt.' } }, { defId: 'giant_centipede', count: 2, name: { en: 'Spiderling', de: 'Jungspinne' }, description: { en: 'A pale, quick spider no bigger than a dog.', de: 'Eine bleiche, flinke Spinne, nicht grösser als ein Hund.' } }] },
     ],
   },
   {
@@ -735,14 +735,14 @@ export const THREATS: ThreatTpl[] = [
       title: { en: 'Hunt the Hunters', de: 'Jagt die Jäger' },
       summary: {
         en: "A gnoll pack lairing {atSite} is running down herds and herders alike. {authority} of {town} has put a price on the pack lord's head.",
-        de: 'Ein Gnollrudel, das {atSite} haust, hetzt Herden und Hirten gleichermaßen zu Tode. {authority} von {town} hat einen Preis auf den Kopf des Rudelführers ausgesetzt.',
+        de: 'Ein Gnollrudel, das {atSite} haust, hetzt Herden und Hirten gleichermassen zu Tode. {authority} von {town} hat einen Preis auf den Kopf des Rudelführers ausgesetzt.',
       },
     },
     stages: [
       { name: { en: 'the Kill Ground', de: 'Rissplatz' }, description: { en: "Trampled grass, dark stains and circling crows. The pack's hounds have not finished here.", de: 'Zertretenes Gras, dunkle Flecken und kreisende Krähen. Die Hunde des Rudels sind hier noch nicht fertig.' }, monsters: [{ defId: 'wolf', count: 3 }] },
-      { name: { en: 'the Outer Camp', de: 'Äußeres Lager' }, description: { en: 'Hide tents, a spit over a fire and a watch that smells you before it sees you.', de: 'Zelte aus Häuten, ein Spieß über dem Feuer und eine Wache, die euch riecht, bevor sie euch sieht.' }, monsters: [{ defId: 'gnoll', count: 2 }] },
+      { name: { en: 'the Outer Camp', de: 'Äusseres Lager' }, description: { en: 'Hide tents, a spit over a fire and a watch that smells you before it sees you.', de: 'Zelte aus Häuten, ein Spiess über dem Feuer und eine Wache, die euch riecht, bevor sie euch sieht.' }, monsters: [{ defId: 'gnoll', count: 2 }] },
       { name: { en: 'the Trophy Pit', de: 'Trophäengrube' }, description: { en: "A pit of skulls and stolen harness where the pack's fiercest fight over scraps.", de: 'Eine Grube voller Schädel und geraubtem Zaumzeug, in der sich die Wildesten des Rudels um Reste balgen.' }, monsters: [{ defId: 'gnoll', count: 2 }, { defId: 'wolf', count: 2 }] },
-      { name: { en: "the Pack Lord's Fire", de: 'Feuer des Rudelführers' }, description: { en: 'A great fire ringed with stakes. The pack lord rises from beside it, taller than any of the rest.', de: 'Ein großes Feuer, von Pfählen umringt. Daneben erhebt sich der Rudelführer, größer als alle anderen.' }, monsters: [{ defId: 'gnoll', count: 1, power: 'stronger', boss: true, look: ['size:large'], name: { en: 'Pack Lord', de: 'Rudelführer' }, description: { en: 'A towering gnoll in a cloak of scalps, its muzzle grey with old scars.', de: 'Ein hünenhafter Gnoll in einem Umhang aus Skalpen, die Schnauze grau von alten Narben.' } }, { defId: 'gnoll', count: 2 }] },
+      { name: { en: "the Pack Lord's Fire", de: 'Feuer des Rudelführers' }, description: { en: 'A great fire ringed with stakes. The pack lord rises from beside it, taller than any of the rest.', de: 'Ein grosses Feuer, von Pfählen umringt. Daneben erhebt sich der Rudelführer, grösser als alle anderen.' }, monsters: [{ defId: 'gnoll', count: 1, power: 'stronger', boss: true, look: ['size:large'], name: { en: 'Pack Lord', de: 'Rudelführer' }, description: { en: 'A towering gnoll in a cloak of scalps, its muzzle grey with old scars.', de: 'Ein hünenhafter Gnoll in einem Umhang aus Skalpen, die Schnauze grau von alten Narben.' } }, { defId: 'gnoll', count: 2 }] },
     ],
   },
 ];

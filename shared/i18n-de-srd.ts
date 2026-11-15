@@ -4,7 +4,7 @@
 // have an established name for a creature, that name is used.
 
 const AGES: [string, string][] = [['Young', 'Junger'], ['Adult', 'Ausgewachsener'], ['Ancient', 'Uralter']];
-const CHROMATIC: [string, string][] = [['Black', 'schwarzer'], ['Blue', 'blauer'], ['Green', 'grüner'], ['Red', 'roter'], ['White', 'weißer']];
+const CHROMATIC: [string, string][] = [['Black', 'schwarzer'], ['Blue', 'blauer'], ['Green', 'grüner'], ['Red', 'roter'], ['White', 'weisser']];
 const METALLIC: [string, string][] = [['Brass', 'Messing'], ['Bronze', 'Bronze'], ['Copper', 'Kupfer'], ['Gold', 'Gold'], ['Silver', 'Silber']];
 
 const dragons: Record<string, string> = {};
@@ -24,8 +24,8 @@ for (const [en, de, beast, beastDe] of [['Werebear', 'Werbär', 'Bear', 'Bären'
 
 // "Huge dragon" → "Riesiger Drache". The adjective follows the gender of the type's noun.
 const SIZES_DE: Record<string, [m: string, f: string, n: string]> = {
-  Tiny: ['Winziger', 'Winzige', 'Winziges'], Small: ['Kleiner', 'Kleine', 'Kleines'], Medium: ['Mittelgroßer', 'Mittelgroße', 'Mittelgroßes'],
-  Large: ['Großer', 'Große', 'Großes'], Huge: ['Riesiger', 'Riesige', 'Riesiges'], Gargantuan: ['Gigantischer', 'Gigantische', 'Gigantisches'],
+  Tiny: ['Winziger', 'Winzige', 'Winziges'], Small: ['Kleiner', 'Kleine', 'Kleines'], Medium: ['Mittelgrosser', 'Mittelgrosse', 'Mittelgrosses'],
+  Large: ['Grosser', 'Grosse', 'Grosses'], Huge: ['Riesiger', 'Riesige', 'Riesiges'], Gargantuan: ['Gigantischer', 'Gigantische', 'Gigantisches'],
 };
 const TYPES_DE: Record<string, [noun: string, gender: 0 | 1 | 2]> = {
   aberration: ['Aberration', 1], beast: ['Tier', 2], celestial: ['Himmlischer', 0], construct: ['Konstrukt', 2], dragon: ['Drache', 0], elemental: ['Elementar', 2], fey: ['Feenwesen', 2],
@@ -69,44 +69,44 @@ export const DE_SRD: Record<string, string> = {
   'Sphinx of Lore': 'Sphinx des Wissens', 'Sphinx of Valor': 'Sphinx der Tapferkeit', 'Sphinx of Wonder': 'Sphinx des Wunders', 'Spider': 'Spinne', 'Spirit Naga': 'Geisternaga', 'Sprite': 'Feengeist', 'Spy': 'Spion', 'Steam Mephit': 'Dampf-Mephit',
   'Stirge': 'Blutmücke', 'Stone Giant': 'Steinriese', 'Stone Golem': 'Steingolem', 'Storm Giant': 'Sturmriese', 'Succubus': 'Sukkubus', 'Swarm of Bats': 'Fledermausschwarm', 'Swarm of Crawling Claws': 'Krabbelnde-Klauen-Schwarm',
   'Swarm of Insects': 'Insektenschwarm', 'Swarm of Piranhas': 'Piranhaschwarm', 'Swarm of Rats': 'Rattenschwarm', 'Swarm of Ravens': 'Rabenschwarm', 'Swarm of Venomous Snakes': 'Giftschlangenschwarm', 'Tarrasque': 'Tarraske',
-  'Tiger': 'Tiger', 'Tough': 'Zäher', 'Tough Boss': 'Zäher Boss', 'Treant': 'Baumhirte', 'Triceratops': 'Triceratops', 'Troll Limb': 'Trollgliedmaße', 'Tyrannosaurus Rex': 'Tyrannosaurus Rex', 'Unicorn': 'Einhorn',
+  'Tiger': 'Tiger', 'Tough': 'Zäher', 'Tough Boss': 'Zäher Boss', 'Treant': 'Baumhirte', 'Triceratops': 'Triceratops', 'Troll Limb': 'Trollgliedmasse', 'Tyrannosaurus Rex': 'Tyrannosaurus Rex', 'Unicorn': 'Einhorn',
   'Vampire Familiar': 'Vampir-Vertrauter', 'Vampire Spawn': 'Vampirbrut', 'Vampire, Bat Form': 'Vampir (Fledermausgestalt)', 'Vampire, Mist Form': 'Vampir (Nebelgestalt)', 'Vampire, Vampire Form': 'Vampir', 'Venomous Snake': 'Giftschlange',
   'Violet Fungus': 'Violetter Pilz', 'Vrock': 'Vrock', 'Vulture': 'Geier', 'Warhorse': 'Streitross', 'Warhorse Skeleton': 'Streitross-Skelett', 'Warrior Infantry': 'Kriegerinfanterist', 'Warrior Veteran': 'Kriegerveteran',
   'Water Elemental': 'Wasserelementar', 'Weasel': 'Wiesel', 'Wight': 'Gruftschrecken', "Will-o'-Wisp": 'Irrlicht', 'Winter Wolf': 'Winterwolf', 'Worg': 'Worg', 'Wraith': 'Todesalb', 'Wyvern': 'Wyvern', 'Xorn': 'Xorn',
 
   // ------------------------------------------------- attacks and actions
   'Abyssal Glaive': 'Abyssische Glefe', 'Acid Breath': 'Säureodem', 'Acid Spray': 'Säurestrahl', 'Arcane Burst': 'Arkaner Ausbruch', 'Arcane Prowl': 'Arkanes Anschleichen', 'Attach': 'Festsaugen', 'Baleful Command': 'Unheilvoller Befehl',
-  'Banish': 'Verbannen', 'Beak': 'Schnabel', 'Beaks': 'Schnäbel', 'Beguile': 'Betören', 'Bites': 'Bisse', 'Bladed Arm': 'Klingenarm', 'Blazing Light': 'Gleißendes Licht', 'Blinding Breath': 'Blendender Odem', 'Blinding Gaze': 'Blendender Blick',
+  'Banish': 'Verbannen', 'Beak': 'Schnabel', 'Beaks': 'Schnäbel', 'Beguile': 'Betören', 'Bites': 'Bisse', 'Bladed Arm': 'Klingenarm', 'Blazing Light': 'Gleissendes Licht', 'Blinding Breath': 'Blendender Odem', 'Blinding Gaze': 'Blendender Blick',
   'Blinding Spittle': 'Blendender Speichel', 'Bone Bow': 'Knochenbogen', 'Bone Cudgel': 'Knochenkeule', 'Boulder': 'Felsbrocken', 'Burn': 'Verbrennen', 'Burning Hammer': 'Brennender Hammer', 'Cacophony': 'Kakophonie', 'Chain': 'Kette',
-  'Chain Lightning': 'Kettenblitz', 'Channel Negative Energy': 'Negative Energie kanalisieren', 'Charged Tendril': 'Geladene Ranke', 'Charging Horn': 'Hornstoß', 'Charm Monster': 'Monster bezaubern', 'Charm Person': 'Person bezaubern',
+  'Chain Lightning': 'Kettenblitz', 'Channel Negative Energy': 'Negative Energie kanalisieren', 'Charged Tendril': 'Geladene Ranke', 'Charging Horn': 'Hornstoss', 'Charm Monster': 'Monster bezaubern', 'Charm Person': 'Person bezaubern',
   'Chill': 'Frostgriff', 'Claw': 'Klaue', 'Cloaked Flight': 'Verhüllter Flug', 'Cloud of Insects': 'Insektenwolke', 'Club': 'Knüppel', 'Cold Breath': 'Kälteodem', 'Cold Gale': 'Eisiger Sturm', 'Command': 'Befehl',
   'Commanding Presence': 'Gebieterische Präsenz', 'Cone of Cold': 'Kältekegel', 'Conjure Infernal Chain': 'Höllenkette beschwören', 'Constrict': 'Würgen', 'Consume Memories': 'Erinnerungen verzehren', 'Corrupting Touch': 'Verderbende Berührung',
   'Crush': 'Zerquetschen', 'Cursed Touch': 'Verfluchte Berührung', 'Death Burst': 'Todesexplosion', 'Death Glare': 'Todesblick', 'Death Throes': 'Todeszuckungen', 'Deathless Strike': 'Untoter Hieb', 'Deathly Teleport': 'Tödliche Teleportation',
-  'Devilish Claw': 'Teufelsklaue', 'Disrupt Life': 'Leben zerrütten', 'Dissolving Pseudopod': 'Auflösendes Scheinfüßchen', 'Dominate Mind': 'Geist beherrschen', 'Draining Kiss': 'Zehrender Kuss', 'Draining Swipe': 'Zehrender Hieb',
+  'Devilish Claw': 'Teufelsklaue', 'Disrupt Life': 'Leben zerrütten', 'Dissolving Pseudopod': 'Auflösendes Scheinfüsschen', 'Dominate Mind': 'Geist beherrschen', 'Draining Kiss': 'Zehrender Kuss', 'Draining Swipe': 'Zehrender Hieb',
   'Dread Command': 'Schreckensbefehl', 'Dreadful Glare': 'Schrecklicher Blick', 'Eldritch Burst': 'Schauerlicher Ausbruch', 'Enchanting Bow': 'Verzaubernder Bogen', 'Engulf': 'Verschlingen', 'Entangle': 'Verstricken',
   'Entangling Rope (Requires Magic Rope)': 'Fesselndes Seil', 'Enthralling Panache': 'Betörender Schneid', 'Fear': 'Furcht', 'Fetid Cloud': 'Stinkende Wolke', 'Fiendish Touch': 'Teuflische Berührung', 'Fiery Bolt': 'Feuriger Bolzen',
   'Fiery Mace': 'Feuriger Streitkolben', 'Fiery Rays': 'Feurige Strahlen', 'Finger of Death': 'Finger des Todes', 'Fire Breath': 'Feuerodem', 'Fireball': 'Feuerball', 'First Roar': 'Erstes Brüllen', 'Fist': 'Faust', 'Flame Spear': 'Flammenspeer',
   'Flame Strike': 'Flammenschlag', 'Flame Sword': 'Flammenschwert', 'Flame Whip': 'Flammenpeitsche', 'Flying Sword': 'Fliegendes Schwert', 'Force Bolt': 'Energiebolzen', 'Foreleg': 'Vorderbein', 'Freezing Burst': 'Eisiger Ausbruch',
-  'Frightening Gaze': 'Furchterregender Blick', 'Frightful Presence': 'Furchterregende Präsenz', 'Frost Axe': 'Frostaxt', 'Frost Breath': 'Frostodem', 'Giggling Magic': 'Kichernde Magie', 'Glare': 'Starren', 'Gore': 'Aufspießen', 'Gouge': 'Aufreißen',
-  'Grab': 'Packen', 'Grave Strike': 'Grabeshieb', 'Great Bow': 'Großbogen', 'Guiding Light': 'Leitendes Licht', 'Hail of Bark': 'Rindenhagel', 'Hammer Throw': 'Hammerwurf', 'Hand Crossbow': 'Handarmbrust', 'Harm': 'Leid', 'Harpoon': 'Harpune',
+  'Frightening Gaze': 'Furchterregender Blick', 'Frightful Presence': 'Furchterregende Präsenz', 'Frost Axe': 'Frostaxt', 'Frost Breath': 'Frostodem', 'Giggling Magic': 'Kichernde Magie', 'Glare': 'Starren', 'Gore': 'Aufspiessen', 'Gouge': 'Aufreissen',
+  'Grab': 'Packen', 'Grave Strike': 'Grabeshieb', 'Great Bow': 'Grossbogen', 'Guiding Light': 'Leitendes Licht', 'Hail of Bark': 'Rindenhagel', 'Hammer Throw': 'Hammerwurf', 'Hand Crossbow': 'Handarmbrust', 'Harm': 'Leid', 'Harpoon': 'Harpune',
   'Heated Blade': 'Glühende Klinge', 'Heavy Crossbow': 'Schwere Armbrust', 'Hold Monster': 'Monster festhalten', 'Hold Person': 'Person festhalten', 'Holy Burst': 'Heiliger Ausbruch', 'Holy Mace': 'Heiliger Streitkolben', 'Hooves': 'Hufe',
   'Horrific Visage': 'Schreckliches Antlitz', 'Horror Nimbus': 'Schreckensnimbus', 'Hurl Flame': 'Flammenwurf', 'Hypnotic Pattern': 'Hypnotisches Muster', 'Ice Knife': 'Eismesser', 'Ice Spear': 'Eisspeer', 'Ice Storm': 'Eissturm',
   'Infernal Glaive': 'Höllenglefe', 'Infernal Sting': 'Höllenstachel', 'Infernal Tail': 'Höllenschwanz', 'Insect Plague': 'Insektenplage', 'Lash': 'Peitschenhieb', 'Light Hammer': 'Leichter Hammer', 'Lightning Blade': 'Blitzklinge',
-  'Lightning Bolt': 'Blitz', 'Lightning Breath': 'Blitzodem', 'Lightning Strike': 'Blitzschlag', 'Luring Song': 'Lockgesang', 'Mind Invasion': 'Gedankeninvasion', 'Mind Jolt': 'Gedankenstoß', 'Mind Spike': 'Gedankendorn',
-  'Mind-Rending Roar': 'Geistzerreißendes Brüllen', 'Moan': 'Stöhnen', 'Mockery': 'Verhöhnen', 'Moonbeam': 'Mondstrahl', 'Necrotic Bow': 'Nekrotischer Bogen', 'Necrotic Ray': 'Nekrotischer Strahl', 'Necrotic Strike': 'Nekrotischer Hieb',
+  'Lightning Bolt': 'Blitz', 'Lightning Breath': 'Blitzodem', 'Lightning Strike': 'Blitzschlag', 'Luring Song': 'Lockgesang', 'Mind Invasion': 'Gedankeninvasion', 'Mind Jolt': 'Gedankenstoss', 'Mind Spike': 'Gedankendorn',
+  'Mind-Rending Roar': 'Geistzerreissendes Brüllen', 'Moan': 'Stöhnen', 'Mockery': 'Verhöhnen', 'Moonbeam': 'Mondstrahl', 'Necrotic Bow': 'Nekrotischer Bogen', 'Necrotic Ray': 'Nekrotischer Strahl', 'Necrotic Strike': 'Nekrotischer Hieb',
   'Necrotic Sword': 'Nekrotisches Schwert', 'Needle Sword': 'Nadelschwert', 'Nightmare Ray': 'Albtraumstrahl', 'Noxious Miasma': 'Giftiges Miasma', 'Ocean Spear': 'Meeresspeer', 'Onslaught': 'Ansturm', 'Pact Blade': 'Paktklinge',
   'Paralyzing Breath': 'Lähmender Odem', 'Paralyzing Tentacles': 'Lähmende Tentakel', 'Paralyzing Touch': 'Lähmende Berührung', 'Petrifying Bite': 'Versteinernder Biss', 'Petrifying Breath': 'Versteinernder Odem',
   'Petrifying Gaze': 'Versteinernder Blick', 'Phantasmal Killer': 'Tödliches Phantom', 'Pike': 'Pike', 'Pincer': 'Schere', 'Pistol': 'Pistole', 'Poison Breath': 'Giftodem', 'Poison Burst': 'Giftexplosion', 'Poison Ray': 'Giftstrahl',
   'Poisonous Spittle': 'Giftiger Speichel', 'Possession': 'Besessenheit', 'Pounce': 'Anspringen', 'Power Word Stun': 'Wort der Macht: Betäubung', 'Proboscis': 'Rüssel', 'Psychic Drain': 'Psychischer Entzug', 'Pummel': 'Prügeln',
-  'Quick Grapple': 'Schneller Griff', 'Radiant Flame': 'Gleißende Flamme', 'Radiant Horn': 'Gleißendes Horn', 'Radiant Sword': 'Gleißendes Schwert', 'Radiant Teleport': 'Gleißende Teleportation', 'Rake': 'Zerfetzen', 'Ram': 'Rammen',
-  'Ray of Sickness': 'Strahl der Übelkeit', 'Rend': 'Zerreißen', 'Repulsion Breath': 'Abstoßender Odem', 'Restless Touch': 'Rastlose Berührung', 'Ritual Sickle': 'Ritualsichel', 'Roar': 'Brüllen', 'Rock Launch': 'Felsschleuder',
+  'Quick Grapple': 'Schneller Griff', 'Radiant Flame': 'Gleissende Flamme', 'Radiant Horn': 'Gleissendes Horn', 'Radiant Sword': 'Gleissendes Schwert', 'Radiant Teleport': 'Gleissende Teleportation', 'Rake': 'Zerfetzen', 'Ram': 'Rammen',
+  'Ray of Sickness': 'Strahl der Übelkeit', 'Rend': 'Zerreissen', 'Repulsion Breath': 'Abstossender Odem', 'Restless Touch': 'Rastlose Berührung', 'Ritual Sickle': 'Ritualsichel', 'Roar': 'Brüllen', 'Rock Launch': 'Felsschleuder',
   'Rotting Fist': 'Verrottende Faust', 'Rotting Touch': 'Verrottende Berührung', 'Scare': 'Erschrecken', 'Scorching Ray': 'Sengender Strahl', 'Scorching Sands': 'Sengender Sand', 'Scratch': 'Kratzen', 'Searing Fork': 'Sengende Gabel',
-  'Second Roar': 'Zweites Brüllen', 'Shield Bash': 'Schildstoß', 'Shimmering Shield': 'Schimmernder Schild', 'Shock': 'Stromschlag', 'Shred': 'Zerfleischen', 'Slash': 'Hieb', 'Slaying Bow': 'Tötungsbogen', 'Sleep': 'Schlaf',
+  'Second Roar': 'Zweites Brüllen', 'Shield Bash': 'Schildstoss', 'Shimmering Shield': 'Schimmernder Schild', 'Shock': 'Stromschlag', 'Shred': 'Zerfleischen', 'Slash': 'Hieb', 'Slaying Bow': 'Tötungsbogen', 'Sleep': 'Schlaf',
   'Sleep Breath': 'Schlafodem', 'Smother': 'Ersticken', 'Snake Hair': 'Schlangenhaar', 'Sonic Boom': 'Schallknall', 'Spores': 'Sporen', 'Steam Breath': 'Dampfodem', 'Stench': 'Gestank', 'Sting': 'Stachel', 'Stone Club': 'Steinkeule',
   'Storm Blade': 'Sturmklinge', 'Storm Bolt': 'Sturmbolzen', 'Storm Sword': 'Sturmschwert', 'Stunning Screech': 'Betäubender Schrei', 'Swallow': 'Verschlucken', 'Swarm of Grasping Hands': 'Schwarm greifender Hände', 'Tail': 'Schwanz',
   'Tail Spike': 'Schwanzstachel', 'Tail Stinger': 'Giftstachel', 'Tail Swipe': 'Schwanzhieb', 'Talons': 'Krallen', 'Tentacle': 'Tentakel', 'Tentacles': 'Tentakel', 'Third Roar': 'Drittes Brüllen', 'Thorn Burst': 'Dornenexplosion',
   'Thunderbolt': 'Donnerkeil', 'Thunderclap': 'Donnerschlag', 'Thundercloud': 'Gewitterwolke', 'Thunderous Bellow': 'Donnerndes Gebrüll', 'Thunderous Mace': 'Donnernder Streitkolben', 'Thunderous Slam': 'Donnernder Hieb',
-  'Toxic Ink': 'Giftige Tinte', 'Trample': 'Niedertrampeln', 'Trash Lob': 'Unratwurf', 'Tree Club': 'Baumkeule', 'Tusk': 'Stoßzahn', 'Umbral Dagger': 'Schattendolch', 'Unsettling Visage': 'Verstörendes Antlitz', 'Verdant Wisp': 'Grünes Irrlicht',
+  'Toxic Ink': 'Giftige Tinte', 'Trample': 'Niedertrampeln', 'Trash Lob': 'Unratwurf', 'Tree Club': 'Baumkeule', 'Tusk': 'Stosszahn', 'Umbral Dagger': 'Schattendolch', 'Unsettling Visage': 'Verstörendes Antlitz', 'Verdant Wisp': 'Grünes Irrlicht',
   'Vile Slime': 'Übler Schleim', 'Vine Lash': 'Rankenpeitsche', 'Vine Staff': 'Rankenstab', 'Vitriolic Sphere': 'Ätzkugel', 'Vortex': 'Strudel', 'Wall of Fire': 'Feuerwand', 'Web': 'Netz', 'Web Strand': 'Netzfaden',
   'Weight of Years': 'Last der Jahre', 'Whirlwind': 'Wirbelwind', 'Wind Swipe': 'Windhieb', 'Withering Sword': 'Welkendes Schwert', 'Withering Touch': 'Welkende Berührung', 'World-Shaking Movement': 'Welterschütternder Schritt',
 
@@ -122,7 +122,7 @@ export const DE_SRD: Record<string, string> = {
   'Cannot attack the one who charmed you.': 'Kann den nicht angreifen, der dich bezaubert hat.',
   'Cannot hear.': 'Kann nichts hören.',
   'Disadvantage on attacks while the source of the fear is near, and you cannot move closer to it.': 'Nachteil bei Angriffen, solange die Quelle der Furcht in der Nähe ist, und du kannst dich ihr nicht nähern.',
-  'Held in place: speed 0. Use Break free to wrestle loose.': 'Festgehalten: Bewegungsrate 0. Mit „Losreißen“ kannst du dich befreien.',
+  'Held in place: speed 0. Use Break free to wrestle loose.': 'Festgehalten: Bewegungsrate 0. Mit „Losreissen“ kannst du dich befreien.',
   'Cannot act or move this turn.': 'Kann in diesem Zug weder handeln noch sich bewegen.',
   'Cannot act or move. Attacks against you have advantage, and hits from next to you are critical.': 'Kann weder handeln noch sich bewegen. Angriffe gegen dich haben Vorteil, und Treffer aus nächster Nähe sind kritisch.',
   'Turned to stone until the fight is over. Cannot act; damage is halved.': 'Bis zum Ende des Kampfes zu Stein erstarrt. Kann nicht handeln; Schaden wird halbiert.',
@@ -143,7 +143,7 @@ export const DE_SRD: Record<string, string> = {
   '{0} {1} parries the blow.': '{0} {1} pariert den Hieb.',
   '{0} is blinded and cannot aim that at {1}': '{0} ist blind und kann damit nicht auf {1} zielen',
   '{0} fails the save but shrugs it off with Legendary Resistance ({1} left).': '{0} verpatzt den Rettungswurf, schüttelt es aber mit Legendärer Resistenz ab (noch {1}).',
-  "{0}'s wounds do not close this turn.": 'Die Wunden von {0} schließen sich in diesem Zug nicht.',
+  "{0}'s wounds do not close this turn.": 'Die Wunden von {0} schliessen sich in diesem Zug nicht.',
   '{0} regenerates {1} HP.': '{0} regeneriert {1} TP.',
   '{0} gathers itself: {1} is ready again.': '{0} sammelt sich: {1} ist wieder bereit.',
   '{0} is seared by the aura around {1}: {2}.': '{0} wird von der Aura um {1} versengt: {2}.',
@@ -157,15 +157,15 @@ export const DE_SRD: Record<string, string> = {
   '{0} is no longer {1}.': '{0} ist nicht mehr {1}.',
   '{0} cannot resist {1}: the {2} save fails automatically.': '{0} kann {1} nicht widerstehen: Der {2}-Rettungswurf misslingt automatisch.',
   '{0}: {1} save against {2}, {3}{4} = {5} vs DC {6}. {7}': '{0}: {1}-Rettungswurf gegen {2}, {3}{4} = {5} gegen SG {6}. {7}',
-  '{0} is hurled {1} ft back.': '{0} wird {1} Fuß zurückgeschleudert.',
+  '{0} is hurled {1} ft back.': '{0} wird {1} Fuss zurückgeschleudert.',
   'The charge hits {0} for another {1}.': 'Der Ansturm trifft {0} für weitere {1}.',
   '{0} is now {1}.': '{0} ist jetzt {1}.',
-  'Breaking free takes an action and a check against DC {0}.': 'Losreißen kostet eine Aktion und einen Wurf gegen SG {0}.',
+  'Breaking free takes an action and a check against DC {0}.': 'Losreissen kostet eine Aktion und einen Wurf gegen SG {0}.',
   '{0} is {1} and loses the turn.': '{0} ist {1} und verliert den Zug.',
   '{0} gets back up, which costs half the movement.': '{0} steht wieder auf, das kostet die halbe Bewegung.',
   'It gets worse: {0} is now {1}.': 'Es wird schlimmer: {0} ist jetzt {1}.',
   '{0} is not held by anything': '{0} wird von nichts festgehalten',
-  'Break free': 'Losreißen',
+  'Break free': 'Losreissen',
   '{0} strains to break free: {1}{2} = {3} vs DC {4}. {5}': '{0} stemmt sich gegen den Griff: {1}{2} = {3} gegen SG {4}. {5}',
   'Free!': 'Frei!',
   'The grip holds.': 'Der Griff hält.',
@@ -174,7 +174,7 @@ export const DE_SRD: Record<string, string> = {
   '{0} strikes {1} unerringly:': '{0} trifft {1} unfehlbar:',
 
   // ------------------------------------------------------ the game screen
-  'Wrestle out of the grip: a Strength (Athletics) or Dexterity (Acrobatics) check against DC {dc}. Until you are free you cannot move.': 'Reiß dich aus dem Griff los: ein Wurf auf Stärke (Athletik) oder Geschicklichkeit (Akrobatik) gegen SG {dc}. Bis du frei bist, kannst du dich nicht bewegen.',
+  'Wrestle out of the grip: a Strength (Athletics) or Dexterity (Acrobatics) check against DC {dc}. Until you are free you cannot move.': 'Reiss dich aus dem Griff los: ein Wurf auf Stärke (Athletik) oder Geschicklichkeit (Akrobatik) gegen SG {dc}. Bis du frei bist, kannst du dich nicht bewegen.',
   'Challenge {cr}': 'Herausforderung {cr}',
   'Legendary actions left this round: {left} of {uses}': 'Legendäre Aktionen in dieser Runde: noch {left} von {uses}',
 };
