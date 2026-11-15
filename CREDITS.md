@@ -2,19 +2,15 @@
 
 ## Rules and monsters
 
-This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at <https://dnd.wizards.com/resources/systems-reference-document>. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
+This work includes material from the System Reference Document 5.1 ("SRD 5.1") and the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at <https://dnd.wizards.com/resources/systems-reference-document> and <https://www.dndbeyond.com/srd>. Both are licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
 
-This work also includes material from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at <https://www.dndbeyond.com/srd>. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
-
-Classes, spells, equipment and monster statistics in `shared/content.ts` and `server/src/data/` are adapted from the SRD 5.1. Species, backgrounds, origin feats and most fighting styles in `shared/rules.ts` are adapted from the SRD 5.2.1; the Dueling style and the subclasses follow the SRD 5.1. All descriptions, hints and German texts are written for Hearthforge in its own words. Nothing is taken from the Player's Handbook or any other book outside the SRD. The Spell Points mana bar and the Hearth's Blessing are house rules.
+Which parts come from which: classes, spells, equipment and monster statistics (`shared/content.ts`, `server/src/data/`), the subclasses and the Dueling style follow the SRD 5.1. Species, backgrounds, origin feats and the other fighting styles (`shared/rules.ts`) follow the SRD 5.2.1. All descriptions, hints and German texts are written for Hearthforge in its own words, and nothing is taken from the Player's Handbook or any other book outside the SRD. The Spell Points mana bar and the Hearth's Blessing are house rules.
 
 Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.
 
 ## Art
 
-All sprites and tiles are original pixel art generated procedurally in `client/src/game/sprites.ts` and dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No third-party art is bundled.
-
-No third-party art is bundled or redistributed in this repository or its Docker image. Packs are fetched by the server at the host's request, or uploaded by the host, and stay in the server's data folder. The game shows name, artist and license of the packs in use under Settings → Art & Assets.
+All sprites and tiles are original pixel art generated procedurally in `client/src/game/sprites.ts` and dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No third-party art is bundled or redistributed in this repository or its Docker image. Packs are fetched by the server at the host's request, or uploaded by the host, and stay in the server's data folder. The game shows name, artist and license of the packs in use under Settings → Art & Assets.
 
 Fetched by the server on request:
 
@@ -35,7 +31,7 @@ Without an icon pack, item icons are emoji rendered by the player's system font.
 
 ## Music
 
-No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
+No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime (they can be switched off, moved or removed in the Innkeeper's Assets page) from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
 
 - Tavern: "Thatched Villagers", "Master of the Feast", "Folk Round", "Fiddles McGinty", "Celtic Impulse", "Dragon and Toast", "Spazzmatica Polka"
 - Town: "Minstrel Guild", "Village Consort", "Suonatore di Liuto", "Virtutes Instrumenti", "Mystery Bazaar", "Lord of the Land", "Winter Reflections", "Evening Melodrama", "Night in Venice"
@@ -44,9 +40,9 @@ No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these 
 - Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm", "Volatile Reaction", "Faster Does It", "Prelude and Action", "Impact Moderato", "Killers", "Unholy Knight", "Crusade - Heavy Industry"
 - Boss fights: "Black Vortex", "Death and Axes", "Giant Wyrm", "Epic Unease", "The Complex", "Hall of the Mountain King", "Danse Macabre"
 
-Ambient sound loops are not bundled or downloaded by default. Loops you add yourself (`/data/music/ambient/`) or list in `tracks.json` are credited in the game by whatever title, artist and license you give them; crediting them is up to you.
+Ambient sound loops are not bundled or downloaded by default. Loops you add yourself are credited in the game by whatever title, artist and license you give them.
 
-The game shows title, artist and license of the track that is playing. If you add your own tracks or a `tracks.json`, crediting them is up to you.
+The game shows title, artist and license of the track that is playing. For tracks you add yourself, crediting them is up to you.
 
 ## Logo
 

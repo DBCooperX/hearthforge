@@ -6,32 +6,68 @@
 
 A self-hosted Dungeons & Dragons 5e game for your browser, run by an AI Dungeon Master.
 
-Hearthforge runs as a single Docker container on your own server. You and your friends open it in a browser, build a party, and set out into an open world: a hex map to travel, a story told in scene cards, and a tactical grid that appears only when a fight breaks out. The server owns the rules and rolls every die; Claude narrates the adventure and plays the monsters.
+You run Hearthforge as one Docker container on your own server. You and your friends open it in a browser, build a party, and set out into an open world: a hex map to travel, a story told in scene cards, and a tactical grid that appears only when a fight breaks out. The server owns the rules and rolls every die. Claude narrates, plays everyone you meet and decides what the monsters do. Play alone with up to four heroes, or share a table with friends. There is always an AI Dungeon Master, never a human one.
+
+<p align="center">
+  <img src="docs/screenshots/story.webp" alt="The story view: party panel, a scene card, the hex map and quests" width="820">
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/lobby.webp" alt="The lobby with the list of tables"></td>
+    <td><img src="docs/screenshots/table-room.webp" alt="A table room: region, opening and world seed"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Lobby</sub></td>
+    <td align="center"><sub>Table room: pick the region, the opening and the seed</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/inventory.webp" alt="The inventory with paper-doll slots"></td>
+    <td><img src="docs/screenshots/character-sheet.webp" alt="The character sheet"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Inventory with paper-doll</sub></td>
+    <td align="center"><sub>Character sheet</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/innkeeper.webp" alt="The Innkeeper owner panel"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>The Innkeeper, the owner's panel: updates, settings, tables, backups and assets without a terminal</sub></td>
+  </tr>
+</table>
+
+## Contents
+
+[What's in the game](#whats-in-the-game) · [Install](#install-on-proxmox) · [Configuration](#configuration) · [The Innkeeper](#the-innkeeper) · [Art and music](#art-and-music) · [Playing together](#playing-together) · [Where the adventure starts](#where-the-adventure-starts) · [How to play](#how-to-play) · [Development](#development) · [Credits](#credits-and-licenses)
 
 ## What's in the game
 
-- **Party panel** on the left: portrait, HP and mana bars, armor class and conditions for every hero.
-- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear. Things the Dungeon Master invents during play (a clue, a letter, a strange key) land in the backpack too, with a fitting icon, a quest marker and their story notes; click an item to read them. Hovering an item shows its numbers and how it compares with what the hero wears; the backpack can be filtered and sorted, and the footer shows carried weight (display only).
-- **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
-- **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
-- **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal, a book with chapters for quests, people, places and lore. The gear in the top bar opens the settings: language, music, interface sounds and text size.
-- **Premade heroes or your own**: eight ready-made heroes on flip cards with their story and numbers, or a guided creator: class, species, background, ability scores (standard array, point buy or dice rolled by the server), skills, talents, equipment, name, gender, looks and backstory. Every option explains what it is, what it does in numbers and who it is good for, with recommended picks per class, tooltips on rules terms and a live preview of your sheet. A premade can be used as it is or customized.
-- **Heroes that look like themselves**: portraits and battle tokens are drawn in layers from the hero's species (height, build, skin, ears, tusks, horns, tail), the hair, beard and colours picked in the creator, and the armour, shield and weapon they carry. The same picture is used in the picker, the party panel, the character sheet and on the battle map, and it changes when the gear does.
-- **Level-up choices**: a subclass at level 3 (Champion, Thief, Evoker, Life Domain), new spells, and a feat or ability score increase at level 4, each with the same explanations and preview.
-- **Progression**: XP from fights and quests, levels 1 to 5 with a level-up summary, and a full character sheet (press `c`).
-- **Monsters that look the part.** Tokens are drawn from a body shape, a size and layered extras (heads, horns, wings, colour, glowing eyes, armour, weapon, aura, mutations). The DM can restyle any creature when a fight starts, so a three-headed ogre has three heads, but its statistics always come from one of the 25 SRD stat blocks. Large and bigger creatures take 2x2 to 4x4 squares. Point at a monster for its card.
-- **Turn-based 5e combat** on a battle map that is generated for each fight and matches where it breaks out (swamp, forest, plains, hills, mountains, road, bridge, camp, town streets, tavern, cave, ruin or dungeon). Mud, undergrowth, rubble and shallow water are difficult terrain; trees, boulders and furniture give half cover against shots. Also: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
-- **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
-- **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
-- **A seat at the forge**: the look follows the logo. Frames of dark iron and stone, ember and gold for everything that glows, rune bands on the windows, sparks rising on the front door, and parchment scene cards so the story stays easy to read. Fonts are bundled; nothing is loaded from the internet by the browser.
-- **Background music** that follows the story: tavern, town, the open road, dungeons, fights and boss fights each have their own tracks and crossfade into each other. Every player has a mute button and a volume slider in the top bar, remembered in their browser. See [Music](#music).
-- **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. A lobby lists the tables; each table has a host, a ready check, invite links and an optional invite code, and a table talk chat with whispers that the Dungeon Master never reads. See [Playing together](#playing-together). Games are saved in SQLite and survive restarts.
+**Story first.** Narration arrives as scene cards with a location and a mood. Each scene offers a few action buttons, and you can always type anything instead. People, places and items are highlighted, with details on hover. The world remembers: people, quests, deeds and places are saved and handed to the Dungeon Master every turn, and the journal (`j`) shows them as a book.
 
-Four classes are available (Fighter, Rogue, Wizard and Cleric) with nine species and four backgrounds. Each hero has a gender (female, male or neutral) that the Dungeon Master is told on every turn, so the narration never guesses or switches. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
+**An open world.** A hex overworld (6 miles per hex) that you travel freely. Pick a hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map and the Dungeon Master can add places as the story finds them.
+
+**Turn-based 5e combat** on a battle map generated for the place where the fight breaks out (swamp, forest, plains, road, bridge, camp, town streets, tavern, cave, ruin, dungeon and more). Initiative, movement, attack rolls, advantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, difficult terrain and cover. Monsters are drawn from a body shape and layered extras, and the Dungeon Master can restyle them, but their numbers always come from one of 25 stat blocks.
+
+**Heroes.** Eight premade heroes, or a guided creator with class (Fighter, Rogue, Wizard, Cleric), nine species, four backgrounds, ability scores, skills, talents, equipment, looks and backstory. Every option explains what it does and who it suits. Portraits and battle tokens are drawn from the hero's looks and gear, so they change when the gear does. Progression runs from level 1 to 5, with a subclass at level 3 and a feat or ability increase at level 4.
+
+**Inventory and sheet.** Paper-doll slots, a backpack, shared party gold, drag and drop, and items the Dungeon Master invents in play (a letter, a strange key) with their own notes. A full character sheet on `c`.
+
+**Solo or multiplayer.** A lobby lists the tables. Each table has a host, a ready check, invite links, an optional invite code and an out-of-character chat. See [Playing together](#playing-together).
+
+**English and German.** Every player picks their own interface language. The table picks the story language, and the narration, the game log and the starting region follow it. German uses the terms of the official German edition.
+
+**Music and sound** that follow the story (tavern, town, road, dungeon, fights, bosses), with a volume slider per player. Nothing is bundled; see [Art and music](#art-and-music).
+
+**The look.** Dark iron and stone frames, ember and gold for everything that glows, rune bands on the windows and parchment for the story, following the logo. Fonts are bundled and the browser loads nothing from the internet.
+
+**Games are saved** in SQLite and survive restarts and updates.
+
+### The AI Dungeon Master
+
+The Dungeon Master picks the Claude model by the moment: a small, fast model for background work, a mid-sized one for everyday narration and monster turns, and a stronger one for key moments such as the opening scene, a first arrival, boss fights, level-ups and turning points. The three models are configurable, or you can force one model for everything. Without an API key a scripted fallback runs travel, fights, rests and dungeons, but it cannot improvise. The Dungeon Master never changes game state itself: it proposes monster actions through tool calls, the engine resolves them with real dice, and the Dungeon Master narrates the result.
 
 ## Install on Proxmox
-
-### One command
 
 On the Proxmox host, as root:
 
@@ -39,11 +75,11 @@ On the Proxmox host, as root:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/DBCooperX/hearthforge/main/scripts/proxmox-install.sh)"
 ```
 
-The script creates an unprivileged Debian 12 LXC named `hearthforge` (nesting and keyctl enabled for Docker), installs Docker, clones this repository to `/opt/hearthforge`, asks for your Anthropic API key, writes `.env`, and runs `docker compose up -d --build`. When it finishes it prints the address to open and the first password for the [Innkeeper](#the-innkeeper), the owner's panel in the game. From then on you should not need a terminal: updates, restarts, the API key and every setting are handled there.
+The script creates an unprivileged Debian 12 LXC named `hearthforge` (nesting and keyctl on, for Docker), installs Docker, clones this repository to `/opt/hearthforge`, asks for your Anthropic API key, writes `.env` and starts the containers. At the end it prints the address to open and the first password for the [Innkeeper](#the-innkeeper). From then on you should not need a terminal: updates, restarts, the API key and every setting live in the Innkeeper.
 
-**Run the same command again to update** an install from before the Innkeeper existed (it adds the updater and prints the first password), or whenever you prefer the terminal. It finds the existing container, pulls the latest code and rebuilds.
+Run the same command again to update an older install (it adds the updater and prints a first password) or whenever you prefer the terminal.
 
-Defaults are 2 cores, 2 GB RAM, 8 GB disk, DHCP on `vmbr0`, the next free container id and your `local-lvm` or `local-zfs` storage. Override any of them by setting variables first:
+Defaults are 2 cores, 2 GB RAM, 8 GB disk, DHCP on `vmbr0`, the next free container id and your `local-lvm` or `local-zfs` storage. Override them with variables:
 
 ```bash
 CTID=120 STORAGE=tank MEMORY=4096 IP=192.168.1.50/24 GATEWAY=192.168.1.1 \
@@ -62,221 +98,148 @@ CTID=120 STORAGE=tank MEMORY=4096 IP=192.168.1.50/24 GATEWAY=192.168.1.1 \
 | `ANTHROPIC_API_KEY` | prompt | Set it to skip the prompt |
 | `BRANCH` | `main` | Git branch to install |
 
-As with any script piped from the internet, read [`scripts/proxmox-install.sh`](scripts/proxmox-install.sh) first if you like; it is short.
+Read [`scripts/proxmox-install.sh`](scripts/proxmox-install.sh) first if you like; it is short.
 
-### By hand
+### Anywhere else with Docker
 
-You need a Debian 12 (or Ubuntu) guest with Docker. Either works:
-
-- **LXC container**: create an unprivileged Debian 12 container with 2 cores, 2 GB RAM and 8 GB disk. Under *Options → Features*, enable **nesting** and **keyctl**, which Docker needs.
-- **VM**: any small Debian 12 VM. No special settings.
-
-Then, inside the guest:
+Any Debian 12 or Ubuntu machine with Docker works (an LXC needs nesting and keyctl; a VM needs nothing special):
 
 ```bash
-# 1. Install Docker and git
-apt update && apt install -y git curl
-curl -fsSL https://get.docker.com | sh
-
-# 2. Get Hearthforge
 git clone https://github.com/DBCooperX/hearthforge.git /opt/hearthforge
 cd /opt/hearthforge
-
-# 3. Configure
-cp .env.example .env
-nano .env        # paste your ANTHROPIC_API_KEY
-
-# 4. Build and start
+cp .env.example .env     # add your ANTHROPIC_API_KEY, or add it later in the Innkeeper
 docker compose up -d --build
 ```
 
-Open `http://<guest-ip>:3000` in a browser. Friends on your network use the same address and pick your table from the list, or open the invite link you send them.
+Open `http://<address>:3000`. Friends on your network use the same address. Saved games live in the `hearthforge-data` Docker volume and are kept across updates. `docker compose logs -f` shows the server log, including whether the AI Dungeon Master is active.
 
 ### Updating
 
-Open the **Innkeeper → Server & updates** and press **Update now**, or switch on automatic updates there. See [The Innkeeper](#the-innkeeper) for how that works.
+Open the Innkeeper, go to **Server & updates** and press **Update now**, or switch on automatic updates. By hand, re-run the installer or run `git pull && docker compose up -d --build` in `/opt/hearthforge`.
 
-By hand, re-run the one-command installer, or inside the guest:
+## Configuration
 
-```bash
-cd /opt/hearthforge
-git pull
-docker compose up -d --build
-```
-
-Saved games live in the `hearthforge-data` Docker volume and are kept across updates. `docker compose logs -f` shows the server log, including whether the AI Dungeon Master is active.
-
-### Configuration
-
-All of these can be changed in the **Innkeeper → Settings** without a terminal; a value set there wins over `.env` and takes effect after a restart, which the panel offers. To set them in `.env` instead:
+Everything below can be changed in the **Innkeeper → Settings**. A value set there wins over `.env` and applies after a restart, which the panel offers. To set them in `.env` instead:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | empty | Your key from [platform.claude.com](https://platform.claude.com). Empty means the scripted fallback DM. |
-| `HEARTHFORGE_DM_MODEL_BACKGROUND` | `claude-haiku-5-5` | Model for background work: memory summaries and routine beats such as short journeys and rests. |
-| `HEARTHFORGE_DM_MODEL_STANDARD` | `claude-sonnet-5-5` | Model for everyday narration, conversation and monster turns. |
-| `HEARTHFORGE_DM_MODEL_KEY` | `claude-opus-5-5` | Model for key moments: the opening scene, first arrival at a major place, boss fights, level-ups, defeats, and turns the DM flagged as a turning point. |
-| `HEARTHFORGE_DM_FORCE_MODEL` | empty | Set to a model id to run everything on that one model and switch the automatic choice off. |
-| `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
-| `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
-| `HEARTHFORGE_ART_UPLOADS` | `on` | `off` stops anyone from adding or switching art packs in the browser. |
-| `HEARTHFORGE_MUSIC` | `on` | `on` or `off`. See [Music](#music). |
-| `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the Dungeon Master waits for the other players after the first one acts. `0` answers every action at once. See [Playing together](#playing-together). |
-| `HEARTHFORGE_PORT` | `3000` | Port on the host. `.env` only. |
-| `HEARTHFORGE_ADMIN_PASSWORD` | generated | First password for the Innkeeper. The installer writes one. It is only read until you change the password in the panel. `.env` only. |
-| `HEARTHFORGE_ADMIN` | `on` | `off` removes the Innkeeper altogether. `.env` only. |
-| `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs a new version by itself as soon as nobody sits at a table. |
-| `HEARTHFORGE_TRUST_PROXY` | `off` | `on` reads the player's address from `X-Forwarded-For`. Only switch it on behind your own reverse proxy. |
-| `HEARTHFORGE_BRANCH` | checked-out branch | Git branch the updater follows. `.env` only. |
+| `ANTHROPIC_API_KEY` | empty | Your key from [platform.claude.com](https://platform.claude.com). Empty means the scripted fallback. |
+| `HEARTHFORGE_DM_MODEL_BACKGROUND` | `claude-haiku-5-5` | Background work: memory summaries, short journeys, rests. |
+| `HEARTHFORGE_DM_MODEL_STANDARD` | `claude-sonnet-5-5` | Everyday narration, conversation and monster turns. |
+| `HEARTHFORGE_DM_MODEL_KEY` | `claude-opus-5-5` | Key moments: opening scene, major arrivals, boss fights, level-ups, defeats, turning points. |
+| `HEARTHFORGE_DM_FORCE_MODEL` | empty | A model id that replaces the automatic choice. |
+| `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. |
+| `HEARTHFORGE_ART` | `generated` | Tile pack for a fresh server: `generated`, `kenney` or `0x72`. A choice made in the game wins. |
+| `HEARTHFORGE_ART_UPLOADS` | `on` | `off` locks the art library against changes from the browser. |
+| `HEARTHFORGE_AUTO_ASSETS` | `on` | Fetch freely licensed item icons on first start. |
+| `HEARTHFORGE_MUSIC` | `on` | `off` skips the music download and the player. |
+| `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the DM waits for the other players after the first one acts. `0` answers every action at once. |
+| `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
+| `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
+| `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
+| `HEARTHFORGE_ADMIN_PASSWORD` | generated | First Innkeeper password; only read until you change it (`.env` only). |
+| `HEARTHFORGE_ADMIN` | `on` | `off` removes the Innkeeper (`.env` only). |
+| `HEARTHFORGE_BRANCH` | checked-out branch | Git branch the updater follows (`.env` only). |
 
-The server decides the tier from what just happened in the game, and the DM can mark a scene as a turning point so the next reply is escalated. Every call is logged as `[dm] <purpose>: tier=<tier> model=<model>`, so `docker compose logs` shows what was used. The older `HEARTHFORGE_DM_MODEL` setting is no longer read; use `HEARTHFORGE_DM_FORCE_MODEL` if you want a single model. The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
+Every model call is logged as `[dm] <purpose>: tier=<tier> model=<model>`. The DM makes roughly one API call per story beat and two per round of monster turns.
 
-Players have no accounts or passwords; only the Innkeeper has one. Each browser keeps a secret token that proves a seat is its own, and a table can ask for an invite code, but anyone who can reach the port can see the list of tables and open one, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
+Players have no accounts. Each browser keeps a secret token that proves a seat is its own, and a table can ask for an invite code, but anyone who can reach the port can see the tables. Keep it on your LAN, behind a VPN or behind an authenticating reverse proxy. A reverse proxy must forward WebSocket upgrades for `/ws`.
 
 ## The Innkeeper
 
-The Innkeeper is the owner's panel. Open it from the lobby (**Innkeeper**, bottom of the page), from **Settings → Server**, or directly at `http://<address>:3000/?innkeeper`, and sign in with the password the installer printed. If you did not set one, the server makes one up on first start and writes it to its log and to `/data/innkeeper-first-password.txt`. Change it under **Server & updates**; that file is removed when you do.
+The Innkeeper is the owner's panel. Open it from the lobby, from **Settings → Server**, or at `http://<address>:3000/?innkeeper`, and sign in with the password the installer printed (or the one the server wrote to its log and to `/data/innkeeper-first-password.txt`). Change it under **Server & updates**.
 
 | Page | What it does |
 | --- | --- |
-| **Overview** | What is running, who is playing, today's AI cost, and an announcement that pops up for every player. |
-| **Tables** | Every table with its players, region, world seed and last save. Pause one (players can still chat), resume it, remove a player, or delete it. |
-| **Players** | Every open connection with its address, browser and how long it has been connected. Disconnect someone or ban an address. |
-| **Assets** | The art library: upload packs, fetch the known ones, assign icons. Only the Innkeeper can change it. See [Art packs](#art-packs). |
-| **Settings** | Everything from the configuration table above, including the API key (shown masked) with a **Test key** button that asks Anthropic whether the key works and whether your chosen models exist. Changes apply with a restart. |
-| **Server & updates** | Version, update, restart (now, or with a warning to the players one or five minutes ahead) and the password. |
-| **AI costs** | Calls, tokens and estimated cost per day, table and model for the last 90 days. The cost is an estimate from list prices, not your invoice. |
-| **Log** | The server log, live, with a filter. |
-| **Backups** | A backup of all tables and settings every day (the last 14 are kept), on demand, as a download, and restore from either. Art packs and music are not part of a backup, and neither is the API key. |
+| **Overview** | What is running, who is playing, today's AI cost, and an announcement for every player. |
+| **Tables** | Every table with players, region, seed and last save. Pause, resume, remove a player or delete a table. |
+| **Players** | Open connections with address and browser. Disconnect someone or ban an address. |
+| **Assets** | Music, ambient sounds and art packs. See [Art and music](#art-and-music). |
+| **Settings** | The configuration above, including the API key (masked) with a **Test key** button. |
+| **Server & updates** | Version, update, restart (now or with a warning to players) and the password. |
+| **AI costs** | Calls, tokens and estimated cost per day, table and model for 90 days. An estimate from list prices, not your invoice. |
+| **Log** | The live server log with a filter. |
+| **Backups** | Daily backups of all tables and settings (the last 14 are kept), on demand, as a download, and restore. Art, music and the API key are not included. |
 
-**How updating works.** The game cannot rebuild its own container, so a second small container, the *updater*, sits next to it. When you press **Update now** the game leaves the word `update` in a folder both share. The updater pulls the latest version from GitHub, builds the new image while the game keeps running, then swaps the container, which takes a few seconds. If the new version does not build, or does not come up healthy, it puts the previous version back and says so in the panel; such a version is not tried again automatically. Saved games are not touched.
+**How updating works.** A second small container, the *updater*, sits next to the game. When you press **Update now** the game leaves a request in a folder they share. The updater pulls the latest code, builds the new image while the game keeps running, and swaps the container in a few seconds. If the build fails or the new version does not come up healthy, it puts the previous one back and the panel says so. Saved games are not touched. The updater needs the Docker socket, which is as good as root in the guest. It opens no port and only understands `check` and `update`. To go without it, remove the `updater` service from `docker-compose.yml`; the panel then says updates are done in the terminal.
 
-The updater needs the Docker socket to do this, which is as good as root inside the guest. It opens no port, runs nothing the game sends it, and only understands the words `check` and `update`. If you would rather not have it, remove the `updater` service from `docker-compose.yml`; the panel then says that updates are done in the terminal, and everything else still works.
-
-The Innkeeper's password travels like the rest of the game: over plain HTTP unless you put a reverse proxy with TLS in front. That is fine on your LAN or a VPN, and one more reason not to expose the port to the internet. Five wrong passwords lock an address out for five minutes.
-
-**Forgot the password?** Delete `/data/innkeeper.json` and restart; the first password applies again (bans and paused tables are forgotten with it):
+The Innkeeper password travels over plain HTTP unless you put TLS in front. Five wrong passwords lock an address out for five minutes. If you forget it, delete `/data/innkeeper.json` and restart; the first password applies again:
 
 ```bash
 docker compose exec hearthforge rm /data/innkeeper.json && docker compose restart hearthforge
 ```
 
-## Art packs
+## Art and music
 
-Out of the box Hearthforge draws its own 16×16 pixel art and shows items as emoji, so it needs no downloads. Everything else is added in the game: open the **Innkeeper → Assets**. Players see which packs are in use and whom to credit under **Settings → Art & Assets**.
+Hearthforge bundles no third-party art or audio, and it never hosts or mirrors anything. Out of the box it draws its own 16×16 pixel art and shows items as emoji. Everything else goes from the artist's site to your server, and how depends on what the source allows:
 
-- **Drop a zip.** Download a pack from its page (itch.io, Kenney, OpenGameArt) and drag the zip into the window. The server unpacks it into the data volume (`/data/art`), keeps only the PNG images, and switches to it. No `docker cp`, no restart.
-- **Item icons.** *Game-icons.net* (CC BY 3.0) is fetched with one click and has a picture for every item. Any other zip with PNG images becomes an icon pack: pictures are matched by file name (`sword_01.png`, `potion_red.png`), and **Assign icons** lets you pick the rest by hand, also out of sprite sheets. Items without a picture keep their emoji.
-- **Map tiles.** *Kenney Tiny Dungeon* is fetched with one click. *0x72 DungeonTileset II* has no direct link on itch.io: download it from [0x72.itch.io](https://0x72.itch.io/dungeontileset-ii) and drop the zip. Tile packs are recognised by their contents. New tiles show after the page is reloaded.
+| Source type | What happens |
+| --- | --- |
+| **Free license** (CC0, CC BY) | The server downloads it by itself: Kevin MacLeod's 50 music tracks (CC BY 4.0) and the game-icons.net item icons (CC BY 3.0). Switch off with `HEARTHFORGE_MUSIC=off` or `HEARTHFORGE_AUTO_ASSETS=off`. |
+| **Direct download allowed** | The owner presses **Download** in the Innkeeper, or pastes a direct link, and the server fetches it from the source (for example Kenney, OpenGameArt). |
+| **Login, Patreon or terms that forbid it** | The Innkeeper shows a **Get it here** link; download the file yourself and drag it onto the page (itch.io, Freesound, Sonniss, Pixabay). |
 
-Licenses differ between packs. CC0 packs need nothing, CC BY packs need a credit, and some free packs may be used but not passed on. The window shows the license of the packs it knows and has fields for the credit of the ones it does not; see [CREDITS.md](CREDITS.md) for what was checked.
+In the Innkeeper's **Assets** page, with the tabs **Music**, **Ambient** and **Art**:
 
-Setting `HEARTHFORGE_ART` in `.env` still chooses the tile pack for a fresh server; a choice made in the game wins over it. A zip copied into `/data/art` by hand is taken in on the next start. Set `HEARTHFORGE_ART_UPLOADS=off` to lock the art library against changes from the browser.
+- **Music.** Every track can be played, switched off, moved to another scene (tavern, town, overworld, dungeon, combat, boss) or removed. Tracks that failed to download get a button to try again. Drop audio files or a zip onto the page, or paste a link. Files are kept in `/data/music`.
+- **Ambient sound.** Quiet loops (crowd, fire, wind, rain) under the music with their own volume slider. Nothing is downloaded by default, so add your own.
+- **Art.** Drop a zip from itch.io, Kenney or OpenGameArt. PNG images are kept, packs are recognised by name or contents, and item icons are matched by file name, with **Assign icons** for the rest. Players see what is in use, with credits, under **Settings → Art & Assets**.
 
-The tile mappings are **experimental**: the packs could not be downloaded in the environment this was built in, so they have not been checked against the real images.
-
-**Kenney Tiny Dungeon** (`HEARTHFORGE_ART=kenney`): downloaded automatically from [kenney.nl](https://kenney.nl/assets/tiny-dungeon). If a hero shows up as the wrong tile, correct it without rebuilding by writing tile numbers into `kenney-map.json` in the art folder:
+Licenses differ: CC0 needs nothing, CC BY needs a credit (the game shows title, artist and license of the playing track and the art packs in use), and a few free packs may be used but not passed on. [CREDITS.md](CREDITS.md) lists what was checked. The Kenney and 0x72 tile mappings are experimental, since the packs could not be downloaded where this was built. To correct a Kenney tile, write numbers into `kenney-map.json`:
 
 ```bash
 docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}" > /data/art/kenney-map.json'
 ```
 
-Sprite names are `fighter`, `rogue`, `wizard`, `cleric`, `goblin`, `skeleton`, `bugbear`, `rat`, `wolf`, `bandit`, `orc`, `zombie`, `floor0`–`floor3` and `wall0`–`wall2`. The numbers are the `tile_NNNN.png` files in the pack.
-
-**0x72 DungeonTileset II** (`HEARTHFORGE_ART=0x72`): drop the zip into Art & Assets, or copy it in by hand:
-
-```bash
-docker compose exec hearthforge mkdir -p /data/art
-docker cp 0x72_DungeonTilesetII_v1.7.zip hearthforge:/data/art/
-docker compose restart
-```
-
-Sprites are matched by the names in the pack's own tile list, so this one does not depend on guessed numbers.
-
-## Music
-
-Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 50 tracks, roughly 300 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
-
-Every built-in link was checked on 15 November 2026 and answers with HTTP 200. Which scene a track is filed under was decided by its title and character, not by listening to all of them, so move or delete any that feel wrong (see below). `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
-
-**Manage it in the Innkeeper** (Assets → Music and Ambient sounds): every track can be listened to, switched off, moved to another scene or removed; tracks that failed to download get a Download button; drop audio files (or a zip) onto the page, or paste a direct link and the server fetches the file from that site itself. Sources that need a login (Freesound, Sonniss, Pixabay) are listed with a "Get it here" link. Nothing is hosted by Hearthforge: every download goes from the artist's site to your server. Item icons from game-icons.net (CC BY 3.0) are fetched on first start too (`HEARTHFORGE_AUTO_ASSETS=off` stops that).
-
-**Your own music by hand**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
-
-```bash
-docker compose exec hearthforge mkdir -p /data/music/tavern
-docker cp my-tavern-song.mp3 hearthforge:/data/music/tavern/
-```
-
-**A different download list**: write `/data/music/tracks.json` and restart. It replaces the built-in list:
-
-```json
-[{ "context": "tavern", "title": "Song name", "artist": "Who made it", "license": "CC BY 4.0", "url": "https://example.org/song.mp3" }]
-```
-
-**Ambient sound** (crowd murmur, a crackling fire, wind, rain) plays as a quiet loop under the music and has its own volume slider next to the music one. It appears once the server has at least one loop. Nothing is downloaded for it, because the usual sources (Freesound, Sonniss) either need a login or do not allow passing the files on. Put loops, ideally seamless ones, in `/data/music/ambient/<scene>/`, with the same scene names as the music (`tavern`, `town`, `overworld`, `dungeon`). A scene without a loop is quiet, and fights keep the loop of the scene they started in:
-
-```bash
-docker compose exec hearthforge mkdir -p /data/music/ambient/tavern
-docker cp tavern-crowd.ogg hearthforge:/data/music/ambient/tavern/
-```
-
-Loops with a direct download link you have tested (for example CC0 ones) can go into `tracks.json` with `"layer": "ambient"`; they are then fetched like the music.
-
-Title, artist and license of the music and of the ambient loop are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
+Browsers only allow sound after the first click, so music starts when a player first touches the page. A scene with no track is silent, and a failed download never breaks the game.
 
 ## Playing together
 
-- **Who you are**: there are no passwords. Your browser keeps a secret token, and the seat and heroes you take at a table belong to that token. A name can sit at a table only once, so nobody can join as a second "Chris". After a reload, a dropped connection or a server restart the same browser gets its seat back; a different browser or a cleared browser storage is a new player.
-- **Tables**: the first screen lists every table with its players, story language, free seats and whether the adventure has begun. Opening a table sets its name, story language, number of seats (1 to 4) and whether it needs an invite code. The table room shows an invite link to copy; with a code, the link carries it.
-- **Before the adventure**: everyone picks or creates heroes and says they are ready, and the host begins. The host can remove a player, hand the table to someone else, or close the table. If the host is gone for 20 seconds while others are there, the player who has sat there longest becomes host.
-- **Away players**: a player who disconnects keeps their seat and heroes and is shown as away. In a fight anyone at the table may play an away player's hero, so the turn order never stalls. In the story the Dungeon Master is told who is away and keeps their hero in the background. Removing a player after the adventure began gives their heroes to the host.
-- **Table talk**: the chat button in the top bar opens an out-of-character chat between the players, with whispers to one player. The Dungeon Master does not read it. What you type into the story box is in character and goes to the Dungeon Master.
-- **Whose turn it is**: in a fight the turn order decides. In the story, with more than one player, the first action opens a short window (`HEARTHFORGE_TURN_WAIT`, 8 seconds). The Dungeon Master answers as soon as every connected player has acted, or when the window closes, and resolves everyone's actions in one scene. While someone is still typing the window stays open, up to 30 seconds. Anything said while the Dungeon Master is writing goes into the next reply. Alone at the table, every action is answered at once.
+- **Who you are.** Your browser keeps a secret token, and the seat and heroes you take belong to it. A name can sit at a table only once. After a reload, a dropped connection or a server restart the same browser gets its seat back.
+- **Tables.** The lobby lists every table with its players, story language, free seats and whether the adventure has begun. A table has 1 to 4 seats and can ask for an invite code. The table room shows an invite link to copy.
+- **Before the adventure.** Everyone picks or creates heroes and says they are ready, then the host begins. The host can remove a player, hand the table over, or close it. If the host is gone for 20 seconds, the player who has sat longest takes over.
+- **Away players.** A disconnected player keeps their seat. In a fight anyone may play an away hero so the order never stalls; in the story the Dungeon Master keeps them in the background.
+- **Table talk.** An out-of-character chat with whispers, which the Dungeon Master never reads. What you type into the story box is in character.
+- **Whose turn.** In a fight the initiative order decides. In the story the first action opens a short window (`HEARTHFORGE_TURN_WAIT`), and the Dungeon Master answers once everyone has acted or the window closes, resolving all actions in one scene.
 
 ## Where the adventure starts
 
-In the table room, before the adventure begins, the host chooses the world:
+In the table room the host chooses the world:
 
-- **Region.** *A new region* rolls its own country from the world seed: the kind of land (vale, coast, fens, highlands, forest or borderland), the town and its tavern, a village, a sanctuary, a lesser ruin or cave, the main threat with its four-part lair and quest, and the people who live there. *Classic* is the handcrafted Emberfall Vale. Tables opened in the lobby start with a new region.
-- **How it begins.** Looking for work, shipwrecked, caravan guards, prison break, a festival gone wrong, a letter from an old friend, a surprise picked by the seed, or a sentence or two of your own. A shipwreck or a prison break opens out in the wild.
-- **World seed.** Shown to everyone and written into the game log. The same seed with the same region and opening rebuilds the same map, places, people and quests, in English and in German. Type in a seed to replay or share a world. Starting a new adventure at the same table rolls a new seed.
+- **Region.** *A new region* rolls a country from the world seed (vale, coast, fens, highlands, forest or borderland) with its town and tavern, village, sanctuary, ruin, main threat with lair and quest, and the people who live there. *Classic* is the handcrafted Emberfall Vale.
+- **How it begins.** Looking for work, shipwrecked, caravan guards, prison break, a festival gone wrong, a letter from an old friend, a surprise, or a sentence or two of your own.
+- **World seed.** Shown to everyone and written to the game log. The same seed with the same region and opening rebuilds the same map, places, people and quests, in English and German. Type one in to replay or share a world.
 
-With an API key, one short call to the background model rewords a rolled region's descriptions before the first scene, so they fit this table's opening. It never changes names, the map, quests or rewards. The story itself is told fresh every time, and dice, ambushes and battle maps stay random.
+With an API key, one short call to the background model rewords a rolled region before the first scene so it fits the opening. It never changes names, the map, quests or rewards.
 
 ## How to play
 
-1. Enter your name, then open a table or sit down at one from the list.
-2. Add heroes: flip a premade card and add it, customize it, or create your own. Playing alone? Add up to four and control them all.
-3. Read the scene, then click a suggested action or type what you do. The panel on the right shows where you are, who is here, the map and your quests.
-4. To travel, click a hex on the map (press `m` for the big one), check the journey and press **Set out**. Places inside a town, such as the tavern, are listed under *Here*, and dungeons are entered with **Delve**.
-5. When a fight starts, the battle map appears and initiative is rolled. On your hero's turn you get 30 ft of movement and one action: click an enemy to attack, or pick a spell or ability from the action bar. `Space` ends the turn.
-6. Short rests take an hour, long rests eight. Camping in the wild can be interrupted; towns, taverns and shrines are safe. If the whole party goes down, survivors are dragged back to the last safe place, lighter in the purse.
+1. Enter your name, then open a table or sit down at one.
+2. Add heroes: flip a premade card, customize it, or create your own. Alone, you can add up to four.
+3. Read the scene, then click a suggested action or type what you do.
+4. To travel, click a hex (press `m` for the big map), check the journey and press **Set out**. Places inside a town are listed under *Here*, and dungeons are entered with **Delve**.
+5. In a fight your hero gets 30 ft of movement and one action: click an enemy to attack or pick from the action bar. `Space` ends the turn.
+6. Short rests take an hour, long rests eight. Camping in the wild can be interrupted; towns, taverns and shrines are safe. If the party falls, survivors wake at the last safe place, lighter in the purse.
 
 | Key | Action |
 | --- | --- |
-| `i` | Inventory |
-| `c` | Character sheet |
-| `m` | Full map |
-| `j` | Journal |
-| `1`–`4` | In a window: switch hero, or turn to a journal chapter |
+| `i` / `c` / `m` / `j` | Inventory / character sheet / full map / journal |
+| `1`–`4` | In a window: switch hero or journal chapter |
 | `WASD`, arrows | Move the active hero in a fight |
 | `1`–`9` | Action bar buttons |
 | `Space` | End turn |
 | `Esc` | Cancel targeting, close an overlay, clear the planned journey |
 
-### House rules
+### Rules and house rules
 
-The rules follow the 5e SRD with a few simplifications:
+The rules follow the 5e System Reference Document with simplifications:
 
 - Mana is the Spell Points variant: casters have 4, 6, 8, 10 and 14 points at levels 1 to 5.
-- Levels stop at 5 for now. Hit points on level-up use the fixed average.
+- Levels stop at 5 for now, with fixed-average hit points on level-up. Each class has the one SRD subclass.
 - Parties smaller than four get the Hearth's Blessing (+4 max HP per missing hero) and face fewer monsters.
-- Heroes left unconscious when a fight is won get back up with 1 HP.
-- A long rest is allowed once every 16 hours.
-- Species traits and feats that the rules engine cannot enforce (darkvision, speaking with small beasts and the like) are handed to the Dungeon Master to honour in the story. The creator marks which is which.
-- Each class has one subclass, the one in the SRD. Magic Initiate spells are cast with mana like any other spell.
-- No opportunity attacks, ammunition tracking, attunement or encumbrance yet.
+- Heroes left unconscious when a fight is won get up with 1 HP. A long rest is allowed once every 16 hours.
+- Traits the engine cannot enforce (darkvision, speaking with small beasts) are handed to the Dungeon Master to honour in the story; the creator marks which is which.
+- No opportunity attacks, ammunition, attunement or encumbrance yet.
 
 ## Development
 
@@ -292,25 +255,18 @@ npm run build && npm start
 
 Layout:
 
-- `shared/` types and content (items, abilities) used by both sides
-- `shared/i18n.ts` and `shared/i18n-de.ts` translations. English text is the lookup key, so a missing entry falls back to English, and `server/test/i18n.test.ts` fails when the interface or a game term has no German
-- `server/src/game/` the rules engine: dice, movement, line of sight, combat, inventory
-- `shared/monsterLook.ts` what a monster looks like (body, size, extras the DM can request); `client/src/game/monsterArt.ts` draws the tokens; `server/src/data/monsters.ts` the SRD stat blocks
-- `shared/heroLook.ts` what a hero looks like (skin, hair, beard, colours, gear); `client/src/game/heroArt.ts` draws portraits and tokens with the same painter as the monsters
-- `shared/battlemap.ts` battle map layouts per kind of place, movement costs and cover; `client/src/game/battleTiles.ts` draws their tiles
-- `server/src/game/world.ts` overworld generation and exploration; `shared/hex.ts` hex maths and the route planner
-- `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback
-- `server/src/data/` classes, monsters and the starting region
-- `client/src/` React UI, the SVG hex map and the PixiJS battle map
-- `server/src/admin/` the Innkeeper: sign-in, settings laid over `.env`, usage, logs, backups and the link to the updater; `shared/admin.ts` its settings list and types; `client/src/ui/Innkeeper.tsx` the panel; `updater/` the updater container
-- `client/src/theme.css` the tavern look; `client/src/music.tsx` the music player; `shared/music.ts` decides which kind of music fits the game state; `server/src/music.ts` fetches and lists tracks
+- `shared/` types and content used by both sides. `shared/i18n.ts` and `shared/i18n-de.ts` hold the translations: English text is the key, and `server/test/i18n.test.ts` fails when something has no German.
+- `server/src/game/` the rules engine (dice, movement, line of sight, combat, inventory) and `world.ts` for overworld generation. The engine is authoritative and synchronous.
+- `server/src/dm/` the Dungeon Master: Claude integration, model tiers, scripted fallback.
+- `server/src/data/` classes, monsters and the starting region. `shared/battlemap.ts`, `shared/heroLook.ts`, `shared/monsterLook.ts` and `shared/hex.ts` describe maps, looks and hex maths; `client/src/game/` draws them.
+- `server/src/admin/` and `client/src/ui/Innkeeper.tsx` the Innkeeper; `shared/admin.ts` is its settings list; `updater/` is the updater container.
+- `server/src/music.ts`, `server/src/artLibrary.ts`, `shared/music.ts`, `shared/art.ts` the asset sources and their access levels.
+- `client/src/` the React UI. `theme.css` holds the colour tokens and `forge.css` the logo-specific rules.
 
 Saves from before the open world cannot be converted: such a table keeps its players and starts a new adventure.
 
-The data model already has the hooks for what comes next: every place has a `zone` slot for generated town and tavern maps, and every character, person and place carries a `visual` record (a fixed appearance description plus an image id) so generated pictures can stay consistent.
-
-The engine is authoritative and synchronous. The DM never changes state directly: it picks monster intents through a tool call, the engine resolves them with real dice, and the DM narrates the result.
-
 ## Credits and licenses
 
-See [CREDITS.md](CREDITS.md). Rules content comes from the D&D 5e System Reference Document 5.1 (CC BY 4.0). The pixel art is original, generated in code, and dedicated to the public domain (CC0). Music is downloaded at runtime, not bundled, and is CC BY 4.0. The fonts are under the SIL Open Font License.
+See [CREDITS.md](CREDITS.md) for the full list. In short: the rules content is from the D&D System Reference Document (CC BY 4.0), the pixel art is original and generated in code (CC0), music and icon packs are fetched at runtime and credited in the game, and the fonts are under the SIL Open Font License.
+
+This work includes material from the System Reference Document 5.1 and 5.2.1 by Wizards of the Coast LLC, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode). Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.
