@@ -382,3 +382,9 @@ ul.plain small { color: var(--muted); }
 .item-notes small { margin-right: 4px; }
 /* The inventory's .item rule must not stretch hover cards about items. */
 .hovercard.item { position: fixed; width: 300px; height: auto; place-items: stretch; cursor: default; }
+/* The details box keeps one height whatever it shows. If it grew with the text, the whole
+   panel would re-centre, the item would slide out from under the cursor and the box would
+   flicker between the item and the hint. Long notes scroll instead (click the item to pin it). */
+.tooltip { height: 216px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+/* Hover cards in the story stay on screen however much there is to say. */
+.hovercard { max-height: min(70vh, 460px); overflow: hidden; }
