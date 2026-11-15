@@ -8,7 +8,7 @@ import { ABILITY_HELP, CLASSES, CLASS_GUIDE, FEATS, loc } from '../../../shared/
 import { SLOT_IDS, abilityMod, type Character, type FeatId, type FeatPick, type ItemDef } from '../../../shared/types';
 import { ABILITY_NAMES } from '../../../shared/content';
 import { itemDef } from '../../../shared/items';
-import { spriteUrl } from '../game/sprites';
+import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { useLang, useT } from '../i18n';
 import type { Connection } from '../net';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, featProblem, type Focus } from './Guide';
@@ -95,7 +95,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
     <div className="overlay creator-overlay">
       <div className="panel creator levelup">
         <header className="creator-head">
-          <img className="pixel" src={spriteUrl(c.classId)} alt="" />
+          <img className="pixel" src={heroUrl(artOfCharacter(c, items))} alt="" />
           <h1>{t('{name} reaches level {level}', { name: c.name, level: choice.level })}</h1>
           <span className="spacer" />
           <button className="link close" onClick={onClose} title={t('Decide later')}>✕</button>

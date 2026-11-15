@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { SLOT_LABELS } from '../../../shared/content';
 import { itemDef } from '../../../shared/items';
 import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemInstance, type SlotId } from '../../../shared/types';
-import { spriteUrl } from '../game/sprites';
+import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { mod, slotForItem, weaponSummary, classLabel } from '../game/util';
 import { playerId, type Connection } from '../net';
 import { useT } from '../i18n';
@@ -107,7 +107,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
                   setDrag(null);
                 }}
               >
-                <img className="pixel" src={spriteUrl(o.classId)} alt="" /> {o.name}
+                <img className="pixel" src={heroUrl(artOfCharacter(o, state.items))} alt="" /> {o.name}
               </button>
             ))}
           </div>
@@ -118,7 +118,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
             <div className="doll-grid">
               <div className="col">{LEFT.map(slot)}</div>
               <div className="figure">
-                <img className="pixel" src={spriteUrl(c.classId)} alt="" />
+                <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
                 <div className="ac-badge" title={t('Armor Class')}><b>{c.ac}</b><small>{t('AC')}</small></div>
               </div>
               <div className="col">{RIGHT.map(slot)}</div>

@@ -12,7 +12,8 @@ import {
   ABILITY_HELP, ABILITY_KEYS, BACKGROUNDS, CLASSES, CLASS_GUIDE, FEATS, KITS, ORIGIN_FEATS, SKILL_HELP, SPECIES, STYLES, kitsFor, loc,
 } from '../../../shared/rules';
 import { GENDERS, abilityMod, type Abilities, type AbilityKey, type CharacterSpec, type ClassId, type GameState } from '../../../shared/types';
-import { spriteUrl } from '../game/sprites';
+import { artOfDraft, heroUrl } from '../game/heroArt';
+import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { playerId, type Connection } from '../net';
 import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
@@ -58,6 +59,8 @@ function tidy(d: Draft): Draft {
   if (cls && !out.base && out.method !== 'roll') out.base = recommendedArray(cls.id);
   if (cls && bg && out.base && out.boosts.length !== 3) out.boosts = recommendedBoosts(cls.id, out.base, bg.abilities);
   if (out.kit && KITS[out.kit]?.classId !== cls?.id) delete out.kit;
+  // The look is always complete and fits the species, so the portrait never jumps while a name is typed.
+  if (cls) out.look = heroLook({ speciesId: sp?.id ?? 'human', gender: out.gender ?? 'neutral', classId: cls.id, name: '', look: d.look });
   const list = cls ? classSpellList(cls.id) : null;
   if (cls && list) {
     const b = startBuild(out, cls.id);
@@ -367,6 +370,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
 
   if (step === 'identity') {
     const names = sp?.names ?? SPECIES.human.names;
+    const look = heroLook({ speciesId: d.speciesId ?? 'human', gender: d.gender ?? 'neutral', classId: d.classId ?? 'fighter', name: '', look: d.look });
     left = (
       <div className="identity">
         <label>
@@ -387,6 +391,16 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           </span>
           <small className="muted">{t('Neutral avoids gendered words and uses the name instead.')}</small>
         </label>
+        <div className="look">
+          <img className="pixel look-portrait" src={heroUrl(artOfDraft(d)!)} alt="" />
+          <div className="look-rows">
+            <Swatches label={t('Skin')} value={look.skin} options={SPECIES_SKINS[d.speciesId ?? 'human']} colors={SKINS} onPick={(skin) => update({ look: { ...look, skin } })} />
+            {d.speciesId !== 'dragonborn' && <Choices label={t('Hair')} value={look.hair} options={HAIR_STYLES} onPick={(hair) => update({ look: { ...look, hair } })} />}
+            {d.speciesId !== 'dragonborn' && <Swatches label={t('Hair colour')} value={look.hairColor} options={Object.keys(HAIR_COLORS)} colors={HAIR_COLORS} onPick={(hairColor) => update({ look: { ...look, hairColor } })} />}
+            {d.speciesId !== 'dragonborn' && <Choices label={t('Beard')} value={look.beard} options={BEARDS} onPick={(beard) => update({ look: { ...look, beard } })} />}
+            <Swatches label={t('Colours')} value={look.color} options={Object.keys(OUTFITS)} colors={OUTFITS} onPick={(color) => update({ look: { ...look, color } })} />
+          </div>
+        </div>
         <label>
           {t('Appearance')}
           <textarea value={d.appearance ?? ''} maxLength={400} rows={3} onChange={(e) => update({ appearance: e.target.value })} placeholder={t('Build, face, hair, clothing, anything people notice first.')} />
@@ -527,7 +541,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     <div className="overlay creator-overlay">
       <div className="panel creator">
         <header className="creator-head">
-          {d.classId && <img className="pixel" src={spriteUrl(d.classId)} alt="" />}
+          {d.classId && <img className="pixel" src={heroUrl(artOfDraft(d)!)} alt="" />}
           <h1>{t('Create your hero')}</h1>
           <nav className="steps">
             {STEPS.map((s, i) => {
@@ -558,6 +572,34 @@ export function Creator({ state, conn, onClose, initial }: Props) {
             : <button type="button" className="primary" onClick={() => go(STEPS[stepIndex + 1])}>{t('Next')} →</button>}
         </footer>
       </div>
+    </div>
+  );
+}
+
+/** A row of colour dots to choose from. */
+function Swatches({ label, value, options, colors, onPick }: { label: string; value: string; options: string[]; colors: Record<string, string>; onPick: (id: string) => void }) {
+  const t = useT();
+  return (
+    <div className="look-row">
+      <span>{label}</span>
+      <span className="swatches">
+        {options.map((id) => (
+          <button key={id} type="button" className={id === value ? 'swatch on' : 'swatch'} style={{ background: colors[id] }} title={t(LOOK_NAMES[id] ?? id)} aria-label={t(LOOK_NAMES[id] ?? id)} aria-pressed={id === value} onClick={() => onPick(id)} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/** A row of named choices. */
+function Choices<T extends string>({ label, value, options, onPick }: { label: string; value: T; options: readonly T[]; onPick: (id: T) => void }) {
+  const t = useT();
+  return (
+    <div className="look-row">
+      <span>{label}</span>
+      <span className="segmented small">
+        {options.map((id) => <button key={id} type="button" className={id === value ? 'on' : ''} onClick={() => onPick(id)}>{t(LOOK_NAMES[id] ?? id)}</button>)}
+      </span>
     </div>
   );
 }

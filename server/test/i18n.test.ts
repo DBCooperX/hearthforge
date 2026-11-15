@@ -6,6 +6,7 @@ import { COMPASS, TERRAIN, formatHours, formatTime } from '../../shared/hex';
 import { classLabel, hasTranslation, tagged, tr } from '../../shared/i18n';
 import { DE } from '../../shared/i18n-de';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS } from '../../shared/types';
+import { LOOK_NAMES } from '../../shared/heroLook';
 import { BACKGROUNDS, CLASS_GUIDE, FEATS, GLOSSARY, KITS, SPECIES, STYLES } from '../../shared/rules';
 import { PREMADES } from '../../shared/premades';
 import * as RULES from '../../shared/rules';
@@ -72,7 +73,7 @@ describe('translations', () => {
       add(o.name, ...o.effects.map((e) => e.name));
     }
     for (const f of [...Object.values(FEATS), ...Object.values(STYLES)]) add(f.feature);
-    add('mage armor', 'Unarmed strike');
+    add('mage armor', 'Unarmed strike', ...Object.values(LOOK_NAMES));
     add(...Object.values(SLOT_LABELS), ...Object.keys(SKILLS), ...Object.values(ABILITY_NAMES), ...Object.keys(ABILITY_NAMES).map((k) => k.toUpperCase()));
     for (const m of Object.values(MONSTERS)) { add(m.name, m.description); for (const a of m.attacks) add(a.name, `${a.damageType} damage`); }
     for (const t of Object.values(TERRAIN)) add(t.name);

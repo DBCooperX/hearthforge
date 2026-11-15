@@ -1,6 +1,6 @@
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
-import { spriteUrl } from '../game/sprites';
+import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
 import { weaponSummary, classLabel } from '../game/util';
 import { BACKGROUNDS, CLASSES, SPECIES } from '../../../shared/rules';
@@ -37,7 +37,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
           <div className="tabs">
             {state.characters.map((o) => (
               <button key={o.id} className={o.id === c.id ? 'tab on' : 'tab'} onClick={() => onSelect(o.id)}>
-                <img className="pixel" src={spriteUrl(o.classId)} alt="" /> {o.name}
+                <img className="pixel" src={heroUrl(artOfCharacter(o, state.items))} alt="" /> {o.name}
               </button>
             ))}
           </div>
@@ -45,7 +45,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
         </header>
         <div className="sheet-body">
           <section className="sheet-id">
-            <img className="pixel" src={spriteUrl(c.classId)} alt="" />
+            <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
             <div>
               <h1 style={{ color: CLASS_INFO[c.classId].color }}>{c.name}</h1>
               <p>{t('Level {level} {class}', { level: c.level, class: `${t(SPECIES[c.speciesId]?.name ?? '')} ${classLabel(c, t)}`.trim() })}{c.subclass ? ` (${t(c.subclass)})` : ''} · {t(BACKGROUNDS[c.backgroundId]?.name ?? '')}{c.gender !== 'neutral' ? ` · ${t(PRONOUNS[c.gender])}` : ''}{owner ? ` · ${t('played by {name}', { name: owner.name })}` : ''}</p>

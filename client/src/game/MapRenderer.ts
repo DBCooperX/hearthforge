@@ -6,6 +6,8 @@ import { TILE, packSprites, spriteCanvas } from './sprites';
 import { tileWalkable } from '../../../shared/battlemap';
 import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { monsterCanvas } from './monsterArt';
+import { artOfCharacter, heroCanvas } from './heroArt';
+import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
 import { tileAt } from './util';
 
@@ -42,6 +44,18 @@ function tex(name: string): Texture {
     t = Texture.from(spriteCanvas(name));
     t.source.scaleMode = 'nearest';
     textures.set(name, t);
+  }
+  return t;
+}
+
+const heroTextures = new Map<string, Texture>();
+function heroTex(art: HeroArt): Texture {
+  const k = heroArtKey(art);
+  let t = heroTextures.get(k);
+  if (!t) {
+    t = Texture.from(heroCanvas(art));
+    t.source.scaleMode = 'nearest';
+    heroTextures.set(k, t);
   }
   return t;
 }
@@ -168,7 +182,8 @@ export class MapRenderer {
           sp.scale.set((size * TILE) / Math.max(texture.width, texture.height));
           sp.position.set((size * TILE) / 2, size * TILE - sp.height / 2);
         } else {
-          // Sprites taller than a tile (some art packs) stand on the tile's bottom edge.
+          // Hero tokens are drawn at twice the tile's resolution and fill their square.
+          sp.scale.set(TILE / Math.max(texture.width, texture.height));
           sp.position.set(TILE / 2, TILE - sp.height / 2);
         }
         const bar = new Graphics();
@@ -198,7 +213,9 @@ export class MapRenderer {
     };
     for (const c of state.characters) {
       if (c.dead) continue;
-      const e = place(c.id, 'pc', tex(c.classId), c.x, c.y, c.hp, c.maxHp);
+      const heroTexture = heroTex(artOfCharacter(c, state.items));
+      const e = place(c.id, 'pc', heroTexture, c.x, c.y, c.hp, c.maxHp);
+      if (e.sprite.texture !== heroTexture) e.sprite.texture = heroTexture; // gear changed
       const down = c.hp <= 0;
       e.sprite.rotation = down ? Math.PI / 2 : 0;
       e.sprite.tint = c.dead ? 0x555555 : 0xffffff;
