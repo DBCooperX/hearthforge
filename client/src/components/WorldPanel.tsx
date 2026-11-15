@@ -5,6 +5,7 @@ import type { Connection } from '../net';
 import { HexMap, KIND_ICON } from './HexMap';
 import { EntityName, useEntity } from './Story';
 import { useLang, useT } from '../i18n';
+import { Window } from '../ui/Window';
 
 function Named({ name }: { name: string }) {
   const entity = useEntity(name);
@@ -153,64 +154,14 @@ export function WorldPanel(props: PanelProps) {
   );
 }
 
-/** Everything the party (and the Dungeon Master) remembers: quests, deeds, people and places. */
-export function Journal({ state, onClose }: { state: GameState; onClose: () => void }) {
-  const t = useT();
-  const w = state.world!;
-  const { quests, deeds, npcs } = state.memory;
-  const placeName = (id: string | null) => w.locations.find((l) => l.id === id)?.name ?? t('parts unknown');
-  return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="panel journal">
-        <header><h1>{t('Journal')}</h1><button className="link close" onClick={onClose} title={t('Close (j or Esc)')}>✕</button></header>
-        <div className="journal-body">
-          <section>
-            <h3>{t('Quests')}</h3>
-            {quests.length === 0 && <p className="muted">{t('Nothing yet.')}</p>}
-            {quests.map((q) => (
-              <div key={q.id} className={`quest ${q.status}`}>
-                <b>{q.title}</b> <span className="chip">{t(q.status)}</span>
-                <p>{q.summary}</p>
-                {q.notes.length > 0 && <ul>{q.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-              </div>
-            ))}
-            <h3>{t('Deeds')}</h3>
-            {deeds.length === 0 && <p className="muted">{t('Your story is still unwritten.')}</p>}
-            <ul className="deeds">{deeds.map((d) => <li key={d.id}><small>{t('Day')} {d.day}</small> {d.text}</li>)}</ul>
-          </section>
-          <section>
-            <h3>{t('People')}</h3>
-            {npcs.length === 0 && <p className="muted">{t('You have met nobody yet.')}</p>}
-            {npcs.map((n) => (
-              <div key={n.id} className="person">
-                <span className={`disp ${n.disposition}`} title={t(n.disposition)} /> <b>{n.name}</b> <small>{n.role} · {placeName(n.locationId)}</small>
-                <p>{n.description}</p>
-                {n.notes.length > 0 && <ul>{n.notes.map((x, i) => <li key={i}>{x}</li>)}</ul>}
-              </div>
-            ))}
-            <h3>{t('Places')}</h3>
-            {w.locations.map((l) => (
-              <div key={l.id} className="person">
-                {KIND_ICON[l.kind]} <b>{l.name}</b> <small>{l.parentId ? t('{kind} in {place}', { kind: t(l.kind), place: placeName(l.parentId) }) : t(l.kind)}{l.visited ? '' : ` · ${t('not yet visited')}`}</small>
-                <p>{l.description}</p>
-              </div>
-            ))}
-          </section>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Full-size map overlay. */
+/** Full-size map window. */
 export function MapOverlay(props: TravelProps & { onClose: () => void }) {
   const t = useT();
+  const { lang } = useLang();
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div className="panel bigmap">
-        <header><h1>{t('The Emberfall Vale')}</h1><small className="muted">{t('One hex is {n} miles', { n: HEX_MILES })}</small><button className="link close" onClick={props.onClose} title={t('Close (m or Esc)')}>✕</button></header>
-        <TravelMap {...props} />
-      </div>
-    </div>
+    <Window title={t('The Emberfall Vale')} icon="map" hotkey="M" size="map" className="bigmap" onClose={props.onClose}
+      subtitle={<>{formatTime(props.world.minutes, lang)} · {t('One hex is {n} miles', { n: HEX_MILES })}</>}>
+      <TravelMap {...props} />
+    </Window>
   );
 }

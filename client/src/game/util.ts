@@ -1,6 +1,6 @@
 import { movementCosts } from '../../../shared/battlemap';
 import { itemDef } from '../../../shared/items';
-import type { Character, GameState, ItemDef, SlotId } from '../../../shared/types';
+import type { Character, GameState } from '../../../shared/types';
 
 export const key = (x: number, y: number) => `${x},${y}`;
 export const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -21,13 +21,7 @@ export function reachable(state: GameState, c: Character, steps: number): Set<st
   return out;
 }
 
-export function slotForItem(def: ItemDef): SlotId | null {
-  if (def.kind === 'weapon') return 'mainHand';
-  if (def.kind === 'shield') return 'offHand';
-  if (def.kind === 'armor') return 'armor';
-  if (def.kind === 'wondrous') return def.slot ?? null;
-  return null;
-}
+export { slotForItem } from '../../../shared/inventory';
 
 export function mod(score: number): string {
   const m = Math.floor((score - 10) / 2);

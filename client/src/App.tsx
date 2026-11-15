@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ABILITIES } from '../../shared/content';
-import type { Hex } from '../../shared/hex';
+import { sameHex, type Hex } from '../../shared/hex';
 import type { Character } from '../../shared/types';
 import { CharacterSheet } from './components/CharacterSheet';
 import { ActionBar, TurnBar, type Targeting } from './components/Hud';
@@ -11,7 +11,8 @@ import { MapView } from './components/MapView';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
-import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
+import { Journal } from './components/Journal';
+import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
 import { tileWalkable } from '../../shared/battlemap';
@@ -20,8 +21,19 @@ import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
 import { playerId, useConnection } from './net';
+import { Icon, type IconName } from './ui/icons';
+import { NAV_LABELS } from './ui/labels';
+import { Settings } from './ui/Settings';
+import { Kbd, Window } from './ui/Window';
 
-type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | null;
+type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | null;
+
+const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
+  { id: 'sheet', key: 'C', icon: 'character' },
+  { id: 'inventory', key: 'I', icon: 'inventory' },
+  { id: 'journal', key: 'J', icon: 'journal' },
+  { id: 'map', key: 'M', icon: 'map' },
+];
 
 export function App() {
   const t = useT();
@@ -156,7 +168,7 @@ export function App() {
   else hint = '';
 
   const focus = selected ?? mine[0] ?? state.characters[0];
-  const newAdventure = () => { if (window.confirm(t('Abandon this adventure and return to the party screen?'))) send({ t: 'reset' }); };
+  const newAdventure = () => { if (window.confirm(t('Abandon this adventure and return to the party screen?'))) { setOverlay(null); send({ t: 'reset' }); } };
   const travel = { world: state.world, state, conn, target: travelTarget, setTarget: setTravelTarget };
 
   return (
@@ -179,12 +191,18 @@ export function App() {
               {t('Table talk')}{unread > 0 && <span className="badge">{unread}</span>}
             </button>
           )}
-          <button className="link" onClick={() => setOverlay('sheet')} title={t('Character sheet (c)')}>{t('Character')}</button>
-          <button className="link" onClick={() => setOverlay('inventory')} title={t('Inventory (i)')}>{t('Inventory')}</button>
-          <button className="link" onClick={() => setOverlay('journal')} title={t('Journal (j)')}>{t('Journal')}</button>
+          <nav className="nav" aria-label={t('Windows')}>
+            {NAV.map((n) => (
+              <button key={n.id} type="button" className={overlay === n.id ? 'nav-btn on' : 'nav-btn'} aria-pressed={overlay === n.id} disabled={n.id === 'map' && !!combat}
+                title={n.id === 'map' && combat ? t('The map is put away during a fight.') : undefined}
+                onClick={() => setOverlay((o) => (o === n.id ? null : n.id))}>
+                <Icon name={n.icon} size={18} /><span>{t(NAV_LABELS[n.id])}</span><Kbd>{n.key}</Kbd>
+              </button>
+            ))}
+          </nav>
           <MusicControl />
           <LangSwitch />
-          {state.hostId === playerId && <button className="link" onClick={newAdventure}>{t('New adventure')}</button>}
+          <button type="button" className={overlay === 'settings' ? 'nav-btn icon-only on' : 'nav-btn icon-only'} onClick={() => setOverlay((o) => (o === 'settings' ? null : 'settings'))} title={t('Settings')} aria-label={t('Settings')}><Icon name="settings" size={18} /></button>
         </header>
         <PartyPanel
           state={state}
@@ -201,7 +219,7 @@ export function App() {
             <main className="stage">
               <TurnBar state={state} />
               <MapView state={state} view={view} onTile={onTile} onMoved={conn.onMoved} />
-              <ActionBar state={state} actor={actor} targeting={targeting} setTargeting={setTargeting} conn={conn} onInventory={() => setOverlay('inventory')} hint={hint} />
+              <ActionBar state={state} actor={actor} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
             </main>
             <StoryFeed state={state} conn={conn} compact />
           </>
@@ -224,24 +242,18 @@ export function App() {
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
-        {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} />}
+        {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
+        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
         {overlay === 'table' && (
-          <div className="overlay" onClick={() => setOverlay(null)}>
-            <div className="panel table-sheet" onClick={(e) => e.stopPropagation()}>
-              <header>
-                <h2>{state.table.title}</h2>
-                <span className="spacer" />
-                <button className="link" onClick={() => setOverlay(null)} aria-label={t('Close')}>✕</button>
-              </header>
-              <Players state={state} conn={conn} />
-              <p className="muted small">{t('A player who is away keeps their seat and their heroes. Until they are back, anyone may play their heroes in a fight, and the Dungeon Master keeps them in the background of the story.')}</p>
-              <Invite state={state} conn={conn} />
-              <div className="row">
-                <button onClick={() => { setOverlay(null); conn.leave(); }} title={t('Your seat and your heroes stay yours. Come back from the list of tables.')}>{t('Back to the tables')}</button>
-                {state.hostId === playerId && <button className="link danger" onClick={() => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) send({ t: 'close_table' }); }}>{t('Close the table')}</button>}
-              </div>
+          <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>
+            <Players state={state} conn={conn} />
+            <p className="muted small">{t('A player who is away keeps their seat and their heroes. Until they are back, anyone may play their heroes in a fight, and the Dungeon Master keeps them in the background of the story.')}</p>
+            <Invite state={state} conn={conn} />
+            <div className="row">
+              <button onClick={() => { setOverlay(null); conn.leave(); }} title={t('Your seat and your heroes stay yours. Come back from the list of tables.')}>{t('Back to the tables')}</button>
+              {state.hostId === playerId && <button className="link danger" onClick={() => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) send({ t: 'close_table' }); }}>{t('Close the table')}</button>}
             </div>
-          </div>
+          </Window>
         )}
         {chatOpen && state.table.maxPlayers > 1 && <div className="chat-float panel"><ChatPanel state={state} conn={conn} onClose={() => setChatOpen(false)} /></div>}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}

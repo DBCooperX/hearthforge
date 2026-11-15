@@ -7,10 +7,10 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 ## What's in the game
 
 - **Party panel** on the left: portrait, HP and mana bars, armor class and conditions for every hero.
-- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear. Things the Dungeon Master invents during play (a clue, a letter, a strange key) land in the backpack too, with a fitting icon, a quest marker and their story notes; click an item to read them.
+- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear. Things the Dungeon Master invents during play (a clue, a letter, a strange key) land in the backpack too, with a fitting icon, a quest marker and their story notes; click an item to read them. Hovering an item shows its numbers and how it compares with what the hero wears; the backpack can be filtered and sorted, and the footer shows carried weight (display only).
 - **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
 - **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
-- **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal.
+- **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal, a book with chapters for quests, people, places and lore. The gear in the top bar opens the settings: language, music, interface sounds and text size.
 - **Premade heroes or your own**: eight ready-made heroes on flip cards with their story and numbers, or a guided creator: class, species, background, ability scores (standard array, point buy or dice rolled by the server), skills, talents, equipment, name, gender, looks and backstory. Every option explains what it is, what it does in numbers and who it is good for, with recommended picks per class, tooltips on rules terms and a live preview of your sheet. A premade can be used as it is or customized.
 - **Heroes that look like themselves**: portraits and battle tokens are drawn in layers from the hero's species (height, build, skin, ears, tusks, horns, tail), the hair, beard and colours picked in the creator, and the armour, shield and weapon they carry. The same picture is used in the picker, the party panel, the character sheet and on the battle map, and it changes when the gear does.
 - **Level-up choices**: a subclass at level 3 (Champion, Thief, Evoker, Life Domain), new spells, and a feat or ability score increase at level 4, each with the same explanations and preview.
@@ -190,6 +190,7 @@ Title, artist and license are shown in the game when a player points at the musi
 | `c` | Character sheet |
 | `m` | Full map |
 | `j` | Journal |
+| `1`–`4` | In a window: switch hero, or turn to a journal chapter |
 | `WASD`, arrows | Move the active hero in a fight |
 | `1`–`9` | Action bar buttons |
 | `Space` | End turn |

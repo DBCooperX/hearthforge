@@ -1,16 +1,112 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SLOT_LABELS } from '../../../shared/content';
+import { weaponAttack } from '../../../shared/build';
+import { INV_FILTERS, INV_SORTS, arrangeBag, carriedWeight, carryCapacity, equipPreview, itemGroup, itemWeight, slotForItem, type InvFilter, type InvSort } from '../../../shared/inventory';
 import { itemDef } from '../../../shared/items';
-import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemInstance, type SlotId } from '../../../shared/types';
+import { SPECIES } from '../../../shared/rules';
+import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemDef, type ItemInstance, type SlotId } from '../../../shared/types';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
-import { mod, slotForItem, weaponSummary, classLabel } from '../game/util';
+import { classLabel } from '../game/util';
 import { playerId, type Connection } from '../net';
-import { useT } from '../i18n';
+import { useLang, useT, type Translate } from '../i18n';
+import type { Lang } from '../../../shared/i18n';
+import { dice, signed } from './Guide';
+import { Float, Hint } from '../ui/Hint';
+import { Icon, SlotIcon } from '../ui/icons';
+import { FILTER_LABELS, ITEM_KIND_LABELS as KIND, SORT_LABELS, STAT_LABELS } from '../ui/labels';
+import { setPrefs, usePrefs } from '../ui/prefs';
+import { sfx } from '../ui/sound';
+import { HeroTabs, Window } from '../ui/Window';
 
 const MIME = 'application/x-hearthforge-item';
 const LEFT: SlotId[] = ['head', 'armor', 'mainHand', 'ring'];
 const RIGHT: SlotId[] = ['amulet', 'cloak', 'offHand', 'boots'];
-const SLOT_GLYPH: Record<SlotId, string> = { head: '⛑', amulet: '📿', armor: '🥋', cloak: '🧣', mainHand: '🗡', offHand: '🛡', ring: '💍', boots: '🥾' };
+
+const num = (n: number, lang: Lang) => n.toLocaleString(lang, { maximumFractionDigits: 1 });
+
+function kindLine(def: ItemDef, t: Translate): string {
+  const slot = slotForItem(def);
+  const kind = def.weapon ? t(KIND[def.weapon.category])
+    : def.armor ? t(KIND[def.armor.category])
+    : def.kind === 'shield' ? t(KIND.shield)
+    : def.consumable ? t(KIND.consumable)
+    : def.kind === 'wondrous' ? t(KIND.wondrous)
+    : def.story ? t(def.story.category) : t(KIND.item);
+  const line = [def.rarity && def.rarity !== 'common' ? t(def.rarity) : null, kind, slot && def.kind !== 'shield' ? t(SLOT_LABELS[slot]) : null].filter(Boolean).join(' · ');
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean }
+
+/** Everything about one item: what it does for this hero, how it compares with what they wear, and its story. */
+function ItemDetails({ def, item, c, state, equipped, mine, pinned }: TipProps) {
+  const t = useT();
+  const { lang } = useLang();
+  const story = def.story;
+  const preview = equipPreview(c, def, state.items);
+  const attack = def.weapon ? weaponAttack(c, def) : null;
+  const weight = itemWeight(def) * item.qty;
+  const props = def.weapon ? [
+    def.weapon.finesse && t('Finesse'),
+    def.weapon.twoHanded && t('Two-handed'),
+    def.weapon.ranged && t('Range {normal}/{long} ft', def.weapon.ranged),
+    def.weapon.bonus && t('Magic {bonus}', { bonus: signed(def.weapon.bonus) }),
+  ].filter(Boolean) as string[] : [];
+  const action = !mine ? null : equipped ? t('Double-click to take it off') : preview ? t('Double-click to equip') : def.consumable ? t('Double-click to drink') : null;
+  return (
+    <div className={['item-tip', def.rarity ?? 'common', story?.quest && 'quest'].filter(Boolean).join(' ')}>
+      <header>
+        <span className="item-tip-icon">{def.icon}</span>
+        <div>
+          <b>{t(def.name)}{item.qty > 1 && <span className="item-tip-qty"> ×{item.qty}</span>}</b>
+          <small>{kindLine(def, t)}</small>
+        </div>
+      </header>
+      {story?.quest && <div className="item-tags"><span className="item-tag quest">{t('Quest item')}</span></div>}
+      {(attack || def.armor || def.acBonus || def.consumable) && (
+        <dl className="item-stats">
+          {attack && <div><dt>{t('To hit')}</dt><dd>{signed(attack.bonus)}</dd></div>}
+          {attack && <div><dt>{t('On a hit')}</dt><dd>{dice(attack.damage, lang)} {t(`${attack.type} damage`)}</dd></div>}
+          {def.armor && <div><dt>{t('Armor Class')}</dt><dd>{def.armor.baseAc}{def.armor.dexCap === 0 ? '' : ` + ${t('DEX')}`}{def.armor.dexCap ? ` (${t('max {n}', { n: def.armor.dexCap })})` : ''}</dd></div>}
+          {def.acBonus ? <div><dt>{t('Armor Class')}</dt><dd>{signed(def.acBonus)}</dd></div> : null}
+          {def.consumable && <div><dt>{t('Heals')}</dt><dd>{dice(def.consumable.heal, lang)} {t('HP')}</dd></div>}
+        </dl>
+      )}
+      {props.length > 0 && <div className="item-props">{props.map((p) => <span key={p}>{p}</span>)}</div>}
+      {preview && !equipped && (preview.changes.length > 0 || !preview.usable) && (
+        <div className="item-compare">
+          <small>{preview.replaces ? t('Instead of {item}', { item: t(preview.replaces.name) }) : t('If equipped')}</small>
+          {preview.changes.map((ch) => {
+            const better = ch.then > ch.now;
+            return (
+              <div key={ch.stat} className={better ? 'better' : 'worse'}>
+                <span>{t(STAT_LABELS[ch.stat])}</span>
+                <span className="was">{ch.stat === 'toHit' ? signed(ch.now) : num(ch.now, lang)}</span>
+                <Icon name={better ? 'up' : 'down'} size={13} />
+                <b>{ch.stat === 'toHit' ? signed(ch.then) : num(ch.then, lang)}</b>
+              </div>
+            );
+          })}
+          {!preview.usable && <p className="item-warn">{t('{name} is not trained to use this.', { name: c.name })}</p>}
+        </div>
+      )}
+      {def.description && <p className="item-flavor">{t(def.description)}</p>}
+      {story && story.notes.length > 0 && (
+        <ul className="item-notes">
+          {story.notes.map((n, i) => <li key={i}><small>{t('Day')} {n.day}</small>{n.text}</li>)}
+        </ul>
+      )}
+      {story && <p className="item-found">{story.foundAt ? t('Found on day {day} at {place}', { day: story.foundDay, place: story.foundAt }) : t('Found on day {day}', { day: story.foundDay })}</p>}
+      <footer>
+        {weight > 0 && <span><Icon name="weight" size={14} /> {t('{n} lb', { n: num(weight, lang) })}</span>}
+        {def.value > 0 && <span><Icon name="coin" size={14} /> {def.value} {t('gp')}</span>}
+        {!weight && !def.value && <span>{t('No weight or worth to speak of')}</span>}
+        <span className="spacer" />
+        {pinned ? <span className="item-pinned"><Icon name="pin" size={13} /> {t('Pinned')}</span> : action && <span className="item-action">{action}</span>}
+      </footer>
+    </div>
+  );
+}
 
 interface Props {
   state: GameState;
@@ -20,46 +116,79 @@ interface Props {
   onClose: () => void;
 }
 
+interface Shown { uid: string; rect: DOMRect }
+
 export function Inventory({ state, character: c, conn, onSelect, onClose }: Props) {
   const t = useT();
+  const { lang } = useLang();
+  const prefs = usePrefs();
   const [drag, setDrag] = useState<{ item: ItemInstance; from: InvLoc } | null>(null);
-  const [hover, setHover] = useState<ItemInstance | null>(null);
-  /** The item pinned by a click, so its story can be read without holding the mouse still. */
-  const [picked, setPicked] = useState<string | null>(null);
+  const [hover, setHover] = useState<Shown | null>(null);
+  /** The item pinned by a click, so long notes can be read and scrolled without holding the mouse still. */
+  const [picked, setPicked] = useState<Shown | null>(null);
   const mine = c.ownerId === playerId;
   const defOf = (item: ItemInstance | null) => (item ? itemDef(state.items, item.defId) ?? null : null);
   const dragDef = defOf(drag?.item ?? null);
   const dragSlot = dragDef ? slotForItem(dragDef) : null;
+  const filter = prefs.invFilter, sort = prefs.invSort;
+  const plain = filter === 'all' && sort === 'manual';
 
-  const cell = (item: ItemInstance | null, loc: InvLoc, extra = '') => {
+  useEffect(() => { setHover(null); setPicked(null); }, [c.id]);
+
+  /** What each backpack square shows and which real bag index it stands for. Null squares are filled by hidden items. */
+  const squares = useMemo(() => {
+    if (plain) return Array.from({ length: BAG_SIZE }, (_, i) => ({ item: c.bag[i] ?? null, index: i as number | null }));
+    const shown = arrangeBag(c.bag, state.items, filter, sort, (d) => t(d.name));
+    const free = c.bag.map((b, i) => (b ? -1 : i)).filter((i) => i >= 0);
+    const out: { item: ItemInstance | null; index: number | null }[] = shown.map((e) => ({ item: e.item, index: e.index }));
+    while (out.length < BAG_SIZE) out.push({ item: null, index: free.shift() ?? null });
+    return out;
+  }, [c.bag, state.items, filter, sort, plain, t]);
+
+  const counts = useMemo(() => {
+    const n: Record<InvFilter, number> = { all: 0, weapon: 0, armor: 0, consumable: 0, quest: 0, other: 0 };
+    for (const it of c.bag) { const d = defOf(it); if (d) { n.all++; n[itemGroup(d)]++; } }
+    return n;
+  }, [c.bag, state.items]);
+
+  const move = (from: InvLoc, to: InvLoc) => {
+    conn.send({ t: 'inv_move', characterId: c.id, from, to });
+    sfx(to.type === 'slot' ? 'equip' : 'drop');
+  };
+
+  const cell = (item: ItemInstance | null, loc: InvLoc | null, key?: string | number) => {
     const def = defOf(item);
-    const isSlot = loc.type === 'slot';
+    const isSlot = loc?.type === 'slot';
     const valid = drag && isSlot && dragSlot === loc.slot;
     const invalid = drag && isSlot && dragSlot !== loc.slot;
-    return (
+    const unusable = def && mine && slotForItem(def) && !equipPreview(c, def, state.items)?.usable;
+    const classes = ['cell', isSlot && 'slot-cell', !loc && 'inert', def?.rarity, def?.story?.quest && 'quest', item && 'filled', item && item.uid === picked?.uid && 'picked', valid && 'valid', invalid && 'invalid', unusable && 'unusable'];
+    const body = (
       <div
-        className={['cell', extra, def?.rarity, def?.story?.quest && 'quest', item && item.uid === picked && 'picked', valid && 'valid', invalid && 'invalid'].filter(Boolean).join(' ')}
-        onDragOver={(e) => { if (mine && drag) e.preventDefault(); }}
+        key={key}
+        className={classes.filter(Boolean).join(' ')}
+        onDragOver={(e) => { if (mine && drag && loc) e.preventDefault(); }}
         onDrop={(e) => {
           e.preventDefault();
-          if (drag) conn.send({ t: 'inv_move', characterId: c.id, from: drag.from, to: loc });
+          if (drag && loc) move(drag.from, loc);
           setDrag(null);
         }}
-        onMouseEnter={() => setHover(item)}
+        onMouseEnter={(e) => setHover(item ? { uid: item.uid, rect: e.currentTarget.getBoundingClientRect() } : null)}
         onMouseLeave={() => setHover(null)}
-        onClick={() => setPicked(item && item.uid !== picked ? item.uid : null)}
+        onClick={(e) => { setPicked(item && item.uid !== picked?.uid ? { uid: item.uid, rect: e.currentTarget.getBoundingClientRect() } : null); if (item) sfx('click'); }}
         onDoubleClick={() => {
-          if (!item || !mine) return;
-          if (loc.type === 'bag') conn.send({ t: 'use_item', characterId: c.id, uid: item.uid });
+          if (!item || !mine || !loc) return;
+          setPicked(null);
+          if (loc.type === 'bag') { conn.send({ t: 'use_item', characterId: c.id, uid: item.uid }); sfx(def && slotForItem(def) ? 'equip' : 'drop'); }
           else {
             const free = c.bag.findIndex((b) => !b);
-            if (free >= 0) conn.send({ t: 'inv_move', characterId: c.id, from: loc, to: { type: 'bag', index: free } });
-            else conn.toast(t('No free bag space'));
+            if (free >= 0) move(loc, { type: 'bag', index: free });
+            else { conn.toast(t('No free bag space')); sfx('deny'); }
           }
         }}
       >
-        {isSlot && !item && <span className="ghost">{SLOT_GLYPH[loc.slot]}</span>}
-        {item && def && (
+        {isSlot && !item && <span className="ghost"><SlotIcon slot={loc.slot} /></span>}
+        {item && def && loc && (
           <div
             className="item"
             draggable={mine}
@@ -67,109 +196,107 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               e.dataTransfer.setData(MIME, JSON.stringify({ characterId: c.id, from: loc }));
               e.dataTransfer.effectAllowed = 'move';
               setDrag({ item, from: loc });
+              setHover(null); setPicked(null);
             }}
             onDragEnd={() => setDrag(null)}
           >
             <span className="icon">{def.icon}</span>
-            {def.story?.quest && <span className="quest-mark" title={t('Quest item')}>❗</span>}
+            {def.story?.quest && <span className="quest-mark" aria-label={t('Quest item')} />}
             {item.qty > 1 && <span className="qty">{item.qty}</span>}
           </div>
         )}
       </div>
     );
+    return isSlot && !item ? <Hint key={key} text={t('Empty')} title={t(SLOT_LABELS[loc.slot])}>{body}</Hint> : body;
   };
 
-  const slot = (s: SlotId) => (
-    <div className="slot" key={s}>
-      {cell(c.equipment[s], { type: 'slot', slot: s })}
-      <label>{t(SLOT_LABELS[s])}</label>
-    </div>
-  );
-
-  const pinned = picked ? [...c.bag, ...Object.values(c.equipment)].find((i) => i?.uid === picked) ?? null : null;
-  const hovered = defOf(hover ?? pinned);
-  const story = hovered?.story;
+  const all = [...c.bag, ...Object.values(c.equipment)];
+  const shown = drag ? null : hover ?? picked;
+  const shownItem = shown ? all.find((i) => i?.uid === shown.uid) ?? null : null;
+  const shownDef = defOf(shownItem);
+  const attack = weaponAttack(c, defOf(c.equipment.mainHand));
+  const weight = carriedWeight(c, state.items), capacity = carryCapacity(c);
+  const species = t(SPECIES[c.speciesId]?.name ?? '');
 
   return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="panel inventory">
-        <header>
-          <div className="tabs">
-            {state.characters.map((o) => (
-              <button
-                key={o.id}
-                className={o.id === c.id ? 'tab on' : 'tab'}
-                onClick={() => onSelect(o.id)}
-                onDragOver={(e) => { if (drag && o.id !== c.id) e.preventDefault(); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (drag && o.id !== c.id) conn.send({ t: 'give', characterId: c.id, from: drag.from, toCharacterId: o.id });
-                  setDrag(null);
-                }}
-              >
-                <img className="pixel" src={heroUrl(artOfCharacter(o, state.items))} alt="" /> {o.name}
-              </button>
-            ))}
-          </div>
-          <button className="link close" onClick={onClose} title={t('Close (i or Esc)')}>✕</button>
-        </header>
-        <div className="inv-body">
-          <section className="doll">
-            <div className="doll-grid">
-              <div className="col">{LEFT.map(slot)}</div>
-              <div className="figure">
-                <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
-                <div className="ac-badge" title={t('Armor Class')}><b>{c.ac}</b><small>{t('AC')}</small></div>
-              </div>
-              <div className="col">{RIGHT.map(slot)}</div>
+    <Window
+      title={t('Inventory')} icon="inventory" hotkey="I" size="large" className="inventory" onClose={onClose}
+      tabs={<HeroTabs state={state} selectedId={c.id} onSelect={onSelect} dropping={!!drag}
+        onDropOn={(o) => { if (drag) { conn.send({ t: 'give', characterId: c.id, from: drag.from, toCharacterId: o.id }); sfx('drop'); } setDrag(null); }} />}
+      footer={(
+        <>
+          <Hint title={t('Carried weight')} text={t('Everything {name} wears and carries. A hero can carry 15 lb for each point of Strength. For your information only: the game does not slow anyone down yet.', { name: c.name })}>
+            <div className={weight > capacity ? 'carry over' : 'carry'} tabIndex={0}>
+              <Icon name="weight" size={16} />
+              <span className="carry-bar"><i style={{ width: `${Math.min(100, (weight / capacity) * 100)}%` }} /></span>
+              <span><b>{num(weight, lang)}</b> / {t('{n} lb', { n: capacity })}</span>
             </div>
-            <div className="stats">
-              {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((a) => (
-                <div key={a}><small>{a.toUpperCase()}</small><b>{c.abilities[a]}</b><span>{mod(c.abilities[a])}</span></div>
+          </Hint>
+          <span className="inv-hint">{mine ? t('Double-click to equip or use. Drag onto a hero to hand over. Click to pin the details.') : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}</span>
+          <Hint title={t('Party gold')} text={t('Shared by the whole party.')}>
+            <div className="purse" tabIndex={0}><Icon name="coin" size={17} /> <b>{state.gold.toLocaleString(lang)}</b> {t('gp')}</div>
+          </Hint>
+        </>
+      )}
+    >
+      <div className="inv-body" onMouseDown={(e) => { if (!(e.target as HTMLElement).closest('.cell')) setPicked(null); }}>
+        <section className="doll">
+          <div className="doll-name">
+            <h2>{c.name}</h2>
+            <small>{t('Level {level} {class}', { level: c.level, class: `${species} ${classLabel(c, t)}`.trim() })}</small>
+          </div>
+          <div className="doll-stage">
+            <div className="col">{LEFT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
+            <div className="figure">
+              <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+            </div>
+            <div className="col">{RIGHT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
+          </div>
+          <div className="doll-stats">
+            <Hint title={t('Armor Class')} text={t('What an attack roll must reach to hit this hero. It changes with armor, shield and magic items.')}>
+              <div tabIndex={0}><Icon name="shield" size={18} /><b>{c.ac}</b><small>{t('AC')}</small></div>
+            </Hint>
+            <Hint title={t('Attack')} text={`${t(attack.name)}: ${signed(attack.bonus)} ${t('To hit').toLowerCase()}, ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`}>
+              <div tabIndex={0}><Icon name="sword" size={18} /><b>{signed(attack.bonus)}</b><small>{dice(attack.damage, lang)}</small></div>
+            </Hint>
+            <Hint title={t('Hit points')} text={`${c.hp} / ${c.maxHp}`}>
+              <div tabIndex={0}><Icon name="heart" size={18} /><b>{c.hp}</b><small>/ {c.maxHp}</small></div>
+            </Hint>
+            <Hint title={t('Speed')} text={t('{n} ft of movement', { n: c.speed })}>
+              <div tabIndex={0}><Icon name="boot" size={18} /><b>{c.speed}</b><small>ft</small></div>
+            </Hint>
+          </div>
+        </section>
+        <section className="bag">
+          <div className="bag-tools">
+            <div className="filters" role="group" aria-label={t('Show')}>
+              {INV_FILTERS.map((f) => (
+                <button key={f} type="button" className={[f === filter && 'on', f !== 'all' && !counts[f] && 'none'].filter(Boolean).join(' ')} aria-pressed={f === filter}
+                  onClick={() => { setPrefs({ invFilter: f }); setPicked(null); sfx('tab'); }}>
+                  {t(FILTER_LABELS[f])}<span>{counts[f]}</span>
+                </button>
               ))}
             </div>
-            <p className="muted small">
-              {c.name}, {t('Level {level} {class}', { level: c.level, class: classLabel(c, t) })} · {t('HP')} {c.hp}/{c.maxHp} · {t('Speed')} {c.speed} ft<br />{t('Attack')}: {weaponSummary(state, c, t)}
-            </p>
-          </section>
-          <section className="bag">
-            <div className="bag-head">
-              <h3>{t('Backpack')}</h3>
-              <span className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</span>
-            </div>
-            <div className="bag-grid">
-              {Array.from({ length: BAG_SIZE }, (_, i) => <div key={i}>{cell(c.bag[i] ?? null, { type: 'bag', index: i })}</div>)}
-            </div>
-            <div className="tooltip">
-              {hovered ? (
-                <>
-                  <b className={hovered.rarity}>{hovered.icon} {t(hovered.name)}</b>
-                  {story && (
-                    <div className="tags">
-                      <span className="tag">{t(story.category)}</span>
-                      {story.quest && <span className="tag quest" title={t('Quest items stay with the party until the story uses them.')}>❗ {t('Quest item')}</span>}
-                    </div>
-                  )}
-                  <p>{t(hovered.description)}</p>
-                  {story && story.notes.length > 0 && (
-                    <ul className="item-notes">
-                      {story.notes.map((n, i) => <li key={i}><small>{t('Day')} {n.day}</small> {n.text}</li>)}
-                    </ul>
-                  )}
-                  {story && <p className="muted small">{story.foundAt ? t('Found on day {day} at {place}', { day: story.foundDay, place: story.foundAt }) : t('Found on day {day}', { day: story.foundDay })}</p>}
-                  <small>{hovered.value} {t('gp')}{hovered.rarity ? ` · ${t(hovered.rarity)}` : ''}</small>
-                </>
-              ) : (
-                <p className="muted">
-                  {mine
-                    ? t('Drag items between the backpack and equipment slots. Double-click to equip, drink or unequip. Drop an item on another hero to hand it over. Click an item to keep its notes open.')
-                    : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}
-                </p>
-              )}
-            </div>
-          </section>
-        </div>
+            <label className="sort">
+              <span>{t('Sort')}</span>
+              <select value={sort} onChange={(e) => { setPrefs({ invSort: e.target.value as InvSort }); setPicked(null); sfx('tab'); }}>
+                {INV_SORTS.map((s) => <option key={s} value={s}>{t(SORT_LABELS[s])}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="bag-grid">
+            {squares.map((sq, i) => cell(sq.item, sq.index === null ? null : { type: 'bag', index: sq.index }, i))}
+          </div>
+          {counts.all === 0 && <p className="empty-note">{t('The backpack is empty. What the party finds lands here.')}</p>}
+          {counts.all > 0 && filter !== 'all' && counts[filter] === 0 && <p className="empty-note">{t('Nothing of this kind in the backpack.')}</p>}
+        </section>
       </div>
-    </div>
+      {shown && shownItem && shownDef && (
+        <Float anchor={shown.rect} side="right" className="item-float" interactive={!hover && !!picked}>
+          <ItemDetails def={shownDef} item={shownItem} c={c} state={state} mine={mine} pinned={!hover && !!picked}
+            equipped={Object.values(c.equipment).some((e) => e?.uid === shownItem.uid)} />
+        </Float>
+      )}
+    </Window>
   );
 }
