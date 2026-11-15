@@ -5,13 +5,12 @@ import { SPELL_BUFFS } from '../../../shared/spells';
 import { weaponAttack } from '../../../shared/build';
 import { INV_FILTERS, INV_SORTS, arrangeBag, carriedWeight, carryCapacity, equipPreview, itemGroup, itemWeight, slotForItem, type InvFilter, type InvSort } from '../../../shared/inventory';
 import { itemDef } from '../../../shared/items';
-import { SPECIES } from '../../../shared/rules';
 import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemDef, type ItemInstance, type SlotId } from '../../../shared/types';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
-import { classLabel } from '../game/util';
+import { heroTitle } from '../game/util';
 import { playerId, type Connection } from '../net';
 import { useLang, useT, type Translate } from '../i18n';
-import type { Lang } from '../../../shared/i18n';
+import { feetToMetres, type Lang } from '../../../shared/i18n';
 import { dice, signed } from './Guide';
 import { Float, Hint } from '../ui/Hint';
 import { Icon, SlotIcon } from '../ui/icons';
@@ -237,7 +236,6 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   const shownDef = defOf(shownItem);
   const attack = weaponAttack(c, defOf(c.equipment.mainHand));
   const weight = carriedWeight(c, state.items), capacity = carryCapacity(c);
-  const species = t(SPECIES[c.speciesId]?.name ?? '');
 
   return (
     <Window
@@ -264,7 +262,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
         <section className="doll">
           <div className="doll-name">
             <h2>{c.name}</h2>
-            <small>{t('Level {level} {class}', { level: c.level, class: `${species} ${classLabel(c, t)}`.trim() })}</small>
+            <small>{t('Level {level} {class}', { level: c.level, class: heroTitle(c, t) })}</small>
           </div>
           <div className="doll-stage">
             <div className="col">{LEFT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
@@ -277,14 +275,14 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
             <Hint title={t('Armor Class')} text={t('What an attack roll must reach to hit this hero. It changes with armor, shield and magic items.')}>
               <div tabIndex={0}><Icon name="shield" size={18} /><b>{c.ac}</b><small>{t('AC')}</small></div>
             </Hint>
-            <Hint title={t('Attack')} text={`${t(attack.name)}: ${signed(attack.bonus)} ${t('To hit').toLowerCase()}, ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`}>
+            <Hint title={t('Attack')} text={`${t(attack.name)}: ${signed(attack.bonus)} ${lang === 'de' ? t('To hit') : t('To hit').toLowerCase()}, ${dice(attack.damage, lang)} ${t(`${attack.type} damage`)}`}>
               <div tabIndex={0}><Icon name="sword" size={18} /><b>{signed(attack.bonus)}</b><small>{dice(attack.damage, lang)}</small></div>
             </Hint>
             <Hint title={t('Hit points')} text={`${c.hp} / ${c.maxHp}`}>
               <div tabIndex={0}><Icon name="heart" size={18} /><b>{c.hp}</b><small>/ {c.maxHp}</small></div>
             </Hint>
             <Hint title={t('Speed')} text={t('{n} ft of movement', { n: c.speed })}>
-              <div tabIndex={0}><Icon name="boot" size={18} /><b>{c.speed}</b><small>ft</small></div>
+              <div tabIndex={0}><Icon name="boot" size={18} /><b>{lang === 'de' ? feetToMetres(c.speed) : c.speed}</b><small>{lang === 'de' ? 'm' : 'ft'}</small></div>
             </Hint>
           </div>
         </section>

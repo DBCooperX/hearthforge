@@ -56,14 +56,14 @@ describe('monster looks', () => {
 describe('monsters in a fight', () => {
   it('restyles a catalogue creature without changing its statistics', () => {
     const g = party();
-    g.startEncounter([{ defId: 'ogre', count: 1, name: 'Dreiköpfiger Oger', description: 'Drei Köpfe streiten sich, wer zuerst zubeißen darf.', look: ['heads:3', 'bogus'], power: 'stronger' }], { source: 'story', context: 'test' });
+    g.startEncounter([{ defId: 'ogre', count: 1, name: 'Dreiköpfiger Oger', description: 'Drei Köpfe streiten sich, wer zuerst zubeissen darf.', look: ['heads:3', 'bogus'], power: 'stronger' }], { source: 'story', context: 'test' });
     const m = g.s.monsters[0];
     expect(m.name).toBe('Dreiköpfiger Oger');
     expect(m.defId).toBe('ogre');
     expect(m.look!.heads).toBe(3);
     expect(m.maxHp).toBe(Math.round(MONSTERS.ogre.hp * 1.5));
     const view = g.publicState({ busy: false, mode: 'scripted', model: null }).monsters[0];
-    expect(view).toMatchObject({ ac: MONSTERS.ogre.ac, tiles: 2, restyled: true, kind: 'giant', description: 'Drei Köpfe streiten sich, wer zuerst zubeißen darf.' });
+    expect(view).toMatchObject({ ac: MONSTERS.ogre.ac, tiles: 2, restyled: true, kind: 'giant', description: 'Drei Köpfe streiten sich, wer zuerst zubeissen darf.' });
     expect(describeCombat(g)).toContain('3 heads');
     expect(() => g.startEncounter([{ defId: 'tarrasque', count: 1 }], { source: 'story', context: 'test' })).toThrow(GameError);
   });
@@ -75,7 +75,7 @@ describe('monsters in a fight', () => {
     const [a, b] = g.publicState({ busy: false, mode: 'scripted', model: null }).monsters;
     expect(a.name).toBe('Riesenratte 1');
     expect(b.name).toBe('Riesenratte 2');
-    expect(a).toMatchObject({ tiles: 1, restyled: false, kind: 'beast', description: 'Eine hundegroße Ratte, die im Rudel kämpft.' });
+    expect(a).toMatchObject({ tiles: 1, restyled: false, kind: 'beast', description: 'Eine hundegrosse Ratte, die im Rudel kämpft.' });
     expect(a.look.body).toBe('rodent');
   });
 

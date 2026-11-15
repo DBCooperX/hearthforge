@@ -77,7 +77,7 @@ export const SPELL_BUFFS: Record<string, SpellBuff> = {
   resistance: B('resistance', 'Resistenz', 'fight', 'The first damage taken each round is reduced by 1d4.', 'Der erste Schaden jeder Runde wird um 1W4 verringert.', { soak: '1d4' }),
   shillelagh: B('shillelagh', 'Shillelagh', 'fight', 'Melee weapon attacks use your spellcasting ability instead of Strength.', 'Nahkampfangriffe mit Waffen nutzen dein Zauberattribut statt Stärke.', { shillelagh: true }),
   bless: B('blessed', 'gesegnet', 'fight', 'Adds 1d4 to attack rolls and saving throws.', 'Addiert 1W4 auf Angriffs- und Rettungswürfe.', { roll: '1d4' }),
-  divine_favor: B('divine favor', 'Göttliche Gunst', 'fight', 'Weapon hits deal 1d4 extra radiant damage.', 'Waffentreffer verursachen 1W4 zusätzlichen gleißenden Schaden.', { hit: { dice: '1d4', type: 'radiant' } }),
+  divine_favor: B('divine favor', 'Göttliche Gunst', 'fight', 'Weapon hits deal 1d4 extra radiant damage.', 'Waffentreffer verursachen 1W4 zusätzlichen gleissenden Schaden.', { hit: { dice: '1d4', type: 'radiant' } }),
   expeditious_retreat: B('fleet', 'flink', 'fight', 'Twice the movement each turn.', 'Doppelte Bewegung in jedem Zug.', { speedMul: 2 }),
   false_life: B('false life', 'Falsches Leben', 'fight', 'Grants 2d4 + 4 temporary hit points, 5 more per spell level above the first.', 'Gewährt 2W4 + 4 temporäre Trefferpunkte, 5 mehr je Zaubergrad über dem ersten.', { instant: true, temp: '2d4+4', tempUp: 5 }),
   heroism: B('heroic', 'heldenmütig', 'fight', 'Cannot be frightened and gains temporary hit points equal to the caster\'s spellcasting modifier at the start of every turn.', 'Kann nicht verängstigt werden und erhält zu Beginn jedes Zuges temporäre Trefferpunkte in Höhe des Zaubermodifikators des Wirkenden.', { tempTurn: true, immune: ['frightened'] }),
@@ -90,7 +90,7 @@ export const SPELL_BUFFS: Record<string, SpellBuff> = {
   barkskin: B('barkskin', 'Rindenhaut', 'rest', 'Armor class is at least 17, until you rest.', 'Die Rüstungsklasse beträgt mindestens 17, bis du rastest.', { acMin: 17 }),
   blur: B('blurred', 'verschwommen', 'fight', 'Attacks against the hero have disadvantage.', 'Angriffe gegen den Helden sind im Nachteil.', { blur: true }),
   darkvision: B('darkvision', 'Dunkelsicht', 'long', 'Sees in the dark out to 150 ft until the next long rest.', 'Sieht bis zur nächsten langen Rast 150 ft weit im Dunkeln.', { darkvision: 150 }),
-  enlarge: B('enlarged', 'vergrößert', 'fight', 'Weapon hits deal 1d4 extra damage.', 'Waffentreffer verursachen 1W4 zusätzlichen Schaden.', { hit: { dice: '1d4', type: 'weapon' } }),
+  enlarge: B('enlarged', 'vergrössert', 'fight', 'Weapon hits deal 1d4 extra damage.', 'Waffentreffer verursachen 1W4 zusätzlichen Schaden.', { hit: { dice: '1d4', type: 'weapon' } }),
   invisibility: B('invisible', 'unsichtbar', 'fight', 'Cannot be seen: own attacks have advantage, attacks against the hero have disadvantage. Ends when the hero attacks or casts a spell.', 'Nicht zu sehen: Eigene Angriffe sind im Vorteil, Angriffe gegen den Helden im Nachteil. Endet, wenn der Held angreift oder zaubert.', { invisible: 'fragile' }),
   greater_invisibility: B('invisible', 'unsichtbar', 'fight', 'Cannot be seen, even while attacking: own attacks have advantage, attacks against the hero have disadvantage.', 'Nicht zu sehen, auch beim Angreifen: Eigene Angriffe sind im Vorteil, Angriffe gegen den Helden im Nachteil.', { invisible: 'lasting' }),
   magic_weapon: B('magic weapon', 'magische Waffe', 'rest', '+1 to weapon attack and damage rolls, +2 from spell level 3 and +3 from level 6. Lasts until you rest.', '+1 auf Angriffs- und Schadenswürfe mit Waffen, +2 ab Zaubergrad 3 und +3 ab Grad 6. Hält bis zur nächsten Rast.', { weapon: { 2: 1, 3: 2, 4: 2, 5: 2, 6: 3, 7: 3, 8: 3, 9: 3 } }),
@@ -104,7 +104,7 @@ export const SPELL_BUFFS: Record<string, SpellBuff> = {
   minor_elementals: B('elemental spirits', 'Elementargeister', 'fight', 'Your attacks that hit deal 2d8 extra lightning damage, and 1d8 more per spell level above the fourth.', 'Deine Angriffe, die treffen, verursachen 2W8 zusätzlichen Blitzschaden und 1W8 mehr je Zaubergrad über dem vierten.', { hit: { dice: '2d8', type: 'lightning', up: '1d8' } }),
   heroes_feast: B('feasted', 'gestärkt vom Festmahl', 'long', 'Maximum and current hit points rise by 2d10; cannot be frightened or poisoned and resists poison. Lasts until the next long rest.', 'Maximale und aktuelle Trefferpunkte steigen um 2W10; kann nicht verängstigt oder vergiftet werden und ist gegen Gift resistent. Hält bis zur nächsten langen Rast.', { maxHp: '2d10', immune: ['frightened', 'poisoned'], resist: ['poison'] }),
   holy_aura: B('holy aura', 'Heilige Aura', 'fight', 'Advantage on all saving throws, and attacks against the hero have disadvantage.', 'Vorteil bei allen Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil.', { saveAdv: 'all', blur: true }),
-  foresight: B('foresight', 'Vorhersehung', 'long', 'Advantage on attack rolls and saving throws, and attacks against the hero have disadvantage. Lasts until the next long rest.', 'Vorteil bei Angriffs- und Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil. Hält bis zur nächsten langen Rast.', { saveAdv: 'all', attackAdv: true, blur: true }),
+  foresight: B('foresight', 'Voraussicht', 'long', 'Advantage on attack rolls and saving throws, and attacks against the hero have disadvantage. Lasts until the next long rest.', 'Vorteil bei Angriffs- und Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil. Hält bis zur nächsten langen Rast.', { saveAdv: 'all', attackAdv: true, blur: true }),
 };
 
 /** Help for the chips of spell effects, by chip name. */
@@ -121,7 +121,7 @@ export const SPELL_CONDITIONS: Record<string, { de: string; text: L2 }> = {
   charmed: { de: 'bezaubert', text: { en: 'it loses its turns', de: 'es verliert seine Züge' } },
   banished: { de: 'verbannt', text: { en: 'it is gone from the fight and cannot be harmed while that lasts', de: 'es ist aus dem Kampf verschwunden und kann solange nicht verletzt werden' } },
   restrained: { de: 'festgesetzt', text: { en: 'it cannot move, its attacks have disadvantage and attacks against it have advantage', de: 'es kann sich nicht bewegen, seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
-  blinded: { de: 'geblendet', text: { en: 'its attacks have disadvantage and attacks against it have advantage', de: 'seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
+  blinded: { de: 'blind', text: { en: 'its attacks have disadvantage and attacks against it have advantage', de: 'seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
   frightened: { de: 'verängstigt', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },
   poisoned: { de: 'vergiftet', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },
   cursed: { de: 'verflucht', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },
@@ -139,7 +139,7 @@ export const SPELL_CONDITIONS: Record<string, { de: string; text: L2 }> = {
 const ABIL_DE: Record<AbilityKey, string> = { str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' };
 const TYPE_DE: Record<string, string> = {
   acid: 'Säureschaden', bludgeoning: 'Wuchtschaden', cold: 'Kälteschaden', fire: 'Feuerschaden', force: 'Energieschaden', lightning: 'Blitzschaden',
-  necrotic: 'nekrotischer Schaden', piercing: 'Stichschaden', poison: 'Giftschaden', psychic: 'psychischer Schaden', radiant: 'gleißender Schaden',
+  necrotic: 'nekrotischer Schaden', piercing: 'Stichschaden', poison: 'Giftschaden', psychic: 'psychischer Schaden', radiant: 'gleissender Schaden',
   slashing: 'Hiebschaden', thunder: 'Schallschaden',
 };
 /** "best" is damage of whichever element the target resists least. */
@@ -262,7 +262,7 @@ function read([id, icon, de, spec, en, deText]: (typeof SPELL_ROWS)[number]): { 
       else if (def.dice && !def.inflict) say(`${dmgEn}, no save.`, `${dmgDe}, kein Rettungswurf.`);
       if (def.inflict) {
         if (!def.saveAbility) say(`The target is ${condEn}.`, `Das Ziel ist ${condDe}.`);
-        else if (def.dice) say(`On a failure the target is also ${condEn}.`, `Bei einem Fehlschlag ist das Ziel außerdem ${condDe}.`);
+        else if (def.dice) say(`On a failure the target is also ${condEn}.`, `Bei einem Fehlschlag ist das Ziel ausserdem ${condDe}.`);
         else say(`${SV} save or ${condEn}.`, `${SVde}-Rettungswurf oder ${condDe}.`);
       }
       break;
@@ -296,7 +296,7 @@ function read([id, icon, de, spec, en, deText]: (typeof SPELL_ROWS)[number]): { 
   if (def.reaction) say('Reaction.', 'Reaktion.');
   if (def.concentration) say('Concentration.', 'Konzentration.');
   if (def.slow) say('Takes minutes to cast, so not in a fight.', 'Das Wirken dauert Minuten, also nicht im Kampf.');
-  if (def.ritual) say('Ritual: free outside a fight.', 'Ritual: außerhalb eines Kampfes kostenlos.');
+  if (def.ritual) say('Ritual: free outside a fight.', 'Ritual: ausserhalb eines Kampfes kostenlos.');
   def.description = en1.join(' ');
   return { def, de, deDesc: de1.join(' ') };
 }

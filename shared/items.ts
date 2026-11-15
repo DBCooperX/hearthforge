@@ -31,7 +31,7 @@ export const CATEGORY_ICONS: Record<ItemCategory, string> = {
 export const ICON_SET: [id: string, icon: string, keywords: string][] = [
   ['bone', '🦴', 'bone knochen splinter splitter rib rippe'],
   ['skull', '💀', 'skull schädel totenkopf'],
-  ['tooth', '🦷', 'tooth teeth zahn zähne fang reißzahn tusk hauer'],
+  ['tooth', '🦷', 'tooth teeth zahn zähne fang reisszahn tusk hauer'],
   ['claw', '🐾', 'claw klaue kralle paw pfote track spur'],
   ['feather', '🪶', 'feather feder quill'],
   ['hide', '🧶', 'hide pelt fur fell pelz wool wolle yarn garn thread faden'],

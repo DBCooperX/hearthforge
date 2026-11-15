@@ -1,3 +1,4 @@
+import { SPECIES } from '../../../shared/rules';
 import { BUFF_HELP, CONDITION_HELP } from '../../../shared/conditions';
 import { movementCosts } from '../../../shared/battlemap';
 import { SPECIES_DARKVISION, canSee, lightGrid, type LightLevel, type Senses } from '../../../shared/light';
@@ -98,6 +99,12 @@ export function classLabel(c: { className: string; gender?: string }, t: (text: 
   const key = `${c.className} (female)`;
   const feminine = c.gender === 'female' ? t(key) : key;
   return feminine === key ? t(c.className) : feminine;
+}
+
+/** Species and class together: "Orc Fighter" in English, "Kämpferin (Ork)" in German, where the class carries the gender. */
+export function heroTitle(c: { className: string; gender?: string; speciesId?: string }, t: (text: string, vars?: Record<string, string | number>) => string): string {
+  const species = c.speciesId ? t(SPECIES[c.speciesId as keyof typeof SPECIES]?.name ?? '') : '';
+  return species ? t('{species} {class}', { species, class: classLabel(c, t) }) : classLabel(c, t);
 }
 
 export function weaponSummary(state: GameState, c: Character, t: (text: string) => string = (x) => x): string {

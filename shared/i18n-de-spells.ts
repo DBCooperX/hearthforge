@@ -86,5 +86,5 @@ export const DE_SPELLS: Record<string, string> = {
   '{0} is already attuned to three magic items': '{0} ist bereits auf drei magische Gegenstände eingestimmt',
   '{0} has no charges left until a long rest': '{0} hat bis zu einer langen Rast keine Ladungen mehr',
   '{0} drinks a {1}.': '{0} trinkt einen {1}.',
-  '{0} feeds {1} a {2}.': '{0} flößt {1} einen {2} ein.',
+  '{0} feeds {1} a {2}.': '{0} flösst {1} einen {2} ein.',
 };

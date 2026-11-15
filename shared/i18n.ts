@@ -1,6 +1,8 @@
 // Translations. English is the source language: the English text is the lookup key,
 // so untranslated strings fall back to English instead of breaking.
 import { DE } from './i18n-de';
+import { metric } from './units';
+export { feetToMetres, metric } from './units';
 import { DE_SRD } from './i18n-de-srd';
 import { DE_CLASSES } from './i18n-de-classes';
 import { DE_SPELLS } from './i18n-de-spells';
@@ -21,6 +23,7 @@ const DE_GENERATED: Record<string, string> = {
 };
 
 export type Lang = 'en' | 'de';
+
 export const LANGS: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
   { id: 'de', label: 'Deutsch' },
@@ -42,7 +45,8 @@ function lookup(lang: Lang, key: string): string | undefined {
 
 export function tr(lang: Lang, text: string, vars?: Record<string, string | number>): string {
   const tpl = lookup(lang, text) ?? text;
-  return vars ? tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : tpl;
+  const out = vars ? tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : tpl;
+  return lang === 'de' ? metric(out) : out;
 }
 
 /** The lookup key of a tagged template: its literal parts joined by `{0}`, `{1}`, … */
@@ -56,7 +60,8 @@ export function tagged(lang: Lang) {
   return (strings: TemplateStringsArray, ...values: unknown[]): string => {
     const key = templateKey(strings);
     const tpl = DICTS[lang]?.[key] ?? key;
-    return tpl.replace(/\{(\d+)\}/g, (_, i: string) => String(values[Number(i)]));
+    const out = tpl.replace(/\{(\d+)\}/g, (_, i: string) => String(values[Number(i)]));
+    return lang === 'de' ? metric(out) : out;
   };
 }
 
