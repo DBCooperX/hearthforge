@@ -7,6 +7,7 @@ import { MONSTERS } from '../src/data/monsters';
 import { roll } from '../src/game/dice';
 import { Game, GameError } from '../src/game/engine';
 import { generateWorld, trueTerrain } from '../src/game/world';
+import { CLASSIC_START } from '../../shared/start';
 
 function seeded(seed: number) {
   let a = seed >>> 0;
@@ -98,7 +99,7 @@ describe('dice', () => {
 describe('world', () => {
   it('generates a map where every seeded place can be reached on foot', () => {
     for (let seed = 1; seed <= 60; seed++) {
-      const { world } = generateWorld(seed, seeded(seed));
+      const { world } = generateWorld({ ...CLASSIC_START, seed: `S${seed}` });
       expect(world.terrain).toHaveLength(world.width * world.height);
       const start = SEED_LOCATIONS[0];
       for (const loc of SEED_LOCATIONS) {
@@ -258,7 +259,7 @@ describe('progression', () => {
     g.attack('p1', f.id, target());
     expect(() => g.useAbility('p1', f.id, 'action_surge')).toThrow(/spent/);
     expect(g.s.log.filter((l) => l.roll?.actor === f.name).length).toBeGreaterThanOrEqual(3);
-    expect(g.s.log.find((l) => l.roll)!.roll).toMatchObject({ target: { kind: 'AC', value: 8 }, modifier: 7 });
+    expect(g.s.log.find((l) => l.roll?.actor === f.name)!.roll).toMatchObject({ target: { kind: 'AC', value: 8 }, modifier: 7 });
   });
 });
 

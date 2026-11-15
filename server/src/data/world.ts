@@ -4,6 +4,7 @@
 
 import type { TerrainCode } from '../../../shared/hex';
 import type { Disposition, LocationKind } from '../../../shared/types';
+import type { Siting, TerrainStyle } from './regions';
 
 export const WORLD_WIDTH = 22;
 export const WORLD_HEIGHT = 15;
@@ -13,8 +14,7 @@ export const SETTING_NAME = 'the Emberfall Vale';
 export const SETTING_PREMISE =
   'The Emberfall Vale is a frontier valley of farms, pine woods and old stone, a week from the nearest city. Its heart is the market town of Emberfall. ' +
   'The Hearthforge, a few hours north-east of town, was once the finest smithy in the valley. Since its master Dorn Hearthforge vanished two winters ago, goblins led by a bugbear chief have moved into the cellars beneath it and raid the outlying farms. ' +
-  'Beyond that trouble the Vale is open country: a fishing village on the Greywater, a ruined watchtower where bandits are said to gather, a shrine in the Mosswood, and whatever else lies in the hills that nobody has mapped. ' +
-  'The heroes have just arrived in Emberfall looking for work and a name for themselves. Where they go and what they do is up to them.';
+  'Beyond that trouble the Vale is open country: a fishing village on the Greywater, a ruined watchtower where bandits are said to gather, a shrine in the Mosswood, and whatever else lies in the hills that nobody has mapped.';
 
 export interface GroupSpec {
   /** The catalogue entry whose statistics the monsters use. */
@@ -26,6 +26,8 @@ export interface GroupSpec {
   look?: string[];
   /** 'weaker' | 'standard' | 'stronger': scales hit points and experience only. */
   power?: string;
+  /** The fight counts as a boss fight even though the catalogue entry is an ordinary monster. */
+  boss?: boolean;
 }
 
 export interface StageDef {
@@ -50,6 +52,8 @@ export interface SeedLocation {
   stages?: StageDef[];
   /** Quest completed when the last stage is cleared. */
   questId?: string;
+  /** Where a place of a random region likes to be. Such places get their hex once the terrain exists. */
+  site?: Siting;
 }
 
 export const START_LOCATION = 'emberfall';
@@ -130,13 +134,42 @@ export const SEED_NPCS: SeedNpc[] = [
   },
 ];
 
-export const SEED_QUESTS = [
+export interface SeedQuest {
+  id: string;
+  title: string;
+  summary: string;
+  rewardXp: number;
+  rewardGold: number;
+}
+
+export const SEED_QUESTS: SeedQuest[] = [
   {
     id: 'warren', title: 'Silence the Warren',
     summary: 'Goblins from the cellars under the Old Hearthforge are raiding the farms. Reeve Aldous Venn of Emberfall has posted a bounty for whoever ends it.',
     rewardXp: 300, rewardGold: 100,
   },
 ];
+
+/** A starting region: the country, its places and people, and what is going on there. */
+export interface RegionDef {
+  /** With its article, as it reads inside a sentence: "the Emberfall Vale". */
+  name: string;
+  /** With its preposition: "in the Emberfall Vale". */
+  nameIn: string;
+  /** What the Dungeon Master knows about the region. "{dist}" is filled in once the map exists. */
+  premise: string;
+  /** The home settlement. */
+  startId: string;
+  tavernId: string | null;
+  locations: SeedLocation[];
+  npcs: SeedNpc[];
+  quests: SeedQuest[];
+  terrain?: TerrainStyle;
+  /** False for a random region, whose places are put on the map after the terrain is made. */
+  placed: boolean;
+  /** Names for the opening texts: town, tavern, region, regionIn. */
+  tokens: Record<string, string>;
+}
 
 /** Wilderness encounters by terrain. Counts are for a party of four and scale down for smaller parties. */
 export const ENCOUNTERS: Record<string, GroupSpec[][]> = {

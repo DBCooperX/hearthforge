@@ -5,6 +5,7 @@ import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TypingWhe
 import type { Store } from './db';
 import type { DungeonMaster, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat } from './game/engine';
+import { newSeed } from '../../shared/start';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -76,6 +77,8 @@ export class Room {
     const saved = store.load(name);
     this.game = new Game(name, Math.random, saved);
     for (const p of this.game.s.players) p.connected = false;
+    // Every table has a world seed to show and share, also the ones saved before seeds existed.
+    if (!this.game.s.table.start.seed) this.game.s.table.start.seed = newSeed();
   }
 
   get empty() { return this.sockets.size === 0; }
@@ -280,8 +283,9 @@ export class Room {
     }
     this.enqueue(async () => {
       if (this.closed) return;
-      this.attempt(ws, () => this.apply(playerId, msg));
+      const began = this.attempt(ws, () => this.apply(playerId, msg)) && msg.t === 'start';
       this.flush();
+      if (began) await this.prepareWorld();
       await this.pump();
     });
   }
@@ -308,6 +312,7 @@ export class Room {
       case 'go': return g.goTo(String(msg.locationId));
       case 'delve': return g.delve();
       case 'set_language': return g.setLanguage(playerId, msg.lang);
+      case 'set_start': return g.setStart(playerId, msg.start);
       case 'reset':
         g.reset(playerId);
         this.epoch++;
@@ -318,6 +323,22 @@ export class Room {
         return;
       default:
         throw new GameError('Unknown action');
+    }
+  }
+
+  /** Before the first scene, let the Dungeon Master put its own words to a freshly rolled region. */
+  private async prepareWorld() {
+    if (!this.dm.prepare) return;
+    const epoch = this.epoch;
+    this.dmBusy++;
+    this.flush();
+    try {
+      await this.dm.prepare(this.game);
+    } catch (err) {
+      console.error('[room] preparing the world failed:', err);
+    } finally {
+      this.dmBusy--;
+      if (epoch === this.epoch) this.flush();
     }
   }
 

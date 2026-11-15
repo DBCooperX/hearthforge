@@ -57,7 +57,8 @@ import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
 import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
-import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
+import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
+import { CLASSIC_START, CUSTOM_MAX, REGIONS, isPremise, newSeed, normalizeSeed, type RegionChoice, type StartOptions } from '../../../shared/start';
 
 export class GameError extends Error {}
 /** A refused seat. The message is one of JOIN_ERRORS, in English; the browser translates it. */
@@ -125,6 +126,8 @@ export interface InternalState {
   language: Lang;
   /** Ability scores rolled in the character creator, by player id. */
   rolled: Record<string, number[]>;
+  /** Where and how the story is set. Missing before the adventure starts and in saves from before start options. */
+  setting?: SettingState;
   /** Missing in saves from before the lobby. */
   table: TableInfo;
   hostId: string | null;
@@ -193,7 +196,9 @@ export class Game {
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
     this.s.rolled ??= {};
     // Tables saved before the lobby: open to anyone, run by whoever sat down first.
-    this.s.table ??= { title: room, maxPlayers: MAX_SEATS, code: null };
+    this.s.table ??= { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START } };
+    // Tables saved before start options keep the classic region.
+    this.s.table.start ??= { ...CLASSIC_START };
     this.s.hostId ??= this.s.players[0]?.id ?? null;
     this.s.seats ??= {};
     this.s.ready ??= [];
@@ -240,7 +245,7 @@ export class Game {
       lastLongRest: -100000,
       language,
       rolled: {},
-      table: { title: room, maxPlayers: MAX_SEATS, code: null },
+      table: { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START } },
       hostId: players[0]?.id ?? null,
       seats: {},
       ready: [],
@@ -268,6 +273,24 @@ export class Game {
     if (!isLang(lang)) throw new GameError(this.t`Unknown language`);
     if (this.s.hostId !== playerId) throw new GameError(this.t`Only the host can change the language`);
     this.s.language = lang;
+  }
+
+  /** The host chooses where and how the adventure begins. An empty seed asks for a fresh one. */
+  setStart(playerId: string, raw: unknown) {
+    this.requireHost(playerId);
+    if (this.s.phase !== 'lobby') throw new GameError(this.t`The adventure has already begun`);
+    const patch = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof StartOptions, unknown>>;
+    const start = this.s.table.start;
+    if (patch.region !== undefined) {
+      if (!REGIONS.includes(patch.region as RegionChoice)) throw new GameError(this.t`Unknown region`);
+      start.region = patch.region as RegionChoice;
+    }
+    if (patch.premise !== undefined) {
+      if (!isPremise(patch.premise)) throw new GameError(this.t`Unknown premise`);
+      start.premise = patch.premise;
+    }
+    if (patch.custom !== undefined) start.custom = String(patch.custom ?? '').replace(/\s+/g, ' ').trim().slice(0, CUSTOM_MAX);
+    if (patch.seed !== undefined) start.seed = normalizeSeed(patch.seed) || newSeed();
   }
 
   private d20Text(r: { value: number; rolls: number[] }, mode: RollMode) {
@@ -647,9 +670,11 @@ export class Game {
     if (this.s.phase !== 'lobby') throw new GameError(this.t`The adventure has already begun`);
     if (!this.s.characters.length) throw new GameError(this.t`Add at least one hero first`);
     const s = this.s;
-    const { world, memory } = generateWorld(Math.floor(this.rng() * 2 ** 31), this.rng, this.lang);
+    // The room gives every table a seed to show and share; a bare engine (tests, scripts) builds one fixed world.
+    const { world, memory, setting } = generateWorld({ ...s.table.start, seed: s.table.start.seed || 'HEARTH' }, this.lang);
     s.world = world;
     s.memory = memory;
+    s.setting = setting;
     s.gold = s.characters.reduce((sum, c) => sum + 5 + (BACKGROUNDS[c.backgroundId]?.gold ?? 10), 0);
     // House rule: small parties get the Hearth's Blessing so solo play is survivable.
     const blessing = (4 - s.characters.length) * 4;
@@ -663,6 +688,7 @@ export class Game {
     s.rows = [];
     s.monsters = [];
     this.log('system', this.t`The adventure begins.`);
+    this.log('system', this.t`World seed: ${setting.seed}`);
     const here = this.place();
     if (here) this.settleIn(here);
     this.beats.push({ kind: 'start' });
@@ -671,7 +697,8 @@ export class Game {
   reset(playerId?: string) {
     if (playerId !== undefined) this.requireHost(playerId);
     const { players, table, hostId, seats, chat, chatSeq } = this.s;
-    this.s = { ...Game.freshState(this.s.room, players, this.lang), table, hostId, seats, chat, chatSeq };
+    // The next adventure gets a world of its own. The old seed is in nobody's way: the host can type it back in.
+    this.s = { ...Game.freshState(this.s.room, players, this.lang), table: { ...table, start: { ...table.start, seed: newSeed() } }, hostId, seats, chat, chatSeq };
     this.beats = [];
     this.moves = [];
   }
@@ -854,7 +881,7 @@ export class Game {
     };
     const heroSpots = column([3, 2]);
     heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
-    const boss = chosen.some((d) => d.boss);
+    const boss = chosen.some((d) => d.boss) || specs.some((g) => g.boss);
     const label = (i: number) => specs[i].name?.trim().slice(0, 40) || this.n(chosen[i].name);
     s.monsters = chosen.map((def, i) => {
       const spec = specs[i];
@@ -2179,6 +2206,7 @@ export class Game {
       gathering: !!dm.gathering,
       rolled: s.rolled,
       world: w && {
+        name: s.setting?.name ?? this.n('the Emberfall Vale'),
         width: w.width,
         height: w.height,
         terrain: maskedTerrain(w),

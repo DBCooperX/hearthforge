@@ -4,6 +4,7 @@ import { buildSheet, type Draft } from '../../../shared/build';
 import { PREMADES, type Premade } from '../../../shared/premades';
 import { ABILITY_KEYS, BACKGROUNDS, CLASSES, SPECIES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
+import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
 import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
@@ -226,6 +227,70 @@ export function Players({ state, conn, pregame }: { state: GameState; conn: Conn
   );
 }
 
+/** Where and how the adventure begins: the region, the premise and the world seed. The host chooses; everyone sees it. */
+function WorldSetup({ state, conn }: { state: GameState; conn: Connection }) {
+  const t = useT();
+  const { lang } = useLang();
+  const host = state.hostId === playerId;
+  const start = state.table.start;
+  const set = (patch: Partial<StartOptions>) => conn.send({ t: 'set_start', start: patch });
+  // The seed and the host's own premise are typed locally and sent when the host is done with the field.
+  const [seed, setSeed] = useState(start.seed);
+  const [custom, setCustom] = useState(start.custom);
+  const [copied, setCopied] = useState(false);
+  const seedField = useRef<HTMLInputElement>(null);
+  useEffect(() => setSeed(start.seed), [start.seed]);
+  useEffect(() => setCustom(start.custom), [start.custom]);
+  const preset = PREMISES.find((p) => p.id === start.premise);
+  const blurb = preset ? loc(preset.blurb, lang)
+    : start.premise === CUSTOM ? t('Describe in a sentence or two how the story opens. The Dungeon Master builds the first scene around it.')
+    : t('The seed picks one of the openings. You find out when the story begins.');
+  return (
+    <div className="world-setup">
+      <h2>{t('The world')}</h2>
+      <div className="field">
+        <span>{t('Region')}</span>
+        <span className="pick">
+          <button type="button" className={start.region === 'random' ? 'on' : ''} disabled={!host} onClick={() => set({ region: 'random' })}>🎲 {t('A new region')}</button>
+          <button type="button" className={start.region === 'classic' ? 'on' : ''} disabled={!host} onClick={() => set({ region: 'classic' })}>🔥 {t('Classic: the Emberfall Vale')}</button>
+        </span>
+        <small className="muted">{start.region === 'random'
+          ? t('Its own country, towns, people and troubles, rolled from the seed. Nobody at the table knows it yet.')
+          : t('The handcrafted valley around Emberfall and the Old Hearthforge. Only its wilderness changes with the seed.')}</small>
+      </div>
+      <div className="field">
+        <span>{t('How it begins')}</span>
+        <span className="pick">
+          <button type="button" className={start.premise === SURPRISE ? 'on' : ''} disabled={!host} onClick={() => set({ premise: SURPRISE })}>✨ {t('Surprise us')}</button>
+          {PREMISES.map((p) => (
+            <button type="button" key={p.id} className={start.premise === p.id ? 'on' : ''} disabled={!host} onClick={() => set({ premise: p.id })}>{p.icon} {loc(p.label, lang)}</button>
+          ))}
+          <button type="button" className={start.premise === CUSTOM ? 'on' : ''} disabled={!host} onClick={() => set({ premise: CUSTOM })}>✒️ {t('Our own idea')}</button>
+        </span>
+        <small className="muted">{blurb}</small>
+        {start.premise === CUSTOM && (
+          <textarea value={custom} maxLength={CUSTOM_MAX} rows={3} disabled={!host} placeholder={t('For example: We are a travelling circus, and last night our bear went missing.')}
+            onChange={(e) => setCustom(e.target.value)} onBlur={() => { if (custom !== start.custom) set({ custom }); }} />
+        )}
+      </div>
+      <div className="field">
+        <span>{t('World seed')}</span>
+        <span className="seed-row">
+          <input ref={seedField} className="code" value={seed} maxLength={SEED_MAX} readOnly={!host} spellCheck={false} aria-label={t('World seed')}
+            onChange={(e) => setSeed(e.target.value.toUpperCase())}
+            onBlur={() => { if (normalizeSeed(seed) !== start.seed) set({ seed }); else setSeed(start.seed); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+          {host && <button type="button" onClick={() => set({ seed: '' })} title={t('Roll a new seed')}>🎲 {t('New seed')}</button>}
+          <button type="button" onClick={() => { setCopied(copyText(start.seed, seedField.current)); setTimeout(() => setCopied(false), 2000); }}>{copied ? t('Copied') : t('Copy')}</button>
+        </span>
+        <small className="muted">{host
+          ? t('The same seed with the same region and opening builds the same map, places, people and quests again. Type in a seed a friend gave you, or share yours. The Dungeon Master still tells the story anew each time.')
+          : t('The host chooses the world. The same seed with the same region and opening builds the same map, places, people and quests again.')}</small>
+      </div>
+    </div>
+  );
+}
+
 /** The table before the adventure: everyone picks a hero, says they are ready, and the host begins. */
 export function PartySetup({ state, conn }: { state: GameState; conn: Connection }) {
   const t = useT();
@@ -279,6 +344,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
           ))}
           <small className="muted">{host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')}</small>
         </div>
+        <WorldSetup state={state} conn={conn} />
         <h2>{t('Party')} ({state.characters.length}/4)</h2>
         {state.characters.length === 0 && <p className="muted">{t('No heroes yet. Playing solo? Add up to four and control them all.')}</p>}
         <ul className="roster">

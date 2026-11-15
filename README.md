@@ -184,6 +184,16 @@ Title, artist and license are shown in the game when a player points at the musi
 - **Table talk**: the chat button in the top bar opens an out-of-character chat between the players, with whispers to one player. The Dungeon Master does not read it. What you type into the story box is in character and goes to the Dungeon Master.
 - **Whose turn it is**: in a fight the turn order decides. In the story, with more than one player, the first action opens a short window (`HEARTHFORGE_TURN_WAIT`, 8 seconds). The Dungeon Master answers as soon as every connected player has acted, or when the window closes, and resolves everyone's actions in one scene. While someone is still typing the window stays open, up to 30 seconds. Anything said while the Dungeon Master is writing goes into the next reply. Alone at the table, every action is answered at once.
 
+## Where the adventure starts
+
+In the table room, before the adventure begins, the host chooses the world:
+
+- **Region.** *A new region* rolls its own country from the world seed: the kind of land (vale, coast, fens, highlands, forest or borderland), the town and its tavern, a village, a sanctuary, a lesser ruin or cave, the main threat with its four-part lair and quest, and the people who live there. *Classic* is the handcrafted Emberfall Vale. Tables opened in the lobby start with a new region.
+- **How it begins.** Looking for work, shipwrecked, caravan guards, prison break, a festival gone wrong, a letter from an old friend, a surprise picked by the seed, or a sentence or two of your own. A shipwreck or a prison break opens out in the wild.
+- **World seed.** Shown to everyone and written into the game log. The same seed with the same region and opening rebuilds the same map, places, people and quests, in English and in German. Type in a seed to replay or share a world. Starting a new adventure at the same table rolls a new seed.
+
+With an API key, one short call to the background model rewords a rolled region's descriptions before the first scene, so they fit this table's opening. It never changes names, the map, quests or rewards. The story itself is told fresh every time, and dice, ambushes and battle maps stay random.
+
 ## How to play
 
 1. Enter your name, then open a table or sit down at one from the list.

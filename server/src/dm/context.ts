@@ -2,14 +2,14 @@
 // factual snapshot of the world, the party and everything the DM should remember.
 import { ITEMS } from '../../../shared/content';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
-import { classLabel, type Lang } from '../../../shared/i18n';
+import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
 import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS } from '../data/monsters';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
-import { trueTerrain } from '../game/world';
+import { trueTerrain, type SettingState } from '../game/world';
 
 export const DM_SYSTEM_PROMPT = `You are the Dungeon Master of Hearthforge, a self-hosted Dungeons & Dragons 5th edition game played in a web browser by one or more players who share a party of heroes.
 
@@ -19,7 +19,7 @@ Hearthforge is an open-world, narrative-first game. Most of play is your narrati
 The game server owns the rules and the state. It rolls every die and tracks hit points, gold, inventory, experience, time, the map and your memory of the world, and it tells you exactly what happened. Your tools are how you change that state. If you narrate something that changes the world without the matching tool call (gold changing hands, an item gained, a fight starting, a new place or person), it did not happen as far as the game is concerned, and the players will see a mismatch between your words and their screen.
 
 Running the game
-- Give the players real freedom. They can go anywhere and try anything. Follow their lead, let the world react believably, and let their choices have consequences that last. The goblin trouble is one thread among many, so do not steer them toward it.
+- Give the players real freedom. They can go anywhere and try anything. Follow their lead, let the world react believably, and let their choices have consequences that last. The region's main trouble is one thread among many, so do not steer them toward it.
 - When an attempt could plausibly fail and failing would matter, call skill_check and narrate from the result. Do not ask for checks on things that would simply work. Typical DCs: 10 easy, 13 moderate, 16 hard, 19 very hard.
 - When a fight breaks out, call start_combat with monsters from the catalogue that are a fair challenge for the party, then describe its opening moment. When the party pushes into the next section of a dungeon they are standing in, call delve instead and the server sets up that section's fight.
 - Every monster fights with the statistics of a catalogue entry; you cannot invent stronger ones. When the story calls for a creature that is not in the catalogue, such as a three-headed ogre or a hell hound, build it on the closest entry in start_combat: give it a name, a one-sentence description and look changes, and it appears on the battle map looking the part. Describe monsters the way their token looks.
@@ -50,14 +50,26 @@ You do not remember earlier scenes by yourself. Each turn you are given the curr
 In combat
 The players act through the battle map. When it is the monsters' turn you choose what each one does through monster_action, the server resolves it, and you narrate the round in two to four sentences. Play monsters as the creatures they are: goblins are cowardly opportunists who gang up on the wounded, wolves and rats swarm, bandits would rather be paid than die, orcs charge the strongest foe, the undead are mindless and relentless, and the bugbear chief is a brutal bully who goes for whoever hurt him most. A fair, tense fight is more fun than a perfectly optimal one.
 
-Setting: ${SETTING_NAME}
-${SETTING_PREMISE}
+The setting
+Every table plays in its own region. Its name, what is going on there and how this table's story opens are given under "Setting" in the state you receive each turn. Treat that as the truth about the world, and build on it.
 
 Monster catalogue (use the id in start_combat)
 ${Object.values(MONSTERS).map((m) => `- ${m.id}: ${m.name}, ${m.size} ${m.type}, CR ${m.cr}, AC ${m.ac}, ${m.hp} HP, ${m.xp} XP. ${m.description}`).join('\n')}
 
 Item catalogue (use the id in give_item)
 ${Object.values(ITEMS).map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`).join('\n')}`;
+
+/** The region and opening of this table. Tables saved before start options play in the classic Vale. */
+export function settingOf(game: Game): Pick<SettingState, 'name' | 'premise' | 'opening' | 'intro'> {
+  if (game.s.setting) return game.s.setting;
+  const t = tagged(game.lang);
+  return {
+    name: tr(game.lang, SETTING_NAME),
+    premise: SETTING_PREMISE,
+    opening: 'The heroes have just arrived in Emberfall looking for work and a name for themselves. Where they go and what they do is up to them.',
+    intro: t`Your road ends, for now, ${tr(game.lang, 'in the Emberfall Vale')}.`,
+  };
+}
 
 /** Tells the DM which language the table plays in. English needs no note. */
 export function languageNote(game: Game): string[] {
@@ -124,6 +136,8 @@ export function describeWorld(game: Game): string {
   const lines: string[] = languageNote(game);
   const place = game.place();
   const terrain = TERRAIN[trueTerrain(w, w.party)].name;
+  const setting = settingOf(game);
+  lines.push(`Setting: ${setting.name}. ${setting.premise}`);
   lines.push(`Time: ${formatTime(w.minutes)} (${timeOfDay(w.minutes)}).`);
   const top = w.locations.find((l) => !l.parentId && l.q === w.party.q && l.r === w.party.r);
   if (place) {
@@ -234,11 +248,11 @@ export function transcript(game: Game, max = 28): string {
     .join('\n');
 }
 
-export function describeBeats(beats: Beat[]): string {
+export function describeBeats(beats: Beat[], game?: Game): string {
   return beats
     .map((b) => {
       switch (b.kind) {
-        case 'start': return 'The adventure begins. Open the story: the heroes have just arrived at this place. Set the scene, hint at what is going on in the region, and leave them free to choose what to do first.';
+        case 'start': return `The adventure begins. Open the story. ${game ? settingOf(game).opening : 'The heroes have just arrived at this place.'} Set the scene, hint at what is going on in the region, and leave the players free to choose what to do first.`;
         case 'arrive': return `The party ${b.journey ? `arrives after ${b.journey}` : 'steps inside'}: ${b.location}${b.firstVisit ? ', for the first time. Establish the place and who is there' : '. They have been here before, so keep it brief and note anything that has changed'}.`;
         case 'travel_end': return b.reason === 'blocked' ? `After ${b.journey} the party can find no way onward and stops.` : `The party stops in the wilderness after ${b.journey}. Describe where they are in a sentence or two.`;
         case 'discover': return `After ${b.journey}, the party sights something new and halts: ${b.locations.join('; ')}. Describe what they can see from here.`;

@@ -7,6 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createHash, randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
+import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { AUDIO_TYPES, byteRange, ensureMusic, musicEnabled, musicManifest } from './music';
 import { Store } from './db';
@@ -93,7 +94,8 @@ function createTable(msg: Extract<ClientMessage, { t: 'create_table' }>, ws: Web
   for (let n = 2; rooms.has(id); n++) id = `${base.slice(0, 28)}-${n}`;
   const room = openRoom(id);
   const s = room.game.s;
-  s.table = { title, maxPlayers: Math.min(MAX_SEATS, Math.max(1, Math.round(Number(msg.maxPlayers)) || MAX_SEATS)), code: null };
+  // A new table gets a region of its own; the host can switch to the classic one in the table room.
+  s.table = { title, maxPlayers: Math.min(MAX_SEATS, Math.max(1, Math.round(Number(msg.maxPlayers)) || MAX_SEATS)), code: null, start: { ...NEW_TABLE_START, seed: newSeed() } };
   if (isLang(msg.language)) s.language = msg.language;
   // The founder sits down before the code exists, so they never have to enter their own code.
   room.join(ws, playerId, token, String(msg.name ?? ''));
