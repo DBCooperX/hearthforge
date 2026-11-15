@@ -155,12 +155,12 @@ describe('strict tool schemas', () => {
   // "400 The compiled grammar is too large" when it outgrows a limit that is not published.
   // Adding the three item tools as strict crossed it. Anything added later should be a
   // looseTool, or be tried against the live API before this list or the budgets change.
-  const ACCEPTED = ['advance_time', 'award_xp', 'change_gold', 'create_location', 'delve', 'give_item', 'monster_action', 'move_to_place', 'record_deed', 'remember_npc', 'scene', 'skill_check', 'start_combat', 'update_quest'];
+  const ACCEPTED = ['advance_time', 'award_xp', 'change_gold', 'create_location', 'delve', 'give_item', 'monster_action', 'move_to_place', 'record_deed', 'remember_npc', 'scene', 'skill_check', 'update_quest'];
 
   it('keeps the strict set to the tools that were strict before the item tools', () => {
     const strict = DM_TOOLS.filter((t) => t.strict);
     expect(strict.map((t) => t.name).sort()).toEqual(ACCEPTED);
-    for (const name of ['give_story_item', 'update_story_item', 'take_item']) expect(DM_TOOLS.find((t) => t.name === name)?.strict, name).toBeUndefined();
+    for (const name of ['give_story_item', 'update_story_item', 'take_item', 'start_combat']) expect(DM_TOOLS.find((t) => t.name === name)?.strict, name).toBeUndefined();
   });
 
   it('does not let the strict schemas grow unnoticed', () => {
@@ -176,6 +176,8 @@ describe('strict tool schemas', () => {
     expect(params).toBeLessThanOrEqual(44);
     expect(enumValues(strict.map((t) => t.input_schema))).toBeLessThanOrEqual(80);
     expect(JSON.stringify(DM_TOOLS)).not.toContain('"longsword_plus1"');
+    // Creature ids and look changes are plain strings too, so restyling monsters adds nothing to the grammar.
+    expect(enumValues(DM_TOOLS.find((t) => t.name === 'start_combat')!.input_schema)).toBe(0);
   });
 
   it('drops strict and carries on if the API still refuses the grammar', async () => {

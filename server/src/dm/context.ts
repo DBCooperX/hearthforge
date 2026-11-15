@@ -5,6 +5,7 @@ import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { classLabel, type Lang } from '../../../shared/i18n';
 import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
+import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS } from '../data/monsters';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
@@ -21,6 +22,7 @@ Running the game
 - Give the players real freedom. They can go anywhere and try anything. Follow their lead, let the world react believably, and let their choices have consequences that last. The goblin trouble is one thread among many, so do not steer them toward it.
 - When an attempt could plausibly fail and failing would matter, call skill_check and narrate from the result. Do not ask for checks on things that would simply work. Typical DCs: 10 easy, 13 moderate, 16 hard, 19 very hard.
 - When a fight breaks out, call start_combat with monsters from the catalogue that are a fair challenge for the party, then describe its opening moment. When the party pushes into the next section of a dungeon they are standing in, call delve instead and the server sets up that section's fight.
+- Every monster fights with the statistics of a catalogue entry; you cannot invent stronger ones. When the story calls for a creature that is not in the catalogue, such as a three-headed ogre or a hell hound, build it on the closest entry in start_combat: give it a name, a one-sentence description and look changes, and it appears on the battle map looking the part. Describe monsters the way their token looks.
 - Crossing the map is the players' job: they pick a hex and the server moves them, tracks time and rolls for encounters. Use move_to_place only for known places in the party's current hex, such as walking into a tavern in town.
 - Rewards are yours to give, in moderation. Use award_xp for clever or brave achievements outside combat (25 to 100 is typical), change_gold for purchases, sales, payments and found coin (item values are in the catalogue), and give_item for items from the catalogue. Combat experience and loot are handled by the server.
 - Anything else a hero picks up, is handed or buys (a clue, a letter, a key, a trophy, a curio) becomes real through give_story_item. Never tell a player that something is "only part of the story": if a hero has it, it belongs in their backpack. If your journal or the story so far says the party carries an object that is not listed under the story items they carry, add it with give_story_item the next time it comes up. Use update_story_item when they learn more about one, and take_item when something is used up, sold, given away or lost.
@@ -52,7 +54,7 @@ Setting: ${SETTING_NAME}
 ${SETTING_PREMISE}
 
 Monster catalogue (use the id in start_combat)
-${Object.values(MONSTERS).map((m) => `- ${m.id}: ${m.name}, AC ${m.ac}, ${m.hp} HP, ${m.xp} XP. ${m.description}`).join('\n')}
+${Object.values(MONSTERS).map((m) => `- ${m.id}: ${m.name}, ${m.size} ${m.type}, CR ${m.cr}, AC ${m.ac}, ${m.hp} HP, ${m.xp} XP. ${m.description}`).join('\n')}
 
 Item catalogue (use the id in give_item)
 ${Object.values(ITEMS).map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`).join('\n')}`;
@@ -163,6 +165,22 @@ export function describeWorld(game: Game): string {
   return lines.join('\n');
 }
 
+/** A monster's look in a few words, so narration matches the token. */
+export function describeLook(l: MonsterLook): string {
+  const parts = [`${l.size} ${l.color} ${l.body}`];
+  if (l.heads > 1) parts.push(`${l.heads} heads`);
+  if (l.arms > 2) parts.push(`${l.arms} arms`);
+  if (l.horns) parts.push('horns');
+  if (l.wings) parts.push(`${l.wings} wings`);
+  if (l.tail) parts.push('tail');
+  if (l.eyes) parts.push(`glowing ${l.eyes} eyes`);
+  if (l.armor) parts.push(`${l.armor} armour`);
+  if (l.weapon) parts.push(l.weapon);
+  if (l.aura) parts.push(`${l.aura} aura`);
+  if (l.mutation) parts.push(l.mutation);
+  return parts.join(', ');
+}
+
 /** The battle in progress, for narrating and playing monsters. */
 export function describeCombat(game: Game): string {
   const s = game.s;
@@ -182,7 +200,9 @@ export function describeCombat(game: Game): string {
     for (const m of foes) {
       const def = MONSTERS[m.defId];
       const attacks = def.attacks.map((a) => `${a.name} (${a.ranged ? `ranged ${a.range}/${a.longRange} ft` : 'melee'}, ${a.damage} ${a.damageType})`).join('; ');
-      lines.push(`- ${m.name} [${m.id}] HP ${m.hp}/${m.maxHp}, AC ${def.ac}, at (${m.x},${m.y}). Attacks: ${attacks}. ${def.description}`);
+      const tiles = game.tilesOf(m);
+      const where = tiles > 1 ? `filling ${tiles}x${tiles} tiles from (${m.x},${m.y})` : `at (${m.x},${m.y})`;
+      lines.push(`- ${m.name} [${m.id}] HP ${m.hp}/${m.maxHp}, AC ${def.ac}, ${where}. Attacks: ${attacks}. ${m.description ?? def.description}${m.look ? ` Looks: ${describeLook(m.look)}.` : ''}`);
     }
   }
   const fallen = s.monsters.filter((m) => !m.alive).map((m) => m.name);

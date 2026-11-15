@@ -3,6 +3,7 @@
 // validates and resolves with real dice, and Claude narrates the result.
 import Anthropic from '@anthropic-ai/sdk';
 import { BIOMES } from '../../../shared/battlemap';
+import { LOOK_HELP, applyLookTokens } from '../../../shared/monsterLook';
 import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
@@ -143,14 +144,27 @@ const STORY_TOOLS: Tool[] = [
     quantity: int('How many to take. Usually 1.'),
     allow_quest_item: { type: 'boolean', description: 'Quest items are refused unless this is true. Set it only when the story truly consumes the item or the party knowingly hands it over.' },
   }),
-  tool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
+  // Loose on purpose: creature ids and look changes are plain strings that the engine checks,
+  // because enums of that size push the compiled grammar of the strict tools over the API's limit.
+  looseTool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
     monsters: {
       type: 'array',
       description: 'The enemies, grouped by type.',
-      items: { type: 'object', properties: { type: { type: 'string', enum: Object.keys(MONSTERS) }, count: int('How many of this type.') }, required: ['type', 'count'], additionalProperties: false },
+      items: {
+        type: 'object',
+        properties: {
+          type: str('Id of the catalogue creature whose statistics these monsters use, exactly as listed in the monster catalogue, for example "ogre". For a creature that is not in the catalogue, pick the entry closest in kind and challenge and restyle it with the fields below.'),
+          count: int('How many of this type.'),
+          name: str('Leave empty for the catalogue creature as it is. For a restyled creature, its name in the table language, for example "Three-headed Ogre".'),
+          description: str('Leave empty for the catalogue creature. For a restyled creature, one sentence on what it looks like, in the table language. Players see it when they point at the monster.'),
+          look: { type: 'array', items: { type: 'string' }, description: `Changes to how the token is drawn, on top of the catalogue look. Empty for the catalogue creature. Allowed values: ${LOOK_HELP}. Examples: ["heads:3"] for a three-headed ogre, ["color:red", "aura:fire", "eyes:orange"] for a hell hound built on a wolf, ["mutation:spectral"] for a ghostly knight, ["size:large", "horns"] for a bigger, horned version. A larger size takes more squares on the map but does not change the statistics.` },
+          power: str('Hit points and experience relative to the catalogue entry: "weaker" is three quarters, "standard" is as written, "stronger" is one and a half times. Attacks and armour class never change.'),
+        },
+        required: ['type', 'count'],
+      },
     },
     reason: str('One sentence on how the fight started, for the record.'),
-    setting: { type: 'string', enum: ['here', ...BIOMES], description: 'What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup.' },
+    setting: str(`What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup. One of: here, ${BIOMES.join(', ')}.`),
   }),
   tool('delve', 'The party pushes into the next uncleared section of the dungeon it is standing in. The server sets up that fight.', {}),
   tool('move_to_place', "Move the party to another known place in its current hex, such as into a tavern in the town it is in.", {
@@ -307,10 +321,11 @@ export class ClaudeDM implements DungeonMaster {
           case 'take_item':
             return game.takeItem({ characterId: String(i.character_id ?? ''), item: String(i.item ?? ''), quantity: Number(i.quantity), allowQuest: truthy(i.allow_quest_item) });
           case 'start_combat': {
-            const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count) }));
+            const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
             game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
-            return { started: true, enemies: game.s.monsters.map((m) => m.name), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
+            const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => (MONSTERS[gr.defId] ? applyLookTokens(MONSTERS[gr.defId].look, gr.look ?? []).ignored : [])))];
+            return { started: true, enemies: game.s.monsters.map((m) => m.name), ...(ignored.length ? { ignored_look_values: ignored } : {}), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
           }
           case 'delve':
             game.delve();

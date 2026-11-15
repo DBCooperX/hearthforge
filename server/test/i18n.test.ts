@@ -74,7 +74,7 @@ describe('translations', () => {
     for (const f of [...Object.values(FEATS), ...Object.values(STYLES)]) add(f.feature);
     add('mage armor', 'Unarmed strike');
     add(...Object.values(SLOT_LABELS), ...Object.keys(SKILLS), ...Object.values(ABILITY_NAMES), ...Object.keys(ABILITY_NAMES).map((k) => k.toUpperCase()));
-    for (const m of Object.values(MONSTERS)) { add(m.name); for (const a of m.attacks) add(a.name, `${a.damageType} damage`); }
+    for (const m of Object.values(MONSTERS)) { add(m.name, m.description); for (const a of m.attacks) add(a.name, `${a.damageType} damage`); }
     for (const t of Object.values(TERRAIN)) add(t.name);
     add(...COMPASS, ...DISPOSITIONS, ...LOCATION_KINDS, ...MOODS, 'active', 'completed', 'failed', 'advantage', 'disadvantage');
     for (const l of SEED_LOCATIONS) { add(l.name, l.description); for (const s of l.stages ?? []) add(s.name, s.description); }

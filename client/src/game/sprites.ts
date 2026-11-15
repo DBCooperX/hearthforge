@@ -233,6 +233,9 @@ export function spriteUrl(name: string): string {
 
 const TILE_SPRITES = /^(floor|wall)/;
 
+/** Sprites that came from an art pack. A monster with one keeps it unless the Dungeon Master restyled it. */
+export const packSprites = new Set<string>();
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -266,6 +269,7 @@ export async function loadArtPack(): Promise<void> {
           c.height = r.h;
           c.getContext('2d')!.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
           canvasCache.set(name, c);
+          packSprites.add(name);
           urlCache.delete(name);
         } catch {
           /* keep the generated sprite */

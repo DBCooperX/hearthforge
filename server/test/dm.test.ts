@@ -110,7 +110,7 @@ describe('Claude Dungeon Master', () => {
     expect(requests[0].model).toBe('std-model');
     expect(requests[0].tools.map((t: any) => t.name)).toContain('start_combat');
     expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false)).toBe(true);
-    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name)).toEqual(['give_story_item', 'update_story_item', 'take_item']);
+    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['give_story_item', 'start_combat', 'take_item', 'update_story_item']);
     expect(requests[0].messages[0].content).toMatch(/Emberfall[\s\S]*Silence the Warren[\s\S]*I buy a round/);
     const results = requests[1].messages[2].content;
     expect(results.map((r: any) => !!r.is_error)).toEqual([false, false, false, true, false, false, false]);
@@ -135,12 +135,14 @@ describe('Claude Dungeon Master', () => {
       req.messages.length === 1
         ? { stop_reason: 'tool_use', content: [use('f1', 'start_combat', { monsters: [{ type: 'bandit', count: 4 }, { type: 'dragon', count: 1 }], reason: 'A deal gone wrong.' })] }
         : req.messages.length === 3
-          ? { stop_reason: 'tool_use', content: [use('f2', 'start_combat', { monsters: [{ type: 'bandit', count: 4 }], reason: 'A deal gone wrong.' })] }
+          ? { stop_reason: 'tool_use', content: [use('f2', 'start_combat', { monsters: [{ type: 'bandit', count: 4, name: '', description: '', look: [], power: 'standard' }, { type: 'ogre', count: 1, name: 'Three-headed Ogre', description: 'Three heads argue over who bites first.', look: ['heads:3'], power: 'standard' }], reason: 'A deal gone wrong.', setting: 'here' })] }
           : { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Knives come out.' }] },
     );
     const scene = await dm.respond(g, 'Tester', 'I insult the bandit captain', noop);
     expect(g.s.phase).toBe('combat');
-    expect(g.s.monsters.map((m) => m.name)).toEqual(['Bandit 1', 'Bandit 2']);
+    expect(g.s.monsters.map((m) => m.name)).toEqual(['Bandit 1', 'Bandit 2', 'Three-headed Ogre']);
+    expect(g.s.monsters[2]).toMatchObject({ defId: 'ogre', tiles: 2, description: 'Three heads argue over who bites first.' });
+    expect(g.s.monsters[2].look!.heads).toBe(3);
     expect(scene).toMatchObject({ text: 'Knives come out.', actions: [] });
     expect(g.takeBeats()).toEqual([]);
   });

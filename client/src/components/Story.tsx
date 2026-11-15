@@ -2,7 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo } from '../../../shared/types';
+import { monsterUrl } from '../game/monsterArt';
 import { spriteUrl } from '../game/sprites';
+import type { CreatureType, Size } from '../../../shared/monsterLook';
 import type { Connection } from '../net';
 import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
@@ -14,7 +16,7 @@ import { classLabel } from '../game/util';
 /** Something the story can mention by name: hovering it shows what the party knows. */
 export interface Entity {
   name: string;
-  kind: 'npc' | 'place' | 'item' | 'hero';
+  kind: 'npc' | 'place' | 'item' | 'hero' | 'monster';
   icon: string;
   image?: string;
   subtitle: string;
@@ -47,6 +49,19 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
       facts: [`${t('HP')} ${c.hp}/${c.maxHp} · ${t('AC')} ${c.ac}`, state.players.find((p) => p.id === c.ownerId)?.name ? t('Played by {name}', { name: state.players.find((p) => p.id === c.ownerId)!.name }) : ''].filter(Boolean),
     });
   }
+  if (state.phase === 'combat') {
+    const sizes: Record<Size, string> = { tiny: t('Tiny'), small: t('Small'), medium: t('Medium'), large: t('Large'), huge: t('Huge'), gargantuan: t('Gargantuan') };
+    const kinds: Record<CreatureType, string> = {
+      aberration: t('Aberration'), beast: t('Beast'), celestial: t('Celestial'), construct: t('Construct'), dragon: t('Dragon'), elemental: t('Elemental'), fey: t('Fey'),
+      fiend: t('Fiend'), giant: t('Giant'), humanoid: t('Humanoid'), monstrosity: t('Monstrosity'), ooze: t('Ooze'), plant: t('Plant'), undead: t('Undead'),
+    };
+    for (const m of state.monsters) {
+      if (!m.alive) continue;
+      const facts = [`${t('HP')} ${m.hp}/${m.maxHp} · ${t('AC')} ${m.ac}`];
+      if (m.tiles > 1) facts.push(t('Takes up {n} by {n} squares', { n: m.tiles }));
+      out.push({ name: m.name, kind: 'monster', icon: '👹', image: monsterUrl(m.look), subtitle: `${sizes[m.look.size]} · ${kinds[m.kind]}`, description: m.description, facts });
+    }
+  }
   // Story items first: where a name is shared, the DM's own creation is the one the story means.
   for (const i of Object.values(state.items)) {
     const st = i.story;
@@ -71,11 +86,14 @@ interface Hover {
 }
 const HoverContext = createContext<{ entities: Entity[]; pattern: RegExp | null; hover: Hover }>({ entities: [], pattern: null, hover: { show: () => {}, hide: () => {} } });
 
+/** The known entities and the shared hover card, for things outside the story feed such as the battle map. */
+export const useEntityHover = () => useContext(HoverContext);
+
 /** Provides entity highlighting and one shared hover card to everything inside it. */
 export function EntityProvider({ state, children }: { state: GameState; children: ReactNode }) {
   const t = useT();
   const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean } | null>(null);
-  const entities = useMemo(() => buildEntities(state, t), [state.memory, state.items, state.world?.locations, state.world?.party, state.characters, state.players, state.language, t]);
+  const entities = useMemo(() => buildEntities(state, t), [state.memory, state.items, state.world?.locations, state.world?.party, state.characters, state.monsters, state.phase, state.players, state.language, t]);
   const pattern = useMemo(() => {
     const names = [...new Set(entities.map((e) => e.name))].filter((n) => n.length > 2).sort((a, b) => b.length - a.length);
     if (!names.length) return null;

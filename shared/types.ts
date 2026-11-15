@@ -1,5 +1,6 @@
 // Types shared between the server (authoritative game state) and the browser client.
 import type { Biome } from './battlemap';
+import type { CreatureType, MonsterLook } from './monsterLook';
 
 import type { Lang } from './i18n';
 
@@ -201,7 +202,17 @@ export interface MonsterView {
   ac: number;
   alive: boolean;
   conditions: string[];
+  /** Art pack sprite name. The drawn token comes from `look`. */
   sprite: string;
+  /** Squares along one side of the space it occupies; (x, y) is the top-left one. */
+  tiles: number;
+  look: MonsterLook;
+  /** True when the Dungeon Master changed the look from the catalogue's. */
+  restyled: boolean;
+  /** SRD creature type. */
+  kind: CreatureType;
+  /** In the table's language. */
+  description: string;
 }
 
 export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward';
