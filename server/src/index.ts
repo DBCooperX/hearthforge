@@ -1,14 +1,14 @@
 // Hearthforge server: serves the browser client and runs games over WebSockets.
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
-import { artManifest, artMode, ensureArt } from './art';
+import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { AUDIO_TYPES, byteRange, ensureMusic, musicEnabled, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
@@ -19,7 +19,9 @@ import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
 const PORT = Number(process.env.PORT ?? 3000);
 const DATA_DIR = process.env.DATA_DIR ?? resolve('data');
 const ART_DIR = process.env.ART_DIR ?? join(DATA_DIR, 'art');
-const ART_MODE = artMode(process.env);
+const art = new ArtStore(ART_DIR, process.env);
+/** Set HEARTHFORGE_ART_UPLOADS=off to lock the art library against changes from the browser. */
+const ART_UPLOADS = (process.env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
 const MUSIC_DIR = process.env.MUSIC_DIR ?? join(DATA_DIR, 'music');
 const here = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR =
@@ -117,6 +119,67 @@ function findTable(msg: Extract<ClientMessage, { t: 'join' }>): Room {
   return room;
 }
 
+/** The art library may be changed by whoever hosts a table: their browser proves it with its seat token. */
+function hostsATable(req: IncomingMessage): boolean {
+  const token = String(req.headers['x-hearthforge-token'] ?? '');
+  if (token.length < 16) return false;
+  const key = createHash('sha256').update(token).digest('hex');
+  return [...rooms.values()].some((r) => { const s = r.game.s; return !!s.hostId && s.seats[s.hostId] === key; });
+}
+
+function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
+  return new Promise((done, fail) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > max) { fail(new ArtError('too_big')); req.resume(); } else chunks.push(c);
+    });
+    req.on('end', () => done(Buffer.concat(chunks)));
+    req.on('error', fail);
+  });
+}
+
+async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  const canEdit = ART_UPLOADS && hostsATable(req);
+  try {
+    if (req.method === 'GET') {
+      if (url.pathname === '/api/art') return json(200, art.manifest());
+      if (url.pathname === '/api/art/library') return json(200, art.library(canEdit, ART_UPLOADS));
+      if (url.pathname === '/api/art/icons') return json(200, art.packIcons(url.searchParams.get('pack') ?? ''));
+      return json(404, { error: 'bad_request' });
+    }
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (!canEdit) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (url.pathname === '/api/art/upload') {
+      const zip = await readBody(req, MAX_UPLOAD);
+      const added = art.importZip(String(url.searchParams.get('name') ?? 'pack.zip').slice(0, 120), new Uint8Array(zip));
+      return json(200, { ...added, library: art.library(canEdit, ART_UPLOADS) });
+    }
+    if (url.pathname === '/api/art/action') {
+      const m = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}');
+      const id = String(m.pack ?? '');
+      if (m.do === 'install') await art.install(id);
+      else if (m.do === 'use') art.activate(m.kind === 'tiles' ? 'tiles' : 'icons', id);
+      else if (m.do === 'assign') art.assign(id, String(m.slot ?? ''), m.icon === null || m.icon === undefined ? m.icon : String(m.icon));
+      else if (m.do === 'describe') art.describe(id, m);
+      else if (m.do === 'remove') art.remove(id);
+      else throw new ArtError('bad_request');
+      return json(200, { library: art.library(canEdit, ART_UPLOADS) });
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof ArtError) return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[art]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
@@ -124,19 +187,26 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, dm: dm.mode, model: dm.model, models: claude?.models ?? null, rooms: rooms.size }));
     return;
   }
-  if (url.pathname === '/api/art') {
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(artManifest(ART_DIR, ART_MODE) ?? { pack: 'generated', sprites: {} }));
+  if (url.pathname === '/api/art' || url.pathname.startsWith('/api/art/')) {
+    void artApi(req, res, url);
     return;
   }
   if (url.pathname.startsWith('/art/')) {
-    const file = join(ART_DIR, normalize(decodeURIComponent(url.pathname.slice(5))).replace(/^(\.\.[/\\])+/, ''));
-    if (!file.startsWith(ART_DIR) || extname(file).toLowerCase() !== '.png' || !existsSync(file) || !statSync(file).isFile()) {
+    let rel = '';
+    try { rel = normalize(decodeURIComponent(url.pathname.slice(5))).replace(/^(\.\.[/\\])+/, ''); } catch { /* 404 below */ }
+    const file = join(ART_DIR, rel);
+    const ext = extname(file).toLowerCase();
+    // Uploaded packs are only ever served as PNG. SVG is served for the game-icons.net set alone, which the server fetched and cleaned itself.
+    const allowed = ext === '.png' || (ext === '.svg' && rel.split(/[/\\]/)[0] === 'game-icons');
+    if (!rel || !file.startsWith(ART_DIR) || !allowed || !existsSync(file) || !statSync(file).isFile()) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('Not found');
       return;
     }
-    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=3600' });
+    res.writeHead(200, {
+      'content-type': ext === '.svg' ? 'image/svg+xml' : 'image/png', 'cache-control': 'public, max-age=3600',
+      'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    });
     createReadStream(file).pipe(res);
     return;
   }
@@ -238,12 +308,12 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('error', gone);
 });
 
-void ensureArt(ART_DIR, ART_MODE, process.env);
+void art.start();
 void ensureMusic(MUSIC_DIR, process.env);
 
 server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
-  console.log(`Art: ${ART_MODE === 'generated' ? 'generated pixel art' : `${ART_MODE} pack (falls back to generated art if unavailable)`}`);
+  console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
   console.log(`Music: ${musicEnabled(process.env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);

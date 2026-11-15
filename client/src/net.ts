@@ -24,7 +24,7 @@ function stored(key: string, make: () => string): string {
 /** Public: everyone at the table sees it next to your name and your heroes. */
 export const playerId = stored('hearthforge.playerId', makeId);
 /** Secret: proves to the server that a seat is yours, so only this browser can take it back. */
-const token = stored('hearthforge.token', () => makeId(32));
+export const token = stored('hearthforge.token', () => makeId(32));
 
 const NAME_KEY = 'hearthforge.name';
 export function savedName(): string {

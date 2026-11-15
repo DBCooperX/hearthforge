@@ -28,7 +28,7 @@ export const CATEGORY_ICONS: Record<ItemCategory, string> = {
  * The icon set the DM picks from. Each entry also lists English and German keywords,
  * so an item whose icon was left on "auto" still gets a fitting picture from its name.
  */
-const ICON_SET: [id: string, icon: string, keywords: string][] = [
+export const ICON_SET: [id: string, icon: string, keywords: string][] = [
   ['bone', '🦴', 'bone knochen splinter splitter rib rippe'],
   ['skull', '💀', 'skull schädel totenkopf'],
   ['tooth', '🦷', 'tooth teeth zahn zähne fang reißzahn tusk hauer'],
