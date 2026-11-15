@@ -189,6 +189,16 @@ function creatureNamesDe(game: Game): string[] {
   return [`Creatures have official German names; use them and never translate a creature name yourself. find_monsters gives the German name of any creature. In this adventure: ${names.join('; ')}. A bugbear is a "Grottenschrat", never a "Bugbär".`];
 }
 
+/**
+ * The German names of the catalogue items in this adventure (carried, for sale, lying around),
+ * so the narration says "Windfächer" where the inventory does, not "Wind Fan".
+ */
+function itemNamesDe(game: Game): string[] {
+  const ids = new Set([...JSON.stringify(game.s).matchAll(/"(?:defId|id)":"([a-z0-9_]+)"/g)].map((m) => m[1]).filter((id) => ITEMS[id]));
+  const names = [...ids].map((id) => [ITEMS[id].name, tr('de', ITEMS[id].name)]).filter(([en, de]) => en !== de).map(([en, de]) => `${en} = ${de}`);
+  return [`Item names in the state below are the English catalogue names. In everything the players read, call a catalogue item by its German name, the one their inventory shows, and never leave it in English or translate it yourself.${names.length ? ` In this adventure: ${names.join('; ')}.` : ''}`];
+}
+
 /** Tells the DM which language the table plays in. English needs no note. */
 export function languageNote(game: Game): string[] {
   if (game.lang !== 'de') return [];
@@ -196,6 +206,7 @@ export function languageNote(game: Game): string[] {
     'LANGUAGE: This table plays in German. Write everything the players read in natural, idiomatic German, addressing the party as "ihr": scene titles, narration, suggested actions, dialogue, and the names, roles and descriptions of any place, person, quest or story item you create, as well as quest notes, item notes, deeds and journal lines.',
     'Use the German D&D terms, those of the official German System Reference Document 5.2.1: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Attributswurf (for example "Weisheitswurf (Wahrnehmung)"), Vorteil and Nachteil, Bewegungsrate, Zaubertrick, Zauber des 1. Grades, Konzentration, Einstimmung, Gelegenheitsangriff, kurze und lange Rast, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
     ...creatureNamesDe(game),
+    ...itemNamesDe(game),
     'Distances, weights and travel are metric in German, as in the German rulebooks: 5 feet are 1,5 m, 30 feet 9 m, a mile 1,5 km, a pound 0,5 kg. Write Swiss Standard German: "ss" instead of "ß" (gross, Strasse, heisst).',
     'Stage dialogue the German way of a good role-playing game: who speaks, what they do, how they sound, then the words. For example: Griet bleibt an der Tür stehen, dreht sich halb zu euch um und sagt leise: „Fragt Hendrick im Zollhaus.“ Use German quotation marks „…“ consistently. In German "sie" can mean she, they or the polite you, so use a name whenever "sie" could be misread.',
     'German marks gender in nouns, articles and pronouns, so follow each hero\'s listed gender exactly: the listed German form (for example "die Magierin" or "der Magier") is the only one you may use for that hero.',

@@ -126,4 +126,13 @@ describe('narration rules', () => {
     expect(note).toContain('Griet bleibt an der Tür stehen, dreht sich halb zu euch um und sagt leise');
     expect(note).toContain('"sie" can mean she, they or the polite you');
   });
+
+  it('gives German tables the German names of the items in play, so loot is not narrated in English', () => {
+    const g = newGame('de');
+    g.grantItem(g.s.characters[0].id, 'wind_fan', 1);
+    const note = languageNote(g).join('\n');
+    expect(note).toContain('Wind Fan = Windfächer');
+    expect(note).toMatch(/call a catalogue item by its German name/);
+    expect(languageNote(newGame('en'))).toEqual([]);
+  });
 });
