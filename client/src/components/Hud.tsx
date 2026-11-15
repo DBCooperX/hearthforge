@@ -2,7 +2,10 @@ import { ABILITIES } from '../../../shared/content';
 import { itemDef } from '../../../shared/items';
 import type { Character, GameState } from '../../../shared/types';
 import type { Connection } from '../net';
-import { useT } from '../i18n';
+import { useLang, useT } from '../i18n';
+import { dice } from './Guide';
+import { Hint } from '../ui/Hint';
+import { Kbd } from '../ui/Window';
 
 export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string } | { kind: 'item'; uid: string } | null;
 
@@ -37,12 +40,12 @@ interface ActionBarProps {
   targeting: Targeting;
   setTargeting: (t: Targeting) => void;
   conn: Connection;
-  onInventory: () => void;
   hint: string;
 }
 
-export function ActionBar({ state, actor, targeting, setTargeting, conn, onInventory, hint }: ActionBarProps) {
+export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }: ActionBarProps) {
   const t = useT();
+  const { lang } = useLang();
   const combat = state.phase === 'combat' ? state.combat : null;
   const myTurn = !!actor && (!combat || combat.order[combat.turnIndex]?.id === actor.id);
   const canAct = myTurn && !!actor && actor.hp > 0;
@@ -58,15 +61,16 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
       <div className="hint">{hint}</div>
       <div className="buttons">
         {actor && combat && (
-          <button
-            className={targeting?.kind === 'attack' ? 'act on' : 'act'}
-            disabled={!canAct || (actionUsed && combat.attacksLeft <= 0)}
-            data-hotkey={key()}
-            onClick={() => toggle({ kind: 'attack' })}
-            title={t('Attack with your main-hand weapon. You can also just click an enemy.')}
-          >
-            <span className="icon">⚔️</span>{t('Attack')}
-          </button>
+          <Hint title={t('Attack')} text={t('Attack with your main-hand weapon. You can also just click an enemy.')}>
+            <button
+              className={targeting?.kind === 'attack' ? 'act on' : 'act'}
+              disabled={!canAct || (actionUsed && combat.attacksLeft <= 0)}
+              data-hotkey={key()}
+              onClick={() => toggle({ kind: 'attack' })}
+            >
+              <span className="icon">⚔️</span>{t('Attack')}
+            </button>
+          </Hint>
         )}
         {actor?.abilityIds.map((id) => {
           const ab = ABILITIES[id];
@@ -76,39 +80,41 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, onInven
           const used = ab.kind === 'surge' ? !actionUsed : ab.bonusAction ? combat.bonusUsed : actionUsed;
           const blocked = !canAct || spent || actor.mana < ab.cost || used;
           const on = targeting?.kind === 'ability' && targeting.abilityId === id;
+          const why = spent ? t('Already used. It comes back after a rest.') : actor.mana < ab.cost ? t('Not enough mana.') : '';
+          const facts = [ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(ab.dice, lang) : '', ab.bonusAction ? t('Bonus action') : ''].filter(Boolean).join(' · ');
           return (
-            <button
-              key={id}
-              className={on ? 'act on' : 'act'}
-              disabled={blocked}
-              data-hotkey={key()}
-              title={t(ab.description)}
-              onClick={() => {
-                if (ab.target === 'self') { conn.send({ t: 'ability', characterId: actor.id, abilityId: id }); setTargeting(null); }
-                else toggle({ kind: 'ability', abilityId: id });
-              }}
-            >
-              <span className="icon">{ab.icon}</span>{t(ab.name)}
-              {ab.cost > 0 && <span className="cost">{ab.cost}</span>}
-            </button>
+            <Hint key={id} title={t(ab.name)} text={<>{t(ab.description)}{facts && <em>{facts}</em>}{why && <em className="warn-line">{why}</em>}</>}>
+              <button
+                className={on ? 'act on' : 'act'}
+                disabled={blocked}
+                data-hotkey={key()}
+                onClick={() => {
+                  if (ab.target === 'self') { conn.send({ t: 'ability', characterId: actor.id, abilityId: id }); setTargeting(null); }
+                  else toggle({ kind: 'ability', abilityId: id });
+                }}
+              >
+                <span className="icon">{ab.icon}</span>{t(ab.name)}
+                {ab.cost > 0 && <span className="cost">{ab.cost}</span>}
+              </button>
+            </Hint>
           );
         })}
         {actor && potion && (
-          <button
-            className={targeting?.kind === 'item' ? 'act on' : 'act'}
-            disabled={!canAct || actionUsed}
-            data-hotkey={key()}
-            title={t('Drink a healing potion, or feed it to an adjacent ally.')}
-            onClick={() => toggle({ kind: 'item', uid: potion.uid })}
-          >
-            <span className="icon">🧪</span>{t('Potion')}<span className="cost">{potions}</span>
-          </button>
+          <Hint title={t('Potion')} text={t('Drink a healing potion, or feed it to an adjacent ally.')}>
+            <button
+              className={targeting?.kind === 'item' ? 'act on' : 'act'}
+              disabled={!canAct || actionUsed}
+              data-hotkey={key()}
+              onClick={() => toggle({ kind: 'item', uid: potion.uid })}
+            >
+              <span className="icon">🧪</span>{t('Potion')}<span className="cost">{potions}</span>
+            </button>
+          </Hint>
         )}
         <span className="spacer" />
-        <button className="act" onClick={onInventory} title={t('Inventory (i)')}><span className="icon">🎒</span>{t('Inventory')}</button>
         {actor && combat && (
-          <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} title={t('End turn (Space)')}>
-            <span className="icon">⏭️</span>{t('End turn')}
+          <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} >
+            <span className="icon">⏭️</span>{t('End turn')}<Kbd>{t('Space')}</Kbd>
           </button>
         )}
       </div>

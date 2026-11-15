@@ -16,6 +16,7 @@ import { SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS } from '../src/data/world';
 import { DM_SYSTEM_PROMPT, describeCombat, describeWorld, genderRoster } from '../src/dm/context';
 import { scriptedScene } from '../src/dm/scripted';
 import { Game, GameError } from '../src/game/engine';
+import { ALL_LABELS } from '../../client/src/ui/labels';
 
 const root = join(__dirname, '..', '..');
 
@@ -59,6 +60,8 @@ describe('translations', () => {
         if (!hasTranslation('de', key)) missing.push(`${f}: ${key}`);
       }
     }
+    // Labels the interface looks up by key (filters, tabs, shortcuts) instead of writing them in place.
+    for (const label of ALL_LABELS) if (!hasTranslation('de', label)) missing.push(`labels: ${label}`);
     // Reasons a seat is refused reach the browser in English and are translated there.
     for (const reason of Object.values(JOIN_ERRORS)) if (!hasTranslation('de', reason)) missing.push(reason);
     expect(missing).toEqual([]);

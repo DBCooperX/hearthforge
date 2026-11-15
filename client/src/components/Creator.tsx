@@ -15,6 +15,7 @@ import { GENDERS, abilityMod, type Abilities, type AbilityKey, type CharacterSpe
 import { artOfDraft, heroUrl } from '../game/heroArt';
 import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
 import { LangSwitch, useLang, useT } from '../i18n';
+import { CloseButton } from '../ui/Window';
 import { playerId, type Connection } from '../net';
 import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 
@@ -540,6 +541,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
   return (
     <div className="overlay creator-overlay">
       <div className="panel creator">
+        <span className="win-corner tl" /><span className="win-corner tr" /><span className="win-corner bl" /><span className="win-corner br" />
         <header className="creator-head">
           {d.classId && <img className="pixel" src={heroUrl(artOfDraft(d)!)} alt="" />}
           <h1>{t('Create your hero')}</h1>
@@ -554,7 +556,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
             })}
           </nav>
           <LangSwitch />
-          <button className="link close" onClick={onClose} title={t('Close')}>✕</button>
+          <CloseButton onClose={onClose} label={t('Close')} />
         </header>
         <div className="creator-body">
           <div className="creator-left">{left}</div>

@@ -43,6 +43,8 @@ export interface ItemDef {
   description: string;
   /** Value in gold pieces. */
   value: number;
+  /** Weight of one, in pounds. Story items weigh what the catalogue item they are based on weighs. */
+  weight?: number;
   /** Slot for wondrous items. Weapons, armor and shields have fixed slots. */
   slot?: SlotId;
   weapon?: {
