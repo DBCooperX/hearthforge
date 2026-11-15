@@ -373,7 +373,7 @@ export class ClaudeDM implements DungeonMaster {
 
   async narrate(game: Game, beats: Beat[], onUpdate: () => Promise<void>): Promise<Scene | null> {
     if (!beats.length) return null;
-    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nNarrate this now:\n${describeBeats(beats)}\n\nSave anything new you introduce with your memory tools, then call scene.`;
+    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nNarrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`;
     try {
       const out = await this.converse(`narrate ${beats.map((b) => b.kind).join('+')}`, tierForBeats(beats), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
@@ -431,6 +431,59 @@ export class ClaudeDM implements DungeonMaster {
     } catch (err) {
       this.report(err);
       return { title: 'A pause at the table', mood: 'calm', text: 'The Dungeon Master is lost in thought for a moment. Try again shortly.', actions: [] };
+    }
+  }
+
+  /**
+   * Put fresh words to a rolled region before the first scene, on the cheapest model: the
+   * descriptions come from tables, and one short call makes them this table's own. Names,
+   * places on the map, quests and rewards stay exactly as rolled; only wording changes.
+   */
+  async prepare(game: Game): Promise<void> {
+    const s = game.s, setting = s.setting, world = s.world;
+    if (!setting || !world || setting.region !== 'random' || setting.fleshedOut) return;
+    const places = world.locations.filter((l) => l.origin === 'seed');
+    const brief = {
+      places: places.map((l) => ({ id: l.id, name: l.name, kind: l.kind, description: l.description })),
+      people: s.memory.npcs.map((n) => ({ id: n.id, name: n.name, role: n.role, looks: n.visual.description, description: n.description })),
+      quests: s.memory.quests.map((q) => ({ id: q.id, title: q.title, summary: q.summary })),
+    };
+    const language = game.lang === 'de' ? 'German (natural and idiomatic)' : 'English';
+    const prompt = `A new campaign is about to begin in a freshly rolled region. Its facts are fixed; the wording is generic. Rewrite the wording so this region feels like one particular place with its own history, and so that it fits how the story opens.
+
+Region: ${setting.name}
+What is going on: ${setting.premise}
+How the story opens: ${setting.opening}
+
+The pieces, as JSON:
+${JSON.stringify(brief)}
+
+Answer with one JSON object and nothing else, in this shape:
+{"premise": "...", "places": {"<id>": "..."}, "people": {"<id>": "..."}, "quests": {"<id>": "..."}}
+
+- "premise": the "What is going on" text rewritten in English, at most 160 words, with two or three concrete local details added (a past event, a rivalry, a rumour) that connect the places and people. Keep every name and every fact.
+- "places", "people", "quests": a new description or summary for each id, in ${language}, one or two sentences each, at most 280 characters. Keep each one's facts, who is involved and where; give people a personality, a want or a secret that touches the region's trouble, and respect the gender their looks give.
+- Never change, translate or invent a name. Do not add new places, people or quests. No markdown.`;
+    try {
+      const call = this.converse('world', 'background', prompt, [], async () => null, 'You are a worldbuilding assistant for a Dungeons & Dragons game. You answer with exactly the JSON you are asked for.');
+      const out = await Promise.race([call, new Promise<null>((r) => setTimeout(() => r(null), 45_000).unref?.())]);
+      const raw = out?.text ?? '';
+      const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+      if (!json) return;
+      const flavour = JSON.parse(json) as { premise?: unknown; places?: Record<string, unknown>; people?: Record<string, unknown>; quests?: Record<string, unknown> };
+      // A new adventure may have begun while the model was writing.
+      if (game.s !== s || s.setting !== setting) return;
+      const line = (v: unknown, max: number) => (typeof v === 'string' && v.trim().length >= 20 ? v.replace(/\s+/g, ' ').trim().slice(0, max) : null);
+      for (const l of places) { const d = line(flavour.places?.[l.id], 400); if (d) l.description = d; }
+      for (const n of s.memory.npcs) { const d = line(flavour.people?.[n.id], 400); if (d) n.description = d; }
+      for (const q of s.memory.quests) { const d = line(flavour.quests?.[q.id], 400); if (d) q.summary = d; }
+      const premise = line(flavour.premise, 1600);
+      // The premise must still name the places the rolled one named.
+      if (premise && places.filter((l) => !l.parentId).every((l) => !setting.premise.includes(l.name) || premise.includes(l.name))) setting.premise = premise;
+      setting.fleshedOut = true;
+    } catch (err) {
+      if (err instanceof SyntaxError) console.warn('[dm] The world flavour came back malformed; keeping the rolled descriptions.');
+      else this.report(err);
     }
   }
 

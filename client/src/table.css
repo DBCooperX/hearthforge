@@ -101,3 +101,14 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
   .presence { display: none; }
 }
 .players li.away .dot { background: #8d7c66; box-shadow: none; }
+
+/* ---------- the world a table starts in ---------- */
+.world-setup { display: grid; gap: 12px; background: rgba(0, 0, 0, 0.22); border: 1px solid #4f3922; border-radius: 8px; padding: 12px; }
+.world-setup h2 { margin: 0; }
+.world-setup .field { display: grid; gap: 6px; font-size: 14px; }
+.world-setup .field > span:first-child { font-weight: 600; }
+.world-setup .pick button:disabled { opacity: 0.55; cursor: default; }
+.world-setup .pick button.on:disabled { opacity: 1; }
+.world-setup textarea { width: 100%; resize: vertical; font: inherit; }
+.seed-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.seed-row input { width: 15ch; flex: 0 1 auto; letter-spacing: 0.08em; text-transform: uppercase; }

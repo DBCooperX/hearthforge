@@ -4,6 +4,7 @@ import type { Biome } from './battlemap';
 import type { CreatureType, MonsterLook } from './monsterLook';
 
 import type { Lang } from './i18n';
+import type { StartOptions } from './start';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -338,6 +339,8 @@ export interface TableInfo {
   maxPlayers: number;
   /** Invite code a new player must enter, or null for an open table. */
   code: string | null;
+  /** Where and how the adventure begins: region, premise and world seed. The host chooses before the start. */
+  start: StartOptions;
 }
 
 export const MAX_SEATS = 4;
@@ -437,6 +440,8 @@ export interface Deed {
 }
 
 export interface WorldView {
+  /** The region with its article, in the table's language: "the Emberfall Vale". */
+  name: string;
   width: number;
   height: number;
   /** One terrain code per hex, row-major. '?' is unexplored. See shared/hex.ts. */
@@ -528,6 +533,7 @@ export type ClientMessage =
   | { t: 'go'; locationId: string }
   | { t: 'delve' }
   | { t: 'set_language'; lang: Lang }
+  | { t: 'set_start'; start: Partial<StartOptions> }
   | { t: 'say'; text: string }
   | { t: 'reset' };
 

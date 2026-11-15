@@ -47,7 +47,7 @@ describe('seats', () => {
 
   it('honours the seat limit and the invite code, but never for someone already seated', () => {
     const g = table();
-    g.s.table = { title: 'Friday', maxPlayers: 2, code: 'ABC23' };
+    g.s.table = { ...g.s.table, title: 'Friday', maxPlayers: 2, code: 'ABC23' };
     expect(() => g.seat('mira', 'k', 'Mira')).toThrow(JOIN_ERRORS.wrongCode);
     expect(() => g.seat('mira', 'k', 'Mira', 'nope')).toThrow(JOIN_ERRORS.wrongCode);
     g.seat('mira', 'k', 'Mira', ' abc23 ');
@@ -65,7 +65,7 @@ describe('seats', () => {
     for (const k of ['table', 'hostId', 'seats', 'ready', 'chat', 'chatSeq']) delete saved[k];
     const g = new Game('test', () => 0.42, saved);
     expect(g.s.hostId).toBe('chris');
-    expect(g.s.table).toEqual({ title: 'test', maxPlayers: 4, code: null });
+    expect(g.s.table).toMatchObject({ title: 'test', maxPlayers: 4, code: null });
     g.seat('chris', 'first-token-wins', 'Chris');
     expect(() => g.seat('chris', 'another', 'Chris')).toThrow(JOIN_ERRORS.seatTaken);
   });

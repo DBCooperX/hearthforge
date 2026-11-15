@@ -4,9 +4,9 @@
 import { TERRAIN } from '../../../shared/hex';
 import { tagged, tr } from '../../../shared/i18n';
 import type { Mood } from '../../../shared/types';
-import { SETTING_NAME } from '../data/world';
 import type { Beat, Game, Monster } from '../game/engine';
 import { trueTerrain } from '../game/world';
+import { settingOf } from './context';
 import type { DungeonMaster, PlayerLine, Scene } from './types';
 
 const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
@@ -42,14 +42,13 @@ function surroundings(game: Game): string {
 
 export function scriptedScene(game: Game, beats: Beat[]): Scene | null {
   const t = tagged(game.lang);
-  const setting = tr(game.lang, SETTING_NAME);
   const out: string[] = [];
   let mood: Mood = 'calm';
   let title = whereTitle(game);
   for (const b of beats) {
     switch (b.kind) {
       case 'start':
-        out.push(t`Your road ends, for now, in ${setting}. ${surroundings(game)}`);
+        out.push(`${settingOf(game).intro} ${surroundings(game)}`);
         mood = 'warm';
         break;
       case 'arrive':

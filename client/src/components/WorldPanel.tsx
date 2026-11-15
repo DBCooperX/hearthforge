@@ -159,7 +159,7 @@ export function MapOverlay(props: TravelProps & { onClose: () => void }) {
   const t = useT();
   const { lang } = useLang();
   return (
-    <Window title={t('The Emberfall Vale')} icon="map" hotkey="M" size="map" className="bigmap" onClose={props.onClose}
+    <Window title={props.world.name.charAt(0).toUpperCase() + props.world.name.slice(1)} icon="map" hotkey="M" size="map" className="bigmap" onClose={props.onClose}
       subtitle={<>{formatTime(props.world.minutes, lang)} · {t('One hex is {n} miles', { n: HEX_MILES })}</>}>
       <TravelMap {...props} />
     </Window>

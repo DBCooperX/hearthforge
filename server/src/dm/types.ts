@@ -32,6 +32,11 @@ export interface DungeonMaster {
    * and get one answer together. `onUpdate` is awaited whenever the DM changes the game.
    */
   respond(game: Game, said: PlayerLine[], onUpdate: () => Promise<void>): Promise<Scene | null>;
+  /**
+   * Called once when an adventure starts, before the opening scene: a chance to put fresh
+   * words to a rolled region. Must leave names, places and rules untouched. Never throws.
+   */
+  prepare?(game: Game): Promise<void>;
   /** Background housekeeping, such as condensing old memory. Never throws. */
   maintain(game: Game): Promise<void>;
 }
