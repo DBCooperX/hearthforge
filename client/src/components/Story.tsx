@@ -58,7 +58,10 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
     };
     for (const m of state.monsters) {
       if (!m.alive) continue;
-      const facts = [`${t('HP')} ${m.hp}/${m.maxHp} · ${t('AC')} ${m.ac}`];
+      const facts = [`${t('HP')} ${m.hp}/${m.maxHp} · ${t('AC')} ${m.ac}${m.cr ? ` · ${t('Challenge {cr}', { cr: m.cr })}` : ''}`];
+      if (m.abilities?.length) facts.push(m.abilities.join(', '));
+      if (m.legendary) facts.push(t('Legendary actions left this round: {left} of {uses}', m.legendary));
+      if (m.conditions.length) facts.push(m.conditions.map((x) => t(x)).join(', '));
       if (m.tiles > 1) facts.push(t('Takes up {n} by {n} squares', { n: m.tiles }));
       if (m.senses?.darkvision) facts.push(t('Darkvision {n} ft', { n: m.senses.darkvision }));
       if (m.senses?.blindsight) facts.push(t('Blindsight {n} ft', { n: m.senses.blindsight }));

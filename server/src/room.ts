@@ -371,6 +371,7 @@ export class Room {
       case 'use_item': return g.useItem(playerId, String(msg.characterId), String(msg.uid), msg.targetId ? String(msg.targetId) : undefined);
       case 'end_turn': return g.endTurn(playerId, String(msg.characterId));
       case 'disengage': return g.disengage(playerId, String(msg.characterId));
+      case 'escape': return g.escape(playerId, String(msg.characterId));
       case 'light': return g.setLight(playerId, String(msg.characterId), !!msg.on);
       case 'inv_move': return g.invMove(playerId, String(msg.characterId), msg.from, msg.to);
       case 'give': return g.give(playerId, String(msg.characterId), msg.from, String(msg.toCharacterId));

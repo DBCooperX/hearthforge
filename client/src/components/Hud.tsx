@@ -56,6 +56,7 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
   const potions = actor?.bag.reduce((n, b) => n + (b && itemDef(state.items, b.defId)?.consumable ? b.qty : 0), 0) ?? 0;
   const toggle = (t: NonNullable<Targeting>) => setTargeting(JSON.stringify(targeting) === JSON.stringify(t) ? null : t);
   const hasLight = !!actor && LIGHT_ITEMS.some((l) => [...actor.bag, ...Object.values(actor.equipment)].some((b) => b?.defId === l.itemId));
+  const held = actor?.effects?.find((e) => e.escapeDc) ?? null;
   let hotkey = 0;
   const key = () => ++hotkey;
 
@@ -111,6 +112,13 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
               onClick={() => conn.send({ t: 'disengage', characterId: actor.id })}
             >
               <span className="icon">🏃</span>{t('Disengage')}
+            </button>
+          </Hint>
+        )}
+        {actor && combat && held && (
+          <Hint title={t('Break free')} text={<>{t('Wrestle out of the grip: a Strength (Athletics) or Dexterity (Acrobatics) check against DC {dc}. Until you are free you cannot move.', { dc: held.escapeDc ?? 0 })}<em>{t('Action')}</em></>}>
+            <button className="act" disabled={!canAct || actionUsed} data-hotkey={key()} onClick={() => conn.send({ t: 'escape', characterId: actor.id })}>
+              <span className="icon">💪</span>{t('Break free')}
             </button>
           </Hint>
         )}

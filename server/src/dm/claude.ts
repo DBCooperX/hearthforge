@@ -8,8 +8,9 @@ import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
+import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
 import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
-import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderRoster, transcript } from './context';
+import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, fightBudget, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
@@ -47,11 +48,11 @@ function looseTool(name: string, description: string, properties: Record<string,
 
 const MONSTER_TOOL = tool(
   'monster_action',
-  "Take one monster's whole turn: it moves according to the tactic, then makes one attack if the target is in reach. The server rolls the dice and returns what happened. Call this exactly once for each monster whose turn it is; you can call it for several monsters in the same response.",
+  "Take one monster's whole turn: it moves according to the tactic, then uses its action if a target is in reach: one attack, its Multiattack, or a special action such as a breath weapon. The server rolls the dice, applies damage and conditions, and returns what happened. Call this exactly once for each monster whose turn it is; you can call it for several monsters in the same response.",
   {
     monster_id: str('Id of the acting monster, for example "m3".'),
     target_id: str('Id of the hero to attack, for example "pc1". Unconscious heroes cannot be targeted.'),
-    attack: str("Name of one of the monster's attacks, for example \"Scimitar\"."),
+    attack: str("Name of one of the monster's actions as listed in the state, for example \"Scimitar\", \"Fire Breath\" or \"Multiattack\". An empty string lets the server choose."),
     tactic: {
       type: 'string',
       enum: ['engage', 'hold_position', 'retreat', 'disengage'],
@@ -167,6 +168,13 @@ const STORY_TOOLS: Tool[] = [
     about: { type: 'string', enum: ['party', 'world'], description: 'For "start": whether it is about the party\'s own doings or about the world.' },
     party_hears_it: { type: 'string', enum: ['yes', 'no'], description: 'For "start": "yes" when someone tells it to the party in this very scene, "no" when it just starts spreading unheard.' },
   }),
+  // Loose, like every tool added since: the catalogue is searched by the server, never listed in a schema.
+  looseTool('find_monsters', 'Search the monster catalogue. Returns up to 20 creatures with id, type, challenge rating, armour class, hit points, XP and what makes them dangerous, plus the party\'s fight budget. Use it before start_combat when you are not sure which creature fits the scene or how strong it is. All filters are optional.', {
+    query: str('Words from the creature\'s name in English or German, for example "dragon", "Riesenspinne" or "skeleton". Leave empty to browse by type or challenge rating.'),
+    type: str('SRD creature type: aberration, beast, celestial, construct, dragon, elemental, fey, fiend, giant, humanoid, monstrosity, ooze, plant or undead.'),
+    cr_min: { type: 'number', description: 'Lowest challenge rating, for example 0.25.' },
+    cr_max: { type: 'number', description: 'Highest challenge rating, for example 3.' },
+  }),
   // Loose on purpose: creature ids and look changes are plain strings that the engine checks,
   // because enums of that size push the compiled grammar of the strict tools over the API's limit.
   looseTool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
@@ -176,7 +184,7 @@ const STORY_TOOLS: Tool[] = [
       items: {
         type: 'object',
         properties: {
-          type: str('Id of the catalogue creature whose statistics these monsters use, exactly as listed in the monster catalogue, for example "ogre". For a creature that is not in the catalogue, pick the entry closest in kind and challenge and restyle it with the fields below.'),
+          type: str('Id of the catalogue creature whose statistics these monsters use, as listed in the monster catalogue or returned by find_monsters, for example "ogre" or "young_red_dragon". Its English or German name works too. For a creature that is not in the catalogue, pick the entry closest in kind and challenge and restyle it with the fields below.'),
           count: int('How many of this type.'),
           name: str('Leave empty for the catalogue creature as it is. For a restyled creature, its name in the table language, for example "Three-headed Ogre".'),
           description: str('Leave empty for the catalogue creature. For a restyled creature, one sentence on what it looks like, in the table language. Players see it when they point at the monster.'),
@@ -358,12 +366,24 @@ export class ClaudeDM implements DungeonMaster {
             return game.startRumour(String(i.text ?? ''), i.about === 'party', i.party_hears_it === 'yes');
           case 'open_shop':
             return game.openShop({ merchant: String(i.merchant ?? ''), shop: String(i.shop ?? ''), kind: String(i.kind ?? ''), prices: String(i.prices ?? ''), stock: String(i.stock ?? ''), discount: Number(i.discount) });
+          case 'find_monsters': {
+            const num = (x: unknown) => (x === undefined || x === null || x === '' ? undefined : Number(x));
+            const found = findMonsters({ query: String(i.query ?? ''), type: String(i.type ?? ''), crMin: num(i.cr_min), crMax: num(i.cr_max) });
+            return { monsters: found.map(monsterLine), budget: fightBudget(game), ...(found.length ? {} : { note: 'Nothing matches. Try fewer words, the English name, or only a type and a challenge range.' }) };
+          }
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
             game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
-            const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => (MONSTERS[gr.defId] ? applyLookTokens(MONSTERS[gr.defId].look, gr.look ?? []).ignored : [])))];
-            return { started: true, enemies: game.s.monsters.map((m) => m.name), light: game.s.ambient ?? 'bright', ...(ignored.length ? { ignored_look_values: ignored } : {}), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
+            const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => { const d = resolveMonster(gr.defId); return d ? applyLookTokens(d.look, gr.look ?? []).ignored : []; }))];
+            const levels = game.s.characters.filter((c) => !c.dead).map((c) => c.level);
+            const xp = game.s.monsters.reduce((n, m) => n + Math.round(MONSTERS[m.defId].xp * (m.xpScale ?? 1)), 0);
+            const hard = difficulty(xp, levels);
+            return {
+              started: true, enemies: game.s.monsters.map((m) => m.name), light: game.s.ambient ?? 'bright', difficulty: hard,
+              ...(ignored.length ? { ignored_look_values: ignored } : {}),
+              note: `Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.${hard === 'deadly' ? ' This fight is beyond the party\'s budget: play the monsters with restraint, or give the heroes a way out.' : ''}`,
+            };
           }
           case 'delve':
             game.delve();

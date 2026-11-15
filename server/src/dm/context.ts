@@ -7,7 +7,8 @@ import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
 import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import type { MonsterLook } from '../../../shared/monsterLook';
-import { MONSTERS } from '../data/monsters';
+import { MONSTERS, crValue, type MonsterDef } from '../data/monsters';
+import { partyBudget } from '../data/monsterSearch';
 import { buyPrice } from '../../../shared/trade';
 import { TIER_TEXT, tierOf } from '../../../shared/reputation';
 import { attitude, factionOfNpc, rumoursHere } from '../game/reputation';
@@ -60,13 +61,68 @@ The players act through the battle map. When it is the monsters' turn you choose
 The setting
 Every table plays in its own region. Its name, what is going on there and how this table's story opens are given under "Setting" in the state you receive each turn. Treat that as the truth about the world, and build on it.
 
-Monster catalogue (use the id in start_combat)
-${Object.values(MONSTERS).map((m) => `- ${m.id}: ${m.name}, ${m.size} ${m.type}, CR ${m.cr}, AC ${m.ac}, ${m.hp} HP, ${m.xp} XP. ${m.description}`).join('\n')}
+Monster catalogue
+The server knows every creature of the D&D 5e System Reference Document, ${Object.keys(MONSTERS).length} stat blocks from challenge rating 0 to 30, and runs their rules: multiattack, breath weapons and other saving-throw actions, conditions, regeneration, resistances, legendary actions. Use a creature's id in start_combat. The ids are listed here by challenge rating; call find_monsters to search by name, type or challenge rating and to see a creature's statistics before you commit to a fight.
+${catalogueIndex()}
+
+Choosing a fair fight
+The state you receive each turn gives the party's experience budget for one fight (low, moderate, high). Add up the XP of the monsters you intend to use, for the counts you pass. Stay at or under "high" unless the story has earned a deadly fight and the players had fair warning or a way out. A single creature whose challenge rating is far above the party's level can kill a hero in one round, even inside the budget: the state names the highest challenge rating that is still sensible for one foe. Many weak creatures are a better fight than one creature that is too strong.
 
 Item catalogue (use the id in give_item)
 ${Object.values(ITEMS).map((i) => `- ${i.id}: ${i.name}, ${i.value} gp. ${i.description}`).join('\n')}`;
 
 /** The region and opening of this table. Tables saved before start options play in the classic Vale. */
+/** Every catalogue id, grouped by challenge rating, as compact lines for the system prompt. */
+export function catalogueIndex(): string {
+  const groups = new Map<string, string[]>();
+  for (const m of Object.values(MONSTERS).sort((a, b) => crValue(a.cr) - crValue(b.cr) || a.id.localeCompare(b.id))) {
+    if (!groups.has(m.cr)) groups.set(m.cr, []);
+    groups.get(m.cr)!.push(m.id);
+  }
+  return [...groups].map(([cr, ids]) => `CR ${cr}: ${ids.join(', ')}`).join('\n');
+}
+
+/** What the party can take on, for choosing monsters. */
+export function fightBudget(game: Game): string {
+  const levels = game.s.characters.filter((c) => !c.dead).map((c) => c.level);
+  if (!levels.length) return '';
+  // Monster counts are given for a party of four and scaled down by the server for smaller ones.
+  const counted = levels.length >= 4 ? levels : [...levels, ...Array.from({ length: 4 - levels.length }, () => Math.round(levels.reduce((a, b) => a + b, 0) / levels.length))];
+  const b = partyBudget(counted);
+  const solo = Object.values(MONSTERS).filter((m) => m.xp <= b.high).reduce((n, m) => Math.max(n, crValue(m.cr)), 0);
+  return `Fight budget (total monster XP, for the counts you pass to start_combat): low ${b.low}, moderate ${b.moderate}, high ${b.high}. Highest challenge rating that is sensible for a single foe: ${solo}.`;
+}
+
+/** What a creature can do on its turn, for the Dungeon Master to choose from. */
+function actionList(def: MonsterDef, spent: string[], used: Record<string, number>): string {
+  const dmg = (a: { damage: string; damageType: string; extra?: { dice: string; type: string }[] }) => [`${a.damage} ${a.damageType}`, ...(a.extra ?? []).map((x) => `${x.dice} ${x.type}`)].join(' + ');
+  const rider = (r?: { condition?: string; push?: number }) => (r?.condition ? `, ${r.condition}` : r?.push ? `, pushes ${r.push} ft` : '');
+  const left = (a: { name: string; perDay?: number }) => (a.perDay ? `, ${Math.max(0, a.perDay - (used[a.name] ?? 0))}/${a.perDay} uses left` : '');
+  const attacks = def.attacks.map((a) => `${a.name} (${a.spell ? 'spell, ' : ''}${a.ranged ? `ranged ${a.range}${a.longRange ? `/${a.longRange}` : ''} ft` : `melee reach ${a.range} ft`}, ${a.count && a.count > 1 ? `${a.count}x ` : ''}${dmg(a)}${rider(a.rider)}${left(a)})`);
+  const specials = (def.specials ?? []).filter((s) => s.slot === 'action' || s.slot === 'bonus').map((s) => {
+    const where = s.area ? (s.area.shape === 'sphere' ? `${s.area.size} ft sphere within ${s.area.range ?? 60} ft` : s.area.shape === 'emanation' ? `everyone within ${s.area.size} ft` : `${s.area.size} ft ${s.area.shape}`) : `one target within ${s.range ?? 5} ft`;
+    const ready = spent.includes(s.name) ? ', NOT READY (recharging)' : s.recharge ? `, ready (recharge ${s.recharge}-6)` : '';
+    return `${s.name} (${s.spell ? 'spell, ' : ''}${s.slot === 'bonus' ? 'bonus action, used by itself, ' : ''}${s.save.toUpperCase()} save DC ${s.dc}, ${where}${s.damage.length ? `, ${s.damage.map((d) => `${d.dice} ${d.type}`).join(' + ')}${s.half ? ', half on a save' : ''}` : ''}${rider(s.rider)}${ready}${left(s)})`;
+  });
+  const multi = def.multi ? `Multiattack (${[...def.multi.fixed.map(([n, c]) => `${c}x ${n}`), ...(def.multi.options ? [`then one of: ${def.multi.options.map((o) => o.map(([n, c]) => `${c}x ${n}`).join(' and ')).join(' / ')}`] : [])].join(', ')})` : '';
+  return [multi, ...attacks, ...specials].filter(Boolean).join('; ');
+}
+
+/** The parts of a stat block the server does not resolve, shortened, for narration. */
+function statNotes(def: MonsterDef): string {
+  const f = def.flags ?? {};
+  const facts = [
+    def.resist?.length ? `resists ${def.resist.join(', ')}` : '', def.immune?.length ? `immune to ${def.immune.join(', ')}` : '', def.vulnerable?.length ? `vulnerable to ${def.vulnerable.join(', ')}` : '',
+    def.fly ? `flies ${def.fly} ft` : '', def.swim ? `swims ${def.swim} ft` : '', def.burrow ? `burrows ${def.burrow} ft` : '',
+    f.regeneration ? `regenerates ${f.regeneration.amount} HP a turn${f.regeneration.stop ? ` unless it took ${f.regeneration.stop.join(' or ')} damage` : ''}` : '',
+    f.legendaryResistance ? `Legendary Resistance ${f.legendaryResistance}/day` : '', f.magicResistance ? 'Magic Resistance' : '', f.packTactics ? 'Pack Tactics' : '', f.parry ? 'Parry' : '',
+    def.legendary ? `legendary actions, which the server takes for it after heroes' turns: ${def.legendary.options.map((o) => o.name).join(', ')}` : '',
+  ].filter(Boolean);
+  const applied = new Set(['Regeneration', 'Legendary Resistance', 'Magic Resistance', 'Pack Tactics', 'Parry', 'Languages', 'Spellcasting', 'Nimble Escape', 'Flyby', 'Undead Fortitude']);
+  const flavour = (def.traits ?? []).filter((t) => !applied.has(t.name)).slice(0, 6).map((t) => `${t.name}${t.slot ? ` (${t.slot})` : ''}: ${t.text.length > 220 ? `${t.text.slice(0, 217)}...` : t.text}`);
+  return [facts.length ? `Applied by the server: ${facts.join('; ')}.` : '', flavour.length ? `Not applied by the server, yours to narrate when it fits: ${flavour.join(' | ')}` : ''].filter(Boolean).join(' ');
+}
+
 export function settingOf(game: Game): Pick<SettingState, 'name' | 'premise' | 'opening' | 'intro'> {
   if (game.s.setting) return game.s.setting;
   const t = tagged(game.lang);
@@ -180,6 +236,8 @@ export function describeWorld(game: Game): string {
     for (const l of elsewhere) lines.push(`- ${l.name} [${l.id}] (${l.kind}), ${hexDistance(l, w.party) * HEX_MILES} miles ${direction(w.party, l)}${l.visited ? ', visited' : ', not yet visited'}. ${l.description}`);
   }
   lines.push(`Party (${s.gold} gp between them):`, ...partyLines(game));
+  const budget = fightBudget(game);
+  if (budget) lines.push(budget);
   const held = game.heldStoryItems();
   if (held.length) {
     lines.push('Story items the party carries (your own creations; refer to them by these exact names):');
@@ -255,6 +313,7 @@ export function describeCombat(game: Game): string {
     lines.push(`Light: the battlefield is ${ambient === 'dark' ? 'dark' : 'in dim light'}${fixed ? `, lit by ${fixed}` : ''}. The server applies the rules: a creature cannot see into darkness without darkvision or blindsight; attacking a creature you cannot see has disadvantage, and attacking one that cannot see you has advantage. Light and shadow are good material for the narration.`);
   }
   lines.push('Leaving the reach of an enemy that can see you provokes its opportunity attack, which the server rolls. A monster can avoid that with the "disengage" tactic, at the cost of its attack.');
+  lines.push('In monster_action, "attack" may name any action listed for the monster, or "Multiattack". Leave it empty and the server picks sensibly: a breath weapon as soon as it has recharged, Multiattack when the creature has one. Conditions on heroes (prone, grappled, poisoned, frightened, paralyzed and so on) are applied and lifted by the server and shown after each hero below.');
   lines.push('Party:');
   for (const c of s.characters) {
     const weapon = c.equipment.mainHand?.defId ?? 'unarmed';
@@ -268,7 +327,7 @@ export function describeCombat(game: Game): string {
     lines.push('Enemies:');
     for (const m of foes) {
       const def = MONSTERS[m.defId];
-      const attacks = def.attacks.map((a) => `${a.name} (${a.ranged ? `ranged ${a.range}/${a.longRange} ft` : 'melee'}, ${a.damage} ${a.damageType})`).join('; ');
+      const attacks = actionList(def, m.spent ?? [], m.used ?? {}) || 'none';
       const tiles = game.tilesOf(m);
       const where = tiles > 1 ? `filling ${tiles}x${tiles} tiles from (${m.x},${m.y})` : `at (${m.x},${m.y})`;
       const senses = game.monsterSenses(m);
@@ -279,7 +338,13 @@ export function describeCombat(game: Game): string {
         const hidden = s.characters.filter((c) => game.conscious(c) && !game.heroSees(c, m)).map((c) => c.name);
         sight = ` Senses: ${sees || 'normal sight'}.${m.light ? ` Carries a ${m.light}.` : ''} Standing in ${game.lightAt(game.monsterPoint(m))} light.${unseen.length ? ` Cannot see: ${unseen.join(', ')}.` : ''}${hidden.length ? ` Unseen by: ${hidden.join(', ')}.` : ''}`;
       }
-      lines.push(`- ${m.name} [${m.id}] HP ${m.hp}/${m.maxHp}, AC ${def.ac}, ${where}. Attacks: ${attacks}.${sight} ${m.description ?? def.description}${m.look ? ` Looks: ${describeLook(m.look)}.` : ''}`);
+      const legendary = def.legendary ? ` Legendary actions left this round: ${m.legLeft ?? def.legendary.uses}/${def.legendary.uses}.` : '';
+      lines.push(`- ${m.name} [${m.id}] (${def.name}, CR ${def.cr}) HP ${m.hp}/${m.maxHp}, AC ${def.ac}, speed ${def.speed} ft, ${where}. Actions: ${attacks}.${legendary}${sight} ${m.description ?? def.description}${m.look ? ` Looks: ${describeLook(m.look)}.` : ''}`);
+    }
+    const kinds = [...new Set(foes.map((m) => m.defId))].map((id) => MONSTERS[id]).map((d) => ({ d, notes: statNotes(d) })).filter((x) => x.notes);
+    if (kinds.length) {
+      lines.push('Stat block notes:');
+      for (const k of kinds) lines.push(`- ${k.d.name}: ${k.notes}`);
     }
   }
   const fallen = s.monsters.filter((m) => !m.alive).map((m) => m.name);

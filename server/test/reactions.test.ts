@@ -129,8 +129,8 @@ describe('light', () => {
     lit.g.attack('p1', lit.c.id, lit.m.id);
     expect(lastRoll(lit.g).mode).toBe('normal');
 
-    // A wolf has no darkvision: the dwarf it cannot see strikes with advantage.
-    const wolf = duel({ light: 'dark', monster: 'wolf', species: 'dwarf' });
+    // A boar has no darkvision: the dwarf it cannot see strikes with advantage.
+    const wolf = duel({ light: 'dark', monster: 'boar', species: 'dwarf' });
     wolf.g.attack('p1', wolf.c.id, wolf.m.id);
     expect(lastRoll(wolf.g).mode).toBe('advantage');
   });
@@ -207,7 +207,7 @@ describe('opportunity attacks', () => {
   });
 
   it('does not let a monster strike what it cannot see', () => {
-    const { g, c } = duel({ light: 'dark', monster: 'wolf', species: 'dwarf' });
+    const { g, c } = duel({ light: 'dark', monster: 'boar', species: 'dwarf' });
     const before = g.s.log.length;
     g.move('p1', c.id, 2, 6);
     expect(logSince(g, before)).not.toContain('Opportunity attack');
