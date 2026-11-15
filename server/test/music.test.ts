@@ -241,7 +241,7 @@ describe('freesound', () => {
     const d = mk();
     const asked: string[] = [];
     await ensureFreesound(d, key, fake(asked));
-    expect(asked.filter((u) => u.includes('/search/')).length).toBe(4);
+    expect(asked.filter((u) => u.includes('/search/')).length).toBeGreaterThanOrEqual(4);
     const n = asked.length;
     await ensureFreesound(d, key, fake(asked));
     expect(asked.length).toBe(n);

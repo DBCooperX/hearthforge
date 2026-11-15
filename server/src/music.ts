@@ -417,11 +417,11 @@ export async function musicAction(dir: string, env: NodeJS.ProcessEnv, m: MusicA
 // ---------------------------------------------------------------------------- Freesound (owner's API key)
 
 /** What to look for per scene. Only CC0 sounds are taken, so no credit is owed, though one is recorded. */
-export const FREESOUND_QUERIES: Partial<Record<MusicContext, string>> = {
-  tavern: 'tavern crowd murmur loop',
-  town: 'town market crowd ambience loop',
-  overworld: 'forest birds wind ambience loop',
-  dungeon: 'cave dripping water ambience loop',
+export const FREESOUND_QUERIES: Partial<Record<MusicContext, string[]>> = {
+  tavern: ['tavern crowd', 'crowd murmur', 'restaurant ambience'],
+  town: ['market crowd', 'town ambience', 'village ambience'],
+  overworld: ['forest ambience', 'forest birds', 'nature ambience'],
+  dungeon: ['cave drip', 'cave ambience', 'dungeon ambience'],
 };
 const FREESOUND_PER_SCENE = 2;
 
@@ -438,44 +438,54 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
   const state = loadState(dir);
   let added = 0;
   let asked = 0;
+  const problems: string[] = [];
   for (const scene of scenes) {
-    const query = FREESOUND_QUERIES[scene];
-    if (!query) continue;
+    const queries = FREESOUND_QUERIES[scene];
+    if (!queries) continue;
     asked++;
-    try {
-      const api = new URL('https://freesound.org/apiv2/search/text/');
-      api.searchParams.set('query', query);
-      api.searchParams.set('filter', 'license:"Creative Commons 0" duration:[15 TO 180]');
-      api.searchParams.set('sort', 'downloads_desc');
-      api.searchParams.set('fields', 'id,name,username,url,previews');
-      api.searchParams.set('page_size', '10');
-      const res = await fetchFn(api, { headers: { authorization: `Token ${key}`, 'user-agent': 'hearthforge-music-fetch' }, signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) throw new Error(`Freesound answered ${res.status}`);
-      const hits: FreesoundHit[] = ((await res.json()) as { results?: FreesoundHit[] }).results ?? [];
-      let taken = 0;
-      for (const h of hits) {
-        if (taken >= FREESOUND_PER_SCENE) break;
-        const src = h.previews?.['preview-hq-mp3'];
-        if (!src || state.freesound.includes(h.id) || !src.startsWith('https://')) continue;
-        try {
-          const { bytes } = await fetchAudio(src, fetchFn);
-          const title = text(h.name.replace(/\.[^.]+$/, ''), 120) || `Freesound ${h.id}`;
-          const file = freeFile(dir, 'ambient', scene, title, '.mp3');
-          writeAtomic(file, bytes);
-          state.files[idOf(dir, file)] = { title, artist: `${text(h.username, 60)} (freesound.org)`, license: 'CC0', url: text(h.url, 300) };
-          state.freesound.push(h.id);
-          saveState(dir, state);
-          taken++;
-          added++;
-        } catch (err) {
-          console.warn(`[music] Freesound sound ${h.id}: ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`);
+    let taken = 0;
+    // Freesound wants every word to match, so a narrow search can find nothing: fall back to broader ones.
+    for (const query of queries) {
+      if (taken >= FREESOUND_PER_SCENE) break;
+      try {
+        const api = new URL('https://freesound.org/apiv2/search/text/');
+        api.searchParams.set('query', query);
+        api.searchParams.set('filter', 'license:"Creative Commons 0" duration:[15 TO 180]');
+        api.searchParams.set('sort', 'downloads_desc');
+        api.searchParams.set('fields', 'id,name,username,url,previews');
+        api.searchParams.set('page_size', '15');
+        const res = await fetchFn(api, { headers: { authorization: `Token ${key}`, 'user-agent': 'hearthforge-music-fetch' }, signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) throw new Error(`Freesound answered ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        const hits: FreesoundHit[] = ((await res.json()) as { results?: FreesoundHit[] }).results ?? [];
+        console.log(`[music] Freesound "${query}" (${scene}): ${hits.length} result${hits.length === 1 ? '' : 's'}`);
+        for (const h of hits) {
+          if (taken >= FREESOUND_PER_SCENE) break;
+          const src = h.previews?.['preview-hq-mp3'];
+          if (!src || state.freesound.includes(h.id) || !src.startsWith('https://')) continue;
+          try {
+            const { bytes } = await fetchAudio(src, fetchFn);
+            const title = text(h.name.replace(/\.[^.]+$/, ''), 120) || `Freesound ${h.id}`;
+            const file = freeFile(dir, 'ambient', scene, title, '.mp3');
+            writeAtomic(file, bytes);
+            state.files[idOf(dir, file)] = { title, artist: `${text(h.username, 60)} (freesound.org)`, license: 'CC0', url: text(h.url, 300) };
+            state.freesound.push(h.id);
+            saveState(dir, state);
+            taken++;
+            added++;
+          } catch (err) {
+            const why = `sound ${h.id}: ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`;
+            problems.push(why);
+            console.warn(`[music] Freesound ${why}`);
+          }
         }
+      } catch (err) {
+        const why = `search "${query}" failed: ${err instanceof Error ? err.message : err}`;
+        problems.push(why);
+        console.warn(`[music] Freesound ${why}`);
       }
-    } catch (err) {
-      console.warn(`[music] Freesound search for ${scene} failed: ${err instanceof Error ? err.message : err}`);
     }
   }
-  if (asked && !added) throw Object.assign(new MusicError('download_failed'), { detail: 'Freesound gave no new sound' });
+  if (asked && !added) throw Object.assign(new MusicError('download_failed'), { detail: `Freesound gave no new sound (${problems.join('; ') || 'no usable results'})` });
   return added;
 }
 
@@ -496,7 +506,7 @@ export async function ensureFreesound(dir: string, env: NodeJS.ProcessEnv, fetch
     const n = await fetchFreesound(dir, env, empty, fetchFn);
     console.log(`[music] Fetched ${n} CC0 ambient loop${n === 1 ? '' : 's'} from Freesound.`);
   } catch (err) {
-    console.warn('[music] Freesound fetch skipped:', err instanceof Error ? err.message : err);
+    console.warn('[music] Freesound fetch skipped:', (err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err));
   } finally {
     fetching = false;
   }
