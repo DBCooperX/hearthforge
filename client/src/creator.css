@@ -10,7 +10,7 @@
 .hero-card.flipped .hero-inner { transform: rotateY(180deg); }
 .hero-face {
   position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 8px; padding: 14px 12px 10px;
-  background: linear-gradient(#402c1b, #33221a); border: 1px solid #6f5133; box-shadow: inset 0 1px 0 rgba(255, 215, 150, 0.08), 0 3px 10px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(#2d2925, #252220); border: 1px solid #4f4943; box-shadow: inset 0 1px 0 rgba(255, 215, 150, 0.08), 0 3px 10px rgba(0, 0, 0, 0.45);
   display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); font: inherit;
 }
 .hero-face.front { cursor: pointer; }
@@ -40,7 +40,7 @@
 .hero-actions button:not(.primary) { background: rgba(60, 38, 20, 0.14); color: var(--ink, #2c1e12); border-color: #a88c58; box-shadow: none; }
 .hero-card.create {
   cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 8px;
-  border: 2px dashed #8a683e; background: rgba(0, 0, 0, 0.22); color: var(--text);
+  border: 2px dashed #625952; background: rgba(0, 0, 0, 0.22); color: var(--text);
 }
 .hero-card.create:hover:not(:disabled) { border-color: var(--gold); background: rgba(238, 143, 60, 0.08); }
 .hero-card.create p { font-size: 13.5px; color: var(--muted); margin: 0; }
@@ -72,13 +72,13 @@
 .pick { border-radius: 6px; }
 .pick-main {
   width: 100%; display: flex; align-items: center; gap: 9px; text-align: left; padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.24); border: 1px solid #5a4129; box-shadow: none; border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24); border: 1px solid #403b36; box-shadow: none; border-radius: 6px;
 }
 .pick.focused .pick-main { border-color: #a8824c; background: rgba(255, 200, 130, 0.06); }
 .pick.on .pick-main { border-color: var(--gold); background: linear-gradient(rgba(230, 183, 101, 0.16), rgba(230, 183, 101, 0.06)); }
 .pick.off .pick-main { opacity: 1; cursor: default; }
 .pick.off:not(.on) .pick-main { opacity: 0.5; }
-.pick-mark { flex: none; width: 16px; height: 16px; border: 1px solid #8a683e; display: grid; place-items: center; font-size: 11px; color: #1a1208; }
+.pick-mark { flex: none; width: 16px; height: 16px; border: 1px solid #625952; display: grid; place-items: center; font-size: 11px; color: #1a1208; }
 .pick-mark.radio { border-radius: 50%; } .pick-mark.check { border-radius: 3px; }
 .pick.on .pick-mark { background: var(--gold); border-color: var(--gold); }
 .pick-icon { flex: none; font-size: 20px; width: 26px; text-align: center; }
@@ -89,7 +89,7 @@
 .badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
 .badge.rec { background: rgba(238, 143, 60, 0.18); border: 1px solid rgba(238, 143, 60, 0.6); color: #ffc98a; }
 .badge.locked { border: 1px solid var(--line); color: var(--muted); }
-.subpick { display: grid; gap: 6px; margin: 2px 0 4px 12px; padding-left: 10px; border-left: 2px solid #6f5133; }
+.subpick { display: grid; gap: 6px; margin: 2px 0 4px 12px; padding-left: 10px; border-left: 2px solid #4f4943; }
 .subpick > small { color: var(--muted); }
 .chips, .asi { display: flex; flex-wrap: wrap; gap: 5px; }
 .chips button, .asi button { padding: 4px 9px; font-size: 13px; }
@@ -109,7 +109,7 @@
 .scores tr.focused { background: rgba(255, 200, 130, 0.06); }
 .scores .boost { color: var(--ok); } .scores .total { font-weight: 700; } .scores .mod { color: var(--gold); font-weight: 700; }
 .scores select, .boost-pick select, .identity textarea {
-  font: inherit; color: inherit; background: #140d08; border: 1px solid #5a4129; border-radius: 5px; padding: 4px 6px; outline: none;
+  font: inherit; color: inherit; background: #0e0d0b; border: 1px solid #403b36; border-radius: 5px; padding: 4px 6px; outline: none;
 }
 .scores select:focus, .boost-pick select:focus, .identity textarea:focus { border-color: var(--gold); }
 .stepper { display: inline-flex; align-items: center; gap: 6px; }
@@ -129,7 +129,7 @@
 /* ---------- detail panel ---------- */
 .detail { max-width: 640px; margin: 0 auto; display: grid; gap: 10px; align-content: start; font-size: 15.5px; line-height: 1.5; }
 .detail header { display: flex; gap: 14px; align-items: center; }
-.detail-icon { font-size: 44px; width: 64px; height: 64px; display: grid; place-items: center; border-radius: 50%; background: rgba(0, 0, 0, 0.3); border: 1px solid #6f5133; flex: none; }
+.detail-icon { font-size: 44px; width: 64px; height: 64px; display: grid; place-items: center; border-radius: 50%; background: rgba(0, 0, 0, 0.3); border: 1px solid #4f4943; flex: none; }
 .detail h2 { font-size: 24px; letter-spacing: 0.03em; }
 .detail .kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; color: var(--muted); }
 .detail .summary { margin: 2px 0 0; color: #dccba9; font-family: var(--font-story, Georgia, serif); font-style: italic; font-size: 16.5px; }

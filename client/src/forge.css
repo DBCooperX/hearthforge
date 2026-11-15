@@ -1,0 +1,76 @@
+/* The pieces that come straight from the Hearthforge logo: the logo itself, the mark in the top bar,
+   the rune band on window frames, engraved steel titles and the sparks. Loaded last. Tokens are in theme.css. */
+
+/* ---------- the logo ---------- */
+.join h1 { display: grid; justify-items: center; margin: -20px -12px -4px; font-size: 0; }
+.brand-logo {
+  display: block; width: min(600px, 100%); height: auto; user-select: none;
+  /* The picture has its own dark ground; let its edges melt into the iron of the panel. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent), linear-gradient(transparent, #000 8%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent), linear-gradient(transparent, #000 8%, #000 95%, transparent);
+  -webkit-mask-composite: source-in; mask-composite: intersect;
+  mix-blend-mode: lighten; filter: drop-shadow(0 0 30px rgba(245, 128, 40, 0.18));
+}
+.brand-emblem {
+  display: block; height: auto; user-select: none; mix-blend-mode: lighten;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%);
+}
+.topbar h1.brand { display: flex; align-items: center; gap: 9px; font-size: 19px; line-height: 1; letter-spacing: 0.09em; text-transform: uppercase; }
+.brand span {
+  font-weight: 700; background: var(--steel-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.8)) drop-shadow(0 0 8px rgba(245, 128, 40, 0.35));
+}
+.brand span::first-letter { font-size: 1.22em; }
+.brand-mark {
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid #b9591b;
+  box-shadow: 0 0 0 1px #0b0a09, 0 0 12px rgba(245, 128, 40, 0.55);
+}
+
+/* ---------- engraved titles ---------- */
+.win-head h1, .setup > h1, .inn-signin h2 {
+  font-weight: 700; background: var(--steel-text); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.85)) drop-shadow(0 0 10px rgba(245, 128, 40, 0.25));
+}
+.inn-signin h2 { font-size: 19px; letter-spacing: 0.14em; }
+.inn-signin .brand-emblem { margin: -14px 0 -10px; }
+
+/* ---------- the rune band: a small iron plate on the top edge of a frame ---------- */
+/* The journal is a book with a stitched cover of its own, so it carries no plate. */
+.win:not(.journal)::before {
+  content: ''; position: absolute; top: -10px; left: 50%; width: 208px; height: 20px; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  background: var(--runes) center / 168px 14px no-repeat, var(--iron-grain), linear-gradient(#35312d, #1d1b19);
+  border: 1px solid #6a625a; border-radius: 3px; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.7);
+  filter: drop-shadow(0 0 5px rgba(245, 128, 40, 0.45)); animation: rune-glow 6s ease-in-out infinite;
+}
+/* The front door scrolls inside its frame, so there the runes sit in a line of their own. */
+.rune-line { height: 14px; background: var(--runes) center / 168px 14px no-repeat, linear-gradient(90deg, transparent, #595249 20%, transparent 38%, transparent 62%, #595249 80%, transparent) center / 100% 1px no-repeat; filter: drop-shadow(0 0 5px rgba(245, 128, 40, 0.6)); }
+@keyframes rune-glow { 0%, 100% { filter: drop-shadow(0 0 4px rgba(245, 128, 40, 0.35)); } 50% { filter: drop-shadow(0 0 9px rgba(245, 128, 40, 0.7)); } }
+
+/* The line under a window title burns from gold into ember. */
+.win-head::after { background: linear-gradient(90deg, transparent, #b9591b 10%, #ffd98a 50%, #b9591b 90%, transparent); box-shadow: 0 0 10px rgba(245, 128, 40, 0.35); }
+
+/* ---------- sparks ---------- */
+.embers { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.embers i {
+  position: absolute; bottom: -12px; border-radius: 50%; background: #ffc46b; opacity: 0;
+  box-shadow: 0 0 6px 1px rgba(255, 140, 40, 0.9), 0 0 14px 3px rgba(245, 100, 20, 0.35);
+  animation: ember-rise linear infinite;
+}
+@keyframes ember-rise {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  8% { opacity: 0.95; }
+  60% { opacity: 0.7; }
+  100% { transform: translate(var(--drift, 0), -92vh) scale(0.3); opacity: 0; }
+}
+.splash > .panel { z-index: 1; }
+
+/* A level gained is a moment at the anvil. */
+.levelup { border-color: #f0a03c; box-shadow: 0 0 30px rgba(245, 128, 40, 0.3), inset 0 0 24px rgba(245, 128, 40, 0.08); }
+
+@media (max-width: 760px) { .topbar h1.brand span { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .embers i { animation: none; opacity: 0.5; bottom: auto; top: calc(18% + var(--drift, 0px) * 4); }
+  .win:not(.journal)::before { animation: none; }
+}

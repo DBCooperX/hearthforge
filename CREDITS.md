@@ -48,9 +48,13 @@ Ambient sound loops are not bundled or downloaded by default. Loops you add your
 
 The game shows title, artist and license of the track that is playing. If you add your own tracks or a `tracks.json`, crediting them is up to you.
 
+## Logo
+
+The Hearthforge logo (`docs/hearthforge-logo.jpg`) was made by the project's owner. The lobby logo, the emblem, the top bar mark and the browser icon are cut from it.
+
 ## Fonts
 
-Bundled through [Fontsource](https://fontsource.org), all under the [SIL Open Font License 1.1](https://openfontlicense.org): Alegreya and Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica), Cinzel (Natanael Gama) and Grenze Gotisch (Omnibus-Type).
+Bundled through [Fontsource](https://fontsource.org), all under the [SIL Open Font License 1.1](https://openfontlicense.org): Alegreya and Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica), and Cinzel (Natanael Gama).
 
 ## Software
 

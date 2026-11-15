@@ -10,6 +10,7 @@ import { CLASS_INFO } from '../../../shared/content';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
 import { ArtWindow } from './ArtWindow';
+import { Emblem } from './Brand';
 import { Icon, type IconName } from './icons';
 import { inn, innDownload, innkeeperSession, InnError, setInnkeeperSession } from './innkeeperApi';
 import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
@@ -90,7 +91,7 @@ function SignIn({ status, onSession }: { status: AdminStatus | null; onSession: 
   if (status && !status.enabled) return <div className="inn-signin"><p>{t(ADMIN_ERRORS.disabled)}</p></div>;
   return (
     <form className="inn-signin" onSubmit={submit}>
-      <Icon name="innkeeper" size={44} />
+      <Emblem />
       <h2>{t('The Innkeeper')}</h2>
       <p className="muted">{t('This is the panel of whoever runs this server. Players do not need it.')}</p>
       <label>{t('Password')}
