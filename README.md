@@ -184,7 +184,7 @@ Hearthforge bundles no third-party art or audio, and it never hosts or mirrors a
 In the Innkeeper's **Assets** page, with the tabs **Music**, **Ambient** and **Art**:
 
 - **Music.** Every track can be played, switched off, moved to another scene (tavern, town, overworld, dungeon, combat, boss) or removed. Tracks that failed to download get a button to try again. Drop audio files or a zip onto the page, or paste a link. Files are kept in `/data/music`.
-- **Ambient sound.** Quiet loops (crowd, fire, wind, rain) under the music with their own volume slider. Nothing is downloaded by default, so add your own.
+- **Ambient sound.** Quiet loops (crowd, fire, wind, rain) under the music with their own volume slider. A few free OpenGameArt loops (fire, wind, dark pad) download automatically; add your own for the rest (tavern crowd, town, cave drips).
 - **Art.** Drop a zip from itch.io, Kenney or OpenGameArt. PNG images are kept, packs are recognised by name or contents, and item icons are matched by file name, with **Assign icons** for the rest. Players see what is in use, with credits, under **Settings → Art & Assets**.
 
 Licenses differ: CC0 needs nothing, CC BY needs a credit (the game shows title, artist and license of the playing track and the art packs in use), and a few free packs may be used but not passed on. [CREDITS.md](CREDITS.md) lists what was checked. The Kenney and 0x72 tile mappings are experimental, since the packs could not be downloaded where this was built. To correct a Kenney tile, write numbers into `kenney-map.json`:

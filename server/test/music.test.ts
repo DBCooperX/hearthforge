@@ -189,7 +189,7 @@ describe('music library managed by the owner', () => {
     expect(added[0].id).toBe('ambient/tavern/crackling-fire.ogg');
     const zip = zipSync({ 'a/Wind.mp3': audioFile(), 'readme.txt': new Uint8Array(5000) });
     expect(addUpload(d, 'pack.zip', zip, 'ambient', 'overworld').map((a) => a.id)).toEqual(['ambient/overworld/wind.mp3']);
-    expect(musicLibrary(d, {}).items.filter((i) => i.layer === 'ambient')).toHaveLength(2);
+    expect(musicLibrary(d, {}).items.filter((i) => i.layer === 'ambient' && !i.builtIn)).toHaveLength(2);
     expect(() => addUpload(d, 'x.mp3', new Uint8Array(5000), 'music', 'town')).toThrow();
     expect(() => addUpload(d, 'x.mp3', audioFile(), 'music', 'nowhere')).toThrow();
   });

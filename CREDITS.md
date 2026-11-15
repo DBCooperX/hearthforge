@@ -40,7 +40,15 @@ No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these 
 - Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm", "Volatile Reaction", "Faster Does It", "Prelude and Action", "Impact Moderato", "Killers", "Unholy Knight", "Crusade - Heavy Industry"
 - Boss fights: "Black Vortex", "Death and Axes", "Giant Wyrm", "Epic Unease", "The Complex", "Hall of the Mountain King", "Danse Macabre"
 
-Ambient sound loops are not bundled or downloaded by default. Loops you add yourself are credited in the game by whatever title, artist and license you give them.
+Ambient loops (under the music) are downloaded the same way, straight from [OpenGameArt](https://opengameart.org), and can be switched off or removed in the Innkeeper:
+
+- "Fire loop" by qubodup, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
+- "Wind loop" by AntumDeluge, based on a recording by InspectorJ (Jonathan Shaw), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
+- "Cathedral in the forest" by congusbongus, [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+Deutsch: Umgebungsschleifen werden genauso direkt von OpenGameArt geladen (Feuer: qubodup, CC BY 3.0; Wind: AntumDeluge nach InspectorJ, CC BY 3.0; Kathedrale im Wald: congusbongus, CC0) und lassen sich im Innkeeper abschalten oder entfernen.
+
+Loops you add yourself are credited in the game by whatever title, artist and license you give them.
 
 The game shows title, artist and license of the track that is playing. For tracks you add yourself, crediting them is up to you.
 
