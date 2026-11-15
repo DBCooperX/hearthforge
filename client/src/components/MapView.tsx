@@ -4,6 +4,7 @@ import type { GameState } from '../../../shared/types';
 import { useT } from '../i18n';
 import { MapRenderer, type TokenHover, type ViewOptions } from '../game/MapRenderer';
 import { useEntityHover } from './Story';
+import { heroSenses } from '../game/util';
 import type { MoveListener } from '../net';
 
 interface Props {
@@ -58,6 +59,14 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
   const tiles = state.map.rows.join('');
   const slow = [...tiles].some(tileDifficult);
   const cover = [...tiles].some(tileGivesCover);
+  const ambient = state.light?.ambient ?? 'bright';
+  const viewer = state.characters.find((c) => c.id === view.selectedId);
+  const dv = viewer ? heroSenses(viewer).darkvision : 0;
+  const lightNote = ambient === 'bright' ? '' : [
+    ambient === 'dark' ? t('Darkness: without darkvision or a light you cannot see into it.') : t('Dim light everywhere the lights do not reach.'),
+    viewer ? (dv ? t('{name} has darkvision out to {n} ft (the grey area).', { name: viewer.name, n: dv }) : t('{name} has no darkvision.', { name: viewer.name })) : '',
+    t('Attacking what you cannot see has disadvantage; attacking what cannot see you has advantage.'),
+  ].filter(Boolean).join(' ');
   return (
     <div className="map" ref={host}>
       {token && <div ref={anchor} className="token-anchor" style={{ left: token.left, top: token.top, width: token.size, height: token.size }} />}
@@ -65,6 +74,7 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
         <strong>{names[state.map.biome] ?? names.dungeon}</strong>
         {slow && <span>{t('Mud, brush, rubble and shallow water cost double movement.')}</span>}
         {cover && <span>{t('Trees, rocks and furniture give half cover (+2 AC) against shots.')}</span>}
+        {lightNote && <span className="light-note">{lightNote}</span>}
       </div>
     </div>
   );

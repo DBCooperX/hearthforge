@@ -136,6 +136,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_AUTO_ASSETS` | `on` | Fetch freely licensed item icons on first start. |
 | `HEARTHFORGE_MUSIC` | `on` | `off` skips the music download and the player. |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the DM waits for the other players after the first one acts. `0` answers every action at once. |
+| `HEARTHFORGE_REACTION_WAIT` | `20` | Seconds a player gets to decide on an opportunity attack when an enemy leaves their hero's reach. After that the hero strikes. `0` never asks. |
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
@@ -203,6 +204,7 @@ Browsers only allow sound after the first click, so music starts when a player f
 - **Away players.** A disconnected player keeps their seat. In a fight anyone may play an away hero so the order never stalls; in the story the Dungeon Master keeps them in the background.
 - **Table talk.** An out-of-character chat with whispers, which the Dungeon Master never reads. What you type into the story box is in character.
 - **Whose turn.** In a fight the initiative order decides. In the story the first action opens a short window (`HEARTHFORGE_TURN_WAIT`), and the Dungeon Master answers once everyone has acted or the window closes, resolving all actions in one scene.
+- **Reactions.** When an enemy leaves a hero's reach, the fight pauses for that hero's player only: strike or let it go (`HEARTHFORGE_REACTION_WAIT`). Each hero can be set to ask, always strike or never; a player who is away never holds up the table.
 
 ## Where the adventure starts
 

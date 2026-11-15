@@ -249,11 +249,19 @@ export function describeCombat(game: Game): string {
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
   lines.push(`The battle map shows: ${s.biome ?? 'dungeon'}. Mud, undergrowth, rubble and shallow water are difficult terrain (double movement); trees, boulders and furniture give half cover (+2 AC) against shots. The server applies both; use them to colour the narration.`);
+  const ambient = s.ambient ?? 'bright';
+  if (ambient !== 'bright') {
+    const fixed = (s.lights ?? []).map((l) => `${l.kind} at (${l.x},${l.y})`).join(', ');
+    lines.push(`Light: the battlefield is ${ambient === 'dark' ? 'dark' : 'in dim light'}${fixed ? `, lit by ${fixed}` : ''}. The server applies the rules: a creature cannot see into darkness without darkvision or blindsight; attacking a creature you cannot see has disadvantage, and attacking one that cannot see you has advantage. Light and shadow are good material for the narration.`);
+  }
+  lines.push('Leaving the reach of an enemy that can see you provokes its opportunity attack, which the server rolls. A monster can avoid that with the "disengage" tactic, at the cost of its attack.');
   lines.push('Party:');
   for (const c of s.characters) {
     const weapon = c.equipment.mainHand?.defId ?? 'unarmed';
     const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
-    lines.push(`- ${c.name} [${c.id}] ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, at (${c.x},${c.y}), wielding ${weapon}, ${status}. Gender: ${genderNote(c, game.lang)}`);
+    const dv = game.heroSenses(c).darkvision;
+    const sight = ambient === 'bright' ? '' : ` ${dv ? `Darkvision ${dv} ft.` : 'No darkvision.'}${c.light ? ` Holds a lit ${c.light}.` : ''}`;
+    lines.push(`- ${c.name} [${c.id}] ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, at (${c.x},${c.y}), wielding ${weapon}, ${status}.${sight} Gender: ${genderNote(c, game.lang)}`);
   }
   const foes = s.monsters.filter((m) => m.alive);
   if (foes.length) {
@@ -263,7 +271,15 @@ export function describeCombat(game: Game): string {
       const attacks = def.attacks.map((a) => `${a.name} (${a.ranged ? `ranged ${a.range}/${a.longRange} ft` : 'melee'}, ${a.damage} ${a.damageType})`).join('; ');
       const tiles = game.tilesOf(m);
       const where = tiles > 1 ? `filling ${tiles}x${tiles} tiles from (${m.x},${m.y})` : `at (${m.x},${m.y})`;
-      lines.push(`- ${m.name} [${m.id}] HP ${m.hp}/${m.maxHp}, AC ${def.ac}, ${where}. Attacks: ${attacks}. ${m.description ?? def.description}${m.look ? ` Looks: ${describeLook(m.look)}.` : ''}`);
+      const senses = game.monsterSenses(m);
+      const sees = [senses.darkvision ? `darkvision ${senses.darkvision} ft` : '', senses.blindsight ? `blindsight ${senses.blindsight} ft` : ''].filter(Boolean).join(', ');
+      let sight = '';
+      if (ambient !== 'bright') {
+        const unseen = s.characters.filter((c) => game.conscious(c) && !game.monsterSees(m, c)).map((c) => c.name);
+        const hidden = s.characters.filter((c) => game.conscious(c) && !game.heroSees(c, m)).map((c) => c.name);
+        sight = ` Senses: ${sees || 'normal sight'}.${m.light ? ` Carries a ${m.light}.` : ''} Standing in ${game.lightAt(game.monsterPoint(m))} light.${unseen.length ? ` Cannot see: ${unseen.join(', ')}.` : ''}${hidden.length ? ` Unseen by: ${hidden.join(', ')}.` : ''}`;
+      }
+      lines.push(`- ${m.name} [${m.id}] HP ${m.hp}/${m.maxHp}, AC ${def.ac}, ${where}. Attacks: ${attacks}.${sight} ${m.description ?? def.description}${m.look ? ` Looks: ${describeLook(m.look)}.` : ''}`);
     }
   }
   const fallen = s.monsters.filter((m) => !m.alive).map((m) => m.name);

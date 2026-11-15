@@ -398,3 +398,62 @@ describe('a table with several players', () => {
     expect(chris.state.table.code).toBeNull();
   });
 });
+
+describe('opportunity attacks at a live table', () => {
+  afterEach(() => vi.useRealTimers());
+
+  /** Brann stands next to a bandit that will walk away from him on its turn, which comes right after his. */
+  async function standoff() {
+    vi.useFakeTimers();
+    const t = await playing({ reactionWaitMs: 20000 });
+    const g = t.r.game;
+    // Monsters back away, so they leave Brann's reach.
+    (t.dm as any).runMonsters = async (_game: Game, block: { id: string }[], act: (id: string, intent: object) => Promise<unknown>) => {
+      for (const m of block) await act(m.id, { tactic: 'retreat' });
+      return null;
+    };
+    g.startEncounter([{ defId: 'bandit', count: 1 }], { source: 'story', context: 'test', light: 'bright' });
+    g.takeBeats();
+    g.s.rows = Array.from({ length: 13 }, (_, y) => (y === 0 || y === 12 ? '#'.repeat(22) : `#${'.'.repeat(20)}#`));
+    const [brann, maeve] = g.s.characters;
+    const bandit = g.s.monsters[0];
+    brann.x = 5; brann.y = 6; maeve.x = 2; maeve.y = 2; bandit.x = 6; bandit.y = 6;
+    const combat = g.s.combat!;
+    combat.order = [{ id: brann.id, kind: 'pc', initiative: 20 }, { id: bandit.id, kind: 'monster', initiative: 10 }, { id: maeve.id, kind: 'pc', initiative: 5 }];
+    combat.turnIndex = 0;
+    t.r.handle(ws(t.chris), { t: 'end_turn', characterId: brann.id });
+    await vi.advanceTimersByTimeAsync(10);
+    return { ...t, g, brann, bandit };
+  }
+
+  it('waits for the hero\'s player, and only that player may answer', async () => {
+    const { r, chris, mira, brann, bandit } = await standoff();
+    expect(chris.state.combat?.reaction).toMatchObject({ heroId: brann.id, monsterId: bandit.id });
+    expect(mira.state.combat?.reaction?.heroId).toBe(brann.id); // everyone sees who is deciding
+    r.handle(ws(mira), { t: 'reaction', characterId: brann.id, take: true });
+    expect(mira.of('error').at(-1)?.message).toMatch(/another player/);
+    r.handle(ws(chris), { t: 'reaction', characterId: brann.id, take: true });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(chris.state.combat?.reaction ?? null).toBeNull();
+    expect(chris.state.log.some((l) => l.text.startsWith('Opportunity attack! Brann attacks'))).toBe(true);
+  });
+
+  it('strikes for a player who does not answer in time', async () => {
+    const { chris } = await standoff();
+    expect(chris.state.combat?.reaction).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(20500);
+    expect(chris.state.combat?.reaction ?? null).toBeNull();
+    expect(chris.state.log.some((l) => l.text.startsWith('Opportunity attack! Brann attacks'))).toBe(true);
+  });
+
+  it('lets a player choose to always strike or never, without asking again', async () => {
+    const { r, chris, mira, brann } = await standoff();
+    r.handle(ws(chris), { t: 'set_opportunity', characterId: brann.id, mode: 'never' });
+    expect(chris.state.characters.find((c) => c.id === brann.id)?.opportunity).toBe('never');
+    r.handle(ws(mira), { t: 'set_opportunity', characterId: brann.id, mode: 'always' });
+    expect(mira.of('error').at(-1)?.message).toMatch(/another player/);
+    r.handle(ws(chris), { t: 'reaction', characterId: brann.id, take: false });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(chris.state.log.some((l) => l.text === 'Brann lets Bandit go.')).toBe(true);
+  });
+});

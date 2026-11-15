@@ -12,7 +12,7 @@ import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
 import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
-import type { DungeonMaster, PlayerLine, Scene } from './types';
+import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
 import type { UsageSample } from '../admin/usage';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -54,8 +54,8 @@ const MONSTER_TOOL = tool(
     attack: str("Name of one of the monster's attacks, for example \"Scimitar\"."),
     tactic: {
       type: 'string',
-      enum: ['engage', 'hold_position', 'retreat'],
-      description: 'engage: move as needed to make the attack. hold_position: stay put and attack only if already in range. retreat: back away from the heroes, then use a ranged attack if it has one.',
+      enum: ['engage', 'hold_position', 'retreat', 'disengage'],
+      description: 'engage: move as needed to make the attack. hold_position: stay put and attack only if already in range. retreat: back away, then use a ranged attack if it has one; leaving a hero\'s reach lets that hero make an opportunity attack. disengage: back away without provoking, but it gives up its attack (creatures with Nimble Escape still attack).',
     },
   },
 );
@@ -188,6 +188,7 @@ const STORY_TOOLS: Tool[] = [
     },
     reason: str('One sentence on how the fight started, for the record.'),
     setting: str(`What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup. One of: here, ${BIOMES.join(', ')}.`),
+    light: str('How lit the battlefield is: "auto" follows the time of day and the place (dungeons and caves are dark), which is right nearly always. "bright", "dim" or "dark" when the story says otherwise, such as "dark" for a cellar whose lamps were smashed. Heroes with torches light them by themselves.'),
   }),
   tool('delve', 'The party pushes into the next uncleared section of the dungeon it is standing in. The server sets up that fight.', {}),
   tool('move_to_place', "Move the party to another known place in its current hex, such as into a tavern in the town it is in.", {
@@ -359,10 +360,10 @@ export class ClaudeDM implements DungeonMaster {
             return game.openShop({ merchant: String(i.merchant ?? ''), shop: String(i.shop ?? ''), kind: String(i.kind ?? ''), prices: String(i.prices ?? ''), stock: String(i.stock ?? ''), discount: Number(i.discount) });
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
-            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
+            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => (MONSTERS[gr.defId] ? applyLookTokens(MONSTERS[gr.defId].look, gr.look ?? []).ignored : [])))];
-            return { started: true, enemies: game.s.monsters.map((m) => m.name), ...(ignored.length ? { ignored_look_values: ignored } : {}), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
+            return { started: true, enemies: game.s.monsters.map((m) => m.name), light: game.s.ambient ?? 'bright', ...(ignored.length ? { ignored_look_values: ignored } : {}), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
           }
           case 'delve':
             game.delve();
@@ -420,13 +421,11 @@ export class ClaudeDM implements DungeonMaster {
     }
   }
 
-  async runMonsters(game: Game, block: Monster[], onAction: () => Promise<void>): Promise<string | null> {
+  async runMonsters(game: Game, block: Monster[], actor: MonsterActor): Promise<string | null> {
     const acted = new Set<string>();
     const act = async (id: string, intent: MonsterIntent) => {
       acted.add(id);
-      const result = game.monsterAct(id, intent);
-      await onAction();
-      return result;
+      return actor(id, intent);
     };
     const prompt = `Current state:\n${describeCombat(game)}\n\nRecent play, oldest first:\n${transcript(game, 16)}\n\nIt is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`;
     let text: string | null = null;
