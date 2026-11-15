@@ -41,6 +41,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
   const choice = c.pending[0];
   const [feat, setFeat] = useState<FeatPick | undefined>();
   const [spell, setSpell] = useState<string | undefined>();
+  const [filter, setFilter] = useState('');
   const [opts, setOpts] = useState<string[]>([]);
   const [focus, setFocus] = useState<Focus>(null);
   const [hover, setHover] = useState<{ feat?: FeatPick; spell?: string } | null>(null);
@@ -145,13 +146,24 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
                 ))}
               </Section>
             ) : (
-              <Section title={choice.pool === 'cantrip' ? t('Cantrips') : t('Spells')}>
-                {spells.map((s) => (
-                  <PickRow key={s} icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected={spell === s}
-                    focused={focus?.kind === 'spell' && focus.id === s}
-                    onClick={() => { setSpell(s); setHover(null); }} onFocus={() => { setFocus({ kind: 'spell', id: s }); setHover(spell === s ? null : { spell: s }); }} onLeave={() => setHover(null)} />
-                ))}
-              </Section>
+              <>
+                {spells.length > 12 && (
+                  <input className="spell-filter" type="search" value={filter} placeholder={t('Search spells')} onChange={(e) => setFilter(e.target.value)} />
+                )}
+                {[...new Set(spells.map((s) => ABILITIES[s].spellLevel ?? 0))].map((l) => {
+                  const shown = spells.filter((s) => (ABILITIES[s].spellLevel ?? 0) === l && (!filter || t(ABILITIES[s].name).toLowerCase().includes(filter.toLowerCase())));
+                  if (!shown.length) return null;
+                  return (
+                    <Section key={l} title={l === 0 ? t('Cantrips') : t('Spells of level {n}', { n: l })}>
+                      {shown.map((s) => (
+                        <PickRow key={s} icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={(ABILITIES[s].kind === 'story' ? `${t('Told by the Dungeon Master.')} ` : '') + t(ABILITIES[s].description)} selected={spell === s}
+                          focused={focus?.kind === 'spell' && focus.id === s}
+                          onClick={() => { setSpell(s); setHover(null); }} onFocus={() => { setFocus({ kind: 'spell', id: s }); setHover(spell === s ? null : { spell: s }); }} onLeave={() => setHover(null)} />
+                      ))}
+                    </Section>
+                  );
+                })}
+              </>
             )}
           </div>
           <div className="creator-mid">{detail}</div>

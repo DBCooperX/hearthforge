@@ -48,7 +48,7 @@ export const INV_SORTS = ['manual', 'type', 'rarity', 'value', 'weight', 'name']
 export type InvSort = (typeof INV_SORTS)[number];
 
 const GROUP_ORDER: ItemGroup[] = ['quest', 'weapon', 'armor', 'consumable', 'other'];
-const RARITY_ORDER = ['rare', 'uncommon', 'common'];
+const RARITY_ORDER = ['artifact', 'legendary', 'very_rare', 'rare', 'uncommon', 'common'];
 
 export interface BagEntry { item: ItemInstance; def: ItemDef; index: number }
 

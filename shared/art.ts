@@ -80,7 +80,9 @@ const EXTRA: Record<string, string> = {
 
 function slots(): IconSlot[] {
   const out = new Map<string, IconSlot>();
+  // Magic items borrow the picture of the gear they are built on, or of their kind (ring, amulet, vial).
   for (const def of Object.values(ITEMS)) {
+    if (def.base || def.srd === def.id) continue;
     const own = def.id.split('_').filter((w) => !/^(of|plus\d*|\d+)$/.test(w));
     out.set(def.id, { id: def.id, emoji: def.icon, name: def.name, keywords: [...new Set([def.id.replace(/_/g, ''), ...own.length > 1 ? [own.join('')] : [], ...(EXTRA[def.id] ?? '').split(' ').filter(Boolean), ...own])] });
   }
@@ -101,7 +103,9 @@ export const isIconSlot = (id: unknown): id is string => typeof id === 'string' 
 /** The slots to try for an item, most specific first. Story items are found through their emoji. */
 export function iconSlotsOf(def: Pick<ItemDef, 'id' | 'icon'>): string[] {
   const out: string[] = [];
-  if (ITEMS[def.id]) out.push(def.id);
+  const known = ITEMS[def.id];
+  if (known && !known.base && known.srd !== known.id) out.push(def.id);
+  if (known?.base) out.push(known.base);
   const generic = BY_EMOJI.get(def.icon);
   if (generic) out.push(generic);
   return out;

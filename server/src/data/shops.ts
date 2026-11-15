@@ -73,6 +73,14 @@ export const SHELVES: Record<ShopKind, Shelf> = {
   },
 };
 
+// Magic items of the SRD: a curiosity shop may have any uncommon one, now and then a rare one;
+// the alchemist brews the potions, the smith has plain +1 gear.
+const magic = (pick: (d: (typeof ITEMS)[string]) => boolean, chance: number): [string, number][] =>
+  Object.values(ITEMS).filter((d) => d.srd && pick(d)).map((d) => [d.id, chance]);
+SHELVES.curio.rare.push(...magic((d) => d.rarity === 'uncommon' && d.kind !== 'consumable', 0.06), ...magic((d) => d.rarity === 'rare' && d.kind !== 'consumable', 0.012));
+SHELVES.alchemist.rare.push(...magic((d) => d.kind === 'consumable' && d.rarity === 'uncommon', 0.15), ...magic((d) => d.kind === 'consumable' && d.rarity === 'rare', 0.05));
+SHELVES.smith.rare.push(...Object.values(ITEMS).filter((d) => /_plus1$/.test(d.id) && !SHELVES.smith.rare.some(([id]) => id === d.id)).map((d) => [d.id, 0.03] as [string, number]));
+
 const between = (rng: () => number, min: number, max: number) => min + Math.floor(rng() * (max - min + 1));
 
 /** Roll one restock. `scale` below 1 gives the thinner shelves of a village. */

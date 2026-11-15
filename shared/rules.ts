@@ -6,6 +6,7 @@
 // Coast. See CREDITS.md. Every explanation is written for Hearthforge in its own words, and
 // says where this game simplifies a rule.
 import type { Lang } from './i18n';
+import { SRD_SPELL_LISTS } from './spells';
 import { CASTING, GROUPS, OPTIONS, optionLine, CLASS_FEATURES, CLASS_IDS, EPIC_BOON_LEVEL, SUBCLASS_LEVEL, LEVEL_ABILITIES, SRD_CLASSES, featureLine, featuresAt, manaFor, maxSpellLevelFor, profBonusFor } from './classes';
 import type { Abilities, AbilityKey, BackgroundId, ClassId, FeatId, SlotId, SpeciesId } from './types';
 
@@ -86,39 +87,8 @@ export interface ClassDef {
 
 export { profBonusFor };
 
-/** Spells each list offers, by spell level (0 = cantrips). More arrive with the spell import. */
-export const SPELL_LISTS: Partial<Record<ClassId, Record<number, string[]>>> = {
-  wizard: {
-    0: ['fire_bolt', 'ray_of_frost', 'chill_touch', 'shocking_grasp', 'acid_splash', 'poison_spray'],
-    1: ['magic_missile', 'burning_hands', 'thunderwave', 'mage_armor'],
-    2: ['acid_arrow', 'shatter'],
-  },
-  cleric: {
-    0: ['sacred_flame'],
-    1: ['cure_wounds', 'healing_word', 'guiding_bolt', 'inflict_wounds'],
-    2: [],
-  },
-  bard: {
-    0: ['vicious_mockery'],
-    1: ['healing_word', 'cure_wounds', 'thunderwave'],
-    2: ['shatter'],
-  },
-  druid: {
-    0: ['produce_flame', 'starry_wisp', 'poison_spray'],
-    1: ['cure_wounds', 'healing_word', 'thunderwave'],
-    2: [],
-  },
-  sorcerer: {
-    0: ['fire_bolt', 'ray_of_frost', 'chill_touch', 'shocking_grasp', 'acid_splash', 'poison_spray'],
-    1: ['magic_missile', 'burning_hands', 'thunderwave', 'mage_armor'],
-    2: ['shatter'],
-  },
-  warlock: {
-    0: ['eldritch_blast', 'chill_touch', 'poison_spray'],
-    1: ['hex'],
-    2: [],
-  },
-};
+/** Spells each list offers, by spell level (0 = cantrips): the class lists of the SRD. */
+export const SPELL_LISTS: Partial<Record<ClassId, Record<number, string[]>>> = SRD_SPELL_LISTS;
 
 /** What a class starts with beyond its table: the spells it knows from the first day and how many it picks. */
 const START: Record<ClassId, { abilityIds?: string[]; cantrips?: { fixed: string[]; pick: number }; spellPicks?: number; weaponProfIds?: string[] }> = {
