@@ -7,6 +7,7 @@ import type { Connection } from '../net';
 import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
 import { tr } from '../../../shared/i18n';
+import { classLabel } from '../game/util';
 
 // ------------------------------------------------------------- entities
 
@@ -42,9 +43,21 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
   }
   for (const c of state.characters) {
     out.push({
-      name: c.name, kind: 'hero', icon: '🛡️', image: spriteUrl(c.classId), subtitle: t('Level {level} {class}', { level: c.level, class: t(c.className) }), description: t(CLASS_INFO[c.classId].blurb),
+      name: c.name, kind: 'hero', icon: '🛡️', image: spriteUrl(c.classId), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
       facts: [`${t('HP')} ${c.hp}/${c.maxHp} · ${t('AC')} ${c.ac}`, state.players.find((p) => p.id === c.ownerId)?.name ? t('Played by {name}', { name: state.players.find((p) => p.id === c.ownerId)!.name }) : ''].filter(Boolean),
     });
+  }
+  // Story items first: where a name is shared, the DM's own creation is the one the story means.
+  for (const i of Object.values(state.items)) {
+    const st = i.story;
+    if (!st) continue;
+    const holder = state.characters.find((c) => c.bag.some((b) => b?.defId === i.id) || Object.values(c.equipment).some((e) => e?.defId === i.id));
+    const facts = [
+      holder ? t('Carried by {name}', { name: holder.name }) : t('No longer with the party'),
+      st.foundAt ? t('Found on day {day} at {place}', { day: st.foundDay, place: st.foundAt }) : t('Found on day {day}', { day: st.foundDay }),
+      ...st.notes.map((n) => n.text),
+    ];
+    out.push({ name: i.name, kind: 'item', icon: i.icon, subtitle: `${t(st.category)}${st.quest ? ` · ${t('Quest item')}` : ''}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: i.description, facts });
   }
   for (const i of Object.values(ITEMS)) {
     out.push({ name: story(i.name), kind: 'item', icon: i.icon, subtitle: `${t(i.kind)}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: t(i.description), facts: [t('Worth {n} gp', { n: i.value })] });
@@ -62,7 +75,7 @@ const HoverContext = createContext<{ entities: Entity[]; pattern: RegExp | null;
 export function EntityProvider({ state, children }: { state: GameState; children: ReactNode }) {
   const t = useT();
   const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean } | null>(null);
-  const entities = useMemo(() => buildEntities(state, t), [state.memory, state.world?.locations, state.world?.party, state.characters, state.players, state.language, t]);
+  const entities = useMemo(() => buildEntities(state, t), [state.memory, state.items, state.world?.locations, state.world?.party, state.characters, state.players, state.language, t]);
   const pattern = useMemo(() => {
     const names = [...new Set(entities.map((e) => e.name))].filter((n) => n.length > 2).sort((a, b) => b.length - a.length);
     if (!names.length) return null;

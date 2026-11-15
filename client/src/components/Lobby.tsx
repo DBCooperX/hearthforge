@@ -10,6 +10,7 @@ import { playerId, type Connection } from '../net';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
 import { MusicControl } from '../music';
+import { classLabel } from '../game/util';
 
 export function JoinScreen({ conn }: { conn: Connection }) {
   const t = useT();
@@ -85,7 +86,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
           {state.characters.map((c) => (
             <li key={c.id}>
               <img className="pixel" src={spriteUrl(c.classId)} alt="" />
-              <span><b>{c.name}</b> · {t(SPECIES[c.speciesId]?.name ?? '')} {t(c.className)}</span>
+              <span><b>{c.name}</b> · {t(SPECIES[c.speciesId]?.name ?? '')} {classLabel(c, t)}</span>
               <span className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</span>
               {c.ownerId === playerId && <button className="link" onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>{t('remove')}</button>}
             </li>

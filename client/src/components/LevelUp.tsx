@@ -5,23 +5,25 @@ import { ABILITIES } from '../../../shared/content';
 import { applyFeat, armorClass, castingAbility, classSpellList, spellOptions, weaponAttack, type Sheet } from '../../../shared/build';
 import { recommendFeat } from '../../../shared/recommend';
 import { ABILITY_HELP, CLASSES, CLASS_GUIDE, FEATS, loc } from '../../../shared/rules';
-import { SLOT_IDS, abilityMod, type Character, type FeatId, type FeatPick } from '../../../shared/types';
+import { SLOT_IDS, abilityMod, type Character, type FeatId, type FeatPick, type ItemDef } from '../../../shared/types';
 import { ABILITY_NAMES } from '../../../shared/content';
+import { itemDef } from '../../../shared/items';
 import { spriteUrl } from '../game/sprites';
 import { useLang, useT } from '../i18n';
 import type { Connection } from '../net';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, featProblem, type Focus } from './Guide';
 
 /** A character in play, in the shape the stat preview understands. */
-export function sheetOf(c: Character): Sheet {
+export function sheetOf(c: Character, items?: Record<string, ItemDef>): Sheet {
   const worn = Object.fromEntries(SLOT_IDS.map((s) => [s, c.equipment[s]?.defId])) as Sheet['equipment'];
-  const atk = weaponAttack(c, c.equipment.mainHand?.defId);
+  const defs = Object.fromEntries(SLOT_IDS.map((s) => [s, c.equipment[s] ? itemDef(items, c.equipment[s]!.defId) : null]));
+  const atk = weaponAttack(c, defs.mainHand);
   const cast = castingAbility(c);
   const hasSpells = c.abilityIds.some((id) => ABILITIES[id]?.spellLevel !== undefined);
   return {
     classId: c.classId, level: c.level, abilities: c.abilities, maxHp: c.maxHp, hp: c.hp, maxMana: c.maxMana, mana: c.mana,
     skills: c.skills, abilityIds: c.abilityIds, feats: c.feats, features: c.features, profBonus: c.profBonus,
-    ac: armorClass(c, worn), speed: c.speed,
+    ac: armorClass(c, defs), speed: c.speed,
     initiative: abilityMod(c.abilities.dex) + (c.feats.includes('alert') ? c.profBonus : 0),
     expertise: c.expertise, saves: CLASSES[c.classId].saves, resist: c.resist, equipment: worn, bag: [], gold: 0,
     attack: { name: atk.name, bonus: atk.bonus, damage: atk.damage, type: atk.type },
@@ -29,9 +31,9 @@ export function sheetOf(c: Character): Sheet {
   };
 }
 
-interface Props { character: Character; conn: Connection; onClose: () => void }
+interface Props { character: Character; items?: Record<string, ItemDef>; conn: Connection; onClose: () => void }
 
-export function LevelUp({ character: c, conn, onClose }: Props) {
+export function LevelUp({ character: c, items, conn, onClose }: Props) {
   const t = useT();
   const { lang } = useLang();
   const choice = c.pending[0];
@@ -40,13 +42,13 @@ export function LevelUp({ character: c, conn, onClose }: Props) {
   const [focus, setFocus] = useState<Focus>(null);
   const [hover, setHover] = useState<{ feat?: FeatPick; spell?: string } | null>(null);
 
-  const now = useMemo(() => sheetOf(c), [c]);
+  const now = useMemo(() => sheetOf(c, items), [c, items]);
   const after = (pick: { feat?: FeatPick; spell?: string } | null) => {
     if (!pick) return null;
     const copy = structuredClone(c);
     if (pick.feat) applyFeat(copy, pick.feat, false);
     if (pick.spell) copy.abilityIds.unshift(pick.spell);
-    return sheetOf(copy);
+    return sheetOf(copy, items);
   };
   const next = useMemo(() => after(hover ?? (feat ? { feat } : spell ? { spell } : null)), [hover, feat, spell, c]);
   if (!choice) return null;

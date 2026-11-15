@@ -2,12 +2,14 @@
 // The server stays authoritative: Claude proposes through tools, the engine
 // validates and resolves with real dice, and Claude narrates the result.
 import Anthropic from '@anthropic-ai/sdk';
+import { BIOMES } from '../../../shared/battlemap';
 import { ITEMS } from '../../../shared/content';
+import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
-import { DISPOSITIONS, LOCATION_KINDS, MOODS, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
+import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
 import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
-import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, transcript } from './context';
+import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, Scene } from './types';
@@ -104,6 +106,32 @@ const STORY_TOOLS: Tool[] = [
     item_id: { type: 'string', enum: Object.keys(ITEMS) },
     quantity: int('How many. Usually 1.'),
   }),
+  tool('give_story_item', "Put something that is not in the catalogue into a hero's backpack: a clue, a keepsake, a letter, a key, a trophy, odd loot. Call it whenever a hero pockets, is handed or buys such a thing, so it shows up in their inventory. Reusing the name of an existing item hands out more of it.", {
+    character_id: str('Id of the hero who receives it.'),
+    name: str('Short name as the players will see it, for example "Notched bone splinter". Use this exact name whenever you mention the item afterwards.'),
+    description: str('One or two sentences on what it is and looks like, as the hero would see it. No hidden truths.'),
+    category: { type: 'string', enum: [...ITEM_CATEGORIES], description: 'quest: needed for a quest. clue: evidence or a lead. key: opens something. document: letters, maps, books. trinket: keepsakes and curios. material: ingredients, pelts, ore. consumable, weapon, armor, tool: as named.' },
+    icon: { type: 'string', enum: ITEM_ICON_IDS, description: 'The picture that fits best, or "auto" to let the server choose from the name.' },
+    rarity: { type: 'string', enum: [...RARITIES], description: 'common for nearly everything. uncommon or rare only for things that are truly special.' },
+    value: int('What a merchant would pay in gold pieces. 0 for things with no market value. Capped by the server.'),
+    quantity: int('How many. Usually 1.'),
+    quest_item: { type: 'boolean', description: 'True if losing it would break a quest or a lead. Such items cannot leave the party by accident.' },
+    base_item: { type: 'string', enum: ['none', ...Object.keys(ITEMS)], description: 'For gear that should work in play, the catalogue item whose rules it uses: an orcish cleaver might use "handaxe", a bitter draught "potion_healing". "none" for everything else. Story items never have rules of their own.' },
+    note: str('Where it came from or what is known about it so far, in one line, or an empty string.'),
+  }),
+  tool('update_story_item', 'Change a story item as the party learns more: add what they found out, rewrite its description, or rename it once its true nature is known.', {
+    item: str('Current name or id of the story item.'),
+    name: str('New name, or an empty string to keep the name.'),
+    description: str('New description, or an empty string to keep it.'),
+    note: str('A new fact the party learned about it, or an empty string.'),
+    quest_item: { type: 'string', enum: ['unchanged', 'yes', 'no'], description: 'Change whether it is protected as a quest item.' },
+  }),
+  tool('take_item', "Remove an item from a hero because the story used it up, or the party sold it, gave it away, or lost it. Works for catalogue and story items. Pair a sale with change_gold.", {
+    character_id: str('Id of the hero who has it, or an empty string to look through the whole party.'),
+    item: str('Name or id of the item.'),
+    quantity: int('How many to take. Usually 1.'),
+    allow_quest_item: { type: 'boolean', description: 'Quest items are refused unless this is true. Set it only when the story truly consumes the item or the party knowingly hands it over.' },
+  }),
   tool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
     monsters: {
       type: 'array',
@@ -111,6 +139,7 @@ const STORY_TOOLS: Tool[] = [
       items: { type: 'object', properties: { type: { type: 'string', enum: Object.keys(MONSTERS) }, count: int('How many of this type.') }, required: ['type', 'count'], additionalProperties: false },
     },
     reason: str('One sentence on how the fight started, for the record.'),
+    setting: { type: 'string', enum: ['here', ...BIOMES], description: 'What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup.' },
   }),
   tool('delve', 'The party pushes into the next uncleared section of the dungeon it is standing in. The server sets up that fight.', {}),
   tool('move_to_place', "Move the party to another known place in its current hex, such as into a tavern in the town it is in.", {
@@ -237,9 +266,18 @@ export class ClaudeDM implements DungeonMaster {
             return game.changeGold(Number(i.amount), String(i.reason ?? ''));
           case 'give_item':
             return game.grantItem(String(i.character_id), String(i.item_id), Number(i.quantity));
+          case 'give_story_item':
+            return game.giveStoryItem({
+              characterId: String(i.character_id), name: String(i.name ?? ''), description: String(i.description ?? ''), category: i.category, icon: String(i.icon ?? 'auto'),
+              rarity: String(i.rarity ?? 'common'), value: Number(i.value), quantity: Number(i.quantity), quest: !!i.quest_item, baseItemId: String(i.base_item ?? 'none'), note: String(i.note ?? ''),
+            });
+          case 'update_story_item':
+            return game.updateStoryItem({ item: String(i.item ?? ''), name: String(i.name ?? ''), description: String(i.description ?? ''), note: String(i.note ?? ''), ...(i.quest_item === 'yes' || i.quest_item === 'no' ? { quest: i.quest_item === 'yes' } : {}) });
+          case 'take_item':
+            return game.takeItem({ characterId: String(i.character_id ?? ''), item: String(i.item ?? ''), quantity: Number(i.quantity), allowQuest: !!i.allow_quest_item });
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count) }));
-            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? '') });
+            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             return { started: true, enemies: game.s.monsters.map((m) => m.name), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };
           }
@@ -331,9 +369,10 @@ export class ClaudeDM implements DungeonMaster {
 
   async respond(game: Game, playerName: string, text: string, onUpdate: () => Promise<void>): Promise<Scene | null> {
     const inCombat = game.s.phase === 'combat';
+    const who = playerHeroes(game, playerName);
     const ask = inCombat
-      ? `In the middle of the fight, the player ${playerName} says to you: ${JSON.stringify(text)}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
-      : `The player ${playerName} says or does this: ${JSON.stringify(text)}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene.`;
+      ? `In the middle of the fight, the player ${playerName}${who} says to you: ${JSON.stringify(text)}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
+      : `The player ${playerName}${who} says or does this: ${JSON.stringify(text)}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. Their message is already shown to everyone, so open with how the world answers it instead of repeating it.`;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
@@ -352,7 +391,7 @@ export class ClaudeDM implements DungeonMaster {
     this.maintaining = true;
     try {
       const old = mem.journal.slice(0, mem.journal.length - JOURNAL_KEEP);
-      const prompt = `Story so far:\n${mem.chronicle || '(nothing yet)'}\n\nNew journal entries, oldest first:\n${old.map((j) => `- Day ${j.day}: ${j.text}`).join('\n')}\n\nRewrite the story so far to include the new entries. Keep names, promises, debts, grudges and unresolved threads; drop colour. At most 250 words of plain prose.`;
+      const prompt = `Story so far:\n${mem.chronicle || '(nothing yet)'}\n\nNew journal entries, oldest first:\n${old.map((j) => `- Day ${j.day}: ${j.text}`).join('\n')}\n\nRewrite the story so far to include the new entries. Keep names, promises, debts, grudges and unresolved threads; drop colour. At most 250 words of plain prose${game.lang === 'de' ? ', written in German' : ''}.\n\nThe heroes and their genders, which must stay exactly as given: ${genderRoster(game)}. Keep the gender of every other person as the entries have it.`;
       const out = await this.converse('memory summary', 'background', prompt, [], async () => null, 'You keep the campaign notes for a Dungeons & Dragons game. You write compact, factual summaries that a Dungeon Master can rely on later.');
       if (out.text) {
         mem.chronicle = out.text.slice(0, 2500);
@@ -364,6 +403,14 @@ export class ClaudeDM implements DungeonMaster {
       this.maintaining = false;
     }
   }
+}
+
+/** Which heroes a player controls, so the DM knows who is speaking without having to guess. */
+function playerHeroes(game: Game, playerName: string): string {
+  const player = game.s.players.find((p) => p.name === playerName);
+  const heroes = player ? game.s.characters.filter((c) => c.ownerId === player.id && !c.dead).map((c) => c.name) : [];
+  if (!heroes.length) return '';
+  return heroes.length === 1 ? ` (who plays ${heroes[0]})` : ` (who plays ${heroes.join(', ')}; unless they say which hero acts, treat it as the party acting)`;
 }
 
 export function createDM(env: NodeJS.ProcessEnv): ClaudeDM | null {

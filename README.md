@@ -7,14 +7,14 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 ## What's in the game
 
 - **Party panel** on the left: portrait, HP and mana bars, armor class and conditions for every hero.
-- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear.
+- **Inventory overlay** (press `i`): paper-doll equipment slots, a 20-slot backpack, shared party gold, drag-and-drop, double-click to equip or drink, and drop an item on another hero to hand it over. Armor class updates as you change gear. Things the Dungeon Master invents during play (a clue, a letter, a strange key) land in the backpack too, with a fitting icon, a quest marker and their story notes; click an item to read them.
 - **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
 - **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
 - **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal.
 - **Premade heroes or your own**: eight ready-made heroes on flip cards with their story and numbers, or a guided creator: class, species, background, ability scores (standard array, point buy or dice rolled by the server), skills, talents, equipment, name, gender, looks and backstory. Every option explains what it is, what it does in numbers and who it is good for, with recommended picks per class, tooltips on rules terms and a live preview of your sheet. A premade can be used as it is or customized.
 - **Level-up choices**: a subclass at level 3 (Champion, Thief, Evoker, Life Domain), new spells, and a feat or ability score increase at level 4, each with the same explanations and preview.
 - **Progression**: XP from fights and quests, levels 1 to 5 with a level-up summary, and a full character sheet (press `c`).
-- **Turn-based 5e combat** on a battle map that is generated for each fight: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
+- **Turn-based 5e combat** on a battle map that is generated for each fight and matches where it breaks out (swamp, forest, plains, hills, mountains, road, bridge, camp, town streets, tavern, cave, ruin or dungeon). Mud, undergrowth, rubble and shallow water are difficult terrain; trees, boulders and furniture give half cover against shots. Also: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
 - **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
 - **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
 - **A seat at the tavern**: dark wood, parchment scene cards, brass and candlelight, with bundled book fonts. Nothing is loaded from the internet by the browser.
@@ -213,7 +213,8 @@ Layout:
 - `shared/` types and content (items, abilities) used by both sides
 - `shared/i18n.ts` and `shared/i18n-de.ts` translations. English text is the lookup key, so a missing entry falls back to English, and `server/test/i18n.test.ts` fails when the interface or a game term has no German
 - `server/src/game/` the rules engine: dice, movement, line of sight, combat, inventory
-- `server/src/game/world.ts` overworld generation, exploration and battle arenas; `shared/hex.ts` hex maths and the route planner
+- `shared/battlemap.ts` battle map layouts per kind of place, movement costs and cover; `client/src/game/battleTiles.ts` draws their tiles
+- `server/src/game/world.ts` overworld generation and exploration; `shared/hex.ts` hex maths and the route planner
 - `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback
 - `server/src/data/` classes, monsters and the starting region
 - `client/src/` React UI, the SVG hex map and the PixiJS battle map

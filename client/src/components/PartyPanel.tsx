@@ -3,6 +3,7 @@ import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc }
 import { spriteUrl } from '../game/sprites';
 import { playerId } from '../net';
 import { useT } from '../i18n';
+import { classLabel } from '../game/util';
 
 interface Props {
   state: GameState;
@@ -57,7 +58,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             <div className="info">
               <div className="name">
                 <b>{c.name}</b>
-                <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{t(c.className)} {c.level}</button>
+                <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{classLabel(c, t)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} />
               {c.maxMana > 0 && <Bar kind="mana" value={c.mana} max={c.maxMana} />}

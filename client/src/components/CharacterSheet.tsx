@@ -1,7 +1,8 @@
-import { ABILITIES, ABILITY_NAMES, CLASS_INFO, ITEMS, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
-import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState } from '../../../shared/types';
+import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
+import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { spriteUrl } from '../game/sprites';
-import { weaponSummary } from '../game/util';
+import { itemDef } from '../../../shared/items';
+import { weaponSummary, classLabel } from '../game/util';
 import { BACKGROUNDS, CLASSES, SPECIES } from '../../../shared/rules';
 import { useLang, useT } from '../i18n';
 import { featureText } from './Guide';
@@ -47,7 +48,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
             <img className="pixel" src={spriteUrl(c.classId)} alt="" />
             <div>
               <h1 style={{ color: CLASS_INFO[c.classId].color }}>{c.name}</h1>
-              <p>{t('Level {level} {class}', { level: c.level, class: `${t(SPECIES[c.speciesId]?.name ?? '')} ${t(c.className)}`.trim() })}{c.subclass ? ` (${t(c.subclass)})` : ''} · {t(BACKGROUNDS[c.backgroundId]?.name ?? '')}{owner ? ` · ${t('played by {name}', { name: owner.name })}` : ''}</p>
+              <p>{t('Level {level} {class}', { level: c.level, class: `${t(SPECIES[c.speciesId]?.name ?? '')} ${classLabel(c, t)}`.trim() })}{c.subclass ? ` (${t(c.subclass)})` : ''} · {t(BACKGROUNDS[c.backgroundId]?.name ?? '')}{c.gender !== 'neutral' ? ` · ${t(PRONOUNS[c.gender])}` : ''}{owner ? ` · ${t('played by {name}', { name: owner.name })}` : ''}</p>
               {mine && c.pending.length > 0 && onLevelUp && <button className="primary levelup-btn" onClick={() => onLevelUp(c)}>⬆ {t('Level-up choice waiting')}</button>}
               <div className="xp" title={t('Experience')}>
                 <div className="fill" style={{ width: `${pct}%` }} />
@@ -84,10 +85,10 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                 </tbody>
               </table>
               <h3>{t('Equipment')}</h3>
-              <p className="small">{t('Attack')}: {weaponSummary(c, t)}</p>
+              <p className="small">{t('Attack')}: {weaponSummary(state, c, t)}</p>
               <ul className="plain">
                 {worn.length === 0 && <li className="muted">{t('Nothing equipped.')}</li>}
-                {worn.map((s) => <li key={s}><small>{t(SLOT_LABELS[s])}</small> {ITEMS[c.equipment[s]!.defId].icon} {t(ITEMS[c.equipment[s]!.defId].name)}</li>)}
+                {worn.map((s) => <li key={s}><small>{t(SLOT_LABELS[s])}</small> {itemDef(state.items, c.equipment[s]!.defId)?.icon} {t(itemDef(state.items, c.equipment[s]!.defId)?.name ?? '')}</li>)}
               </ul>
             </div>
             <div>

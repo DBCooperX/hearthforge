@@ -1,4 +1,5 @@
 // Types shared between the server (authoritative game state) and the browser client.
+import type { Biome } from './battlemap';
 
 import type { Lang } from './i18n';
 
@@ -11,6 +12,26 @@ export type SlotId = (typeof SLOT_IDS)[number];
 export const BAG_SIZE = 20;
 
 export type ItemKind = 'weapon' | 'armor' | 'shield' | 'consumable' | 'wondrous' | 'misc';
+
+export const ITEM_CATEGORIES = ['quest', 'clue', 'key', 'document', 'trinket', 'material', 'consumable', 'weapon', 'armor', 'tool'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
+export const RARITIES = ['common', 'uncommon', 'rare'] as const;
+
+/** What sets an item the Dungeon Master invented apart from a catalogue item. */
+export interface StoryItemInfo {
+  category: ItemCategory;
+  /** Quest items stay with the party until the story itself uses them up. */
+  quest: boolean;
+  /** Catalogue item whose rules it uses (a strange dagger still fights as a dagger), or null. */
+  baseId: string | null;
+  /** When and where the party came by it. */
+  foundDay: number;
+  foundAt: string | null;
+  /** What the party has learned about it since, oldest first. */
+  notes: { day: number; text: string }[];
+  /** Reserved for phase 3: id of a generated, cached picture of this item. */
+  imageId: string | null;
+}
 
 export interface ItemDef {
   id: string;
@@ -44,11 +65,12 @@ export interface ItemDef {
   consumable?: { heal: string };
   stackable?: boolean;
   rarity?: 'common' | 'uncommon' | 'rare';
+  /** Set on items the Dungeon Master created during play. Their name and description are in the table's language. */
+  story?: StoryItemInfo;
 }
 
 export type SpeciesId = 'human' | 'dwarf' | 'elf' | 'halfling' | 'gnome' | 'orc' | 'dragonborn' | 'tiefling' | 'goliath';
 export type BackgroundId = 'acolyte' | 'criminal' | 'sage' | 'soldier';
-export type Gender = 'female' | 'male' | 'neutral';
 export const GENDERS: Gender[] = ['female', 'male', 'neutral'];
 export type FeatId = 'asi' | 'alert' | 'savage_attacker' | 'skilled' | 'magic_initiate_cleric' | 'magic_initiate_wizard';
 
@@ -113,12 +135,17 @@ export interface ItemInstance {
 
 export type ClassId = 'fighter' | 'rogue' | 'wizard' | 'cleric';
 
+/** A hero's gender. It fixes the pronouns and, in German, the grammatical forms the story uses for them. */
+export type Gender = 'female' | 'male' | 'neutral';
+export const PRONOUNS: Record<Gender, string> = { female: 'she/her', male: 'he/him', neutral: 'they/them' };
+
 export interface Character {
   id: string;
   ownerId: string;
   name: string;
   classId: ClassId;
   className: string;
+  gender: Gender;
   level: number;
   abilities: Abilities;
   profBonus: number;
@@ -149,8 +176,6 @@ export interface Character {
   features: string[];
   speciesId: SpeciesId;
   backgroundId: BackgroundId;
-  /** How the Dungeon Master refers to the hero: she, he or they. */
-  gender: Gender;
   /** Set at level 3. */
   subclass: string | null;
   feats: string[];
@@ -377,13 +402,15 @@ export interface GameState {
   room: string;
   phase: Phase;
   /** The tactical battle map. Only meaningful while phase is 'combat'. */
-  map: { width: number; height: number; rows: string[] };
+  map: { width: number; height: number; rows: string[]; biome: Biome };
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;
   /** The current fight includes a boss. Drives the music. */
   bossFight: boolean;
   gold: number;
+  /** Items the Dungeon Master created for this table, by id. Catalogue items are in shared/content.ts. */
+  items: Record<string, ItemDef>;
   shortRestsLeft: number;
   log: LogEntry[];
   players: PlayerInfo[];

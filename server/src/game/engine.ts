@@ -6,6 +6,7 @@ import { ABILITIES, ABILITY_NAMES, ITEMS } from '../../../shared/content';
 import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isProficient, spellOptions, weaponAttack } from '../../../shared/build';
 import { DEFAULT_PREMADE, PREMADE_BY_ID } from '../../../shared/premades';
 import { BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, loc, type L } from '../../../shared/rules';
+import { pickIcon } from '../../../shared/items';
 import {
   COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex,
   type Compass, type Hex,
@@ -13,6 +14,7 @@ import {
 import {
   BAG_SIZE,
   GENDERS,
+  ITEM_CATEGORIES,
   MAX_LEVEL,
   SLOT_IDS,
   XP_THRESHOLDS,
@@ -27,6 +29,7 @@ import {
   type Disposition,
   type GameState,
   type InvLoc,
+  type ItemCategory,
   type ItemDef,
   type ItemInstance,
   type LevelUpInfo,
@@ -42,12 +45,13 @@ import {
   type SceneMeta,
   type SlotId,
 } from '../../../shared/types';
-import { CLASSES, MANA_BY_LEVEL, profBonusFor } from '../data/classes';
+import { CLASSES, MANA_BY_LEVEL, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, type MonsterAttack, type MonsterDef } from '../data/monsters';
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
-import { buildArena, generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
+import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
+import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
 
 export class GameError extends Error {}
 
@@ -75,11 +79,15 @@ export interface InternalState {
   phase: Phase;
   /** Battle map rows; empty outside combat. */
   rows: string[];
+  /** What kind of place the battle map shows. Missing in saves from before biomes. */
+  biome?: Biome;
   characters: Character[];
   monsters: Monster[];
   combat: CombatState | null;
   encounter: EncounterState | null;
   gold: number;
+  /** Items the DM created during play, by id. */
+  items: Record<string, ItemDef>;
   shortRestsLeft: number;
   log: LogEntry[];
   logSeq: number;
@@ -155,11 +163,12 @@ export class Game {
     const usable = saved && saved.memory && typeof saved.lastLongRest === 'number' && (saved.phase === 'lobby' || saved.world);
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
     this.s.rolled ??= {};
+    this.s.items ??= {}; // saves from before story items
     // Heroes saved before the character creator existed get the fields it added.
     for (const c of this.s.characters) {
       c.speciesId ??= 'human';
       c.backgroundId ??= 'soldier';
-      c.gender ??= 'neutral';
+      c.gender ??= defaultGender(c.name); // premade names get theirs, anything else stays neutral
       c.subclass ??= c.level >= 3 ? CLASSES[c.classId].subclass.name : null;
       c.feats ??= [];
       c.expertise ??= [];
@@ -181,6 +190,7 @@ export class Game {
       combat: null,
       encounter: null,
       gold: 0,
+      items: {},
       shortRestsLeft: 2,
       log: [],
       logSeq: 0,
@@ -238,10 +248,28 @@ export class Game {
     return this.s.rows[y][x];
   }
 
-  private blocksSight(x: number, y: number) { return this.tile(x, y) === '#'; }
+  private blocksSight(x: number, y: number) { return tileBlocksSight(this.tile(x, y)); }
 
   /** Can anything ever stand here? */
-  private walkable(x: number, y: number) { return this.tile(x, y) === '.'; }
+  private walkable(x: number, y: number) { return tileWalkable(this.tile(x, y)); }
+
+  /** The part of a path that a movement budget pays for. Difficult terrain costs double. */
+  private afford(path: Pt[], budget: number): { walked: Pt[]; cost: number } {
+    const walked: Pt[] = [];
+    let cost = 0;
+    for (const p of path) {
+      const c = tileCost(this.tile(p.x, p.y));
+      if (cost + c > budget) break;
+      cost += c;
+      walked.push(p);
+    }
+    return { walked, cost };
+  }
+
+  private pathCost(path: Pt[]) { return path.reduce((n, p) => n + tileCost(this.tile(p.x, p.y)), 0); }
+
+  /** Half cover for the target of a shot: +2 AC behind a tree, boulder or furniture. */
+  private coverBonus(from: Pt, to: Pt) { return cheb(from, to) > 1 && hasCover(this.s.rows, from, to) ? COVER_BONUS : 0; }
 
   char(id: string): Character {
     const c = this.s.characters.find((c) => c.id === id);
@@ -283,35 +311,42 @@ export class Game {
   }
 
   /**
-   * Breadth-first path. `canEnter` decides which tiles may be walked through;
-   * `isGoal` decides where to stop. Returns the path excluding the start tile.
+   * Cheapest path by movement cost (difficult terrain costs double). `canEnter`
+   * decides which tiles may be walked through; `isGoal` decides where to stop.
+   * Returns the path excluding the start tile.
    */
   private bfs(start: Pt, isGoal: (p: Pt) => boolean, canEnter: (p: Pt) => boolean, maxNodes = 4000): Pt[] | null {
     if (isGoal(start)) return [];
-    const prev = new Map<string, string | null>([[key(start.x, start.y), null]]);
-    const queue: Pt[] = [start];
+    const startKey = key(start.x, start.y);
+    const best = new Map<string, { cost: number; prev: string | null }>([[startKey, { cost: 0, prev: null }]]);
+    // Steps cost 1 or 2, so one bucket per total cost is a complete priority queue.
+    const buckets: Pt[][] = [[start]];
     let found: Pt | null = null;
-    while (queue.length && prev.size < maxNodes) {
-      const cur = queue.shift()!;
-      for (const d of DIRS) {
-        const n = { x: cur.x + d.x, y: cur.y + d.y };
-        const k = key(n.x, n.y);
-        if (prev.has(k) || !this.walkable(n.x, n.y) || !canEnter(n)) continue;
-        // No cutting corners around obstacles.
-        if (d.x !== 0 && d.y !== 0 && (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y))) continue;
-        prev.set(k, key(cur.x, cur.y));
-        if (isGoal(n)) { found = n; break; }
-        queue.push(n);
+    for (let cost = 0; cost < buckets.length && !found && best.size < maxNodes; cost++) {
+      for (const cur of buckets[cost] ?? []) {
+        if (best.get(key(cur.x, cur.y))!.cost !== cost) continue;
+        if (isGoal(cur)) { found = cur; break; }
+        for (const d of DIRS) {
+          const n = { x: cur.x + d.x, y: cur.y + d.y };
+          if (!this.walkable(n.x, n.y) || !canEnter(n)) continue;
+          // No cutting corners around obstacles.
+          if (d.x !== 0 && d.y !== 0 && (!this.walkable(cur.x + d.x, cur.y) || !this.walkable(cur.x, cur.y + d.y))) continue;
+          const c = cost + tileCost(this.tile(n.x, n.y));
+          const k = key(n.x, n.y);
+          const seen = best.get(k);
+          if (seen && seen.cost <= c) continue;
+          best.set(k, { cost: c, prev: key(cur.x, cur.y) });
+          (buckets[c] ??= []).push(n);
+        }
       }
-      if (found) break;
     }
     if (!found) return null;
     const path: Pt[] = [];
     let k: string | null = key(found.x, found.y);
-    while (k && k !== key(start.x, start.y)) {
+    while (k && k !== startKey) {
       const [x, y] = k.split(',').map(Number);
       path.unshift({ x, y });
-      k = prev.get(k) ?? null;
+      k = best.get(k)?.prev ?? null;
     }
     return path;
   }
@@ -329,15 +364,24 @@ export class Game {
     if (p) p.connected = connected;
   }
 
+  /** An item's definition: from the catalogue, or one the DM created for this table. */
+  def(defId: string): ItemDef {
+    return ITEMS[defId] ?? this.s.items[defId];
+  }
+
   private newItem(defId: string, qty = 1): ItemInstance {
-    if (!ITEMS[defId]) throw new Error(`Unknown item ${defId}`);
+    if (!this.def(defId)) throw new Error(`Unknown item ${defId}`);
     return { uid: this.uid('i'), defId, qty };
   }
 
   /** One click in the old lobby: the default premade hero of that class. */
   addCharacter(playerId: string, classId: ClassId, name: string): Character {
     if (!CLASSES[classId]) throw new GameError(this.t`Unknown class`);
-    return this.addPremade(playerId, DEFAULT_PREMADE[classId], name);
+    const pre = PREMADE_BY_ID[DEFAULT_PREMADE[classId]];
+    const own = String(name ?? '').trim();
+    // A name of the player's own says nothing about gender, looks or history, so those stay open.
+    if (own && own !== pre.spec.name) return this.createCharacter(playerId, { ...pre.spec, name: own, gender: 'neutral', appearance: '', backstory: '', premadeId: undefined });
+    return this.addPremade(playerId, pre.id, '');
   }
 
   addPremade(playerId: string, premadeId: string, name: string): Character {
@@ -604,7 +648,7 @@ export class Game {
   // ----------------------------------------------------------------- combat
 
   /** Set up a battle map and roll initiative. Group counts are for a party of four. */
-  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string }) {
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string }) {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
@@ -621,8 +665,9 @@ export class Game {
     if (!chosen.length) throw new GameError(this.t`An encounter needs at least one monster`);
     s.travel = null;
     const place = this.place();
-    const indoors = opts.source === 'dungeon' || (!!place && ['dungeon', 'cave', 'tavern', 'shop', 'temple'].includes(place.kind));
-    s.rows = buildArena(trueTerrain(this.world, this.world.party), indoors, this.rng);
+    const terrain = trueTerrain(this.world, this.world.party);
+    s.biome = chooseBiome({ setting: opts.setting, placeKind: place?.kind, terrain, dungeonDelve: opts.source === 'dungeon' });
+    s.rows = buildBattleMap(s.biome, this.rng, terrain);
     const midY = Math.floor(this.height / 2);
     const column = (xs: number[]) => {
       const out: Pt[] = [];
@@ -798,7 +843,7 @@ export class Game {
     for (const it of items) {
       const qty = it.qty ?? 1;
       const taker = this.s.characters.find((c) => !c.dead && this.addToBag(c, it.id, qty));
-      got.push(`${qty > 1 ? `${qty}× ` : ''}${this.n(ITEMS[it.id].name)} ${taker ? `(${taker.name})` : this.t`(left behind, bags are full)`}`);
+      got.push(`${qty > 1 ? `${qty}× ` : ''}${this.n(this.def(it.id).name)} ${taker ? `(${taker.name})` : this.t`(left behind, bags are full)`}`);
     }
     return got;
   }
@@ -951,11 +996,12 @@ export class Game {
     const path = this.bfs(c, (p) => p.x === tx && p.y === ty, canEnter);
     if (!path) throw new GameError(this.t`No path there`);
     if (s.combat.movementLeft <= 0) throw new GameError(this.t`No movement left this turn`);
-    const walked = path.slice(0, s.combat.movementLeft);
+    const { walked, cost } = this.afford(path, s.combat.movementLeft);
+    if (!walked.length) throw new GameError(this.t`Not enough movement left for that ground`);
     const end = walked[walked.length - 1];
     c.x = end.x;
     c.y = end.y;
-    s.combat.movementLeft -= walked.length;
+    s.combat.movementLeft -= cost;
     this.moves.push({ id: c.id, path: walked });
   }
 
@@ -1011,7 +1057,7 @@ export class Game {
 
   private weaponOf(c: Character): ItemDef | null {
     const it = c.equipment.mainHand;
-    const def = it ? ITEMS[it.defId] : null;
+    const def = it ? this.def(it.defId) : null;
     return def?.weapon ? def : null;
   }
 
@@ -1033,7 +1079,7 @@ export class Game {
     const m = this.targetMonster(c, targetId, ranged ? ranged.long : 5);
     const dist = cheb(c, m) * 5;
     const strMod = abilityMod(c.abilities.str);
-    const atk = weaponAttack(c, w?.id);
+    const atk = weaponAttack(c, w);
     const mod = atk.mod, bonus = atk.bonus;
     const guided = m.conditions.includes('guided');
     const mode = rollMode(guided, !!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c)));
@@ -1042,9 +1088,10 @@ export class Game {
     const r = this.heroD20(c, mode);
     const total = r.value + bonus;
     const crit = r.value >= (c.classId === 'fighter' && c.level >= 3 ? 19 : 20);
-    const ac = MONSTERS[m.defId].ac;
+    const cover = ranged ? this.coverBonus(c, m) : 0;
+    const ac = MONSTERS[m.defId].ac + cover;
     const label = w ? this.n(w.name) : this.t`an unarmed strike`;
-    const head = this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
+    const head = this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
       ({ actor: c.name, label: w ? this.n(w.name) : this.t`Unarmed strike`, die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
     if (r.value === 1 || (!crit && total < ac)) {
@@ -1164,8 +1211,9 @@ export class Game {
         const r = this.heroD20(c, mode);
         const total = r.value + bonus;
         const crit = r.value === 20;
-        const ac = MONSTERS[m.defId].ac;
-        const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.`;
+        const cover = this.coverBonus(c, m);
+        const ac = MONSTERS[m.defId].ac + cover;
+        const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
         const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
           ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
         if (r.value === 1 || (!crit && total < ac)) {
@@ -1274,7 +1322,7 @@ export class Game {
 
     let target = targets.find((t) => t.id === intent.targetId);
     if (!target) {
-      const scored = targets.map((t) => ({ t, d: pathToAdjacent(t)?.length ?? 999 }));
+      const scored = targets.map((t) => { const p = pathToAdjacent(t); return { t, d: p ? this.pathCost(p) : 999 }; });
       scored.sort((a, b) => a.d - b.d || cheb(m, a.t) - cheb(m, b.t));
       target = scored[0].t;
     }
@@ -1284,7 +1332,7 @@ export class Game {
     const tactic = intent.tactic ?? 'engage';
     const meleePath = pathToAdjacent(target);
     if (!chosen) {
-      const reachable = meleePath !== null && meleePath.length <= speed;
+      const reachable = meleePath !== null && this.pathCost(meleePath) <= speed;
       chosen = melee && (reachable || !rangedAtk) ? melee : rangedAtk ?? melee!;
       if (tactic === 'retreat' && rangedAtk) chosen = rangedAtk;
     }
@@ -1294,23 +1342,24 @@ export class Game {
     const stepTo = (p: Pt) => { m.x = p.x; m.y = p.y; walked.push(p); };
     if (tactic === 'engage') {
       if (!chosen.ranged) {
-        for (const p of (meleePath ?? []).slice(0, speed)) stepTo(p);
+        for (const p of this.afford(meleePath ?? [], speed).walked) stepTo(p);
       } else {
         const inRange = () => cheb(m, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(m, target!);
         const path = meleePath ?? [];
-        for (const p of path.slice(0, speed)) { if (inRange()) break; stepTo(p); }
+        for (const p of this.afford(path, speed).walked) { if (inRange()) break; stepTo(p); }
       }
     } else if (tactic === 'retreat') {
-      for (let i = 0; i < speed; i++) {
+      for (let left = speed; left > 0; ) {
         const score = (p: Pt) => Math.min(...targets.map((t) => cheb(p, t)));
         let best: Pt | null = null;
         for (const d of DIRS) {
           const n = { x: m.x + d.x, y: m.y + d.y };
-          if (!this.walkable(n.x, n.y) || this.monsterBlocked(n, m)) continue;
+          if (!this.walkable(n.x, n.y) || this.monsterBlocked(n, m) || tileCost(this.tile(n.x, n.y)) > left) continue;
           if (d.x !== 0 && d.y !== 0 && (!this.walkable(m.x + d.x, m.y) || !this.walkable(m.x, m.y + d.y))) continue;
           if (score(n) > score(best ?? m)) best = n;
         }
         if (!best) break;
+        left -= tileCost(this.tile(best.x, best.y));
         stepTo(best);
       }
     }
@@ -1332,10 +1381,12 @@ export class Game {
     const r = d20(this.rng, mode);
     const total = r.value + chosen.toHit;
     const crit = r.value === 20;
-    const head = this.t`${m.name} attacks ${target.name} with ${this.n(chosen.name)}: ${this.d20Text(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${target.ac}.`;
+    const cover = chosen.ranged ? this.coverBonus(m, target) : 0;
+    const ac = target.ac + cover;
+    const head = this.t`${m.name} attacks ${target.name} with ${this.n(chosen.name)}: ${this.d20Text(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${target.name} has half cover.`}` : '');
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-      ({ actor: m.name, label: this.n(chosen!.name), die: r.value, rolls: r.rolls, mode, modifier: chosen!.toHit, total, target: { kind: 'AC', value: target!.ac, name: target!.name }, outcome, damage });
-    if (r.value === 1 || (!crit && total < target.ac)) {
+      ({ actor: m.name, label: this.n(chosen!.name), die: r.value, rolls: r.rolls, mode, modifier: chosen!.toHit, total, target: { kind: 'AC', value: ac, name: target!.name }, outcome, damage });
+    if (r.value === 1 || (!crit && total < ac)) {
       this.log('roll', this.t`${head} Miss.`, { roll: info('miss') });
       return { monster: m.name, moved: walked.length, attack: { name: chosen.name, target: target.name, hit: false, crit: false, damage: 0, targetHp: target.hp, targetDown: false } };
     }
@@ -1361,14 +1412,14 @@ export class Game {
   }
 
   private canEquip(c: Character, item: ItemInstance, slot: SlotId): string | null {
-    const def = ITEMS[item.defId];
+    const def = this.def(item.defId);
     if (this.slotFor(def) !== slot) return `${def.name} doesn't go there`;
     if (!this.proficient(c, def)) return `${c.className}s can't use ${def.name}`;
     return null;
   }
 
   computeAc(c: Character): number {
-    return armorClass(c, Object.fromEntries(SLOT_IDS.map((slot) => [slot, c.equipment[slot]?.defId])));
+    return armorClass(c, Object.fromEntries(SLOT_IDS.map((slot) => [slot, c.equipment[slot] ? this.def(c.equipment[slot]!.defId) : null])));
   }
 
   private getLoc(c: Character, loc: InvLoc): ItemInstance | null {
@@ -1390,7 +1441,7 @@ export class Game {
 
   /** Put an item into a bag, merging stacks. Returns false if the bag is full. */
   private addToBag(c: Character, defId: string, qty: number): boolean {
-    const def = ITEMS[defId];
+    const def = this.def(defId);
     if (def.stackable) {
       const stack = c.bag.find((b) => b?.defId === defId);
       if (stack) { stack.qty += qty; return true; }
@@ -1417,7 +1468,7 @@ export class Game {
       if (err) throw new GameError(err);
     }
     // Stack merge inside the bag.
-    if (other && to.type === 'bag' && from.type === 'bag' && other.defId === item.defId && ITEMS[item.defId].stackable) {
+    if (other && to.type === 'bag' && from.type === 'bag' && other.defId === item.defId && this.def(item.defId).stackable) {
       other.qty += item.qty;
       this.setLoc(c, from, null);
       return;
@@ -1425,7 +1476,7 @@ export class Game {
     this.setLoc(c, to, item);
     this.setLoc(c, from, other);
     // Two-handed weapons and shields exclude each other.
-    const main = c.equipment.mainHand ? ITEMS[c.equipment.mainHand.defId] : null;
+    const main = c.equipment.mainHand ? this.def(c.equipment.mainHand.defId) : null;
     if (main?.weapon?.twoHanded && c.equipment.offHand) {
       const drop = to.type === 'slot' && to.slot === 'offHand' ? 'mainHand' : 'offHand';
       const idx = this.firstFreeBag(c);
@@ -1452,7 +1503,7 @@ export class Game {
     if (!this.addToBag(t, item.defId, item.qty)) throw new GameError(this.t`${t.name}'s bag is full`);
     this.setLoc(c, from, null);
     c.ac = this.computeAc(c);
-    this.log('system', this.t`${c.name} hands ${this.n(ITEMS[item.defId].name)} to ${t.name}.`);
+    this.log('system', this.t`${c.name} hands ${this.n(this.def(item.defId).name)} to ${t.name}.`);
   }
 
   useItem(playerId: string, characterId: string, uid: string, targetId?: string) {
@@ -1460,7 +1511,7 @@ export class Game {
     const idx = c.bag.findIndex((b) => b?.uid === uid);
     if (idx < 0) throw new GameError(this.t`That item is not in the bag`);
     const item = c.bag[idx]!;
-    const def = ITEMS[item.defId];
+    const def = this.def(item.defId);
     if (!def.consumable) {
       const slot = this.slotFor(def);
       if (!slot) throw new GameError(this.t`${this.n(def.name)} can't be used`);
@@ -1702,13 +1753,159 @@ export class Game {
 
   grantItem(characterId: string, itemId: string, qty: number) {
     const c = this.char(characterId);
-    const def = ITEMS[itemId];
+    const def = this.def(itemId);
     if (!def) throw new GameError(this.t`Unknown item "${itemId}"`);
     if (c.dead) throw new GameError(this.t`${c.name} is dead`);
     const n = Math.max(1, Math.min(def.stackable ? 10 : 1, Math.round(qty) || 1));
     if (!this.addToBag(c, itemId, n)) throw new GameError(this.t`${c.name}'s bag is full`);
     this.log('system', this.t`${c.name} receives ${`${n > 1 ? `${n}× ` : ''}${this.n(def.name)}`}.`);
     return { character: c.name, item: def.name, quantity: n };
+  }
+
+  // ------------------------------------------------------------ story items
+
+  /** Every item a hero carries or wears, with where it is. */
+  private carried(c: Character): { item: ItemInstance; loc: InvLoc }[] {
+    const out: { item: ItemInstance; loc: InvLoc }[] = [];
+    c.bag.forEach((item, index) => { if (item) out.push({ item, loc: { type: 'bag', index } }); });
+    for (const slot of SLOT_IDS) { const item = c.equipment[slot]; if (item) out.push({ item, loc: { type: 'slot', slot } }); }
+    return out;
+  }
+
+  /** Find an item by id or by name, in English or the table's language. Story items win over the catalogue. */
+  findItemDef(ref: string): ItemDef | null {
+    const key = ref.trim().toLowerCase();
+    if (!key) return null;
+    const all = [...Object.values(this.s.items), ...Object.values(ITEMS)];
+    return all.find((d) => d.id.toLowerCase() === key) ?? all.find((d) => d.name.toLowerCase() === key || this.n(d.name).toLowerCase() === key) ?? null;
+  }
+
+  /** Story items the party holds right now, with who has them. */
+  heldStoryItems(): { def: ItemDef; holder: Character; qty: number }[] {
+    const out: { def: ItemDef; holder: Character; qty: number }[] = [];
+    for (const c of this.s.characters) {
+      for (const { item } of this.carried(c)) {
+        const def = this.s.items[item.defId];
+        if (def) out.push({ def, holder: c, qty: item.qty });
+      }
+    }
+    return out;
+  }
+
+  private addItemNote(def: ItemDef, note?: string) {
+    const clean = (note ?? '').trim().slice(0, 240);
+    if (!clean || !def.story || def.story.notes.some((n) => n.text === clean)) return;
+    def.story.notes.push({ day: this.day(), text: clean });
+    if (def.story.notes.length > 8) def.story.notes.splice(0, def.story.notes.length - 8);
+  }
+
+  /**
+   * The DM hands a hero something that is not in the catalogue. The server builds the item:
+   * any rules it has are copied from a catalogue item, so the DM can rename and describe
+   * gear freely but cannot invent stronger gear than the game already has.
+   */
+  giveStoryItem(input: {
+    characterId: string; name: string; description?: string; category?: ItemCategory; icon?: string; rarity?: string;
+    value?: number; quantity?: number; quest?: boolean; baseItemId?: string; note?: string;
+  }) {
+    const name = input.name.trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (!name) throw new GameError('The item needs a name');
+    const first = this.char(input.characterId);
+    const qtyAsked = Math.round(input.quantity ?? 1) || 1;
+    let def = this.findItemDef(name);
+    // A name the game already knows: hand out more of that item instead of making a twin.
+    if (def && !def.story) return { ...this.grantItem(first.id, def.id, qtyAsked), item_id: def.id, created: false, quest_item: false };
+    const created = !def;
+    if (!def) {
+      if (Object.keys(this.s.items).length >= 150) throw new GameError('This table already has as many story items as it can hold. Reuse or update an existing one.');
+      const base = input.baseItemId && input.baseItemId !== 'none' ? ITEMS[input.baseItemId] : undefined;
+      if (input.baseItemId && input.baseItemId !== 'none' && !base) throw new GameError(`Unknown base item "${input.baseItemId}"`);
+      const category: ItemCategory = ITEM_CATEGORIES.includes(input.category as ItemCategory)
+        ? input.category!
+        : base?.weapon ? 'weapon' : base?.armor || base?.kind === 'shield' ? 'armor' : base?.consumable ? 'consumable' : 'trinket';
+      const description = (input.description ?? '').trim().slice(0, 400);
+      const rarity = input.rarity === 'uncommon' || input.rarity === 'rare' ? input.rarity : base?.rarity;
+      def = {
+        id: this.uniqueId('story', name, (id) => !!this.def(id)),
+        name,
+        kind: base?.kind ?? 'misc',
+        icon: pickIcon(input.icon, name, description, category),
+        description,
+        value: Math.max(0, Math.min(Math.round(input.value ?? base?.value ?? 0) || 0, Math.max(500, base?.value ?? 0))),
+        ...(base?.slot ? { slot: base.slot } : {}),
+        ...(base?.weapon ? { weapon: base.weapon } : {}),
+        ...(base?.armor ? { armor: base.armor } : {}),
+        ...(base?.acBonus ? { acBonus: base.acBonus } : {}),
+        ...(base?.consumable ? { consumable: base.consumable } : {}),
+        ...(base ? (base.stackable ? { stackable: true } : {}) : category === 'material' || category === 'consumable' || qtyAsked > 1 ? { stackable: true } : {}),
+        ...(rarity && rarity !== 'common' ? { rarity } : {}),
+        story: {
+          category,
+          quest: !!input.quest || category === 'quest',
+          baseId: base?.id ?? null,
+          foundDay: this.day(),
+          foundAt: this.s.world ? this.place()?.name ?? null : null,
+          notes: [],
+          imageId: null,
+        },
+      };
+    }
+    const qty = Math.max(1, Math.min(def.stackable ? 20 : 1, qtyAsked));
+    // Nothing found in a story should be lost to a full backpack while a friend has room.
+    const alive = this.s.characters.filter((c) => !c.dead);
+    const taker = [first, ...alive.filter((c) => c.id !== first.id)].find((c) => !c.dead && (created ? this.firstFreeBag(c) >= 0 : this.hasRoomFor(c, def!)));
+    if (!taker) throw new GameError(this.t`${first.name}'s bag is full`);
+    if (created) this.s.items[def.id] = def;
+    this.addToBag(taker, def.id, qty);
+    this.addItemNote(def, input.note);
+    this.log('system', this.t`${taker.name} receives ${`${qty > 1 ? `${qty}× ` : ''}${def.name}`}.`);
+    return { character: taker.name, item: def.name, item_id: def.id, quantity: qty, created, quest_item: !!def.story?.quest };
+  }
+
+  private hasRoomFor(c: Character, def: ItemDef) {
+    return this.firstFreeBag(c) >= 0 || (!!def.stackable && c.bag.some((b) => b?.defId === def.id));
+  }
+
+  /** Rename, re-describe or annotate a story item as the party learns more about it. */
+  updateStoryItem(input: { item: string; name?: string; description?: string; note?: string; quest?: boolean }) {
+    const def = this.findItemDef(input.item);
+    if (!def?.story) throw new GameError(`No story item called "${input.item}". Story items: ${Object.values(this.s.items).map((d) => d.name).join(', ') || 'none yet'}.`);
+    const name = (input.name ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (name && name !== def.name) {
+      const clash = this.findItemDef(name);
+      if (clash && clash !== def) throw new GameError(`Another item is already called "${name}"`);
+      def.name = name;
+    }
+    const description = (input.description ?? '').trim().slice(0, 400);
+    if (description) def.description = description;
+    if (typeof input.quest === 'boolean') def.story.quest = input.quest;
+    this.addItemNote(def, input.note);
+    return { item: def.name, item_id: def.id, quest_item: def.story.quest, notes: def.story.notes.length };
+  }
+
+  /**
+   * Take an item away because the story used it up, or the party sold, gave or lost it.
+   * Quest items are only released when the DM says so explicitly.
+   */
+  takeItem(input: { characterId?: string; item: string; quantity?: number; allowQuest?: boolean }) {
+    const def = this.findItemDef(input.item);
+    if (!def) throw new GameError(this.t`Unknown item "${input.item}"`);
+    const owners = input.characterId ? [this.char(input.characterId)] : this.s.characters;
+    let found: { c: Character; item: ItemInstance; loc: InvLoc } | null = null;
+    for (const c of owners) {
+      const hit = this.carried(c).find((x) => x.item.defId === def.id);
+      if (hit) { found = { c, ...hit }; break; }
+    }
+    if (!found) throw new GameError(`${input.characterId ? this.char(input.characterId).name : 'Nobody in the party'} has no ${def.name}`);
+    if (def.story?.quest && !input.allowQuest) {
+      throw new GameError(`${def.name} is a quest item, so it stays with the party. If the story really uses it up or the party knowingly parts with it, call again with allow_quest_item set to true.`);
+    }
+    const qty = Math.max(1, Math.min(found.item.qty, Math.round(input.quantity ?? 1) || 1));
+    found.item.qty -= qty;
+    if (found.item.qty <= 0) this.setLoc(found.c, found.loc, null);
+    found.c.ac = this.computeAc(found.c);
+    this.log('system', this.t`${found.c.name} no longer has ${`${qty > 1 ? `${qty}× ` : ''}${this.n(def.name)}`}.`);
+    return { character: found.c.name, item: def.name, removed: qty, left: Math.max(0, found.item.qty) };
   }
 
   /** Forget pending beats of a kind the DM is already narrating itself. */
@@ -1725,7 +1922,7 @@ export class Game {
     return {
       room: s.room,
       phase: s.phase,
-      map: { width: this.width, height: this.height, rows: s.rows },
+      map: { width: this.width, height: this.height, rows: s.rows, biome: s.biome ?? 'dungeon' },
       characters: s.characters,
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
@@ -1734,6 +1931,7 @@ export class Game {
       combat: s.combat,
       bossFight: s.phase === 'combat' && !!s.encounter?.boss,
       gold: s.gold,
+      items: s.items,
       shortRestsLeft: s.shortRestsLeft,
       log: s.log.slice(-150),
       players: s.players,

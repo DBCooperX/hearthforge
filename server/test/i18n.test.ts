@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, ITEMS, SKILLS, SLOT_LABELS } from '../../shared/content';
 import { COMPASS, TERRAIN, formatHours, formatTime } from '../../shared/hex';
-import { hasTranslation, tagged, tr } from '../../shared/i18n';
+import { classLabel, hasTranslation, tagged, tr } from '../../shared/i18n';
 import { DE } from '../../shared/i18n-de';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS } from '../../shared/types';
 import { BACKGROUNDS, CLASS_GUIDE, FEATS, GLOSSARY, KITS, SPECIES, STYLES } from '../../shared/rules';
@@ -12,7 +12,7 @@ import * as RULES from '../../shared/rules';
 import { CLASSES } from '../src/data/classes';
 import { MONSTERS } from '../src/data/monsters';
 import { SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS } from '../src/data/world';
-import { describeWorld } from '../src/dm/context';
+import { DM_SYSTEM_PROMPT, describeCombat, describeWorld, genderRoster } from '../src/dm/context';
 import { scriptedScene } from '../src/dm/scripted';
 import { Game, GameError } from '../src/game/engine';
 
@@ -138,5 +138,52 @@ describe('session language', () => {
     expect(g.s.log.map((l) => l.text).join('\n')).toContain('The adventure begins.');
     expect(g.place()?.name).toBe('Emberfall');
     expect(describeWorld(g)).not.toContain('German');
+  });
+});
+
+describe('hero gender', () => {
+  it('gives premade heroes a fixed gender and leaves made-up names neutral', () => {
+    const g = new Game('test', () => 0.42);
+    g.upsertPlayer('p', 'Chris', true);
+    const elowen = g.addCharacter('p', 'wizard', '');
+    const brann = g.addCharacter('p', 'fighter', '');
+    const custom = g.addCharacter('p', 'rogue', 'Quill');
+    expect([elowen.name, elowen.gender]).toEqual(['Elowen', 'female']);
+    expect([brann.name, brann.gender]).toEqual(['Brann', 'male']);
+    expect(custom.gender).toBe('neutral');
+  });
+
+  it('fills in the gender of heroes saved before it existed', () => {
+    const g = new Game('test', () => 0.42);
+    g.upsertPlayer('p', 'Chris', true);
+    g.addCharacter('p', 'wizard', '');
+    g.addCharacter('p', 'rogue', 'Quill');
+    const saved = JSON.parse(JSON.stringify(g.s));
+    for (const c of saved.characters) delete c.gender;
+    const loaded = new Game('test', () => 0.42, saved);
+    expect(loaded.s.characters.map((c) => c.gender)).toEqual(['female', 'neutral']);
+  });
+
+  it('tells the Dungeon Master every turn, with the German forms at a German table', () => {
+    const g = germanGame();
+    g.addCharacter('host', 'wizard', '');
+    g.addCharacter('host', 'rogue', 'Quill');
+    g.start();
+    const world = describeWorld(g);
+    expect(world).toContain('Elowen');
+    expect(world).toContain('female, she/her (German: sie/ihr, "die Magierin")');
+    expect(world).toContain('male, he/him (German: er/ihm, "der Kämpfer")');
+    expect(world).toMatch(/Quill.*gender not specified/);
+    g.startEncounter([{ defId: 'giant_rat', count: 1 }], { source: 'story', context: 'test' });
+    expect(describeCombat(g)).toContain('"die Magierin"');
+    expect(genderRoster(g)).toContain('Elowen: female');
+    expect(classLabel('de', 'Wizard', 'female')).toBe('Magierin');
+    expect(classLabel('de', 'Wizard', 'male')).toBe('Magier');
+    expect(classLabel('en', 'Wizard', 'female')).toBe('Wizard');
+  });
+
+  it('instructs the Dungeon Master not to echo the player or guess a gender', () => {
+    expect(DM_SYSTEM_PROMPT).toContain('never quote, repeat or paraphrase what they just said or did');
+    expect(DM_SYSTEM_PROMPT).toContain('Never infer it from a name');
   });
 });

@@ -104,8 +104,8 @@ describe('character creator rules', () => {
     expect(g.s.characters[1].gender).toBe('neutral');
     g.start();
     const text = describeWorld(g);
-    expect(text).toMatch(/Elowen \[pc\d+\] female \(she\/her\)/);
-    expect(text).toMatch(/Ash \[pc\d+\] gender-neutral/);
+    expect(text).toMatch(/Elowen \[pc\d+\].*Gender: female, she\/her/);
+    expect(text).toMatch(/Ash \[pc\d+\].*Gender: gender not specified/);
   });
 
   it('offers level-up choices and applies them', () => {

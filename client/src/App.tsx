@@ -13,6 +13,7 @@ import { LevelUp } from './components/LevelUp';
 import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
+import { tileWalkable } from '../../shared/battlemap';
 import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
@@ -110,7 +111,7 @@ export function App() {
         e.preventDefault();
         const nx = actor.x + dirs[k][0], ny = actor.y + dirs[k][1];
         const occupied = state.monsters.some((m) => m.alive && m.x === nx && m.y === ny);
-        if (tileAt(state, nx, ny) === '.' && !occupied) send({ t: 'move', characterId: actor.id, x: nx, y: ny });
+        if (tileWalkable(tileAt(state, nx, ny)) && !occupied) send({ t: 'move', characterId: actor.id, x: nx, y: ny });
         return;
       }
       if ((k === ' ' || k === 'enter') && actor) { e.preventDefault(); send({ t: 'end_turn', characterId: actor.id }); return; }
@@ -193,7 +194,7 @@ export function App() {
         )}
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
-        {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} conn={conn} onClose={() => setOverlay(null)} />}
+        {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} />}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
         <Toasts conn={conn} />

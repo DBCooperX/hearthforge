@@ -3,6 +3,8 @@
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../../../shared/types';
 import { TILE, spriteCanvas } from './sprites';
+import { tileWalkable } from '../../../shared/battlemap';
+import { battleTileName } from './battleTiles';
 import { tileAt } from './util';
 
 interface Ent {
@@ -127,8 +129,7 @@ export class MapRenderer {
     // Tiles
     for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
-        const h = (x * 7 + y * 13) % 4;
-        this.tiles[y * state.map.width + x].texture = tex(tileAt(state, x, y) === '#' ? `wall${h % 3}` : `floor${h}`);
+        this.tiles[y * state.map.width + x].texture = tex(battleTileName(state.map.biome ?? 'dungeon', tileAt(state, x, y), x, y));
       }
     }
 
@@ -245,7 +246,7 @@ export class MapRenderer {
     for (const id of this.opts.targetIds) ring(id, 0xff5252, beat);
     if (this.opts.activeId && this.opts.activeId !== this.opts.selectedId) ring(this.opts.activeId, 0xffd54f, beat);
     ring(this.opts.selectedId, 0xffffff, 0.9);
-    if (this.hover && tileAt(state, this.hover.x, this.hover.y) === '.') {
+    if (this.hover && tileWalkable(tileAt(state, this.hover.x, this.hover.y))) {
       g.rect(this.hover.x * TILE + 0.5, this.hover.y * TILE + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color: 0xd4a857, alpha: 0.8 });
     }
 

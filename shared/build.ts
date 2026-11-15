@@ -59,25 +59,24 @@ export function castingAbility(c: { classId: ClassId; abilities: Abilities }): A
 
 export function isProficient(classId: ClassId, def: ItemDef): boolean {
   const cls = CLASSES[classId];
-  if (def.kind === 'weapon') return cls.weaponProf.includes(def.weapon!.category) || !!cls.weaponProfIds?.some((id) => def.id.startsWith(id));
+  if (def.kind === 'weapon') return cls.weaponProf.includes(def.weapon!.category) || !!cls.weaponProfIds?.some((id) => (def.story?.baseId ?? def.id).startsWith(id));
   if (def.kind === 'armor') return cls.armorProf.includes(def.armor!.category);
   if (def.kind === 'shield') return cls.armorProf.includes('shield');
   return true;
 }
 
 /** Armor class from what is worn, plus the Defense style and Mage Armor. */
-export function armorClass(c: { abilities: Abilities; feats: string[]; conditions?: string[] }, worn: Partial<Record<SlotId, string | null | undefined>>): number {
+export function armorClass(c: { abilities: Abilities; feats: string[]; conditions?: string[] }, worn: Partial<Record<SlotId, ItemDef | null | undefined>>): number {
   const dex = abilityMod(c.abilities.dex);
-  const armor = worn.armor ? ITEMS[worn.armor]?.armor : undefined;
+  const armor = worn.armor?.armor;
   let ac = armor ? armor.baseAc + (armor.dexCap === null ? dex : Math.min(dex, armor.dexCap)) : (c.conditions?.includes('mage armor') ? 13 : 10) + dex;
-  for (const id of Object.values(worn)) if (id) ac += ITEMS[id]?.acBonus ?? 0;
+  for (const def of Object.values(worn)) ac += def?.acBonus ?? 0;
   if (armor && c.feats.includes('style_defense')) ac += 1;
   return ac;
 }
 
 /** The weapon attack a hero makes with what they hold: bonus to hit and damage. */
-export function weaponAttack(c: { classId: ClassId; abilities: Abilities; feats: string[]; profBonus: number }, weaponId: string | null | undefined) {
-  const def = weaponId ? ITEMS[weaponId] : null;
+export function weaponAttack(c: { classId: ClassId; abilities: Abilities; feats: string[]; profBonus: number }, def: ItemDef | null | undefined) {
   const wp = def?.weapon;
   const str = abilityMod(c.abilities.str), dex = abilityMod(c.abilities.dex);
   if (!def || !wp) return { name: 'Unarmed strike', bonus: str + c.profBonus, damage: String(Math.max(1, 1 + str)), type: 'bludgeoning', mod: str, flat: 0, toHit: 0 };
@@ -287,10 +286,10 @@ export function buildSheet(d: Draft): Sheet | null {
   const profBonus = 2;
   const hasSpells = b.abilityIds.some((id) => ABILITIES[id]?.spellLevel !== undefined);
   const cast = castingAbility(b);
-  const atk = weaponAttack({ ...b, profBonus }, equipment.mainHand);
+  const atk = weaponAttack({ ...b, profBonus }, equipment.mainHand ? ITEMS[equipment.mainHand] : null);
   return {
     ...b, profBonus,
-    ac: armorClass(b, equipment),
+    ac: armorClass(b, Object.fromEntries(Object.entries(equipment).map(([slot, id]) => [slot, id ? ITEMS[id] : null]))),
     speed: sp?.speed ?? 30,
     initiative: abilityMod(b.abilities.dex) + (b.feats.includes('alert') ? profBonus : 0),
     expertise: cls.id === 'rogue' ? (d.expertise ?? []).filter((s) => b.skills.includes(s)) : [],
