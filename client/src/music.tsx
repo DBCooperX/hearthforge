@@ -6,6 +6,8 @@ import { useT } from './i18n';
 
 const KEY = 'hearthforge.music';
 const FADE = 2.2;
+/** How often a browser re-reads the track list, so a track the owner switched off stops soon. */
+const MANIFEST_REFRESH_MS = 30_000;
 /** Fights cut in faster than a walk into town. */
 const FADE_FIGHT = 0.9;
 
@@ -34,7 +36,7 @@ function storedSettings(): Settings {
   return { muted: false, volume: 0.5, ambient: 0.5, ambientMuted: false };
 }
 
-class MusicPlayer {
+export class MusicPlayer {
   private settings = storedSettings();
   private manifest: MusicManifest = { enabled: true, pending: false, tracks: [] };
   private context: MusicContext = 'tavern';
@@ -85,26 +87,38 @@ class MusicPlayer {
       }
       void this.ctx.resume().then(() => { this.sync(); this.emit(); }).catch(() => {});
     };
+    setInterval(() => { if (typeof document === 'undefined' || !document.hidden) void this.refresh(); }, MANIFEST_REFRESH_MS);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (!document.hidden) void this.refresh(); });
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
   }
 
-  private async loadManifest() {
+  private retry: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Ask the server which tracks are allowed right now. The owner can switch a track off in the Innkeeper at any time,
+   * so this runs again on a timer, when the tab comes back and at every scene change; sync() then fades out a track
+   * that is no longer on the list.
+   */
+  async refresh() {
     try {
-      const res = await fetch('/api/music');
+      const res = await fetch('/api/music', { cache: 'no-store' });
       if (res.ok) this.manifest = await res.json() as MusicManifest;
-    } catch { /* stay silent */ }
+    } catch { /* keep the list we have */ }
     this.sync();
     this.emit();
     // The server may still be downloading tracks after a fresh install.
-    if (this.manifest.pending) setTimeout(() => void this.loadManifest(), 20_000);
+    clearTimeout(this.retry);
+    if (this.manifest.pending) this.retry = setTimeout(() => void this.refresh(), 20_000);
   }
+  private loadManifest() { return this.refresh(); }
 
   setContext(context: MusicContext) {
     if (context === this.context) return;
     this.context = context;
     this.sync();
     this.emit();
+    if (this.started) void this.refresh();
   }
 
   private ambientLevel(s: Settings) { return s.ambientMuted ? 0 : s.ambient; }

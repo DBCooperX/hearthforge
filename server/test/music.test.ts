@@ -250,3 +250,19 @@ describe('freesound', () => {
     expect(none).toEqual([]);
   });
 });
+
+describe('switching a track off', () => {
+  it('keeps it out of what players get, and back in when switched on again', async () => {
+    const { musicAction } = await import('../src/music');
+    const d = dir();
+    mkdirSync(join(d, 'tavern'), { recursive: true });
+    writeFileSync(join(d, 'tavern', 'a.mp3'), mp3);
+    writeFileSync(join(d, 'tavern', 'b.mp3'), mp3);
+    const ids = () => musicManifest(d, {}).tracks.map((t) => t.id).sort();
+    expect(ids()).toEqual(['tavern/a.mp3', 'tavern/b.mp3']);
+    await musicAction(d, {}, { do: 'set', id: 'tavern/a.mp3', enabled: false });
+    expect(ids()).toEqual(['tavern/b.mp3']);
+    await musicAction(d, {}, { do: 'set', id: 'tavern/a.mp3', enabled: true });
+    expect(ids()).toEqual(['tavern/a.mp3', 'tavern/b.mp3']);
+  });
+});
