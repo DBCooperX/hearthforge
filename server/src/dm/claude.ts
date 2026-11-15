@@ -154,6 +154,19 @@ const STORY_TOOLS: Tool[] = [
     stock: str('Up to eight extra things this merchant has on offer, as catalogue item ids or story item names separated by commas, for example "longsword_plus1, potion_greater_healing". Empty string for the usual stock.'),
     discount: int('Percent off for today that the party earned in the story (a favour, a rescued daughter): 0 normally, 10 or 20. Use -10 for a merchant they have angered. Ordinary haggling is a button in the trade window, so leave it at 0 for that.'),
   }),
+  // Loose on purpose, like open_shop: plain strings that the engine checks.
+  looseTool('change_standing', "Change how a faction of the region feels about the party, because of something they did. The factions and their current standing are listed in the state. The server clamps the size of the change and how much a faction moves in a day.", {
+    faction: str('The faction, by its id (for example "guild") or its name, exactly as listed under Standing.'),
+    change: int('Between -12 and 12, never 0. Positive when they gained its favour. 1 to 4 for a favour, 5 to 8 for something that matters, up to 12 for a deed that people will talk about for years.'),
+    reason: str('What the party did, in a few words, in the table language. The players read it in their journal.'),
+  }),
+  looseTool('rumour', 'Gossip. Use action "start" to let a new rumour loose where the party is: it is repeated here at once and reaches other places over the following days. Use action "heard" when the party hears one of the rumours listed for this place, so it is written in their journal.', {
+    action: { type: 'string', enum: ['start', 'heard'] },
+    text: str('For "start": the rumour as people tell it, one sentence in the table language. Empty string for "heard".'),
+    id: str('For "heard": the id of the rumour as listed, for example "r12". Empty string for "start".'),
+    about: { type: 'string', enum: ['party', 'world'], description: 'For "start": whether it is about the party\'s own doings or about the world.' },
+    party_hears_it: { type: 'string', enum: ['yes', 'no'], description: 'For "start": "yes" when someone tells it to the party in this very scene, "no" when it just starts spreading unheard.' },
+  }),
   // Loose on purpose: creature ids and look changes are plain strings that the engine checks,
   // because enums of that size push the compiled grammar of the strict tools over the API's limit.
   looseTool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
@@ -338,6 +351,11 @@ export class ClaudeDM implements DungeonMaster {
             return game.updateStoryItem({ item: String(i.item ?? ''), name: String(i.name ?? ''), description: String(i.description ?? ''), note: String(i.note ?? ''), ...(i.quest_item === 'yes' || i.quest_item === 'no' ? { quest: i.quest_item === 'yes' } : {}) });
           case 'take_item':
             return game.takeItem({ characterId: String(i.character_id ?? ''), item: String(i.item ?? ''), quantity: Number(i.quantity), allowQuest: truthy(i.allow_quest_item) });
+          case 'change_standing':
+            return game.adjustStanding({ faction: String(i.faction ?? ''), change: Number(i.change), reason: String(i.reason ?? '') });
+          case 'rumour':
+            if (i.action === 'heard') return game.hearRumour(String(i.id ?? ''));
+            return game.startRumour(String(i.text ?? ''), i.about === 'party', i.party_hears_it === 'yes');
           case 'open_shop':
             return game.openShop({ merchant: String(i.merchant ?? ''), shop: String(i.shop ?? ''), kind: String(i.kind ?? ''), prices: String(i.prices ?? ''), stock: String(i.stock ?? ''), discount: Number(i.discount) });
           case 'start_combat': {

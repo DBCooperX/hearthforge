@@ -8,6 +8,8 @@ import type { StartOptions } from './start';
 import type { ShopView } from './trade';
 import type { DmStyle } from './style';
 import type { LightKindId, LightLevel, LightSource, Senses } from './light';
+import type { FactionView, RumourView } from './reputation';
+import type { TrophyView } from './achievements';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -535,6 +537,14 @@ export interface GameState {
   gathering: boolean;
   /** Ability scores each player rolled in the character creator, by player id. */
   rolled: Record<string, number[]>;
+  /** What the factions of the region think of the party. */
+  factions: FactionView[];
+  /** Rumours the party has heard, oldest first. */
+  rumours: RumourView[];
+  /** Every trophy, earned or not. */
+  trophies: TrophyView[];
+  /** Lines in the story that the Dungeon Master has not answered yet. Their author may still take them back. */
+  unanswered: { logId: number; playerId: string }[];
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };
@@ -581,6 +591,7 @@ export type ClientMessage =
   | { t: 'set_start'; start: Partial<StartOptions> }
   | { t: 'set_style'; style: Partial<DmStyle> }
   | { t: 'say'; text: string }
+  | { t: 'unsay' }
   | { t: 'reset' };
 
 export type ServerMessage =

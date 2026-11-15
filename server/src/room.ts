@@ -6,6 +6,7 @@ import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat } from './game/engine';
 import { newSeed } from '../../shared/start';
+import { tagged } from '../../shared/i18n';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -29,9 +30,11 @@ export interface RoomTiming {
   hostGraceMs: number;
   /** How long the fight waits for a player deciding on an opportunity attack before striking for them. */
   reactionWaitMs: number;
+  /** How long a player may take back what they just said, before the Dungeon Master starts to answer. 0 answers at once. */
+  undoGraceMs: number;
 }
 
-export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000, reactionWaitMs: 20000 };
+export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000, reactionWaitMs: 20000, undoGraceMs: 0 };
 
 export interface RoomHooks {
   /** What the lobby lists about this table changed. */
@@ -66,7 +69,9 @@ export class Room {
   private hostTimer: NodeJS.Timeout | null = null;
   private typing = new Map<string, { where: TypingWhere; at: number }>();
   /** What players said to the Dungeon Master that has not been answered yet. */
-  private pending: (PlayerLine & { playerId: string })[] = [];
+  private pending: (PlayerLine & { playerId: string; logId: number })[] = [];
+  /** The wait before the next answer is only the short moment to take an action back, not a wait for other players. */
+  private graceOnly = false;
   private gatherTimer: NodeJS.Timeout | null = null;
   private gatherStart = 0;
   /** Non-zero while a reply to the players is queued or being written. */
@@ -242,15 +247,16 @@ export class Room {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   }
 
-  private get gathering() { return this.pending.length > 0 && !this.answering; }
+  private get gathering() { return this.pending.length > 0 && !this.answering && !this.graceOnly; }
 
   /** Push pending movement animations and the latest state to everyone, then persist. */
   flush() {
     if (this.closed) return;
     const moves = this.game.takeMoves();
+    this.game.checkTrophies();
     const state: ServerMessage = {
       t: 'state',
-      state: this.game.publicState({ busy: this.dmBusy > 0, mode: this.dm.mode, model: this.dm.model, gathering: this.gathering }),
+      state: this.game.publicState({ busy: this.dmBusy > 0, mode: this.dm.mode, model: this.dm.model, gathering: this.gathering, unanswered: this.pending.map((l) => ({ logId: l.logId, playerId: l.playerId })) }),
     };
     const payload = JSON.stringify(state);
     for (const ws of this.sockets.keys()) {
@@ -308,6 +314,7 @@ export class Room {
     }
     switch (msg.t) {
       case 'say': return this.say(playerId, String(msg.text ?? ''));
+      case 'unsay': return this.unsay(ws, playerId);
       case 'travel': return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));
       case 'chat': return this.chat(ws, playerId, String(msg.text ?? ''), msg.to ? String(msg.to) : undefined);
       case 'typing': return this.setTyping(playerId, msg.where === 'story' || msg.where === 'chat' ? msg.where : null);
@@ -383,6 +390,7 @@ export class Room {
         this.reactionWaiter?.(false);
         this.pending = [];
         this.answering = 0;
+        this.graceOnly = false;
         if (this.gatherTimer) clearTimeout(this.gatherTimer);
         this.gatherTimer = null;
         return;
@@ -519,9 +527,25 @@ export class Room {
     const name = this.game.player(playerId)?.name ?? 'Adventurer';
     this.game.log('chat', text, { speaker: name });
     this.setTyping(playerId, null);
-    if (this.game.s.phase !== 'lobby') this.pending.push({ playerId, player: name, text });
-    this.flush();
+    if (this.game.s.phase !== 'lobby') this.pending.push({ playerId, player: name, text, logId: this.game.s.logSeq });
     this.considerAnswer();
+    this.flush();
+  }
+
+  /** Take back the player's latest line, as long as the Dungeon Master has not started to answer it. */
+  private unsay(ws: WebSocket, playerId: string) {
+    const at = this.pending.map((l) => l.playerId).lastIndexOf(playerId);
+    if (at < 0) {
+      return this.send(ws, { t: 'error', message: tagged(this.game.lang)`Too late: the Dungeon Master is already answering.` });
+    }
+    const [line] = this.pending.splice(at, 1);
+    this.game.retract(line.logId);
+    if (!this.pending.length) {
+      if (this.gatherTimer) clearTimeout(this.gatherTimer);
+      this.gatherTimer = null;
+      this.graceOnly = false;
+    }
+    this.flush();
   }
 
   /** Connected players with a hero who can still act, and who have not said anything since the last reply. */
@@ -542,8 +566,16 @@ export class Room {
   private considerAnswer() {
     if (this.closed || !this.pending.length || this.answering) return;
     const waitFor = this.game.s.phase === 'explore' && this.timing.turnWaitMs > 0 ? this.stillToAct() : [];
-    if (!waitFor.length) return this.answer();
+    if (!waitFor.length && !(this.timing.undoGraceMs > 0 && this.game.s.phase === 'explore')) return this.answer();
     if (this.gatherTimer) return;
+    if (!waitFor.length) {
+      // Nobody else to wait for: only a moment in which the player may still change their mind.
+      this.graceOnly = true;
+      this.gatherTimer = setTimeout(() => { this.gatherTimer = null; this.answer(); }, this.timing.undoGraceMs);
+      this.gatherTimer.unref?.();
+      return;
+    }
+    this.graceOnly = false;
     this.gatherStart = Date.now();
     const arm = (ms: number) => {
       this.gatherTimer = setTimeout(() => {
@@ -564,6 +596,7 @@ export class Room {
   private answer() {
     if (this.gatherTimer) clearTimeout(this.gatherTimer);
     this.gatherTimer = null;
+    this.graceOnly = false;
     if (!this.pending.length || this.answering) return;
     const run = (this.answering = ++this.answerSeq);
     const epoch = this.epoch;

@@ -63,6 +63,8 @@ import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTer
 import { RESTOCK_DAYS, MAX_SHOPS, SHELVES, rollStock, shopKindOf } from '../data/shops';
 import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type Mood as HaggleMood, type ShopKind, type ShopStock, type ShopView } from '../../../shared/trade';
 import { seedStream } from '../../../shared/start';
+import { emptyStats, type Stats } from '../../../shared/achievements';
+import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
 import { LIGHT_ITEMS, NO_SENSES, SPECIES_DARKVISION, ambientLight, canSee, isLightLevel, lightGrid, placeFixedLights, type LightKindId, type LightLevel, type LightSource, type Senses } from '../../../shared/light';
 import { CLASSIC_START, CUSTOM_MAX, REGIONS, isPremise, newSeed, normalizeSeed, type RegionChoice, type StartOptions } from '../../../shared/start';
@@ -177,6 +179,12 @@ export interface InternalState {
   /** Hash of each player's secret token, by player id. Whoever presents the token owns the seat. */
   seats: Record<string, string>;
   ready: string[];
+  /** What the factions of the region think of the party. Missing in saves from before reputation. */
+  factions: FactionState[];
+  /** Trophies earned, with the day. */
+  achievements: { id: string; day: number }[];
+  /** Counters for the trophies. */
+  stats: Stats;
   /** Table talk between the players, whispers included. Never part of the public state. */
   chat: ChatMessage[];
   chatSeq: number;
@@ -246,7 +254,7 @@ const DIRS: Pt[] = [
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
 ];
 const MAX_LOG = 400;
-const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '' });
+const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [] });
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
 export class Game {
@@ -275,6 +283,11 @@ export class Game {
     this.s.items ??= {}; // saves from before story items
     this.s.shops ??= {}; // saves from before trading
     this.s.tradeOffer ??= null;
+    // Saves from before reputation, rumours and trophies.
+    this.s.memory.rumours ??= [];
+    this.s.achievements ??= [];
+    this.s.stats = { ...emptyStats(), ...this.s.stats };
+    this.s.factions ??= this.s.world ? makeFactions(this.s.setting?.seed ?? 'HEARTH', this.lang, !this.s.setting || this.s.setting.region === 'classic') : [];
     // Heroes saved before the character creator existed get the fields it added.
     for (const c of this.s.characters) {
       c.speciesId ??= 'human';
@@ -325,6 +338,9 @@ export class Game {
       hostId: players[0]?.id ?? null,
       seats: {},
       ready: [],
+      factions: [],
+      achievements: [],
+      stats: emptyStats(),
       chat: [],
       chatSeq: 0,
     };
@@ -765,6 +781,9 @@ export class Game {
     s.world = world;
     s.memory = memory;
     s.setting = setting;
+    s.factions = makeFactions(setting.seed, this.lang, setting.region === 'classic');
+    s.achievements = [];
+    s.stats = emptyStats();
     s.gold = s.characters.reduce((sum, c) => sum + 5 + (BACKGROUNDS[c.backgroundId]?.gold ?? 10), 0);
     // House rule: small parties get the Hearth's Blessing so solo play is survivable.
     const blessing = (4 - s.characters.length) * 4;
@@ -2318,13 +2337,27 @@ export class Game {
     return shop.npcId ? this.s.memory.npcs.find((n) => n.id === shop.npcId) : undefined;
   }
 
+  /** What the traders' guild thinks of the party does to the prices in every shop but a peddler's. */
+  private priceFactor(shop: ShopState): number { return shop.kind === 'peddler' ? 1 : guildFactor(this); }
+
+  /** A shop as the price sums see it: its own markup with the guild's opinion counted in. */
+  priced(shop: ShopState): Pick<ShopView, 'kind' | 'markup' | 'mood'> {
+    return { kind: shop.kind, markup: shop.markup * this.priceFactor(shop), mood: shop.mood };
+  }
+
+  /** How the keeper of a shop feels about the party, with their faction's opinion counted in. */
+  private keeperMood(shop: ShopState): Disposition {
+    const npc = this.shopNpc(shop);
+    return npc ? attitude(this, npc) : 'neutral';
+  }
+
   shopView(shop: ShopState): ShopView {
     const npc = this.shopNpc(shop);
     const day = this.day();
     return {
-      id: shop.id, name: shop.name, kind: shop.kind, merchant: npc?.name ?? null, disposition: npc?.disposition ?? 'neutral',
+      id: shop.id, name: shop.name, kind: shop.kind, merchant: npc?.name ?? null, disposition: this.keeperMood(shop), factor: this.priceFactor(shop),
       stock: shop.stock.filter((e) => e.qty > 0 && this.def(e.defId)).map(({ defId, qty }) => ({ defId, qty })),
-      purse: shop.gold, markup: shop.markup, mood: shop.mood, haggled: shop.haggledDay === day,
+      purse: shop.gold, markup: shop.markup * this.priceFactor(shop), mood: shop.mood, haggled: shop.haggledDay === day,
       restockIn: (shop.cycle + 1) * RESTOCK_DAYS + 1 - day,
     };
   }
@@ -2333,7 +2366,7 @@ export class Game {
   private tradingShop(shopId: string): ShopState {
     const shop = this.shopsHere().find((sh) => sh.id === shopId);
     if (!shop) throw new GameError(this.t`That merchant is not here`);
-    if (this.shopNpc(shop)?.disposition === 'hostile') throw new GameError(this.t`${this.shopNpc(shop)!.name} will not trade with you`);
+    if (this.keeperMood(shop) === 'hostile') throw new GameError(this.t`${this.shopNpc(shop)!.name} will not trade with you`);
     return shop;
   }
 
@@ -2347,7 +2380,7 @@ export class Game {
     const def = entry && this.def(entry.defId);
     if (!entry || !def) throw new GameError(this.t`That is sold out`);
     const qty = Math.max(1, Math.min(entry.qty, def.stackable ? 20 : 1, Math.round(qtyRaw) || 1));
-    const price = buyPrice(def, shop) * qty;
+    const price = buyPrice(def, this.priced(shop)) * qty;
     if (this.s.gold < price) throw new GameError(this.t`The party only has ${this.s.gold} gp`);
     if (!this.hasRoomFor(c, def)) throw new GameError(this.t`${c.name}'s bag is full`);
     this.addToBag(c, def.id, qty);
@@ -2355,6 +2388,9 @@ export class Game {
     shop.gold += price;
     entry.qty -= qty;
     if (entry.qty <= 0) shop.stock.splice(shop.stock.indexOf(entry), 1);
+    this.s.stats.trades++;
+    // Spending money in guild shops earns a little goodwill, but only up to a point.
+    if (price >= 50 && shop.kind !== 'peddler' && (this.s.factions.find((f) => f.id === 'guild')?.standing ?? 0) < 30) shiftStanding(this, 'guild', 1, this.t`steady custom`);
     this.log('system', this.t`${c.name} buys ${this.countOf(def, qty)} at ${shop.name} for ${price} gp.`);
     return { item: def.name, quantity: qty, price, gold: this.s.gold };
   }
@@ -2368,7 +2404,7 @@ export class Game {
     if (!item) throw new GameError(this.t`Nothing there`);
     const def = this.def(item.defId);
     if (def.story?.quest) throw new GameError(this.t`${this.n(def.name)} is a quest item and stays with the party`);
-    const each = sellPrice(def, shop);
+    const each = sellPrice(def, this.priced(shop));
     if (each <= 0) throw new GameError(this.t`Nobody here will pay for ${this.n(def.name)}`);
     if (shop.gold < each) throw new GameError(this.t`The merchant cannot afford that right now`);
     const qty = Math.max(1, Math.min(item.qty, Math.floor(shop.gold / each), Math.round(qtyRaw) || 1));
@@ -2381,6 +2417,7 @@ export class Game {
     const shelf = shop.stock.find((e) => e.defId === def.id);
     if (shelf) shelf.qty += qty; else shop.stock.push({ defId: def.id, qty });
     this.log('system', this.t`${c.name} sells ${this.countOf(def, qty)} at ${shop.name} for ${total} gp.`);
+    this.s.stats.trades++;
     return { item: def.name, quantity: qty, price: total, gold: this.s.gold };
   }
 
@@ -2390,10 +2427,11 @@ export class Game {
     const shop = this.tradingShop(shopId);
     const day = this.day();
     if (shop.haggledDay === day) throw new GameError(this.t`You have already haggled here today`);
-    const dc = HAGGLE_DC[this.shopNpc(shop)?.disposition ?? 'neutral'];
+    const dc = HAGGLE_DC[this.keeperMood(shop)];
     const check = this.skillCheck(c.id, 'cha', 'persuasion', dc);
     const result = haggleMood(check.total, dc);
     shop.haggledDay = day;
+    if (result === 2) this.s.stats.haggled++;
     if (result !== 0) { shop.mood = result; shop.moodDay = day; }
     this.log('system', result === 2 ? this.t`${c.name} drives a hard bargain at ${shop.name}: much better prices for the rest of the day.`
       : result === 1 ? this.t`${c.name} talks the prices down at ${shop.name} for the rest of the day.`
@@ -2454,7 +2492,7 @@ export class Game {
     const view = this.shopView(shop);
     return {
       shop_id: shop.id, name: shop.name, kind: shop.kind, created, merchant: view.merchant, party_gold: s.gold, merchant_gold: shop.gold,
-      for_sale: view.stock.map((e) => `${this.def(e.defId).name}${e.qty > 1 ? ` ×${e.qty}` : ''}: ${buyPrice(this.def(e.defId), shop)} gp`),
+      for_sale: view.stock.map((e) => `${this.def(e.defId).name}${e.qty > 1 ? ` ×${e.qty}` : ''}: ${buyPrice(this.def(e.defId), this.priced(shop))} gp`),
       ...(unknown.length ? { unknown_items: unknown } : {}),
       note: 'The trade window is now open on the players\' screens. They buy, sell and haggle there themselves and the server moves the gold and the goods, so do not call change_gold, give_item or take_item for what is traded in the window. Have the merchant show the wares in a sentence or two; quote only prices from this list.',
     };
@@ -2598,7 +2636,8 @@ export class Game {
         if (q.rewardXp) this.grantXp(q.rewardXp, this.t`completing "${q.title}"`);
         q.rewardGold = 0;
         q.rewardXp = 0;
-      }
+        shiftStanding(this, 'commons', 6, this.t`finished "${q.title}"`);
+      } else if (was === 'active' && q.status === 'failed') shiftStanding(this, 'commons', -4, this.t`failed "${q.title}"`);
     }
     return { id: q.id, title: q.title, status: q.status };
   }
@@ -2609,6 +2648,8 @@ export class Game {
     const deeds = this.s.memory.deeds;
     deeds.push({ id: this.uid('deed'), day: this.day(), text: clean });
     if (deeds.length > 60) deeds.shift();
+    // Word gets around: the people here talk about it, and it travels on from them.
+    if (this.place()) addRumour(this, { text: clean, aboutParty: true });
     return { recorded: clean };
   }
 
@@ -2786,15 +2827,50 @@ export class Game {
     return { character: found.c.name, item: def.name, removed: qty, left: Math.max(0, found.item.qty) };
   }
 
+  // -------------------------------------------- reputation, rumours, trophies
+
+  /** The Dungeon Master moves the party's standing with a faction. */
+  adjustStanding(input: { faction: string; change: number; reason: string }) { return changeStanding(this, input); }
+
+  /** The Dungeon Master lets a rumour loose where the party stands. */
+  startRumour(text: string, aboutParty: boolean, heard: boolean) {
+    this.needExplore();
+    const r = addRumour(this, { text, aboutParty });
+    if (heard && r.heard === null) { r.heard = this.day(); this.s.stats.heard++; }
+    return { id: r.id, text: r.text, note: 'People here already repeat it. It reaches other places over the following days.' };
+  }
+
+  /** The Dungeon Master has the party hear a rumour that is going round here. */
+  hearRumour(ref: string) { return hearRumour(this, ref); }
+
+  /** A player took back a line of the story before it was answered. */
+  retract(logId: number) {
+    const at = this.s.log.findIndex((l) => l.id === logId && l.kind === 'chat');
+    if (at < 0) return;
+    this.s.log.splice(at, 1);
+    this.s.stats.undos++;
+  }
+
+  /** Award the trophies whose goals are reached. Called whenever state is sent out. */
+  checkTrophies() { return checkTrophies(this); }
+
   /** Forget pending beats of a kind the DM is already narrating itself. */
   dropBeats(kind: Beat['kind']) { this.beats = this.beats.filter((b) => b.kind !== kind); }
 
-  takeBeats(): Beat[] { const b = this.beats; this.beats = []; return b; }
+  takeBeats(): Beat[] {
+    const b = this.beats;
+    this.beats = [];
+    for (const beat of b) {
+      if (beat.kind === 'combat_end') { this.s.stats.fights++; if (beat.boss) this.s.stats.bosses++; }
+      else if (beat.kind === 'rescued') this.s.stats.rescued++;
+    }
+    return b;
+  }
   takeMoves() { const m = this.moves; this.moves = []; return m; }
 
   // ------------------------------------------------------------ public view
 
-  publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean }): GameState {
+  publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean; unanswered?: { logId: number; playerId: string }[] }): GameState {
     const s = this.s;
     const w = s.world;
     const shops = this.shopsHere();
@@ -2826,6 +2902,10 @@ export class Game {
       ready: s.ready,
       gathering: !!dm.gathering,
       rolled: s.rolled,
+      factions: factionViews(this),
+      rumours: rumourViews(this),
+      trophies: trophyViews(this),
+      unanswered: dm.unanswered ?? [],
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),
         width: w.width,
