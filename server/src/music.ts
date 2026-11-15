@@ -438,6 +438,7 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
   const state = loadState(dir);
   let added = 0;
   let asked = 0;
+  const problems: string[] = [];
   for (const scene of scenes) {
     const query = FREESOUND_QUERIES[scene];
     if (!query) continue;
@@ -450,7 +451,7 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
       api.searchParams.set('fields', 'id,name,username,url,previews');
       api.searchParams.set('page_size', '10');
       const res = await fetchFn(api, { headers: { authorization: `Token ${key}`, 'user-agent': 'hearthforge-music-fetch' }, signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) throw new Error(`Freesound answered ${res.status}`);
+      if (!res.ok) throw new Error(`Freesound answered ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
       const hits: FreesoundHit[] = ((await res.json()) as { results?: FreesoundHit[] }).results ?? [];
       let taken = 0;
       for (const h of hits) {
@@ -468,14 +469,18 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
           taken++;
           added++;
         } catch (err) {
-          console.warn(`[music] Freesound sound ${h.id}: ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`);
+          const why = `sound ${h.id}: ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`;
+          problems.push(why);
+          console.warn(`[music] Freesound ${why}`);
         }
       }
     } catch (err) {
-      console.warn(`[music] Freesound search for ${scene} failed: ${err instanceof Error ? err.message : err}`);
+      const why = `search for ${scene} failed: ${err instanceof Error ? err.message : err}`;
+      problems.push(why);
+      console.warn(`[music] Freesound ${why}`);
     }
   }
-  if (asked && !added) throw Object.assign(new MusicError('download_failed'), { detail: 'Freesound gave no new sound' });
+  if (asked && !added) throw Object.assign(new MusicError('download_failed'), { detail: `Freesound gave no new sound (${problems.join('; ') || 'no usable results'})` });
   return added;
 }
 
@@ -496,7 +501,7 @@ export async function ensureFreesound(dir: string, env: NodeJS.ProcessEnv, fetch
     const n = await fetchFreesound(dir, env, empty, fetchFn);
     console.log(`[music] Fetched ${n} CC0 ambient loop${n === 1 ? '' : 's'} from Freesound.`);
   } catch (err) {
-    console.warn('[music] Freesound fetch skipped:', err instanceof Error ? err.message : err);
+    console.warn('[music] Freesound fetch skipped:', (err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err));
   } finally {
     fetching = false;
   }
