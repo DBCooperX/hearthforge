@@ -3,7 +3,7 @@ import { ABILITIES } from '../../shared/content';
 import { sameHex, type Hex } from '../../shared/hex';
 import type { Character } from '../../shared/types';
 import { CharacterSheet } from './components/CharacterSheet';
-import { ActionBar, TurnBar, type Targeting } from './components/Hud';
+import { ActionBar, ReactionPrompt, TurnBar, type Targeting } from './components/Hud';
 import { Inventory } from './components/Inventory';
 import { StyleSetup } from './components/StyleSetup';
 import { ChatPanel, lastForeignChat } from './components/Chat';
@@ -16,7 +16,7 @@ import { Journal } from './components/Journal';
 import { Trade } from './components/Trade';
 import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
-import { reachable, tileAt } from './game/util';
+import { heroSees, key, lightLevels, pathTo, provokersOf, reachable, tileAt } from './game/util';
 import { tileWalkable } from '../../shared/battlemap';
 import { inFootprint } from '../../shared/monsterLook';
 import { musicContext } from '../../shared/music';
@@ -48,6 +48,8 @@ export function App() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [targeting, setTargeting] = useState<Targeting>(null);
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
+  /** A move that would provoke opportunity attacks waits for a second click on the same tile. */
+  const [risky, setRisky] = useState<{ x: number; y: number; path: { x: number; y: number }[]; ids: string[] } | null>(null);
   /** The owner's panel. It sits above everything, also above the list of tables; ?innkeeper opens it directly. */
   const [innkeeper, setInnkeeper] = useState(() => new URLSearchParams(location.search).has('innkeeper'));
   const closeInnkeeper = useCallback(() => {
@@ -109,6 +111,9 @@ export function App() {
     }
   }, [state, selected, mine]);
 
+  // A planned move only holds while nothing else changes.
+  useEffect(() => setRisky(null), [state?.combat?.turnIndex, state?.combat?.movementLeft, state?.combat?.disengaged, actor?.id, targeting]);
+
   // Leaving a fight or the map drops whatever was being aimed or planned.
   useEffect(() => { if (!combat) setTargeting(null); else { setTravelTarget(null); setOverlay((o) => (o === 'map' ? null : o)); } }, [!!combat]);
 
@@ -146,10 +151,23 @@ export function App() {
       if (hero && (wantsAlly || hero.id !== actor?.id) && (wantsAlly || hero.hp > 0)) return pickCharacter(hero);
       if (!actor) return conn.toast(t('Wait for your turn'));
       setTargeting(null);
-      send({ t: 'move', characterId: actor.id, x, y });
+      tryMove(x, y);
     },
-    [state, actor, combat, targeting, targetAbility, wantsAlly, pickCharacter, send, conn],
+    [state, actor, combat, targeting, targetAbility, wantsAlly, pickCharacter, send, conn, risky],
   );
+
+  /** Move, but stop once first if the way leads out of an enemy's reach. */
+  function tryMove(x: number, y: number) {
+    if (!state || !combat || !actor) return;
+    const path = pathTo(state, actor, combat.movementLeft, x, y);
+    const foes = path ? provokersOf(state, actor, path) : [];
+    if (foes.length && !(risky && risky.x === x && risky.y === y)) {
+      setRisky({ x, y, path: path!, ids: foes.map((m) => m.id) });
+      return;
+    }
+    setRisky(null);
+    send({ t: 'move', characterId: actor.id, x, y });
+  }
 
   // Keyboard: i inventory, c sheet, m map, j journal; in a fight WASD moves, Space ends the turn, digits fire action buttons.
   useEffect(() => {
@@ -161,30 +179,40 @@ export function App() {
       const toggles: Record<string, Overlay> = { i: 'inventory', c: 'sheet', m: 'map', j: 'journal' };
       if (k === 't' && state.shops.length) { setOverlay((o) => (o === 'trade' ? null : 'trade')); e.preventDefault(); return; }
       if (toggles[k] && !(k === 'm' && combat)) { setOverlay((o) => (o === toggles[k] ? null : toggles[k])); e.preventDefault(); return; }
-      if (k === 'escape') { if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else setTravelTarget(null); return; }
+      if (k === 'escape') { if (risky) setRisky(null); else if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else setTravelTarget(null); return; }
       if (overlay || !combat) return;
       const dirs: Record<string, [number, number]> = { w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] };
       if (dirs[k] && actor) {
         e.preventDefault();
         const nx = actor.x + dirs[k][0], ny = actor.y + dirs[k][1];
         const occupied = state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, nx, ny));
-        if (tileWalkable(tileAt(state, nx, ny)) && !occupied) send({ t: 'move', characterId: actor.id, x: nx, y: ny });
+        if (tileWalkable(tileAt(state, nx, ny)) && !occupied) tryMove(nx, ny);
         return;
       }
-      if ((k === ' ' || k === 'enter') && actor) { e.preventDefault(); send({ t: 'end_turn', characterId: actor.id }); return; }
+      if ((k === ' ' || k === 'enter') && actor && !combat.reaction) { e.preventDefault(); send({ t: 'end_turn', characterId: actor.id }); return; }
       if (/^[1-9]$/.test(k)) document.querySelector<HTMLButtonElement>(`.actionbar button[data-hotkey="${k}"]:not(:disabled)`)?.click();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [state, actor, combat, targeting, overlay, innkeeper, send]);
+  }, [state, actor, combat, targeting, overlay, innkeeper, send, risky]);
 
   const view: ViewOptions = useMemo(() => {
     const reach = state && combat && turnChar ? reachable(state, turnChar, combat.movementLeft) : new Set<string>();
     const targetIds = new Set<string>();
     if (state && wantsEnemy) for (const m of state.monsters) if (m.alive) targetIds.add(m.id);
     if (state && wantsAlly) for (const c of state.characters) if (!c.dead) targetIds.add(c.id);
-    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)) };
-  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine]);
+    // In the dark, a monster is a shape until one of the player's heroes (or anyone's, for a spectator) can make it out.
+    const unseenIds = new Set<string>();
+    if (state && combat && state.light?.ambient !== 'bright') {
+      const grid = lightLevels(state);
+      const eyes = (mine.length ? mine : state.characters).filter((c) => !c.dead && c.hp > 0);
+      for (const m of state.monsters) if (m.alive && !eyes.some((c) => heroSees(state, grid, c, m))) unseenIds.add(m.id);
+    }
+    const danger = new Set(risky?.path.map((p) => key(p.x, p.y)) ?? []);
+    const warnIds = new Set(risky?.ids ?? []);
+    const reaction = combat?.reaction ? { heroId: combat.reaction.heroId, monsterId: combat.reaction.monsterId } : null;
+    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction };
+  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky]);
 
   const inn = innkeeper && <Innkeeper onClose={closeInnkeeper} />;
   if (!state) return <><LobbyScreen conn={conn} onInnkeeper={() => setInnkeeper(true)} />{inn}<Toasts conn={conn} /></>;
@@ -194,6 +222,7 @@ export function App() {
   if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
+  else if (risky && state) hint = t('Leaving the reach of {names} invites an opportunity attack. Click the same square again to go anyway, or Disengage first.', { names: risky.ids.map((id) => state.monsters.find((m) => m.id === id)?.name ?? '?').join(', ') });
   else if (combat && turnChar) hint = `${turnChar.ownerId === playerId ? t("{name}'s turn", { name: turnChar.name }) : t("{name}'s turn. Their player is away, so anyone may act for them.", { name: turnChar.name })} · ${t('{n} ft of movement', { n: combat.movementLeft * 5 })} · ${combat.actionUsed ? (combat.attacksLeft > 0 ? t('one more attack') : t('action used')) : t('action ready')}`;
   else if (combat) hint = t('Waiting for {name}…', { name: state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
   else hint = '';
@@ -250,6 +279,7 @@ export function App() {
             <main className="stage">
               <TurnBar state={state} />
               <MapView state={state} view={view} onTile={onTile} onMoved={conn.onMoved} />
+              <ReactionPrompt state={state} playable={playable} conn={conn} />
               <ActionBar state={state} actor={actor} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
             </main>
             <StoryFeed state={state} conn={conn} compact />

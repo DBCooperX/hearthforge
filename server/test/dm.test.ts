@@ -58,7 +58,7 @@ describe('Claude Dungeon Master', () => {
       return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'The rats surge forward.' }] };
     });
     let actions = 0;
-    const text = await dm.runMonsters(g, block, async () => { actions++; });
+    const text = await dm.runMonsters(g, block, async (id, intent) => { actions++; return g.monsterAct(id, intent); });
     expect(text).toBe('The rats surge forward.');
     // Every monster in the block acted exactly once, including ones the model skipped.
     expect(actions).toBe(block.length);
@@ -76,7 +76,7 @@ describe('Claude Dungeon Master', () => {
     const block = g.monsterBlock();
     const { dm } = stubbed(() => { throw new Error('network down'); });
     let actions = 0;
-    const text = await dm.runMonsters(g, block, async () => { actions++; });
+    const text = await dm.runMonsters(g, block, async (id, intent) => { actions++; return g.monsterAct(id, intent); });
     expect(text).toBeNull();
     expect(actions).toBe(block.length);
     expect((await dm.narrate(g, [{ kind: 'combat_end', boss: false, rewards: '50 XP' }], noop))?.text).toMatch(/50 XP/);

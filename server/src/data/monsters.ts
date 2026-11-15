@@ -1,6 +1,7 @@
 // Monster statistics from the D&D 5e System Reference Document 5.1 (CC-BY-4.0).
 
 import { baseLook, type CreatureType, type MonsterLook, type Size } from '../../../shared/monsterLook';
+import type { LightKindId } from '../../../shared/light';
 
 export interface MonsterAttack {
   name: string;
@@ -34,6 +35,13 @@ export interface MonsterDef {
   vulnerable?: string[];
   immune?: string[];
   packTactics?: boolean;
+  /** Senses in feet (SRD). Missing: none. */
+  darkvision?: number;
+  blindsight?: number;
+  /** A light it brings to a fight in the dark, because it cannot see without one. */
+  carriesLight?: LightKindId;
+  /** Nimble Escape: it can Disengage as a bonus action and still attack. */
+  nimbleEscape?: boolean;
   boss?: boolean;
   /** Experience awarded for defeating it. */
   xp: number;
@@ -55,6 +63,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'small', 'green', { eyes: 'yellow', weapon: 'sword' }),
     ac: 15,
     hp: 7,
+    darkvision: 60, nimbleEscape: true,
     speed: 30,
     dexMod: 2,
     saves: { str: -1, dex: 2, con: 0, int: 0, wis: -1, cha: -1 },
@@ -75,6 +84,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('rodent', 'small', 'brown', { eyes: 'red', tail: true }),
     ac: 12,
     hp: 7,
+    darkvision: 60,
     speed: 30,
     dexMod: 2,
     saves: { str: -2, dex: 2, con: 0, int: -4, wis: 0, cha: -3 },
@@ -94,6 +104,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'bone', { mutation: 'skeletal', weapon: 'sword' }),
     ac: 13,
     hp: 13,
+    darkvision: 60,
     speed: 30,
     dexMod: 2,
     saves: { str: 0, dex: 2, con: 2, int: -2, wis: -1, cha: -3 },
@@ -117,6 +128,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'brown', { eyes: 'red', weapon: 'club' }),
     ac: 16,
     hp: 27,
+    darkvision: 60,
     speed: 30,
     dexMod: 2,
     saves: { str: 2, dex: 2, con: 1, int: -1, wis: 0, cha: -1 },
@@ -157,6 +169,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'tan', { armor: 'leather', weapon: 'sword' }),
     ac: 12,
     hp: 11,
+    carriesLight: 'torch',
     speed: 30,
     dexMod: 1,
     saves: { str: 0, dex: 1, con: 1, int: 0, wis: 0, cha: 0 },
@@ -178,6 +191,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'green', { eyes: 'red', weapon: 'axe' }),
     ac: 13,
     hp: 15,
+    darkvision: 60,
     speed: 30,
     dexMod: 1,
     saves: { str: 3, dex: 1, con: 3, int: -2, wis: 0, cha: 0 },
@@ -198,6 +212,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'teal', { mutation: 'rotting' }),
     ac: 8,
     hp: 22,
+    darkvision: 60,
     speed: 20,
     dexMod: -2,
     saves: { str: 1, dex: -2, con: 3, int: -4, wis: 0, cha: -3 },
@@ -217,6 +232,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'small', 'red', { tail: true, horns: true, weapon: 'spear' }),
     ac: 12,
     hp: 5,
+    darkvision: 60,
     speed: 30,
     dexMod: 2,
     saves: { str: -2, dex: 2, con: -1, int: -1, wis: -2, cha: -1 },
@@ -239,6 +255,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'orange', { armor: 'plate', weapon: 'sword' }),
     ac: 18,
     hp: 11,
+    darkvision: 60,
     speed: 30,
     dexMod: 1,
     saves: { str: 1, dex: 1, con: 1, int: 0, wis: 0, cha: -1 },
@@ -260,6 +277,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'tan', { eyes: 'yellow', weapon: 'spear' }),
     ac: 15,
     hp: 22,
+    darkvision: 60,
     speed: 30,
     dexMod: 1,
     saves: { str: 2, dex: 1, con: 0, int: -2, wis: 0, cha: -2 },
@@ -280,6 +298,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'medium', 'grey', { eyes: 'yellow', mutation: 'rotting' }),
     ac: 12,
     hp: 22,
+    darkvision: 60,
     speed: 30,
     dexMod: 2,
     saves: { str: 1, dex: 2, con: 0, int: -2, wis: 0, cha: -2 },
@@ -300,6 +319,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('ghost', 'medium', 'white', { eyes: 'blue', mutation: 'spectral' }),
     ac: 12,
     hp: 22,
+    darkvision: 60,
     speed: 50,
     dexMod: 2,
     saves: { str: -5, dex: 2, con: 0, int: 0, wis: 0, cha: 0 },
@@ -320,6 +340,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('insect', 'small', 'orange'),
     ac: 13,
     hp: 4,
+    blindsight: 30,
     speed: 30,
     dexMod: 2,
     saves: { str: -3, dex: 2, con: 1, int: -5, wis: -2, cha: -4 },
@@ -339,6 +360,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('insect', 'large', 'black', { eyes: 'red' }),
     ac: 14,
     hp: 26,
+    darkvision: 60, blindsight: 10,
     speed: 30,
     dexMod: 3,
     saves: { str: 2, dex: 3, con: 1, int: -4, wis: 0, cha: -3 },
@@ -397,6 +419,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('ooze', 'medium', 'grey'),
     ac: 8,
     hp: 22,
+    blindsight: 60,
     speed: 10,
     dexMod: -2,
     saves: { str: 1, dex: -2, con: 3, int: -5, wis: -2, cha: -4 },
@@ -416,6 +439,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('construct', 'medium', 'grey', { armor: 'plate', eyes: 'blue' }),
     ac: 18,
     hp: 33,
+    blindsight: 60,
     speed: 25,
     dexMod: 0,
     saves: { str: 2, dex: 0, con: 1, int: -5, wis: -4, cha: -5 },
@@ -436,6 +460,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('humanoid', 'small', 'purple', { eyes: 'red', horns: true }),
     ac: 11,
     hp: 18,
+    darkvision: 60,
     speed: 20,
     dexMod: 0,
     saves: { str: 0, dex: 0, con: 1, int: -3, wis: -1, cha: -4 },
@@ -456,6 +481,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('giant', 'large', 'tan', { weapon: 'club' }),
     ac: 11,
     hp: 59,
+    darkvision: 60,
     speed: 40,
     dexMod: -1,
     saves: { str: 4, dex: -1, con: 3, int: -3, wis: -2, cha: -2 },
@@ -477,6 +503,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('dragon', 'medium', 'white', { wings: 'bat', tail: true, horns: true, eyes: 'blue' }),
     ac: 16,
     hp: 32,
+    darkvision: 60, blindsight: 10,
     speed: 30,
     dexMod: 0,
     saves: { str: 2, dex: 2, con: 4, int: -3, wis: 2, cha: 2 },
@@ -497,6 +524,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('beast', 'large', 'brown', { eyes: 'yellow' }),
     ac: 13,
     hp: 59,
+    darkvision: 60,
     speed: 40,
     dexMod: 1,
     saves: { str: 5, dex: 1, con: 3, int: -4, wis: 1, cha: -2 },
@@ -517,6 +545,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('giant', 'large', 'green', { eyes: 'yellow' }),
     ac: 15,
     hp: 84,
+    darkvision: 60,
     speed: 30,
     dexMod: 1,
     saves: { str: 4, dex: 1, con: 5, int: -2, wis: -1, cha: -2 },
@@ -537,6 +566,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     look: baseLook('giant', 'huge', 'tan', { weapon: 'club' }),
     ac: 13,
     hp: 105,
+    carriesLight: 'torch',
     speed: 40,
     dexMod: -1,
     saves: { str: 5, dex: -1, con: 4, int: -3, wis: -1, cha: -2 },

@@ -9,7 +9,8 @@ import { monsterCanvas } from './monsterArt';
 import { artOfCharacter, heroCanvas } from './heroArt';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
-import { tileAt } from './util';
+import { heroSenses, lightLevels, tileAt } from './util';
+import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 
 interface Ent {
   /** Squares along one side. */
@@ -35,7 +36,16 @@ export interface ViewOptions {
   reach: Set<string>;
   targetIds: Set<string>;
   myIds: Set<string>;
+  /** Monsters none of the player's heroes can see: drawn as a faint shape in the dark. */
+  unseenIds: Set<string>;
+  /** Tiles of a planned move that would provoke opportunity attacks, and the enemies that would strike. */
+  danger: Set<string>;
+  warnIds: Set<string>;
+  /** Hero and monster of an open reaction prompt. */
+  reaction: { heroId: string; monsterId: string } | null;
 }
+
+export const EMPTY_VIEW: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set(), unseenIds: new Set(), danger: new Set(), warnIds: new Set(), reaction: null };
 
 const textures = new Map<string, Texture>();
 function tex(name: string): Texture {
@@ -80,13 +90,17 @@ export class MapRenderer {
   private world = new Container();
   private tileLayer = new Container();
   private overlay = new Graphics();
+  /** Darkness and dim light, seen through the eyes of the selected hero. Redrawn when the state changes. */
+  private shade = new Graphics();
+  /** Flames and glows, flickering every frame. */
+  private glow = new Graphics();
   private entLayer = new Container();
   private fxLayer = new Container();
   private tiles: Sprite[] = [];
   private ents = new Map<string, Ent>();
   private floaters: Floater[] = [];
   private state: GameState | null = null;
-  private opts: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set() };
+  private opts: ViewOptions = EMPTY_VIEW;
   private hover: { x: number; y: number } | null = null;
   private mapKey = '';
   private scale = 3;
@@ -102,7 +116,7 @@ export class MapRenderer {
     await this.app.init({ resizeTo: host, background: 0x0c0a0e, antialias: false, autoDensity: true, resolution: Math.min(window.devicePixelRatio || 1, 2) });
     if (this.destroyed) { this.app.destroy(true); return; }
     host.appendChild(this.app.canvas);
-    this.world.addChild(this.tileLayer, this.overlay, this.entLayer, this.fxLayer);
+    this.world.addChild(this.tileLayer, this.shade, this.glow, this.overlay, this.entLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
@@ -226,7 +240,13 @@ export class MapRenderer {
       if (!m.alive) continue;
       const e = place(m.id, 'monster', !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look), m.x, m.y, m.hp, m.maxHp, m.tiles);
       e.root.zIndex = 1;
+      // In the dark, a monster nobody in the party can see is only a shape.
+      const unseen = this.opts.unseenIds.has(m.id);
+      e.sprite.tint = unseen ? 0x2a2a3a : 0xffffff;
+      e.root.alpha = unseen ? 0.55 : 1;
+      e.bar.visible = !unseen;
     }
+    this.drawShade(state);
     this.entLayer.sortableChildren = true;
     for (const [id, e] of this.ents) {
       if (seen.has(id)) continue;
@@ -234,6 +254,57 @@ export class MapRenderer {
       if (e.kind === 'monster' && e.hp > 0) this.float(e, `-${e.hp}`, 0xff6b5e);
       e.root.destroy({ children: true });
       this.ents.delete(id);
+    }
+  }
+
+  /**
+   * Darken what is dim or dark. The selected hero's eyes decide: with darkvision, darkness
+   * within range shows as a cold grey instead of black, so the player sees how far it reaches.
+   */
+  private drawShade(state: GameState) {
+    const g = this.shade;
+    g.clear();
+    if (state.phase !== 'combat' || (state.light?.ambient ?? 'bright') === 'bright') return;
+    const grid = lightLevels(state);
+    const viewer = state.characters.find((c) => c.id === this.opts.selectedId) ?? null;
+    const senses = viewer ? heroSenses(viewer) : { darkvision: 0, blindsight: 0 };
+    for (let y = 0; y < state.map.height; y++) {
+      for (let x = 0; x < state.map.width; x++) {
+        const level = grid[y * state.map.width + x];
+        if (level === 'bright') continue;
+        const dist = viewer ? Math.max(Math.abs(viewer.x - x), Math.abs(viewer.y - y)) * 5 : 9999;
+        const seen = perceivedLight(level, senses, dist);
+        const byDarkvision = seen !== level;
+        const alpha = seen === 'dark' ? 0.7 : seen === 'dim' ? (byDarkvision ? 0.42 : 0.34) : byDarkvision ? 0.18 : 0;
+        if (alpha > 0) g.rect(x * TILE, y * TILE, TILE, TILE).fill({ color: byDarkvision ? 0x1d2026 : 0x05040a, alpha });
+      }
+    }
+  }
+
+  /** Flames on the map and a glow around every carried light, flickering a little. */
+  private drawGlow(state: GameState) {
+    const g = this.glow;
+    g.clear();
+    if (state.phase !== 'combat' || (state.light?.ambient ?? 'bright') === 'bright') return;
+    for (const [i, src] of (state.light?.sources ?? []).entries()) {
+      const k = LIGHT_KINDS[src.kind];
+      if (!k) continue;
+      const holder = src.holder ? this.ents.get(src.holder) : undefined;
+      const px = (holder ? holder.x : src.x) * TILE + TILE / 2, py = (holder ? holder.y : src.y) * TILE + TILE / 2;
+      const flick = 0.85 + 0.15 * Math.sin(this.pulse * 9 + i * 1.7) * Math.sin(this.pulse * 5.3 + i);
+      const warm = src.kind === 'glow' ? 0x7fd6c8 : 0xffb347;
+      const r = Math.max(TILE * 0.8, ((k.bright || k.dim) / 5) * TILE * 0.5);
+      g.circle(px, py, r * flick).fill({ color: warm, alpha: 0.07 });
+      g.circle(px, py, r * 0.45 * flick).fill({ color: warm, alpha: 0.08 });
+      if (holder) {
+        g.circle(px + TILE * 0.3, py - TILE * 0.2, 1.6 * flick).fill({ color: 0xffe08a, alpha: 0.95 });
+      } else if (src.kind !== 'glow') {
+        // A little flame on its sconce, brazier or hearth.
+        g.ellipse(px, py + 1, 2.6, 3.6 * flick).fill({ color: 0xff7a1a, alpha: 0.9 });
+        g.ellipse(px, py + 1.6, 1.3, 2 * flick).fill({ color: 0xffe08a, alpha: 0.95 });
+      } else {
+        g.circle(px, py, 1.4 * flick).fill({ color: 0xb8fff0, alpha: 0.8 });
+      }
     }
   }
 
@@ -284,12 +355,19 @@ export class MapRenderer {
       return true;
     });
 
+    this.drawGlow(state);
+
     // Overlay: reach, targets, selection, hover
     const g = this.overlay;
     g.clear();
     for (const k of this.opts.reach) {
       const [x, y] = k.split(',').map(Number);
       g.rect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2).fill({ color: 0x64b5f6, alpha: 0.16 });
+    }
+    // A planned move that provokes: the path in ember red.
+    for (const k of this.opts.danger) {
+      const [x, y] = k.split(',').map(Number);
+      g.rect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2).fill({ color: 0xff6a3d, alpha: 0.32 });
     }
     const ring = (id: string | null, color: number, alpha: number) => {
       const e = id ? this.ents.get(id) : undefined;
@@ -298,6 +376,8 @@ export class MapRenderer {
     };
     const beat = 0.55 + 0.45 * Math.sin(this.pulse * 5);
     for (const id of this.opts.targetIds) ring(id, 0xff5252, beat);
+    for (const id of this.opts.warnIds) ring(id, 0xff8a3d, beat);
+    if (this.opts.reaction) { ring(this.opts.reaction.monsterId, 0xff8a3d, beat); ring(this.opts.reaction.heroId, 0xffd54f, beat); }
     if (this.opts.activeId && this.opts.activeId !== this.opts.selectedId) ring(this.opts.activeId, 0xffd54f, beat);
     ring(this.opts.selectedId, 0xffffff, 0.9);
     if (this.hover && tileWalkable(tileAt(state, this.hover.x, this.hover.y))) {

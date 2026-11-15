@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
-import type { DungeonMaster, PlayerLine } from './dm/types';
+import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat } from './game/engine';
 import { newSeed } from '../../shared/start';
 
@@ -27,9 +27,11 @@ export interface RoomTiming {
   turnWaitMaxMs: number;
   /** How long a disconnected host keeps the table before it passes to another player. */
   hostGraceMs: number;
+  /** How long the fight waits for a player deciding on an opportunity attack before striking for them. */
+  reactionWaitMs: number;
 }
 
-export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000 };
+export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000, reactionWaitMs: 20000 };
 
 export interface RoomHooks {
   /** What the lobby lists about this table changed. */
@@ -70,6 +72,8 @@ export class Room {
   /** Non-zero while a reply to the players is queued or being written. */
   private answering = 0;
   private answerSeq = 0;
+  /** Settles the reaction prompt that a monster's turn is waiting on: true strikes. */
+  private reactionWaiter: ((take: boolean) => void) | null = null;
 
   constructor(
     readonly name: string,
@@ -81,6 +85,8 @@ export class Room {
     this.timing = { ...DEFAULT_TIMING, ...timing };
     const saved = store.load(name);
     this.game = new Game(name, Math.random, saved);
+    this.game.interactiveReactions = this.timing.reactionWaitMs > 0;
+    this.game.reactionWaitMs = this.timing.reactionWaitMs;
     for (const p of this.game.s.players) p.connected = false;
     // Every table has a world seed to show and share, also the ones saved before seeds existed.
     if (!this.game.s.table.start.seed) this.game.s.table.start.seed = newSeed();
@@ -127,6 +133,9 @@ export class Room {
     if (![...this.sockets.values()].includes(id)) {
       this.game.setConnected(id, false);
       this.setTyping(id, null);
+      // Nobody waits for a player who has gone: their hero strikes.
+      const prompt = this.game.reactionPrompt();
+      if (prompt && this.game.s.characters.find((c) => c.id === prompt.heroId)?.ownerId === id) this.reactionWaiter?.(true);
     }
     this.watchHost();
     this.flush();
@@ -166,6 +175,7 @@ export class Room {
   private stop(reason: 'closed' | 'restored') {
     this.closed = true;
     this.epoch++;
+    this.reactionWaiter?.(false);
     for (const id of new Set(this.sockets.values())) this.detach(id, reason);
     for (const t of [this.saveTimer, this.hostTimer, this.gatherTimer]) if (t) clearTimeout(t);
     this.saveTimer = this.hostTimer = this.gatherTimer = null;
@@ -321,6 +331,13 @@ export class Room {
       case 'ready':
         if (this.attempt(ws, () => g.setReady(playerId, !!msg.ready))) this.flush();
         return;
+      // Answered outside the queue: the monsters' turn holds it while it waits for this.
+      case 'reaction':
+        if (this.attempt(ws, () => g.checkReaction(playerId, String(msg.characterId)))) this.reactionWaiter?.(!!msg.take);
+        return;
+      case 'set_opportunity':
+        if (this.attempt(ws, () => g.setOpportunity(playerId, String(msg.characterId), msg.mode))) this.flush();
+        return;
     }
     this.enqueue(async () => {
       if (this.closed) return;
@@ -346,6 +363,8 @@ export class Room {
       case 'ability': return g.useAbility(playerId, String(msg.characterId), String(msg.abilityId), msg.targetId ? String(msg.targetId) : undefined);
       case 'use_item': return g.useItem(playerId, String(msg.characterId), String(msg.uid), msg.targetId ? String(msg.targetId) : undefined);
       case 'end_turn': return g.endTurn(playerId, String(msg.characterId));
+      case 'disengage': return g.disengage(playerId, String(msg.characterId));
+      case 'light': return g.setLight(playerId, String(msg.characterId), !!msg.on);
       case 'inv_move': return g.invMove(playerId, String(msg.characterId), msg.from, msg.to);
       case 'give': return g.give(playerId, String(msg.characterId), msg.from, String(msg.toCharacterId));
       case 'buy': return void g.buy(playerId, String(msg.characterId), String(msg.shopId), String(msg.defId), Number(msg.qty));
@@ -361,6 +380,7 @@ export class Room {
       case 'reset':
         g.reset(playerId);
         this.epoch++;
+        this.reactionWaiter?.(false);
         this.pending = [];
         this.answering = 0;
         if (this.gatherTimer) clearTimeout(this.gatherTimer);
@@ -416,10 +436,7 @@ export class Room {
       try {
         await this.narration; // let the scene-setting land before the monsters move
         if (epoch !== this.epoch) return;
-        const text = await this.dm.runMonsters(g, block, async () => {
-          this.flush();
-          await sleep(this.timing.actionDelayMs);
-        });
+        const text = await this.dm.runMonsters(g, block, this.monsterActor(epoch));
         if (epoch !== this.epoch) return;
         if (text) g.log('dm', text);
         g.finishMonsterBlock(block);
@@ -429,6 +446,40 @@ export class Room {
       }
       this.narrateLater(g.takeBeats());
     }
+  }
+
+  /** Plays a monster's turn for the Dungeon Master, pausing while a player decides on an opportunity attack. */
+  private monsterActor(epoch: number): MonsterActor {
+    const g = this.game;
+    return async (id, intent) => {
+      let result = g.monsterAct(id, intent);
+      while (result.waiting && g.reactionPrompt() && epoch === this.epoch && !this.closed) {
+        this.flush();
+        const take = await this.waitForReaction();
+        if (epoch !== this.epoch || this.closed) break;
+        const next = g.resumeMonster(take);
+        if (!next) break;
+        result = next;
+      }
+      this.flush();
+      await sleep(this.timing.actionDelayMs);
+      return result;
+    };
+  }
+
+  /** Resolves when the player answers, leaves, or the time runs out (then the hero strikes). */
+  private waitForReaction(): Promise<boolean> {
+    const prompt = this.game.reactionPrompt();
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => settle(true), Math.max(0, (prompt?.until ?? 0) - Date.now()));
+      timer.unref?.();
+      const settle = (take: boolean) => {
+        clearTimeout(timer);
+        if (this.reactionWaiter === settle) this.reactionWaiter = null;
+        resolve(take);
+      };
+      this.reactionWaiter = settle;
+    });
   }
 
   private background(fn: () => Promise<void>) {

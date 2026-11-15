@@ -85,6 +85,7 @@ let connSeq = 0;
 const num = (raw: string | undefined, fallback: number) => (raw !== undefined && raw !== '' && Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : fallback);
 const TIMING = {
   turnWaitMs: num(env.HEARTHFORGE_TURN_WAIT, DEFAULT_TIMING.turnWaitMs / 1000) * 1000,
+  reactionWaitMs: num(env.HEARTHFORGE_REACTION_WAIT, DEFAULT_TIMING.reactionWaitMs / 1000) * 1000,
 };
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // nothing that reads two ways aloud

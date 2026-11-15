@@ -1,5 +1,11 @@
 import type { Mood } from '../../../shared/types';
-import type { Beat, Game, Monster } from '../game/engine';
+import type { Beat, Game, Monster, MonsterActResult, MonsterIntent } from '../game/engine';
+
+/**
+ * Plays one monster's turn and resolves to what happened. The room supplies it: it runs the
+ * engine, waits for a player who is deciding on an opportunity attack, and paces the animation.
+ */
+export type MonsterActor = (monsterId: string, intent?: MonsterIntent) => Promise<MonsterActResult>;
 
 /** A piece of narration ready to show as a scene card. */
 export interface Scene {
@@ -23,10 +29,9 @@ export interface DungeonMaster {
   /** Narrate story beats. Returns null when there is nothing to say. */
   narrate(game: Game, beats: Beat[], onUpdate: () => Promise<void>): Promise<Scene | null>;
   /**
-   * Play every monster in the block. `onAction` is awaited after each monster
-   * acts so clients can animate it. Returns narration for the block.
+   * Play every monster in the block, each through `act` exactly once. Returns narration for the block.
    */
-  runMonsters(game: Game, block: Monster[], onAction: () => Promise<void>): Promise<string | null>;
+  runMonsters(game: Game, block: Monster[], act: MonsterActor): Promise<string | null>;
   /**
    * Respond to what the players say or try. Several lines mean they acted at the same moment
    * and get one answer together. `onUpdate` is awaited whenever the DM changes the game.

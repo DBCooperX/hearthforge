@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { ABILITIES } from '../../../shared/content';
+import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
-import type { Character, GameState } from '../../../shared/types';
+import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
 import { dice } from './Guide';
@@ -53,6 +55,7 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
   const potion = actor?.bag.find((b) => b && itemDef(state.items, b.defId)?.consumable) ?? null;
   const potions = actor?.bag.reduce((n, b) => n + (b && itemDef(state.items, b.defId)?.consumable ? b.qty : 0), 0) ?? 0;
   const toggle = (t: NonNullable<Targeting>) => setTargeting(JSON.stringify(targeting) === JSON.stringify(t) ? null : t);
+  const hasLight = !!actor && LIGHT_ITEMS.some((l) => [...actor.bag, ...Object.values(actor.equipment)].some((b) => b?.defId === l.itemId));
   let hotkey = 0;
   const key = () => ++hotkey;
 
@@ -99,6 +102,30 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
             </Hint>
           );
         })}
+        {actor && combat && (
+          <Hint title={t('Disengage')} text={<>{t('Until the end of your turn, leaving an enemy\'s reach invites no opportunity attack.')}<em>{actor.abilityIds.includes('dash') ? t('Bonus action (Cunning Action)') : t('Action')}</em></>}>
+            <button
+              className={combat.disengaged ? 'act on' : 'act'}
+              disabled={!canAct || !!combat.disengaged || (actor.abilityIds.includes('dash') ? combat.bonusUsed && actionUsed : actionUsed)}
+              data-hotkey={key()}
+              onClick={() => conn.send({ t: 'disengage', characterId: actor.id })}
+            >
+              <span className="icon">🏃</span>{t('Disengage')}
+            </button>
+          </Hint>
+        )}
+        {actor && combat && state.light?.ambient !== 'bright' && (actor.light || hasLight) && (
+          <Hint title={actor.light ? t('Put out the light') : t('Light a torch')} text={actor.light ? t('Darkness hides you from enemies without darkvision, but you cannot see them either. Free.') : t('Bright light for 20 ft and dim light 20 ft beyond (a lantern: 30 and 30). Enemies see you too. Bonus action.')}>
+            <button
+              className={actor.light ? 'act on' : 'act'}
+              disabled={!canAct || (!actor.light && combat.bonusUsed)}
+              data-hotkey={key()}
+              onClick={() => conn.send({ t: 'light', characterId: actor.id, on: !actor.light })}
+            >
+              <span className="icon">{actor.light ? '🌑' : '🔥'}</span>{actor.light ? t('Douse') : t('Light')}
+            </button>
+          </Hint>
+        )}
         {actor && potion && (
           <Hint title={t('Potion')} text={t('Drink a healing potion, or feed it to an adjacent ally.')}>
             <button
@@ -112,12 +139,84 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
           </Hint>
         )}
         <span className="spacer" />
+        {actor && combat && <OpportunitySwitch actor={actor} conn={conn} />}
         {actor && combat && (
           <button className="act end" disabled={!canAct} onClick={() => conn.send({ t: 'end_turn', characterId: actor.id })} >
             <span className="icon">⏭️</span>{t('End turn')}<Kbd>{t('Space')}</Kbd>
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+const MODE_LABELS: Record<OpportunityMode, string> = { ask: 'Ask me', always: 'Always strike', never: 'Never' };
+
+/** What the hero does when an enemy walks out of reach. Changeable at any time, also on others' turns. */
+function OpportunitySwitch({ actor, conn }: { actor: Character; conn: Connection }) {
+  const t = useT();
+  const mode = actor.opportunity ?? 'ask';
+  const next = OPPORTUNITY_MODES[(OPPORTUNITY_MODES.indexOf(mode) + 1) % OPPORTUNITY_MODES.length];
+  return (
+    <Hint title={t('Opportunity attacks')} text={t('When an enemy {name} can see leaves their reach, they may strike at it with their reaction, once per round. Ask me: you decide each time. Always strike or Never: the game decides for you. Click to switch.', { name: actor.name })}>
+      <button className="act small oa-mode" onClick={() => conn.send({ t: 'set_opportunity', characterId: actor.id, mode: next })}>
+        <span className="icon">🛡️</span>{t(MODE_LABELS[mode])}
+      </button>
+    </Hint>
+  );
+}
+
+/**
+ * An enemy is leaving a hero's reach. The hero's player decides: strike or let it go. Everyone
+ * else sees who the fight is waiting for. Enter strikes, Escape lets it go.
+ */
+export function ReactionPrompt({ state, playable, conn }: { state: GameState; playable: Character[]; conn: Connection }) {
+  const t = useT();
+  const prompt = state.phase === 'combat' ? state.combat?.reaction : null;
+  const hero = prompt ? state.characters.find((c) => c.id === prompt.heroId) : undefined;
+  const foe = prompt ? state.monsters.find((m) => m.id === prompt.monsterId) : undefined;
+  const [now, setNow] = useState(() => Date.now());
+  const [span, setSpan] = useState(20000);
+  useEffect(() => {
+    if (!prompt) return;
+    setSpan(Math.max(1000, prompt.until - Date.now()));
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
+  }, [prompt?.until]);
+  const mine = !!hero && playable.some((c) => c.id === hero.id);
+  const answer = (take: boolean) => hero && conn.send({ t: 'reaction', characterId: hero.id, take });
+  useEffect(() => {
+    if (!mine) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); answer(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); answer(false); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [mine, hero?.id]);
+  if (!prompt || !hero || !foe) return null;
+  const left = Math.max(0, prompt.until - now);
+  const owner = state.players.find((p) => p.id === hero.ownerId)?.name ?? '?';
+  return (
+    <div className={mine ? 'reaction-prompt panel mine' : 'reaction-prompt panel'} role={mine ? 'alertdialog' : 'status'} aria-live="assertive">
+      <div className="rp-head">
+        <span className="icon">⚔️</span>
+        <b>{t('{monster} is leaving the reach of {hero}!', { monster: foe.name, hero: hero.name })}</b>
+      </div>
+      {mine ? (
+        <>
+          <p>{t('Opportunity attack: strike at it with your reaction before it gets away. Your reaction comes back at the start of your next turn.')}</p>
+          <div className="row">
+            <button className="primary" onClick={() => answer(true)}>{t('Strike')}<kbd>{t('Enter')}</kbd></button>
+            <button onClick={() => answer(false)}>{t('Let it go')}<kbd>Esc</kbd></button>
+          </div>
+        </>
+      ) : (
+        <p className="muted">{t('Waiting for {player} to decide whether {hero} strikes.', { player: owner, hero: hero.name })}</p>
+      )}
+      <div className="rp-timer" title={t('After that, the hero strikes.')}><span style={{ width: `${Math.min(100, (left / span) * 100)}%` }} /></div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import type { Lang } from './i18n';
 import type { StartOptions } from './start';
 import type { ShopView } from './trade';
 import type { DmStyle } from './style';
+import type { LightKindId, LightLevel, LightSource, Senses } from './light';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -199,7 +200,14 @@ export interface Character {
   /** Level-up choices the player has not made yet. */
   pending: PendingChoice[];
   premadeId: string | null;
+  /** The light this hero holds up, or null. Lit from a torch or lantern in the backpack. */
+  light: LightKindId | null;
+  /** What to do when an enemy leaves this hero's reach: ask the player, always strike, or let it go. */
+  opportunity: OpportunityMode;
 }
+
+export const OPPORTUNITY_MODES = ['ask', 'always', 'never'] as const;
+export type OpportunityMode = (typeof OPPORTUNITY_MODES)[number];
 
 export interface MonsterView {
   id: string;
@@ -223,6 +231,12 @@ export interface MonsterView {
   kind: CreatureType;
   /** In the table's language. */
   description: string;
+  /** Darkvision and blindsight, in feet. */
+  senses: Senses;
+  /** Squares its melee attacks reach; 0 for a creature without one. Leaving them provokes an opportunity attack. */
+  reach: number;
+  /** The light it carries, or null. */
+  light: LightKindId | null;
 }
 
 export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward';
@@ -273,6 +287,20 @@ export interface CombatState {
   attacksLeft: number;
   /** Savage Attacker has been used this turn. */
   savageUsed?: boolean;
+  /** Combatants who have spent their reaction since their own last turn began. */
+  reacted?: string[];
+  /** The acting hero took the Disengage action: leaving reach provokes nothing this turn. */
+  disengaged?: boolean;
+  /** An enemy is leaving a hero's reach, and that hero's player decides whether to strike. */
+  reaction?: ReactionPrompt | null;
+}
+
+/** The fight waits for one player: take the opportunity attack or let the enemy go. */
+export interface ReactionPrompt {
+  heroId: string;
+  monsterId: string;
+  /** Milliseconds since the epoch when the server stops waiting and strikes for them. */
+  until: number;
 }
 
 export type LogKind = 'dm' | 'system' | 'roll' | 'chat' | 'levelup';
@@ -473,6 +501,8 @@ export interface GameState {
   phase: Phase;
   /** The tactical battle map. Only meaningful while phase is 'combat'. */
   map: { width: number; height: number; rows: string[]; biome: Biome };
+  /** Light on the battle map: the ambient level and every source, carried ones at their holder. */
+  light: { ambient: LightLevel; sources: LightSource[] };
   characters: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;
@@ -533,6 +563,10 @@ export type ClientMessage =
   | { t: 'ability'; characterId: string; abilityId: string; targetId?: string }
   | { t: 'use_item'; characterId: string; uid: string; targetId?: string }
   | { t: 'end_turn'; characterId: string }
+  | { t: 'disengage'; characterId: string }
+  | { t: 'light'; characterId: string; on: boolean }
+  | { t: 'reaction'; characterId: string; take: boolean }
+  | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
   | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc }
   | { t: 'give'; characterId: string; from: InvLoc; toCharacterId: string }
   | { t: 'buy'; characterId: string; shopId: string; defId: string; qty: number }

@@ -60,6 +60,9 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
       if (!m.alive) continue;
       const facts = [`${t('HP')} ${m.hp}/${m.maxHp} · ${t('AC')} ${m.ac}`];
       if (m.tiles > 1) facts.push(t('Takes up {n} by {n} squares', { n: m.tiles }));
+      if (m.senses?.darkvision) facts.push(t('Darkvision {n} ft', { n: m.senses.darkvision }));
+      if (m.senses?.blindsight) facts.push(t('Blindsight {n} ft', { n: m.senses.blindsight }));
+      if (m.light) facts.push(t('Carries a light'));
       out.push({ name: m.name, kind: 'monster', icon: '👹', image: monsterUrl(m.look), subtitle: `${sizes[m.look.size]} · ${kinds[m.kind]}`, description: m.description, facts });
     }
   }

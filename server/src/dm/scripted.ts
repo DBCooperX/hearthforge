@@ -4,10 +4,22 @@
 import { TERRAIN } from '../../../shared/hex';
 import { tagged, tr } from '../../../shared/i18n';
 import type { Mood } from '../../../shared/types';
-import type { Beat, Game, Monster } from '../game/engine';
+import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
+import { MONSTERS } from '../data/monsters';
 import { trueTerrain } from '../game/world';
 import { settingOf } from './context';
-import type { DungeonMaster, PlayerLine, Scene } from './types';
+import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
+
+/**
+ * Scripted monsters press the attack. The one exception: a hurt creature with Nimble Escape
+ * and a bow slips out of reach without provoking and shoots instead.
+ */
+export function scriptedIntent(game: Game, m: Monster): MonsterIntent {
+  const def = MONSTERS[m.defId];
+  const cornered = game.consciousChars().some((c) => Math.max(Math.abs(c.x - m.x), Math.abs(c.y - m.y)) <= 1);
+  if (def?.nimbleEscape && def.attacks.some((a) => a.ranged) && m.hp <= m.maxHp / 2 && cornered) return { tactic: 'disengage' };
+  return {};
+}
 
 const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
@@ -102,11 +114,10 @@ export class ScriptedDM implements DungeonMaster {
     return scriptedScene(game, beats);
   }
 
-  async runMonsters(game: Game, block: Monster[], onAction: () => Promise<void>) {
+  async runMonsters(game: Game, block: Monster[], act: MonsterActor) {
     for (const m of block) {
       if (game.s.phase !== 'combat') break;
-      game.monsterAct(m.id);
-      await onAction();
+      await act(m.id, scriptedIntent(game, m));
     }
     return null;
   }
