@@ -59,7 +59,7 @@ const oga = (file: string) => `https://opengameart.org/sites/default/files/${fil
  */
 export const AMBIENT_TRACKS: TrackSource[] = [
   { context: 'tavern', layer: 'ambient', title: 'Fire loop', artist: 'qubodup (opengameart.org)', license: 'CC BY 3.0', url: oga('qubodupFireLoop.ogg') },
-  { context: 'overworld', layer: 'ambient', title: 'Wind loop', artist: 'AntumDeluge, after InspectorJ (opengameart.org)', license: 'CC BY 3.0', url: oga('wind-01.ogg') },
+  { context: 'overworld', layer: 'ambient', title: 'Wind loop', artist: 'AntumDeluge, after InspectorJ (opengameart.org)', license: 'CC BY 3.0', url: oga('wind-01_0.ogg') },
   { context: 'dungeon', layer: 'ambient', title: 'Cathedral in the forest', artist: 'congusbongus (opengameart.org)', license: 'CC0', url: oga('forest_2.ogg') },
 ];
 export const DEFAULT_TRACKS: TrackSource[] = [...MUSIC_CONTEXTS.flatMap((c) => BY_CONTEXT[c].map((t) => incompetech(c, t))), ...AMBIENT_TRACKS];
