@@ -15,7 +15,7 @@ import { MusicControl } from '../music';
 import { classLabel } from '../game/util';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
-export function LobbyScreen({ conn }: { conn: Connection }) {
+export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeeper: () => void }) {
   const t = useT();
   const { lang } = useLang();
   const link = useMemo(linkedTable, []);
@@ -54,6 +54,7 @@ export function LobbyScreen({ conn }: { conn: Connection }) {
   return (
     <div className="splash">
       <div className="splash-tools"><MusicControl /></div>
+      <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>
       <div className="panel lobby">
         <header className="join">
           <h1>Hearthforge</h1>

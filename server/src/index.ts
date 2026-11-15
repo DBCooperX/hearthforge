@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
@@ -15,17 +15,46 @@ import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
 import { JoinError } from './game/engine';
 import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
+import type { AdminConnection } from '../../shared/admin';
+import { AdminApi } from './admin/api';
+import { Auth } from './admin/auth';
+import { Config } from './admin/config';
+import { testKey } from './admin/keytest';
+import { Logs } from './admin/logs';
+import { Updater } from './admin/updater';
+import { Usage } from './admin/usage';
+
+import pkg from '../../package.json';
+
+const VERSION: string = pkg.version;
+const STARTED_AT = Date.now();
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DATA_DIR = process.env.DATA_DIR ?? resolve('data');
-const ART_DIR = process.env.ART_DIR ?? join(DATA_DIR, 'art');
-const art = new ArtStore(ART_DIR, process.env);
+const logs = new Logs();
+logs.open(DATA_DIR);
+logs.capture();
+// What the owner set in the Innkeeper lies over the environment the container was started with.
+const config = new Config(DATA_DIR, process.env);
+const env = config.env;
+const auth = new Auth(DATA_DIR, env);
+const usage = new Usage(DATA_DIR);
+const updater = new Updater(DATA_DIR);
+const ART_DIR = env.ART_DIR ?? join(DATA_DIR, 'art');
+const art = new ArtStore(ART_DIR, env);
 /** Set HEARTHFORGE_ART_UPLOADS=off to lock the art library against changes from the browser. */
-const ART_UPLOADS = (process.env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
-const MUSIC_DIR = process.env.MUSIC_DIR ?? join(DATA_DIR, 'music');
+const ART_UPLOADS = (env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
+const MUSIC_DIR = env.MUSIC_DIR ?? join(DATA_DIR, 'music');
+const TRUST_PROXY = (env.HEARTHFORGE_TRUST_PROXY ?? 'off').toLowerCase() === 'on';
+
+/** The address a request comes from. Behind a reverse proxy the owner trusts, the one it reports. */
+function ipOf(req: IncomingMessage): string {
+  const forwarded = TRUST_PROXY ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';
+  return (forwarded || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+}
 const here = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR =
-  process.env.CLIENT_DIR ?? [resolve(here, '../client/dist'), resolve(here, '../../client/dist')].find((p) => existsSync(p)) ?? resolve('client/dist');
+  env.CLIENT_DIR ?? [resolve(here, '../client/dist'), resolve(here, '../../client/dist')].find((p) => existsSync(p)) ?? resolve('client/dist');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -40,17 +69,20 @@ const MIME: Record<string, string> = {
 };
 
 const store = new Store(DATA_DIR);
-const claude = createDM(process.env);
+const claude = createDM(env, (sample) => usage.record(sample));
 const dm = claude ?? new ScriptedDM();
 const rooms = new Map<string, Room>();
 /** Connections looking at the list of tables. */
 const lobby = new Set<WebSocket>();
 /** The table each connection sits at. */
 const seated = new Map<WebSocket, Room>();
+/** Every open connection, for the Innkeeper's list of who is here. */
+const conns = new Map<WebSocket, { id: number; ip: string; since: number; agent: string }>();
+let connSeq = 0;
 
 const num = (raw: string | undefined, fallback: number) => (raw !== undefined && raw !== '' && Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : fallback);
 const TIMING = {
-  turnWaitMs: num(process.env.HEARTHFORGE_TURN_WAIT, DEFAULT_TIMING.turnWaitMs / 1000) * 1000,
+  turnWaitMs: num(env.HEARTHFORGE_TURN_WAIT, DEFAULT_TIMING.turnWaitMs / 1000) * 1000,
 };
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // nothing that reads two ways aloud
@@ -78,6 +110,7 @@ const hooks: RoomHooks = {
   detached: (ws) => void seated.delete(ws),
   closed: (room) => { rooms.delete(room.name); pushTables(); },
   newCode,
+  paused: (room) => auth.paused(room.name),
 };
 
 const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
@@ -119,13 +152,56 @@ function findTable(msg: Extract<ClientMessage, { t: 'join' }>): Room {
   return room;
 }
 
-/** The art library may be changed by whoever hosts a table: their browser proves it with its seat token. */
-function hostsATable(req: IncomingMessage): boolean {
-  const token = String(req.headers['x-hearthforge-token'] ?? '');
-  if (token.length < 16) return false;
-  const key = createHash('sha256').update(token).digest('hex');
-  return [...rooms.values()].some((r) => { const s = r.game.s; return !!s.hostId && s.seats[s.hostId] === key; });
+function connections(): AdminConnection[] {
+  return [...conns].map(([ws, c]) => {
+    const room = seated.get(ws);
+    const playerId = room?.playerOf(ws) ?? '';
+    return {
+      ...c,
+      table: room?.name ?? '',
+      tableTitle: room?.game.s.table.title ?? '',
+      playerId,
+      name: (playerId && room?.game.player(playerId)?.name) || '',
+      host: !!playerId && room?.game.s.hostId === playerId,
+    };
+  });
 }
+
+function restart() {
+  for (const room of rooms.values()) room.saveNow();
+  usage.flush();
+  store.close();
+  // Docker's restart policy starts the container again; the settings are read afresh on the way up.
+  process.exit(0);
+}
+
+const admin = new AdminApi({
+  dataDir: DATA_DIR,
+  version: VERSION,
+  startedAt: STARTED_AT,
+  env,
+  config,
+  auth,
+  usage,
+  logs,
+  updater,
+  store,
+  rooms,
+  openRoom: (id) => openRoom(id),
+  tablesChanged: () => pushTables(),
+  connections,
+  disconnect: ({ id, ip }) => {
+    for (const [ws, c] of conns) if (c.id === id || (ip && c.ip === ip)) ws.close(4403, 'removed');
+  },
+  notice: (text) => {
+    const payload = JSON.stringify({ t: 'notice', text } satisfies ServerMessage);
+    for (const ws of conns.keys()) if (ws.readyState === ws.OPEN) ws.send(payload);
+  },
+  dm: { mode: dm.mode, background: claude?.models.background ?? null, standard: claude?.models.standard ?? null, key: claude?.models.key ?? null, forced: claude?.models.forced ?? null },
+  ipOf,
+  restart,
+  testKey,
+});
 
 function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
   return new Promise((done, fail) => {
@@ -145,7 +221,8 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body));
   };
-  const canEdit = ART_UPLOADS && hostsATable(req);
+  // The art library belongs to the owner of the server: it is changed from the Innkeeper.
+  const canEdit = ART_UPLOADS && admin.authorised(req);
   try {
     if (req.method === 'GET') {
       if (url.pathname === '/api/art') return json(200, art.manifest());
@@ -187,6 +264,10 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, dm: dm.mode, model: dm.model, models: claude?.models ?? null, rooms: rooms.size }));
     return;
   }
+  if (url.pathname.startsWith('/api/admin/')) {
+    void admin.handle(req, res, url);
+    return;
+  }
   if (url.pathname === '/api/art' || url.pathname.startsWith('/api/art/')) {
     void artApi(req, res, url);
     return;
@@ -212,7 +293,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(musicManifest(MUSIC_DIR, process.env)));
+    res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
     return;
   }
   if (url.pathname.startsWith('/music/')) {
@@ -260,8 +341,11 @@ const server = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   const send = (msg: ServerMessage) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg)); };
+  const ip = ipOf(req);
+  if (auth.banned(ip)) return ws.close(4403, 'banned');
+  conns.set(ws, { id: ++connSeq, ip, since: Date.now(), agent: String(req.headers['user-agent'] ?? '').slice(0, 200) });
   ws.on('message', (data) => {
     let msg: ClientMessage;
     try {
@@ -300,6 +384,7 @@ wss.on('connection', (ws: WebSocket) => {
     seated.get(ws)?.handle(ws, msg);
   });
   const gone = () => {
+    conns.delete(ws);
     lobby.delete(ws);
     seated.get(ws)?.leave(ws);
     seated.delete(ws);
@@ -309,19 +394,24 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 void art.start();
-void ensureMusic(MUSIC_DIR, process.env);
+void ensureMusic(MUSIC_DIR, env);
+admin.start();
 
 server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
   console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
-  console.log(`Music: ${musicEnabled(process.env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
+  console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
   else console.log(`Dungeon Master: Claude. Key moments: ${claude.models.key}. Narration and combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
+  if (!admin.enabled) console.log('Innkeeper: switched off (HEARTHFORGE_ADMIN).');
+  else if (auth.firstPasswordNote) console.log(`Innkeeper: no password was set, so one was made up. It is "${auth.firstPasswordNote.password}" (also in ${auth.firstPasswordNote.file}). Sign in and choose your own.`);
+  else console.log(`Innkeeper: ready${auth.usesFirstPassword ? ', with the password from HEARTHFORGE_ADMIN_PASSWORD. Sign in and choose your own' : ''}.`);
 });
 
 function shutdown() {
   for (const room of rooms.values()) room.saveNow();
+  usage.flush();
   store.close();
   process.exit(0);
 }

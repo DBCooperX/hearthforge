@@ -13,6 +13,7 @@ import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, genderR
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, PlayerLine, Scene } from './types';
+import type { UsageSample } from '../admin/usage';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -198,7 +199,10 @@ export class ClaudeDM implements DungeonMaster {
   /** Set once the API has refused the strict tool schemas as too large; tools are then sent without strict. */
   private strictOff = false;
 
-  constructor(opts: { models?: ModelConfig; model?: string; effort: Effort; apiKey?: string }) {
+  private onUsage?: (sample: UsageSample) => void;
+
+  constructor(opts: { models?: ModelConfig; model?: string; effort: Effort; apiKey?: string; onUsage?: (sample: UsageSample) => void }) {
+    this.onUsage = opts.onUsage;
     this.models = opts.models ?? { background: opts.model!, standard: opts.model!, key: opts.model!, forced: opts.model! };
     this.model = this.models.standard;
     this.effort = opts.effort;
@@ -211,6 +215,7 @@ export class ClaudeDM implements DungeonMaster {
    * calls the scene tool, which is its way of handing over the finished narration.
    */
   private async converse(
+    game: Game,
     purpose: string,
     tier: Tier,
     user: string,
@@ -243,6 +248,9 @@ export class ClaudeDM implements DungeonMaster {
         this.strictOff = true;
         response = await request();
       }
+      // Every call is counted, whatever comes of it: it was paid for.
+      const u = response.usage;
+      this.onUsage?.({ table: game.s.room, model: response.model || model, input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.cache_read_input_tokens ?? 0, cacheWrite: u?.cache_creation_input_tokens ?? 0 });
       if (response.stop_reason === 'refusal') {
         console.warn('[dm] request declined:', response.stop_details?.category ?? 'unknown');
         return { text: null, scene: null };
@@ -375,7 +383,7 @@ export class ClaudeDM implements DungeonMaster {
     if (!beats.length) return null;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nNarrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`;
     try {
-      const out = await this.converse(`narrate ${beats.map((b) => b.kind).join('+')}`, tierForBeats(beats), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
+      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, tierForBeats(beats), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
     } catch (err) {
       this.report(err);
@@ -394,7 +402,7 @@ export class ClaudeDM implements DungeonMaster {
     const prompt = `Current state:\n${describeCombat(game)}\n\nRecent play, oldest first:\n${transcript(game, 16)}\n\nIt is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`;
     let text: string | null = null;
     try {
-      const out = await this.converse('monsters', tierForMonsters(game, block), prompt, [MONSTER_TOOL], async (name, input) => {
+      const out = await this.converse(game, 'monsters', tierForMonsters(game, block), prompt, [MONSTER_TOOL], async (name, input) => {
         if (name !== 'monster_action') throw new Error(`Unknown tool ${name}`);
         const i = input as { monster_id: string; target_id: string; attack: string; tactic: MonsterIntent['tactic'] };
         if (!block.some((m) => m.id === i.monster_id)) throw new Error(`It is not ${i.monster_id}'s turn. Monsters acting now: ${block.map((m) => m.id).join(', ')}.`);
@@ -426,7 +434,7 @@ export class ClaudeDM implements DungeonMaster {
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
-      const out = await this.converse('reply', tierForReply(game), prompt, tools, this.storyHandler(game, onUpdate));
+      const out = await this.converse(game, 'reply', tierForReply(game), prompt, tools, this.storyHandler(game, onUpdate));
       return this.finish(game, out);
     } catch (err) {
       this.report(err);
@@ -465,7 +473,7 @@ Answer with one JSON object and nothing else, in this shape:
 - "places", "people", "quests": a new description or summary for each id, in ${language}, one or two sentences each, at most 280 characters. Keep each one's facts, who is involved and where; give people a personality, a want or a secret that touches the region's trouble, and respect the gender their looks give.
 - Never change, translate or invent a name. Do not add new places, people or quests. No markdown.`;
     try {
-      const call = this.converse('world', 'background', prompt, [], async () => null, 'You are a worldbuilding assistant for a Dungeons & Dragons game. You answer with exactly the JSON you are asked for.');
+      const call = this.converse(game, 'world', 'background', prompt, [], async () => null, 'You are a worldbuilding assistant for a Dungeons & Dragons game. You answer with exactly the JSON you are asked for.');
       const out = await Promise.race([call, new Promise<null>((r) => setTimeout(() => r(null), 45_000).unref?.())]);
       const raw = out?.text ?? '';
       const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
@@ -495,7 +503,7 @@ Answer with one JSON object and nothing else, in this shape:
     try {
       const old = mem.journal.slice(0, mem.journal.length - JOURNAL_KEEP);
       const prompt = `Story so far:\n${mem.chronicle || '(nothing yet)'}\n\nNew journal entries, oldest first:\n${old.map((j) => `- Day ${j.day}: ${j.text}`).join('\n')}\n\nRewrite the story so far to include the new entries. Keep names, promises, debts, grudges and unresolved threads; drop colour. At most 250 words of plain prose${game.lang === 'de' ? ', written in German' : ''}.\n\nThe heroes and their genders, which must stay exactly as given: ${genderRoster(game)}. Keep the gender of every other person as the entries have it.`;
-      const out = await this.converse('memory summary', 'background', prompt, [], async () => null, 'You keep the campaign notes for a Dungeons & Dragons game. You write compact, factual summaries that a Dungeon Master can rely on later.');
+      const out = await this.converse(game, 'memory summary', 'background', prompt, [], async () => null, 'You keep the campaign notes for a Dungeons & Dragons game. You write compact, factual summaries that a Dungeon Master can rely on later.');
       if (out.text) {
         mem.chronicle = out.text.slice(0, 2500);
         mem.journal.splice(0, old.length);
@@ -516,8 +524,8 @@ function playerHeroes(game: Game, playerName: string): string {
   return heroes.length === 1 ? ` (who plays ${heroes[0]})` : ` (who plays ${heroes.join(', ')}; unless they say which hero acts, treat it as the party acting)`;
 }
 
-export function createDM(env: NodeJS.ProcessEnv): ClaudeDM | null {
+export function createDM(env: NodeJS.ProcessEnv, onUsage?: (sample: UsageSample) => void): ClaudeDM | null {
   if (!env.ANTHROPIC_API_KEY) return null;
   const effort = (['low', 'medium', 'high', 'xhigh', 'max'] as const).find((e) => e === env.HEARTHFORGE_DM_EFFORT) ?? 'low';
-  return new ClaudeDM({ models: resolveModels(env), effort, apiKey: env.ANTHROPIC_API_KEY });
+  return new ClaudeDM({ models: resolveModels(env), effort, apiKey: env.ANTHROPIC_API_KEY, onUsage });
 }

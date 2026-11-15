@@ -544,7 +544,9 @@ export type ServerMessage =
   | { t: 'chat'; messages: ChatMessage[]; replace?: boolean }
   | { t: 'typing'; playerId: string; where: TypingWhere | null }
   /** The player no longer sits at the table and goes back to the lobby. */
-  | { t: 'left'; reason: 'left' | 'kicked' | 'closed' }
+  | { t: 'left'; reason: 'left' | 'kicked' | 'closed' | 'removed' | 'restored' }
+  /** A message from the owner of the server to everyone, such as an announced restart. */
+  | { t: 'notice'; text: string }
   /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
   | { t: 'error'; message: string; join?: boolean };
 

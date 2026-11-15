@@ -25,6 +25,7 @@ import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
 import { Settings } from './ui/Settings';
 import { ArtWindow } from './ui/ArtWindow';
+import { Innkeeper } from './ui/Innkeeper';
 import { Kbd, Window } from './ui/Window';
 
 type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
@@ -44,6 +45,13 @@ export function App() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [targeting, setTargeting] = useState<Targeting>(null);
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
+  /** The owner's panel. It sits above everything, also above the list of tables; ?innkeeper opens it directly. */
+  const [innkeeper, setInnkeeper] = useState(() => new URLSearchParams(location.search).has('innkeeper'));
+  const closeInnkeeper = useCallback(() => {
+    setInnkeeper(false);
+    const url = new URL(location.href);
+    if (url.searchParams.has('innkeeper')) { url.searchParams.delete('innkeeper'); history.replaceState(null, '', url); }
+  }, []);
   useMusic(musicContext(state));
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -128,7 +136,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') { if (e.key === 'Escape') el.blur(); return; }
-      if (!state || state.phase === 'lobby' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!state || state.phase === 'lobby' || innkeeper || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const toggles: Record<string, Overlay> = { i: 'inventory', c: 'sheet', m: 'map', j: 'journal' };
       if (toggles[k] && !(k === 'm' && combat)) { setOverlay((o) => (o === toggles[k] ? null : toggles[k])); e.preventDefault(); return; }
@@ -147,7 +155,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [state, actor, combat, targeting, overlay, send]);
+  }, [state, actor, combat, targeting, overlay, innkeeper, send]);
 
   const view: ViewOptions = useMemo(() => {
     const reach = state && combat && turnChar ? reachable(state, turnChar, combat.movementLeft) : new Set<string>();
@@ -157,8 +165,9 @@ export function App() {
     return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)) };
   }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine]);
 
-  if (!state) return <><LobbyScreen conn={conn} /><Toasts conn={conn} /></>;
-  if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} /><Toasts conn={conn} /></>;
+  const inn = innkeeper && <Innkeeper onClose={closeInnkeeper} />;
+  if (!state) return <><LobbyScreen conn={conn} onInnkeeper={() => setInnkeeper(true)} />{inn}<Toasts conn={conn} /></>;
+  if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} />{inn}<Toasts conn={conn} /></>;
 
   let hint: string;
   if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
@@ -244,7 +253,7 @@ export function App() {
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
-        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
+        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={() => { setOverlay(null); setInnkeeper(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
         {overlay === 'art' && <ArtWindow onClose={() => setOverlay('settings')} />}
         {overlay === 'table' && (
           <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>
@@ -259,6 +268,7 @@ export function App() {
         )}
         {chatOpen && state.table.maxPlayers > 1 && <div className="chat-float panel"><ChatPanel state={state} conn={conn} onClose={() => setChatOpen(false)} /></div>}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
+        {inn}
         <Toasts conn={conn} />
       </div>
     </EntityProvider>
@@ -270,7 +280,7 @@ function Toasts({ conn }: { conn: ReturnType<typeof useConnection> }) {
   // Messages about the table itself arrive in English; the game's own are already in the story language.
   return (
     <div className="toasts">
-      {conn.toasts.map((x) => <div key={x.id} className="toast">{t(x.text)}</div>)}
+      {conn.toasts.map((x) => <div key={x.id} className={x.notice ? 'toast notice' : 'toast'} role={x.notice ? 'alert' : undefined}>{x.notice && <b>{t('The innkeeper says')}</b>}{t(x.text)}</div>)}
     </div>
   );
 }

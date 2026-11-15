@@ -17,6 +17,8 @@ import { DM_SYSTEM_PROMPT, describeCombat, describeWorld, genderRoster } from '.
 import { scriptedScene } from '../src/dm/scripted';
 import { Game, GameError } from '../src/game/engine';
 import { ALL_LABELS } from '../../client/src/ui/labels';
+import { NOTICES } from '../src/admin/api';
+import { PAUSED_MESSAGE } from '../src/room';
 
 const root = join(__dirname, '..', '..');
 
@@ -64,6 +66,8 @@ describe('translations', () => {
     for (const label of ALL_LABELS) if (!hasTranslation('de', label)) missing.push(`labels: ${label}`);
     // Reasons a seat is refused reach the browser in English and are translated there.
     for (const reason of Object.values(JOIN_ERRORS)) if (!hasTranslation('de', reason)) missing.push(reason);
+    // So do the innkeeper's announcements and the word that a table is paused.
+    for (const notice of [...Object.values(NOTICES), PAUSED_MESSAGE]) if (!hasTranslation('de', notice)) missing.push(notice);
     expect(missing).toEqual([]);
   });
 

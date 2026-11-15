@@ -21,7 +21,30 @@ services:
       HEARTHFORGE_TURN_WAIT: ${HEARTHFORGE_TURN_WAIT:-8}
       HEARTHFORGE_KENNEY_URL: ${HEARTHFORGE_KENNEY_URL:-}
       HEARTHFORGE_0X72_URL: ${HEARTHFORGE_0X72_URL:-}
+      # The owner's panel (Innkeeper). The password here is only the first one; change it in the panel.
+      HEARTHFORGE_ADMIN: ${HEARTHFORGE_ADMIN:-on}
+      HEARTHFORGE_ADMIN_PASSWORD: ${HEARTHFORGE_ADMIN_PASSWORD:-}
+      HEARTHFORGE_AUTO_UPDATE: ${HEARTHFORGE_AUTO_UPDATE:-off}
+      HEARTHFORGE_TRUST_PROXY: ${HEARTHFORGE_TRUST_PROXY:-off}
     volumes:
+      - hearthforge-data:/data
+
+  # Lets the Innkeeper update Hearthforge from GitHub with one click. It talks to Docker on
+  # this host, which is why it is a container of its own: it opens no port and only acts on
+  # the words "check" and "update" that the game leaves in the data volume. Remove this
+  # service if you would rather update by hand (git pull && docker compose up -d --build).
+  updater:
+    build: ./updater
+    image: hearthforge-updater:local
+    restart: unless-stopped
+    # Started after the game, so a new data volume is set up by the game.
+    depends_on:
+      - hearthforge
+    environment:
+      HEARTHFORGE_BRANCH: ${HEARTHFORGE_BRANCH:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
       - hearthforge-data:/data
 
 volumes:

@@ -40,7 +40,12 @@ export interface RoomHooks {
   closed?(room: Room): void;
   /** A fresh invite code no other table uses. */
   newCode?(): string;
+  /** True while the Innkeeper has paused the table. */
+  paused?(room: Room): boolean;
 }
+
+/** Sent in English and translated by the browser, like the reasons a seat is refused. */
+export const PAUSED_MESSAGE = 'The innkeeper has paused this table.';
 
 export class Room {
   readonly game: Game;
@@ -146,7 +151,7 @@ export class Room {
   }
 
   /** Send every connection of one player back to the lobby. */
-  private detach(playerId: string, reason: 'left' | 'kicked' | 'closed') {
+  private detach(playerId: string, reason: 'left' | 'kicked' | 'closed' | 'removed' | 'restored') {
     for (const [ws, id] of [...this.sockets]) {
       if (id !== playerId) continue;
       this.sockets.delete(ws);
@@ -157,14 +162,46 @@ export class Room {
     this.pending = this.pending.filter((l) => l.playerId !== playerId);
   }
 
-  /** Remove the table and everything saved for it. */
-  close() {
+  /** Stop the table and send everyone back to the lobby, without touching what is saved. */
+  private stop(reason: 'closed' | 'restored') {
     this.closed = true;
     this.epoch++;
-    for (const id of new Set(this.sockets.values())) this.detach(id, 'closed');
+    for (const id of new Set(this.sockets.values())) this.detach(id, reason);
     for (const t of [this.saveTimer, this.hostTimer, this.gatherTimer]) if (t) clearTimeout(t);
     this.saveTimer = this.hostTimer = this.gatherTimer = null;
     this.pending = [];
+  }
+
+  /** The Innkeeper replaces this table with a saved one: this room ends, the caller opens a new one. */
+  retire() {
+    this.stop('restored');
+  }
+
+  /** The Innkeeper sends a player away. Before the adventure the seat goes too; later it stays theirs. */
+  remove(playerId: string) {
+    if (this.closed || !this.game.player(playerId)) return;
+    if (this.game.s.phase === 'lobby') this.game.unseat(playerId);
+    this.detach(playerId, 'removed');
+    if (this.game.s.phase !== 'lobby') this.game.setConnected(playerId, false);
+    if (!this.game.s.players.length) return this.close();
+    this.watchHost();
+    this.flush();
+    this.considerAnswer();
+  }
+
+  /** Which player a connection belongs to. */
+  playerOf(ws: WebSocket): string | undefined {
+    return this.sockets.get(ws);
+  }
+
+  /** A word from the Innkeeper to everyone at the table. */
+  notice(text: string) {
+    for (const ws of this.sockets.keys()) this.send(ws, { t: 'notice', text });
+  }
+
+  /** Remove the table and everything saved for it. */
+  close() {
+    this.stop('closed');
     try {
       this.store.delete(this.name);
     } catch (err) {
@@ -255,6 +292,10 @@ export class Room {
     const playerId = this.sockets.get(ws);
     if (!playerId || this.closed) return;
     const g = this.game;
+    // A paused table can still be left and talked at, but nothing moves in the game.
+    if (this.hooks.paused?.(this) && !['chat', 'typing', 'leave_table'].includes(msg.t)) {
+      return this.send(ws, { t: 'error', message: PAUSED_MESSAGE });
+    }
     switch (msg.t) {
       case 'say': return this.say(playerId, String(msg.text ?? ''));
       case 'travel': return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));

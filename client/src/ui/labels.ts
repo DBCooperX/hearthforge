@@ -2,6 +2,7 @@
 // They live in one place so the translation test can check every one of them.
 import type { InvFilter, InvSort } from '../../../shared/inventory';
 import type { QuestStatus } from '../../../shared/types';
+import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
 
 export const FILTER_LABELS: Record<InvFilter, string> = { all: 'All', weapon: 'Weapons', armor: 'Armor', consumable: 'Potions', quest: 'Quest', other: 'Other' };
 export const SORT_LABELS: Record<InvSort, string> = { manual: 'As packed', type: 'Type', rarity: 'Rarity', value: 'Value', weight: 'Weight', name: 'Name' };
@@ -38,11 +39,10 @@ export const SHORTCUTS: { keys: string[]; text: string }[] = [
   { keys: ['Space'], text: 'End your turn' },
 ];
 
-/** Every label above, for the translation test. */
 /** What the server answers when it cannot take an art pack, in words. */
 export const ART_ERRORS = {
   failed: 'That did not work. The server log says more.',
-  forbidden: 'Only the host of a table can change the art packs.',
+  forbidden: 'Art packs are changed in the Innkeeper, by the owner of this server.',
   no_images: 'There are no PNG images in this zip.',
   not_a_zip: 'This is not a zip file.',
   too_big: 'This pack is too large (96 MB at most).',
@@ -52,7 +52,31 @@ export const ART_ERRORS = {
   bad_request: 'That did not work. The server log says more.',
 } as const;
 
+/** The Innkeeper's sections. */
+export const INN_TABS = {
+  overview: 'Overview', tables: 'Tables', players: 'Players', assets: 'Assets', settings: 'Settings',
+  server: 'Server & updates', usage: 'AI costs', logs: 'Log', backups: 'Backups',
+} as const;
+export const SOURCE_LABELS = { panel: 'Set here', env: 'From the installer', default: 'Default' } as const;
+export const PHASE_LABELS: Record<string, string> = { lobby: 'Gathering', explore: 'Exploring', combat: 'In a fight', defeat: 'Defeated' };
+export const UPDATER_STATES = { idle: 'Ready', checking: 'Looking for a new version…', building: 'Building the new version…', restarting: 'Starting the new version…', failed: 'The last update failed' } as const;
+export const KEY_RESULTS = {
+  ok: 'The key works.',
+  none: 'No key is set.',
+  invalid: 'The Claude API refused this key.',
+  unreachable: 'The server could not reach the Claude API.',
+  error: 'The check did not work.',
+} as const;
+
+export const LOG_FILTERS = { all: 'Everything', warn: 'Warnings and errors', error: 'Errors only' } as const;
+/** Why the server closed this browser's connection for good. */
+export const CLOSED_REASONS = { banned: 'This server does not let you in.', removed: 'The innkeeper has closed your connection. Reload the page to come back.' } as const;
+export const INN_MISC = { empty: 'Empty' } as const;
+
+/** Every label above, for the translation test. */
 export const ALL_LABELS: string[] = [
+  ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
+  ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
   ...Object.values(ART_ERRORS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),

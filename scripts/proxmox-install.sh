@@ -6,6 +6,8 @@
 #
 # First run: creates a Debian 12 LXC with Docker, clones Hearthforge into it, asks for
 # your Anthropic API key and starts the stack. Later runs: update the existing container.
+# After that, everything is done in the game itself, in the owner's panel (the Innkeeper):
+# open http://<address>:3000/?innkeeper and sign in with the password this script prints.
 #
 # Override any default by setting the variable first, for example:
 #   CTID=120 STORAGE=local-zfs MEMORY=4096 bash -c "$(curl -fsSL .../proxmox-install.sh)"
@@ -46,6 +48,14 @@ wait_for_network() {
   die "The container has no working network or DNS. Check BRIDGE ($BRIDGE) and IP ($IP)."
 }
 
+# The owner's panel in the game (Innkeeper) needs a first password. Make one up unless .env has one.
+ADMIN_PASSWORD_NEW=""
+ensure_admin_password() {
+  if in_ct "grep -q '^HEARTHFORGE_ADMIN_PASSWORD=..*' $APP_DIR/.env 2>/dev/null"; then return 0; fi
+  ADMIN_PASSWORD_NEW="$(head -c 12 /dev/urandom | base64 | tr -d '/+=' | cut -c1-14)"
+  printf '%s' "$ADMIN_PASSWORD_NEW" | pct exec "$CTID" -- bash -c "pw=\$(cat); cd $APP_DIR && touch .env && chmod 600 .env && sed -i '/^HEARTHFORGE_ADMIN_PASSWORD=/d' .env && printf '\nHEARTHFORGE_ADMIN_PASSWORD=%s\n' \"\$pw\" >> .env"
+}
+
 compose_up() {
   say "Building and starting Hearthforge (the first build takes a few minutes)"
   in_ct "cd $APP_DIR && docker compose up -d --build"
@@ -55,10 +65,15 @@ finish() {
   local ip
   ip="$(ct_ip || true)"
   say "Hearthforge is running in container $CTID"
-  echo "    Open:    http://${ip:-<container-ip>}:${PORT}"
-  echo "    Logs:    pct exec $CTID -- docker compose -f $APP_DIR/docker-compose.yml logs -f"
-  echo "    Config:  pct exec $CTID -- nano $APP_DIR/.env   (then run this installer again)"
-  echo "    Update:  run this installer again"
+  echo "    Open:       http://${ip:-<container-ip>}:${PORT}"
+  echo "    Innkeeper:  http://${ip:-<container-ip>}:${PORT}/?innkeeper"
+  echo "                The owner's panel: tables, players, art packs, settings, API key,"
+  echo "                updates, restart, logs and backups. No terminal needed from here on."
+  if [ -n "$ADMIN_PASSWORD_NEW" ]; then
+    echo "    Password:   $ADMIN_PASSWORD_NEW"
+    echo "                Sign in with it once and choose your own. It is not shown again."
+  fi
+  echo "    Logs:       pct exec $CTID -- docker compose -f $APP_DIR/docker-compose.yml logs -f"
 }
 
 # ---------------------------------------------------------------- update path
@@ -69,6 +84,7 @@ if [ -n "$EXISTING" ]; then
   pct status "$CTID" | grep -q running || pct start "$CTID"
   wait_for_network
   in_ct "cd $APP_DIR && git pull --ff-only"
+  ensure_admin_password
   compose_up
   in_ct "docker image prune -f >/dev/null" || true
   finish
@@ -130,6 +146,7 @@ say "Writing $APP_DIR/.env"
 in_ct "cd $APP_DIR && cp -n .env.example .env && chmod 600 .env"
 # Pass the key on stdin so it never appears in a process list or shell history.
 printf '%s' "$API_KEY" | pct exec "$CTID" -- bash -c "key=\$(cat); cd $APP_DIR && sed -i \"s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=\${key}|; s|^HEARTHFORGE_PORT=.*|HEARTHFORGE_PORT=${PORT}|\" .env"
+ensure_admin_password
 
 compose_up
 finish

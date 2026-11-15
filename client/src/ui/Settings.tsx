@@ -13,10 +13,11 @@ interface Props {
   onNewAdventure?: () => void;
   onTable: () => void;
   onArt: () => void;
+  onInnkeeper: () => void;
   children?: ReactNode;
 }
 
-export function Settings({ onClose, onNewAdventure, onTable, onArt }: Props) {
+export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper }: Props) {
   const t = useT();
   const prefs = usePrefs();
   return (
@@ -50,7 +51,7 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt }: Props) {
         </section>
         <section>
           <h3>{t('Art')}</h3>
-          <div className="setting"><span>{t('Art packs')}<small>{t('Icons for items and tiles for the map, with their credits.')}</small></span><button type="button" onClick={onArt}>{t('Art & Assets')}</button></div>
+          <div className="setting"><span>{t('Art packs')}<small>{t('The packs in use on this server, with their credits.')}</small></span><button type="button" onClick={onArt}>{t('Art & Assets')}</button></div>
         </section>
         <section>
           <h3>{t('Keyboard')}</h3>
@@ -59,6 +60,10 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt }: Props) {
               <li key={s.text}><span className="keys">{s.keys.map((k, i) => <span key={k}>{i > 0 && (s.keys.length === 2 ? '–' : '')}<Kbd>{k}</Kbd></span>)}</span>{t(s.text)}</li>
             ))}
           </ul>
+        </section>
+        <section>
+          <h3>{t('Server')}</h3>
+          <div className="setting"><span>{t('Innkeeper')}<small>{t('For whoever runs this server: tables, players, art packs, API key, updates and backups.')}</small></span><button type="button" onClick={onInnkeeper}>{t('Open')}</button></div>
         </section>
         <section>
           <h3>{t('Table')}</h3>
