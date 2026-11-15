@@ -1,3 +1,4 @@
+import { ItemIcon } from '../ui/ItemIcon';
 import { useEffect, useMemo, useState } from 'react';
 import { SLOT_LABELS } from '../../../shared/content';
 import { weaponAttack } from '../../../shared/build';
@@ -56,7 +57,7 @@ function ItemDetails({ def, item, c, state, equipped, mine, pinned }: TipProps) 
   return (
     <div className={['item-tip', def.rarity ?? 'common', story?.quest && 'quest'].filter(Boolean).join(' ')}>
       <header>
-        <span className="item-tip-icon">{def.icon}</span>
+        <span className="item-tip-icon"><ItemIcon def={def} /></span>
         <div>
           <b>{t(def.name)}{item.qty > 1 && <span className="item-tip-qty"> ×{item.qty}</span>}</b>
           <small>{kindLine(def, t)}</small>
@@ -200,7 +201,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
             }}
             onDragEnd={() => setDrag(null)}
           >
-            <span className="icon">{def.icon}</span>
+            <span className="icon"><ItemIcon def={def} /></span>
             {def.story?.quest && <span className="quest-mark" aria-label={t('Quest item')} />}
             {item.qty > 1 && <span className="qty">{item.qty}</span>}
           </div>

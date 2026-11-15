@@ -24,9 +24,10 @@ import { playerId, useConnection } from './net';
 import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
 import { Settings } from './ui/Settings';
+import { ArtWindow } from './ui/ArtWindow';
 import { Kbd, Window } from './ui/Window';
 
-type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | null;
+type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
 
 const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
   { id: 'sheet', key: 'C', icon: 'character' },
@@ -243,7 +244,8 @@ export function App() {
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
-        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
+        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
+        {overlay === 'art' && <ArtWindow onClose={() => setOverlay('settings')} />}
         {overlay === 'table' && (
           <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>
             <Players state={state} conn={conn} />

@@ -1,5 +1,6 @@
 // The journal: a bound book of everything the party (and the Dungeon Master) remembers.
 // Four bookmarks, a list on the left page and the chosen entry written out on the right.
+import { ItemIcon } from '../ui/ItemIcon';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { HEX_MILES, direction, formatTime, hexDistance, type Hex } from '../../../shared/hex';
 import type { Disposition, GameState, ItemDef, Location, Npc, Quest, QuestStatus } from '../../../shared/types';
@@ -76,7 +77,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
     }));
     const lore: Entry[] = [
       { id: CHRONICLE, title: t('Chronicle of deeds'), sub: deeds.length ? t('{n} entries', { n: deeds.length }) : t('Still unwritten'), head: t('The story so far'), mark: <span className="place-mark">📜</span> },
-      ...finds.map((i, n): Entry => ({ id: i.id, title: i.name, sub: `${t(i.story!.category)}${i.story!.quest ? ` · ${t('Quest item')}` : ''}`, head: n === 0 ? t('Clues and keepsakes') : undefined, mark: <span className="place-mark">{i.icon}</span> })),
+      ...finds.map((i, n): Entry => ({ id: i.id, title: i.name, sub: `${t(i.story!.category)}${i.story!.quest ? ` · ${t('Quest item')}` : ''}`, head: n === 0 ? t('Clues and keepsakes') : undefined, mark: <span className="place-mark"><ItemIcon def={i} /></span> })),
     ];
     return { quests: questList, people, places, lore };
   }, [quests, npcs, w.locations, deeds.length, finds, t]);
@@ -217,7 +218,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
     return (
       <article className="entry" key={i.id}>
         <header className="entry-head">
-          <span className="place-mark large">{i.icon}</span>
+          <span className="place-mark large"><ItemIcon def={i} /></span>
           <div>
             <h2>{i.name}</h2>
             <p className="byline">{t(st.category)}{st.quest ? ` · ${t('Quest item')}` : ''}{i.rarity && i.rarity !== 'common' ? ` · ${t(i.rarity)}` : ''}</p>

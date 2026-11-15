@@ -1,3 +1,4 @@
+import { ItemIcon } from '../ui/ItemIcon';
 import { useState } from 'react';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { castingAbility, weaponAttack } from '../../../shared/build';
@@ -184,7 +185,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                 <h4>{t('Equipment')}</h4>
                 <ul className="cs-gear">
                   {worn.length === 0 && <li className="muted">{t('Nothing equipped.')}</li>}
-                  {worn.map((s) => { const d = itemDef(state.items, c.equipment[s]!.defId); return <li key={s}><small>{t(SLOT_LABELS[s])}</small><span className={d?.rarity}>{d?.icon} {t(d?.name ?? '')}</span></li>; })}
+                  {worn.map((s) => { const d = itemDef(state.items, c.equipment[s]!.defId); return <li key={s}><small>{t(SLOT_LABELS[s])}</small><span className={d?.rarity}><ItemIcon def={d} /> {t(d?.name ?? '')}</span></li>; })}
                 </ul>
               </div>
             )}

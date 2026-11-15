@@ -470,3 +470,48 @@
 
 /* German compounds are long; let them break at syllables instead of leaving ragged lines. English reads better unbroken. */
 :lang(de) :is(.hint-tip, .item-tip header b, .item-flavor, .item-notes li, .entry-text b, .entry h2, .lead, .notes li, .cs-features li > span, .cs-actions div > span, .cs-story p, .doll-name h2) { hyphens: auto; }
+
+/* ---------- item pictures from an art pack ---------- */
+.item-art { width: 1.15em; height: 1.15em; object-fit: contain; vertical-align: -0.22em; }
+.cell .item .icon .item-art, .item-tip-icon .item-art, .place-mark .item-art { display: block; vertical-align: 0; }
+.hc-portrait img:not(.pixel) { width: 32px; height: 32px; }
+
+/* ---------- art & assets ---------- */
+.art-window a { color: #e6c88a; }
+.art-drop { display: grid; justify-items: center; gap: 6px; padding: 18px 16px; text-align: center; border: 2px dashed #7a5a36; border-radius: 8px; background: rgba(0, 0, 0, 0.18); transition: border-color 0.15s, background 0.15s; }
+.art-drop.over { border-color: #f0c877; background: rgba(240, 200, 119, 0.1); }
+.art-drop b { font-family: var(--font-head); letter-spacing: 0.06em; color: #f0dcae; }
+.art-note, .art-error { margin: 0; padding: 8px 12px; border-radius: 6px; font-size: 14px; background: rgba(240, 200, 119, 0.1); border: 1px solid #7a5a36; display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.art-error { background: rgba(224, 138, 124, 0.12); border-color: #a4574a; color: #f1b3a8; }
+.art-packs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.art-pack { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 12px; border: 1px solid rgba(122, 90, 54, 0.6); border-radius: 6px; background: rgba(0, 0, 0, 0.16); }
+.art-pack.on { border-color: #d9a851; box-shadow: inset 0 0 0 1px rgba(217, 168, 81, 0.35); }
+.art-pack > div { display: grid; gap: 1px; min-width: 0; }
+.art-pack small { color: var(--muted); }
+.art-pack-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.art-inuse { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #f0c877; }
+.art-window.win-large .win-body { overflow: hidden; display: flex; }
+.art-assign { flex: 1; min-width: 0; min-height: 0; padding: 14px 18px 16px; display: grid; gap: 10px; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.art-assign p { margin: 0; }
+.art-assign-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.art-cell { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.art-cols { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 14px; min-height: 0; }
+.art-slots { list-style: none; margin: 0; padding: 0 4px 0 0; overflow-y: auto; display: grid; gap: 3px; align-content: start; }
+.art-slots button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 3px 8px; text-align: left; font-size: 14px; }
+.art-slots button.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.art-slot-pic { flex: none; width: 30px; height: 30px; display: grid; place-items: center; font-size: 20px; }
+.art-slot-pic img { width: 28px; height: 28px; object-fit: contain; }
+.art-slot-none { opacity: 0.55; }
+.art-slot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.art-picker { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; min-height: 0; }
+.art-picker-bar { display: flex; align-items: center; gap: 10px; }
+.art-picker-bar input { flex: 1; min-width: 0; }
+.art-grid { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, 46px); gap: 4px; align-content: start; padding: 2px; }
+.art-grid button { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.3); }
+.art-grid button:hover { border-color: var(--gold); }
+.art-thumb { display: block; object-fit: contain; overflow: hidden; }
+.art-cut { display: block; transform-origin: 0 0; background-repeat: no-repeat; }
+.art-credit { display: grid; grid-template-columns: auto 1fr 1fr 1.4fr; align-items: center; gap: 8px; font-size: 14px; }
+@media (max-width: 760px) { .art-cols { grid-template-columns: 1fr; } .art-slots { max-height: 180px; } .art-credit { grid-template-columns: 1fr; } }
+.win.art-window { max-height: calc(100vh - 24px); }
+.win.art-window.win-large { height: min(780px, calc(100vh - 24px)); }

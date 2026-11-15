@@ -39,7 +39,21 @@ export const SHORTCUTS: { keys: string[]; text: string }[] = [
 ];
 
 /** Every label above, for the translation test. */
+/** What the server answers when it cannot take an art pack, in words. */
+export const ART_ERRORS = {
+  failed: 'That did not work. The server log says more.',
+  forbidden: 'Only the host of a table can change the art packs.',
+  no_images: 'There are no PNG images in this zip.',
+  not_a_zip: 'This is not a zip file.',
+  too_big: 'This pack is too large (96 MB at most).',
+  unknown_pack: 'The server does not know this pack.',
+  not_installed: 'This pack is not on the server yet.',
+  download_failed: 'The download failed. The server may not reach the internet.',
+  bad_request: 'That did not work. The server log says more.',
+} as const;
+
 export const ALL_LABELS: string[] = [
+  ...Object.values(ART_ERRORS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
 ];
