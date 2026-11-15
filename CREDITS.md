@@ -37,12 +37,14 @@ Without an icon pack, item icons are emoji rendered by the player's system font.
 
 No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
 
-- Tavern: "Thatched Villagers", "Master of the Feast", "Folk Round"
-- Town: "Minstrel Guild", "Village Consort", "Suonatore di Liuto"
-- Overworld: "Heroic Age", "Moorland", "Skye Cuillin"
-- Dungeon: "Ossuary 6 - Air", "Dark Times", "The Dread"
-- Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm"
-- Boss fights: "Black Vortex", "Death and Axes"
+- Tavern: "Thatched Villagers", "Master of the Feast", "Folk Round", "Fiddles McGinty", "Celtic Impulse", "Dragon and Toast", "Spazzmatica Polka"
+- Town: "Minstrel Guild", "Village Consort", "Suonatore di Liuto", "Virtutes Instrumenti", "Mystery Bazaar", "Lord of the Land", "Winter Reflections", "Evening Melodrama", "Night in Venice"
+- Overworld: "Heroic Age", "Moorland", "Skye Cuillin", "Eternal Hope", "Ice Flow", "Dreamer", "Heart of Nowhere", "Echoes of Time v2", "Hidden Past", "Atlantean Twilight", "Lightless Dawn"
+- Dungeon: "Ossuary 6 - Air", "Ossuary 5 - Rest", "Dark Times", "The Dread", "The Descent", "Oppressive Gloom", "Gathering Darkness", "Ghost Story", "Disquiet", "Dark Walk", "Dark Fog", "Anguish", "Ancient Rite"
+- Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm", "Volatile Reaction", "Faster Does It", "Prelude and Action", "Impact Moderato", "Killers", "Unholy Knight", "Crusade - Heavy Industry"
+- Boss fights: "Black Vortex", "Death and Axes", "Giant Wyrm", "Epic Unease", "The Complex", "Hall of the Mountain King", "Danse Macabre"
+
+Ambient sound loops are not bundled or downloaded by default. Loops you add yourself (`/data/music/ambient/`) or list in `tracks.json` are credited in the game by whatever title, artist and license you give them; crediting them is up to you.
 
 The game shows title, artist and license of the track that is playing. If you add your own tracks or a `tracks.json`, crediting them is up to you.
 
