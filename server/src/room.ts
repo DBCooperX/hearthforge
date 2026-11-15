@@ -357,6 +357,7 @@ export class Room {
       case 'delve': return g.delve();
       case 'set_language': return g.setLanguage(playerId, msg.lang);
       case 'set_start': return g.setStart(playerId, msg.start);
+      case 'set_style': return g.setStyle(playerId, msg.style);
       case 'reset':
         g.reset(playerId);
         this.epoch++;

@@ -6,6 +6,7 @@ import type { CreatureType, MonsterLook } from './monsterLook';
 import type { Lang } from './i18n';
 import type { StartOptions } from './start';
 import type { ShopView } from './trade';
+import type { DmStyle } from './style';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -342,6 +343,8 @@ export interface TableInfo {
   code: string | null;
   /** Where and how the adventure begins: region, premise and world seed. The host chooses before the start. */
   start: StartOptions;
+  /** How the Dungeon Master runs the table: tone, rules strictness and content rating. The host may change it at any time. */
+  style: DmStyle;
 }
 
 export const MAX_SEATS = 4;
@@ -542,6 +545,7 @@ export type ClientMessage =
   | { t: 'delve' }
   | { t: 'set_language'; lang: Lang }
   | { t: 'set_start'; start: Partial<StartOptions> }
+  | { t: 'set_style'; style: Partial<DmStyle> }
   | { t: 'say'; text: string }
   | { t: 'reset' };
 

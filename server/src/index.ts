@@ -8,6 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
+import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
@@ -120,6 +121,11 @@ for (const id of store.names()) rooms.set(id, openRoom(id));
 
 const tableId = (raw: unknown) => String(raw ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
 
+/** The style new tables start with: what the owner set in the Innkeeper, else the built-in default. */
+function defaultStyle() {
+  return cleanStyle({ tone: env.HEARTHFORGE_DM_TONE, rules: env.HEARTHFORGE_DM_RULES || undefined, rating: env.HEARTHFORGE_DM_RATING }, DEFAULT_STYLE);
+}
+
 function createTable(msg: Extract<ClientMessage, { t: 'create_table' }>, ws: WebSocket, playerId: string, token: string): Room {
   const title = String(msg.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
   if (!title) throw new JoinError(JOIN_ERRORS.titleNeeded);
@@ -129,7 +135,7 @@ function createTable(msg: Extract<ClientMessage, { t: 'create_table' }>, ws: Web
   const room = openRoom(id);
   const s = room.game.s;
   // A new table gets a region of its own; the host can switch to the classic one in the table room.
-  s.table = { title, maxPlayers: Math.min(MAX_SEATS, Math.max(1, Math.round(Number(msg.maxPlayers)) || MAX_SEATS)), code: null, start: { ...NEW_TABLE_START, seed: newSeed() } };
+  s.table = { title, maxPlayers: Math.min(MAX_SEATS, Math.max(1, Math.round(Number(msg.maxPlayers)) || MAX_SEATS)), code: null, start: { ...NEW_TABLE_START, seed: newSeed() }, style: defaultStyle() };
   if (isLang(msg.language)) s.language = msg.language;
   // The founder sits down before the code exists, so they never have to enter their own code.
   room.join(ws, playerId, token, String(msg.name ?? ''));
