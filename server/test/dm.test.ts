@@ -104,7 +104,7 @@ describe('Claude Dungeon Master', () => {
         : { stop_reason: 'tool_use', content: [sceneCall({ important: true })] },
     );
     let updates = 0;
-    const scene = await dm.respond(g, 'Tester', 'I buy a round and ask about the riders', async () => { updates++; });
+    const scene = await dm.respond(g, [{ player: 'Tester', text: 'I buy a round and ask about the riders' }], async () => { updates++; });
     expect(scene).toEqual({ title: 'The Gilded Anvil', mood: 'warm', text: 'Marta Coppervein slides a mug across the bar.', actions: ['Ask about the smithy', 'Order stew'] });
     expect(updates).toBe(6);
     expect(requests[0].model).toBe('std-model');
@@ -123,7 +123,7 @@ describe('Claude Dungeon Master', () => {
     expect(g.takeBeats()).toEqual([]);
     expect(g.s.memory.journal.map((j) => j.text)).toEqual(['Met Marta.']);
     // The scene was flagged important, so the next reply is escalated to the key model.
-    await dm.respond(g, 'Tester', 'What now?', noop);
+    await dm.respond(g, [{ player: 'Tester', text: 'What now?' }], noop);
     expect(requests[2].model).toBe('key-model');
     expect(requests[2].messages[0].content).toMatch(/Pip Underbough[\s\S]*Met Marta/);
   });
@@ -138,7 +138,7 @@ describe('Claude Dungeon Master', () => {
           ? { stop_reason: 'tool_use', content: [use('f2', 'start_combat', { monsters: [{ type: 'bandit', count: 4, name: '', description: '', look: [], power: 'standard' }, { type: 'ogre', count: 1, name: 'Three-headed Ogre', description: 'Three heads argue over who bites first.', look: ['heads:3'], power: 'standard' }], reason: 'A deal gone wrong.', setting: 'here' })] }
           : { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Knives come out.' }] },
     );
-    const scene = await dm.respond(g, 'Tester', 'I insult the bandit captain', noop);
+    const scene = await dm.respond(g, [{ player: 'Tester', text: 'I insult the bandit captain' }], noop);
     expect(g.s.phase).toBe('combat');
     expect(g.s.monsters.map((m) => m.name)).toEqual(['Bandit 1', 'Bandit 2', 'Three-headed Ogre']);
     expect(g.s.monsters[2]).toMatchObject({ defId: 'ogre', tiles: 2, description: 'Three heads argue over who bites first.' });
@@ -195,7 +195,7 @@ describe('scripted Dungeon Master', () => {
     const opening = await dm.narrate(g, g.takeBeats());
     expect(opening).toMatchObject({ title: 'Emberfall', actions: ['Talk to Reeve Aldous Venn', 'Look around'] });
     expect(opening!.text).toMatch(/market town/);
-    const reply = await dm.respond(g, 'Tester', 'talk to reeve aldous venn');
+    const reply = await dm.respond(g, [{ player: 'Tester', text: 'talk to reeve aldous venn' }]);
     expect(reply!.text).toMatch(/bounty[\s\S]*ANTHROPIC_API_KEY/);
   });
 });

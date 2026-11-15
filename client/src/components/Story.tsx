@@ -5,7 +5,7 @@ import type { GameState, LogEntry, RollInfo } from '../../../shared/types';
 import { monsterUrl } from '../game/monsterArt';
 import { spriteUrl } from '../game/sprites';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
-import type { Connection } from '../net';
+import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
 import { tr } from '../../../shared/i18n';
@@ -252,11 +252,15 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
   const last = state.log[state.log.length - 1];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [last?.id, state.dmBusy]);
 
+  const signal = useTypingSignal(conn, 'story');
   const say = useCallback((line: string) => { if (line.trim()) conn.send({ t: 'say', text: line.trim() }); }, [conn]);
   const exploring = state.phase === 'explore';
-  // Suggestions belong to the newest scene and go stale once someone has answered it.
-  const lastTalk = [...state.log].reverse().find((l) => l.kind === 'dm' || l.kind === 'chat');
-  const chips = exploring && !state.dmBusy && !state.travelling && lastTalk?.kind === 'dm' ? lastTalk.scene?.actions ?? [] : [];
+  // Suggestions belong to the newest scene. Each player keeps them until they have answered it themselves.
+  const me = state.players.find((p) => p.id === playerId)?.name;
+  const sceneAt = state.log.reduce((at, l, i) => (l.kind === 'dm' ? i : at), -1);
+  const answered = state.log.slice(sceneAt + 1).some((l) => l.kind === 'chat' && l.speaker === me);
+  const chips = exploring && !state.dmBusy && !state.travelling && sceneAt >= 0 && !answered ? state.log[sceneAt].scene?.actions ?? [] : [];
+  const writing = state.players.filter((p) => p.id !== playerId && conn.typing[p.id] === 'story').map((p) => p.name);
 
   return (
     <section className={compact ? 'story compact' : 'story'}>
@@ -264,6 +268,8 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
         {state.log.map((l) => <Entry key={l.id} entry={l} animate={l.id > seen.current} />)}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}
         {state.travelling && <p className="line typing">{t('On the road…')}</p>}
+        {state.gathering && !state.dmBusy && <p className="line typing">{answered ? t('The Dungeon Master gives the others a moment to act…') : t('The Dungeon Master is listening. Say what you do, and it is resolved together with the others.')}</p>}
+        {writing.length > 0 && <p className="line typing">{writing.length === 1 ? t('{name} is writing…', { name: writing[0] }) : t('{names} are writing…', { names: writing.join(', ') })}</p>}
         <div ref={end} />
       </div>
       {chips.length > 0 && (
@@ -273,9 +279,9 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
       )}
       <form
         className="composer"
-        onSubmit={(e) => { e.preventDefault(); say(text); setText(''); }}
+        onSubmit={(e) => { e.preventDefault(); say(text); setText(''); signal(''); }}
       >
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder={exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
+        <input value={text} onChange={(e) => { setText(e.target.value); signal(e.target.value); }} maxLength={500} placeholder={exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
         <button className="primary" disabled={!text.trim()}>{t('Send')}</button>
       </form>
     </section>

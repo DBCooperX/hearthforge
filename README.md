@@ -20,7 +20,7 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **English and German**: every player picks their own interface language (EN / DE in the top bar, remembered in the browser). Whoever opens a table chooses the story language on the party screen, and the game log, the starting region and the Dungeon Master's narration follow it. German uses the terms of the official German D&D edition (Rettungswurf, Rüstungsklasse, Trefferpunkte).
 - **A seat at the tavern**: dark wood, parchment scene cards, brass and candlelight, with bundled book fonts. Nothing is loaded from the internet by the browser.
 - **Background music** that follows the story: tavern, town, the open road, dungeons, fights and boss fights each have their own tracks and crossfade into each other. Every player has a mute button and a volume slider in the top bar, remembered in their browser. See [Music](#music).
-- **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. Games are saved in SQLite and survive restarts.
+- **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. A lobby lists the tables; each table has a host, a ready check, invite links and an optional invite code, and a table talk chat with whispers that the Dungeon Master never reads. See [Playing together](#playing-together). Games are saved in SQLite and survive restarts.
 
 Four classes are available (Fighter, Rogue, Wizard and Cleric) with nine species and four backgrounds. Each hero has a gender (female, male or neutral) that the Dungeon Master is told on every turn, so the narration never guesses or switches. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
 
@@ -85,7 +85,7 @@ nano .env        # paste your ANTHROPIC_API_KEY
 docker compose up -d --build
 ```
 
-Open `http://<guest-ip>:3000` in a browser. Friends on your network use the same address and the same table name.
+Open `http://<guest-ip>:3000` in a browser. Friends on your network use the same address and pick your table from the list, or open the invite link you send them.
 
 ### Updating
 
@@ -113,11 +113,12 @@ Set these in `.env`:
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
 | `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
 | `HEARTHFORGE_MUSIC` | `on` | `on` or `off`. See [Music](#music). |
+| `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the Dungeon Master waits for the other players after the first one acts. `0` answers every action at once. See [Playing together](#playing-together). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host. |
 
 The server decides the tier from what just happened in the game, and the DM can mark a scene as a turning point so the next reply is escalated. Every call is logged as `[dm] <purpose>: tier=<tier> model=<model>`, so `docker compose logs` shows what was used. The older `HEARTHFORGE_DM_MODEL` setting is no longer read; use `HEARTHFORGE_DM_FORCE_MODEL` if you want a single model. The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
 
-Hearthforge has no login. Anyone who can reach the port can join a table, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
+Hearthforge has no accounts or passwords. Each browser keeps a secret token that proves a seat is its own, and a table can ask for an invite code, but anyone who can reach the port can see the list of tables and open one, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
 
 ## Art packs
 
@@ -164,9 +165,18 @@ docker cp my-tavern-song.mp3 hearthforge:/data/music/tavern/
 
 Title, artist and license are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
 
+## Playing together
+
+- **Who you are**: there are no passwords. Your browser keeps a secret token, and the seat and heroes you take at a table belong to that token. A name can sit at a table only once, so nobody can join as a second "Chris". After a reload, a dropped connection or a server restart the same browser gets its seat back; a different browser or a cleared browser storage is a new player.
+- **Tables**: the first screen lists every table with its players, story language, free seats and whether the adventure has begun. Opening a table sets its name, story language, number of seats (1 to 4) and whether it needs an invite code. The table room shows an invite link to copy; with a code, the link carries it.
+- **Before the adventure**: everyone picks or creates heroes and says they are ready, and the host begins. The host can remove a player, hand the table to someone else, or close the table. If the host is gone for 20 seconds while others are there, the player who has sat there longest becomes host.
+- **Away players**: a player who disconnects keeps their seat and heroes and is shown as away. In a fight anyone at the table may play an away player's hero, so the turn order never stalls. In the story the Dungeon Master is told who is away and keeps their hero in the background. Removing a player after the adventure began gives their heroes to the host.
+- **Table talk**: the chat button in the top bar opens an out-of-character chat between the players, with whispers to one player. The Dungeon Master does not read it. What you type into the story box is in character and goes to the Dungeon Master.
+- **Whose turn it is**: in a fight the turn order decides. In the story, with more than one player, the first action opens a short window (`HEARTHFORGE_TURN_WAIT`, 8 seconds). The Dungeon Master answers as soon as every connected player has acted, or when the window closes, and resolves everyone's actions in one scene. While someone is still typing the window stays open, up to 30 seconds. Anything said while the Dungeon Master is writing goes into the next reply. Alone at the table, every action is answered at once.
+
 ## How to play
 
-1. Enter your name and a table name. Everyone who enters the same table name shares one adventure.
+1. Enter your name, then open a table or sit down at one from the list.
 2. Add heroes: flip a premade card and add it, customize it, or create your own. Playing alone? Add up to four and control them all.
 3. Read the scene, then click a suggested action or type what you do. The panel on the right shows where you are, who is here, the map and your quests.
 4. To travel, click a hex on the map (press `m` for the big one), check the journey and press **Set out**. Places inside a town, such as the tavern, are listed under *Here*, and dungeons are entered with **Delve**.

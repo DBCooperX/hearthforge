@@ -37,6 +37,15 @@ export class Store {
       .run(room, JSON.stringify(state));
   }
 
+  /** Every saved table. */
+  names(): string[] {
+    return (this.db.prepare('SELECT room FROM rooms ORDER BY updated_at').all() as { room: string }[]).map((r) => r.room);
+  }
+
+  delete(room: string) {
+    this.db.prepare('DELETE FROM rooms WHERE room = ?').run(room);
+  }
+
   close() {
     this.db.close();
   }

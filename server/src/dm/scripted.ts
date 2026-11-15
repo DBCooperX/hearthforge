@@ -7,7 +7,7 @@ import type { Mood } from '../../../shared/types';
 import { SETTING_NAME } from '../data/world';
 import type { Beat, Game, Monster } from '../game/engine';
 import { trueTerrain } from '../game/world';
-import type { DungeonMaster, Scene } from './types';
+import type { DungeonMaster, PlayerLine, Scene } from './types';
 
 const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
@@ -112,8 +112,9 @@ export class ScriptedDM implements DungeonMaster {
     return null;
   }
 
-  async respond(game: Game, _playerName: string, text: string): Promise<Scene | null> {
+  async respond(game: Game, said: PlayerLine[]): Promise<Scene | null> {
     if (game.s.phase !== 'explore') return null;
+    const text = said.map((l) => l.text).join(' ');
     const npc = game.presentNpcs().find((n) => text.toLowerCase().includes(n.name.toLowerCase()));
     const body = npc ? `${npc.name}, ${npc.role}. ${npc.description}` : surroundings(game);
     return {

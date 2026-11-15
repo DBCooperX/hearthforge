@@ -1,0 +1,105 @@
+/* The lobby (the tavern's notice board), the table before the adventure, presence and table talk.
+   Loaded last; uses the tavern palette from theme.css. */
+
+/* ---------- lobby ---------- */
+.lobby { width: min(760px, 100%); max-height: 100%; overflow-y: auto; padding: 26px 28px; display: grid; gap: 16px; }
+.lobby header.join { width: auto; padding: 0; gap: 10px; }
+.lobby-name { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.lobby-name input { font-size: 17px; padding: 9px 12px; }
+.notice { background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 14.5px; }
+.notice.error { background: #4a1a14; border-color: #d0483a; }
+.tables { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.table-card {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 12px 14px;
+  background: var(--paper-grain), linear-gradient(var(--parchment), var(--parchment-2)); color: var(--ink);
+  border: 1px solid #8a6a3c; border-radius: 5px; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(120, 80, 30, 0.22);
+}
+.table-card.mine { box-shadow: 0 0 0 2px var(--gold), 0 3px 10px rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(120, 80, 30, 0.22); }
+.table-card.invited { box-shadow: 0 0 0 2px var(--ember), 0 0 18px rgba(238, 143, 60, 0.45), inset 0 0 22px rgba(120, 80, 30, 0.22); }
+.table-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; }
+.table-head b { font-family: var(--font-head); font-size: 18px; color: #4a2c10; overflow-wrap: anywhere; }
+.status { margin-left: auto; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #3f6b34; white-space: nowrap; }
+.status.playing { color: #9a4a16; }
+.table-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--ink-soft); }
+.table-players { grid-column: 1; display: flex; flex-wrap: wrap; gap: 6px; font-size: 14px; }
+.table-card .muted { color: var(--ink-soft); }
+.who { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 10px; background: rgba(60, 35, 10, 0.14); color: var(--ink-soft); }
+.who::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #9a8468; }
+.who.here { color: var(--ink); }
+.who.here::before { background: #3f9a3f; box-shadow: 0 0 5px #5fd05f; }
+.table-join { grid-column: 2; grid-row: 2 / span 2; display: grid; gap: 6px; justify-items: end; }
+.table-join input { width: 130px; text-transform: uppercase; letter-spacing: 0.14em; text-align: center; }
+.warn { color: #9a2f1c; max-width: 190px; text-align: right; }
+.lobby-foot { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 14px; }
+.by-code { display: flex; gap: 6px; }
+.by-code input { width: 130px; text-transform: uppercase; letter-spacing: 0.14em; }
+.open-table { width: 100%; display: grid; gap: 12px; }
+.open-table label, .open-table .field { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick button.on, .session-lang button.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+label.check { display: flex; grid-template-columns: none; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text); cursor: pointer; }
+label.check input { width: auto; margin-top: 3px; accent-color: var(--gold); box-shadow: none; }
+label.check small { display: block; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+button.danger, button.link.danger { color: #e08a7c; }
+button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #ff9f8f; }
+
+/* ---------- the table before the adventure ---------- */
+.table-room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.table-room > :only-child { grid-column: 1 / -1; }
+.seats { display: grid; gap: 10px; align-content: start; background: rgba(0, 0, 0, 0.22); border: 1px solid #4f3922; border-radius: 8px; padding: 12px; }
+.players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.players li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0, 0, 0, 0.25); border: 1px solid #4f3922; border-radius: 6px; }
+.players li.away { opacity: 0.7; }
+.players .dot { flex: none; }
+.who-name { flex: 1; min-width: 0; }
+.who-name small { color: var(--muted); }
+.who-name > small:last-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ready { font-size: 12px; padding: 1px 9px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.ready.yes { border-color: #4f8a4f; color: #9be09b; background: rgba(60, 120, 60, 0.18); }
+.host-tools { display: flex; gap: 10px; font-size: 13px; white-space: nowrap; }
+.invite { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; }
+.invite-title, .invite small, .invite label { grid-column: 1 / -1; }
+.invite-title { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.invite input[readonly] { font-size: 13px; min-width: 0; }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.18em; color: var(--gold); font-size: 15px; }
+.begin { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.begin .primary { padding: 10px 22px; font-size: 16px; }
+
+/* ---------- presence in the game ---------- */
+.topbar .table-name { font-family: var(--font-head); color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence { display: flex; gap: 5px; padding: 2px 4px; background: none; border: none; box-shadow: none; font-size: 12.5px; }
+.presence .who { background: rgba(0, 0, 0, 0.3); color: #8d7c66; }
+.presence .who.here { color: var(--text); }
+.chip.owner.away { background: #4a3a1c; color: #e8c97a; }
+.table-sheet { width: min(520px, 100%); max-height: 100%; overflow: auto; padding: 16px; display: grid; gap: 12px; }
+.table-sheet header { display: flex; align-items: baseline; }
+
+/* ---------- table talk ---------- */
+.chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: rgba(0, 0, 0, 0.22); border: 1px solid #4f3922; border-radius: 8px; }
+.chat header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 9px 12px 7px; border-bottom: 1px solid #4f3922; }
+.chat header small { flex: 1; min-width: 0; }
+.chat-feed { flex: 1; min-height: 120px; max-height: 260px; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; font-size: 14.5px; }
+.chat-line { align-self: flex-start; max-width: 88%; padding: 5px 10px; border-radius: 3px 10px 10px 10px; background: rgba(255, 220, 170, 0.08); border: 1px solid #4f3922; overflow-wrap: anywhere; }
+.chat-line b { display: block; font-size: 11.5px; letter-spacing: 0.04em; color: var(--gold); font-weight: 600; }
+.chat-line b i { font-weight: 400; color: #c9a2e8; }
+.chat-line.mine { align-self: flex-end; border-radius: 10px 3px 10px 10px; background: rgba(238, 143, 60, 0.13); border-color: #7a5230; }
+.chat-line.whisper { border-style: dashed; border-color: #8a6ab0; background: rgba(140, 100, 190, 0.12); font-style: italic; }
+.chat-typing { font-size: 13px; font-style: italic; color: var(--muted); animation: pulse 1.2s infinite; }
+.chat-form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #4f3922; }
+.chat-form input { flex: 1; min-width: 0; }
+.chat-form select { max-width: 40%; background: #140d08; color: var(--text); border: 1px solid #5a4129; border-radius: 6px; padding: 0 6px; font: inherit; font-size: 13px; }
+.chat-float { position: fixed; top: 52px; right: 12px; width: min(360px, calc(100vw - 24px)); z-index: 30; padding: 4px; display: flex; }
+.chat-float .chat { flex: 1; border: none; background: none; }
+.chat-float .chat-feed { height: 300px; max-height: 50vh; }
+.chat-toggle { position: relative; }
+.chat-toggle.unread { color: var(--gold); }
+.badge { display: inline-block; min-width: 18px; margin-left: 5px; padding: 0 5px; border-radius: 9px; background: var(--ember); color: #24160a; font-size: 11.5px; font-weight: 700; line-height: 18px; text-align: center; animation: pulse 1.2s 3; }
+
+@media (max-width: 760px) {
+  .table-room { grid-template-columns: minmax(0, 1fr); }
+  .table-card { grid-template-columns: 1fr; }
+  .table-join { grid-column: 1; grid-row: auto; justify-items: stretch; }
+  .presence { display: none; }
+}
+.players li.away .dot { background: #8d7c66; box-shadow: none; }

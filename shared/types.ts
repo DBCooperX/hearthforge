@@ -317,10 +317,53 @@ export interface LogEntry {
 export type Phase = 'lobby' | 'explore' | 'combat' | 'defeat';
 
 export interface PlayerInfo {
+  /** Public id. The secret that proves who owns the seat never leaves the server. */
   id: string;
+  /** Display name, unique at the table. */
   name: string;
   connected: boolean;
 }
+
+/** What a table is called and who may sit down at it. */
+export interface TableInfo {
+  title: string;
+  /** Seats, 1 to 4. A seat stays taken while its player is away. */
+  maxPlayers: number;
+  /** Invite code a new player must enter, or null for an open table. */
+  code: string | null;
+}
+
+export const MAX_SEATS = 4;
+
+/** A table as the lobby lists it. */
+export interface TableSummary {
+  id: string;
+  title: string;
+  language: Lang;
+  playing: boolean;
+  players: PlayerInfo[];
+  maxPlayers: number;
+  /** Joining needs an invite code. */
+  locked: boolean;
+  heroes: number;
+  hostId: string | null;
+}
+
+/** A line of table talk between players. The Dungeon Master never sees it. */
+export interface ChatMessage {
+  id: number;
+  from: string;
+  name: string;
+  text: string;
+  /** Set on a whisper: the one player it is for. */
+  to: string | null;
+  toName: string | null;
+  /** Milliseconds since the epoch. */
+  at: number;
+}
+
+/** Where a player is typing right now. */
+export type TypingWhere = 'story' | 'chat';
 
 // ------------------------------------------------------------------ world
 
@@ -433,8 +476,13 @@ export interface GameState {
   dmModel: string | null;
   /** Language of the game log, world text and narration. */
   language: Lang;
-  /** The player who may change the session language (whoever opened the table). */
+  /** The player who runs the table: starts the adventure, picks the story language, removes players. */
   hostId: string | null;
+  table: TableInfo;
+  /** Players who said they are ready to begin. */
+  ready: string[];
+  /** The Dungeon Master is waiting a moment for the other players before answering. */
+  gathering: boolean;
   /** Ability scores each player rolled in the character creator, by player id. */
   rolled: Record<string, number[]>;
 }
@@ -442,7 +490,17 @@ export interface GameState {
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };
 
 export type ClientMessage =
-  | { t: 'join'; room: string; playerId: string; name: string }
+  | { t: 'lobby' }
+  | { t: 'join'; room: string; playerId: string; token: string; name: string; code?: string }
+  | { t: 'create_table'; playerId: string; token: string; name: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
+  | { t: 'leave_table' }
+  | { t: 'close_table' }
+  | { t: 'ready'; ready: boolean }
+  | { t: 'kick'; playerId: string }
+  | { t: 'make_host'; playerId: string }
+  | { t: 'set_code'; locked: boolean }
+  | { t: 'chat'; text: string; to?: string }
+  | { t: 'typing'; where: TypingWhere | null }
   | { t: 'add_character'; classId: ClassId; name: string }
   | { t: 'create_character'; spec: CharacterSpec }
   | { t: 'add_premade'; premadeId: string; name: string }
@@ -469,7 +527,28 @@ export type ClientMessage =
 export type ServerMessage =
   | { t: 'state'; state: GameState }
   | { t: 'moved'; id: string; path: { x: number; y: number }[] }
-  | { t: 'error'; message: string };
+  | { t: 'tables'; tables: TableSummary[] }
+  | { t: 'chat'; messages: ChatMessage[]; replace?: boolean }
+  | { t: 'typing'; playerId: string; where: TypingWhere | null }
+  /** The player no longer sits at the table and goes back to the lobby. */
+  | { t: 'left'; reason: 'left' | 'kicked' | 'closed' }
+  /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
+  | { t: 'error'; message: string; join?: boolean };
+
+/**
+ * Reasons the server refuses a seat. They are sent in English and translated by the
+ * browser, because the player may not share the table's language yet.
+ */
+export const JOIN_ERRORS = {
+  noTable: 'That table does not exist (any more).',
+  nameTaken: 'That name is already taken at this table. Pick another one.',
+  noName: 'Enter your name first.',
+  full: 'This table is full.',
+  wrongCode: 'That invite code is not right.',
+  noCode: 'No table uses that invite code.',
+  seatTaken: 'That seat belongs to another player.',
+  titleNeeded: 'Give the table a name.',
+} as const;
 
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);

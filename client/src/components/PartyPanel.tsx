@@ -73,7 +73,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
                     {'●'.repeat(c.deathSaves.successes)}{'○'.repeat(3 - c.deathSaves.successes)} <i>{'✖'.repeat(c.deathSaves.failures)}</i>
                   </span>
                 )}
-                {!mine && <span className="chip owner">{owner?.name ?? 'someone'}{owner && !owner.connected ? ' (away)' : ''}</span>}
+                {!mine && owner && <span className={owner.connected ? 'chip owner' : 'chip owner away'} title={owner.connected ? t('Played by {name}', { name: owner.name }) : t('{name} is away. Anyone may play this hero in a fight.', { name: owner.name })}>{owner.name}{!owner.connected && ` · ${t('away')}`}</span>}
               </div>
             </div>
           </div>
