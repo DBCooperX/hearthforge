@@ -49,7 +49,20 @@ const BY_CONTEXT: Record<MusicContext, string[]> = {
   combat: ['Five Armies', 'Clash Defiant', 'Crossing the Chasm', 'Volatile Reaction', 'Faster Does It', 'Prelude and Action', 'Impact Moderato', 'Killers', 'Unholy Knight', 'Crusade - Heavy Industry'],
   boss: ['Black Vortex', 'Death and Axes', 'Giant Wyrm', 'Epic Unease', 'The Complex', 'Hall of the Mountain King', 'Danse Macabre'],
 };
-export const DEFAULT_TRACKS: TrackSource[] = MUSIC_CONTEXTS.flatMap((c) => BY_CONTEXT[c].map((t) => incompetech(c, t)));
+
+const oga = (file: string) => `https://opengameart.org/sites/default/files/${file}`;
+/**
+ * Ambient loops, fetched straight from OpenGameArt (CC0 or CC BY, so downloading is allowed).
+ * The licences were read on each file's page on 15 November 2026; the direct links follow
+ * OpenGameArt's usual pattern and still have to be checked with scripts/check-ambient-links.mjs.
+ * A link that fails is skipped. Gaps (tavern crowd, town bustle, cave drips) are filled by hand in the Innkeeper.
+ */
+export const AMBIENT_TRACKS: TrackSource[] = [
+  { context: 'tavern', layer: 'ambient', title: 'Fire loop', artist: 'qubodup (opengameart.org)', license: 'CC BY 3.0', url: oga('qubodupFireLoop.ogg') },
+  { context: 'overworld', layer: 'ambient', title: 'Wind loop', artist: 'AntumDeluge, after InspectorJ (opengameart.org)', license: 'CC BY 3.0', url: oga('wind-01_0.ogg') },
+  { context: 'dungeon', layer: 'ambient', title: 'Cathedral in the forest', artist: 'congusbongus (opengameart.org)', license: 'CC0', url: oga('forest_2.ogg') },
+];
+export const DEFAULT_TRACKS: TrackSource[] = [...MUSIC_CONTEXTS.flatMap((c) => BY_CONTEXT[c].map((t) => incompetech(c, t))), ...AMBIENT_TRACKS];
 
 export function musicEnabled(env: NodeJS.ProcessEnv): boolean {
   return !/^(off|none|false|0|no)$/i.test((env.HEARTHFORGE_MUSIC ?? 'on').trim());
