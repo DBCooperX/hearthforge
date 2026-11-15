@@ -113,6 +113,7 @@ Set these in `.env`:
 | `HEARTHFORGE_DM_FORCE_MODEL` | empty | Set to a model id to run everything on that one model and switch the automatic choice off. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. Higher is slower and costs more. |
 | `HEARTHFORGE_ART` | `generated` | `generated`, `kenney` or `0x72`. See [Art packs](#art-packs). |
+| `HEARTHFORGE_ART_UPLOADS` | `on` | `off` stops anyone from adding or switching art packs in the browser. |
 | `HEARTHFORGE_MUSIC` | `on` | `on` or `off`. See [Music](#music). |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the Dungeon Master waits for the other players after the first one acts. `0` answers every action at once. See [Playing together](#playing-together). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host. |
@@ -123,9 +124,17 @@ Hearthforge has no accounts or passwords. Each browser keeps a secret token that
 
 ## Art packs
 
-Out of the box Hearthforge draws its own 16×16 pixel art, so it needs no downloads. You can switch to a CC0 art pack by setting `HEARTHFORGE_ART` in `.env` and restarting (`docker compose up -d`). The server fetches the pack on start into the data volume (`/data/art`), and anything it cannot get or map keeps the built-in sprite, so a failed download never breaks the game.
+Out of the box Hearthforge draws its own 16×16 pixel art and shows items as emoji, so it needs no downloads. Everything else is added in the game: open **Settings → Art & Assets**. The host of a table can change things there; everyone else sees which packs are in use and whom to credit.
 
-This is **experimental**: the packs could not be downloaded in the environment this was built in, so the pack-to-sprite mappings have not been checked against the real images.
+- **Drop a zip.** Download a pack from its page (itch.io, Kenney, OpenGameArt) and drag the zip into the window. The server unpacks it into the data volume (`/data/art`), keeps only the PNG images, and switches to it. No `docker cp`, no restart.
+- **Item icons.** *Game-icons.net* (CC BY 3.0) is fetched with one click and has a picture for every item. Any other zip with PNG images becomes an icon pack: pictures are matched by file name (`sword_01.png`, `potion_red.png`), and **Assign icons** lets you pick the rest by hand, also out of sprite sheets. Items without a picture keep their emoji.
+- **Map tiles.** *Kenney Tiny Dungeon* is fetched with one click. *0x72 DungeonTileset II* has no direct link on itch.io: download it from [0x72.itch.io](https://0x72.itch.io/dungeontileset-ii) and drop the zip. Tile packs are recognised by their contents. New tiles show after the page is reloaded.
+
+Licenses differ between packs. CC0 packs need nothing, CC BY packs need a credit, and some free packs may be used but not passed on. The window shows the license of the packs it knows and has fields for the credit of the ones it does not; see [CREDITS.md](CREDITS.md) for what was checked.
+
+Setting `HEARTHFORGE_ART` in `.env` still chooses the tile pack for a fresh server; a choice made in the game wins over it. A zip copied into `/data/art` by hand is taken in on the next start. Set `HEARTHFORGE_ART_UPLOADS=off` to lock the art library against changes from the browser.
+
+The tile mappings are **experimental**: the packs could not be downloaded in the environment this was built in, so they have not been checked against the real images.
 
 **Kenney Tiny Dungeon** (`HEARTHFORGE_ART=kenney`): downloaded automatically from [kenney.nl](https://kenney.nl/assets/tiny-dungeon). If a hero shows up as the wrong tile, correct it without rebuilding by writing tile numbers into `kenney-map.json` in the art folder:
 
@@ -135,7 +144,7 @@ docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}"
 
 Sprite names are `fighter`, `rogue`, `wizard`, `cleric`, `goblin`, `skeleton`, `bugbear`, `rat`, `wolf`, `bandit`, `orc`, `zombie`, `floor0`–`floor3` and `wall0`–`wall2`. The numbers are the `tile_NNNN.png` files in the pack.
 
-**0x72 DungeonTileset II** (`HEARTHFORGE_ART=0x72`): itch.io has no direct download link, so download the zip from [0x72.itch.io](https://0x72.itch.io/dungeontileset-ii) (free, name your own price) and copy it in:
+**0x72 DungeonTileset II** (`HEARTHFORGE_ART=0x72`): drop the zip into Art & Assets, or copy it in by hand:
 
 ```bash
 docker compose exec hearthforge mkdir -p /data/art

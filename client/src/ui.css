@@ -490,7 +490,8 @@
 .art-pack small { color: var(--muted); }
 .art-pack-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 .art-inuse { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #f0c877; }
-.art-assign { padding: 14px 18px 16px; display: grid; gap: 10px; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
+.art-window.win-large .win-body { overflow: hidden; display: flex; }
+.art-assign { flex: 1; min-width: 0; min-height: 0; padding: 14px 18px 16px; display: grid; gap: 10px; grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .art-assign p { margin: 0; }
 .art-assign-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .art-cell { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
@@ -512,3 +513,5 @@
 .art-cut { display: block; transform-origin: 0 0; background-repeat: no-repeat; }
 .art-credit { display: grid; grid-template-columns: auto 1fr 1fr 1.4fr; align-items: center; gap: 8px; font-size: 14px; }
 @media (max-width: 760px) { .art-cols { grid-template-columns: 1fr; } .art-slots { max-height: 180px; } .art-credit { grid-template-columns: 1fr; } }
+.win.art-window { max-height: calc(100vh - 24px); }
+.win.art-window.win-large { height: min(780px, calc(100vh - 24px)); }
