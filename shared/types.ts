@@ -741,6 +741,8 @@ export type ClientMessage =
   | { t: 'reset' };
 
 export type ServerMessage =
+  /** Sent first on every connection. `build` names the client build this server serves; empty if it serves none. */
+  | { t: 'hello'; build: string }
   | { t: 'state'; state: GameState }
   | { t: 'moved'; id: string; path: { x: number; y: number }[] }
   | { t: 'tables'; tables: TableSummary[] }

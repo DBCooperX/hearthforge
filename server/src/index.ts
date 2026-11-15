@@ -1,5 +1,5 @@
 // Hearthforge server: serves the browser client and runs games over WebSockets.
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ import { Updater } from './admin/updater';
 import { Usage } from './admin/usage';
 
 import pkg from '../../package.json';
+import { buildOf } from '../../shared/update';
 
 const VERSION: string = pkg.version;
 const STARTED_AT = Date.now();
@@ -371,6 +372,12 @@ const server = createServer((req, res) => {
   // Static client with SPA fallback.
   const rel = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
   let file = join(CLIENT_DIR, rel);
+  // A script or style from an older build must fail loudly, not come back as the page (which breaks lazy chunks).
+  if (rel.replace(/\\/g, '/').startsWith('/assets/') && (!existsSync(file) || statSync(file).isDirectory())) {
+    res.writeHead(404, { 'content-type': 'text/plain', 'cache-control': 'no-store' });
+    res.end('Not found');
+    return;
+  }
   if (!file.startsWith(CLIENT_DIR) || !existsSync(file) || statSync(file).isDirectory()) file = join(CLIENT_DIR, 'index.html');
   if (!existsSync(file)) {
     res.writeHead(404, { 'content-type': 'text/plain' });
@@ -385,12 +392,22 @@ const server = createServer((req, res) => {
   createReadStream(file).pipe(res);
 });
 
+/** The client build this server serves, read from the built index.html so a swapped-in build is noticed. */
+function clientBuild(): string {
+  try {
+    return buildOf(readFileSync(join(CLIENT_DIR, 'index.html'), 'utf8'));
+  } catch {
+    return '';
+  }
+}
+
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
 wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   const send = (msg: ServerMessage) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg)); };
   const ip = ipOf(req);
   if (auth.banned(ip)) return ws.close(4403, 'banned');
+  send({ t: 'hello', build: clientBuild() });
   conns.set(ws, { id: ++connSeq, ip, since: Date.now(), agent: String(req.headers['user-agent'] ?? '').slice(0, 200) });
   ws.on('message', (data) => {
     let msg: ClientMessage;
