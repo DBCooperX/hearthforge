@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { MUSIC_CONTEXTS, SOUND_SOURCES, type MusicContext, type MusicItem, type MusicLayer, type MusicLibrary } from '../../../shared/music';
 import { useT } from '../i18n';
+import { music } from '../music';
 import { innkeeperSession } from './innkeeperApi';
 import { ACCESS_LABELS as ACCESS, MUSIC_ERRORS, SCENE_LABELS as SCENES } from './labels';
 import { sfx } from './sound';
@@ -16,7 +17,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new Error(String(body?.error ?? 'failed'));
   return body as T;
 }
-const act = (body: Record<string, unknown>) => api<MusicLibrary>('/api/music/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const act = (body: Record<string, unknown>) =>
+  api<MusicLibrary>('/api/music/action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    // This browser may be playing the track that was just switched off or removed.
+    .then((lib) => { void music.refresh(); return lib; });
 const AUDIO = /\.(mp3|ogg|oga|opus|m4a|wav|flac|zip)$/i;
 
 export function SoundLibrary({ layer }: { layer: MusicLayer }) {
