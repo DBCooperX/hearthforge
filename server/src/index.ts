@@ -9,7 +9,7 @@ import { isLang } from '../../shared/i18n';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
-import { AUDIO_TYPES, byteRange, ensureMusic, musicEnabled, musicManifest } from './music';
+import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
@@ -257,6 +257,39 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** The music library belongs to the owner of the server: it is changed from the Innkeeper. */
+async function musicApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/music/library') return json(200, musicLibrary(MUSIC_DIR, env));
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (url.pathname === '/api/music/upload') {
+      const body = await readBody(req, 96 * 1024 * 1024);
+      addUpload(MUSIC_DIR, String(url.searchParams.get('name') ?? 'track.mp3').slice(0, 160), new Uint8Array(body), url.searchParams.get('layer'), url.searchParams.get('context'));
+      return json(200, musicLibrary(MUSIC_DIR, env));
+    }
+    if (url.pathname === '/api/music/action') {
+      await musicAction(MUSIC_DIR, env, JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'));
+      return json(200, musicLibrary(MUSIC_DIR, env));
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof MusicError) {
+      const detail = (err as { detail?: string }).detail;
+      if (detail) console.warn(`[music] ${detail}`);
+      return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
+    }
+    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[music]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
@@ -289,6 +322,10 @@ const server = createServer((req, res) => {
       'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     });
     createReadStream(file).pipe(res);
+    return;
+  }
+  if (url.pathname.startsWith('/api/music/')) {
+    void musicApi(req, res, url);
     return;
   }
   if (url.pathname === '/api/music') {

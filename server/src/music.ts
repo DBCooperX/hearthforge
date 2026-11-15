@@ -3,8 +3,9 @@
 // A track that cannot be fetched is skipped, and with no tracks at all the game is silent.
 // Audio files the owner copies into a context folder are played too.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
-import { MUSIC_CONTEXTS, type MusicContext, type MusicLayer, type MusicManifest, type MusicTrack } from '../../shared/music';
+import { basename, dirname, extname, join, relative, sep } from 'node:path';
+import { unzipSync } from 'fflate';
+import { MUSIC_CONTEXTS, type MusicContext, type MusicItem, type MusicLayer, type MusicLibrary, type MusicManifest, type MusicTrack } from '../../shared/music';
 
 export interface TrackSource {
   context: MusicContext;
@@ -89,6 +90,82 @@ function looksLikeAudio(bytes: Uint8Array, contentType: string): boolean {
 let fetching = false;
 export const musicPending = () => fetching;
 
+/** A refusal the interface can explain. `code` is one of the keys of MUSIC_ERRORS. */
+export class MusicError extends Error {
+  constructor(readonly code: 'not_audio' | 'too_big' | 'bad_link' | 'download_failed' | 'unknown_track' | 'bad_request') {
+    super(code);
+  }
+}
+
+// ---------------------------------------------------------------------------- what the owner decided
+// Kept in MUSIC_DIR/library.json: which files players hear, which scene a file is assigned to,
+// the credits of files that were added by hand, and which built-in tracks were taken off.
+interface FileState {
+  disabled?: boolean;
+  context?: MusicContext;
+  title?: string;
+  artist?: string;
+  license?: string;
+  url?: string;
+}
+interface LibraryState {
+  files: Record<string, FileState>;
+  /** Ids of built-in tracks the owner removed, so the server does not fetch them again. */
+  removed: string[];
+}
+
+const stateFile = (dir: string) => join(dir, 'library.json');
+function loadState(dir: string): LibraryState {
+  try {
+    const raw = JSON.parse(readFileSync(stateFile(dir), 'utf8'));
+    return {
+      files: raw?.files && typeof raw.files === 'object' && !Array.isArray(raw.files) ? raw.files : {},
+      removed: Array.isArray(raw?.removed) ? raw.removed.filter((x: unknown) => typeof x === 'string') : [],
+    };
+  } catch {
+    return { files: {}, removed: [] };
+  }
+}
+function saveState(dir: string, state: LibraryState) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(`${stateFile(dir)}.tmp`, JSON.stringify(state, null, 2));
+  renameSync(`${stateFile(dir)}.tmp`, stateFile(dir));
+}
+
+/** The id of a file: its path below MUSIC_DIR, such as "tavern/folk-round.mp3" or "ambient/town/crowd.ogg". */
+const idOf = (dir: string, file: string) => relative(dir, file).split(sep).join('/');
+const fileOf = (dir: string, id: string) => join(dir, ...id.split('/'));
+function validId(id: unknown): id is string {
+  if (typeof id !== 'string') return false;
+  const parts = id.split('/');
+  const ok = parts.length === 2 || (parts.length === 3 && parts[0] === 'ambient');
+  return ok && parts.every((p) => p && !p.startsWith('.') && !/[\\]/.test(p)) && MUSIC_CONTEXTS.includes(parts[parts.length - 2] as MusicContext) && !!AUDIO_TYPES[extname(id).toLowerCase()];
+}
+
+// ---------------------------------------------------------------------------- fetching
+
+/** Fetch one audio file. Throws MusicError('download_failed') when it is not one. */
+export async function fetchAudio(url: string, fetchFn: typeof fetch = fetch): Promise<{ bytes: Uint8Array; type: string }> {
+  try {
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(120_000), headers: { 'user-agent': 'hearthforge-music-fetch' } });
+    if (!res.ok) throw new Error(`answered ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < 10_000 || bytes.length > MAX_TRACK_BYTES) throw new Error(`unexpected size (${bytes.length} bytes)`);
+    const type = res.headers.get('content-type') ?? '';
+    if (!looksLikeAudio(bytes, type)) throw new Error('not an audio file');
+    return { bytes, type };
+  } catch (err) {
+    throw Object.assign(new MusicError('download_failed'), { detail: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function writeAtomic(file: string, bytes: Uint8Array) {
+  mkdirSync(dirname(file), { recursive: true });
+  // Write under another name first, so a half-written file is never served.
+  writeFileSync(`${file}.part`, bytes);
+  renameSync(`${file}.part`, file);
+}
+
 /** Fetch every listed track that is not on disk yet, one after another. Never throws. */
 export async function ensureMusic(dir: string, env: NodeJS.ProcessEnv, fetchFn: typeof fetch = fetch): Promise<void> {
   if (!musicEnabled(env)) return;
@@ -96,23 +173,16 @@ export async function ensureMusic(dir: string, env: NodeJS.ProcessEnv, fetchFn: 
   let got = 0;
   const failures: string[] = [];
   try {
+    const removed = new Set(loadState(dir).removed);
     for (const t of trackList(dir)) {
       const file = fileFor(dir, t);
-      if (existsSync(file)) continue;
+      if (existsSync(file) || removed.has(idOf(dir, file))) continue;
       try {
-        const res = await fetchFn(t.url, { signal: AbortSignal.timeout(120_000), headers: { 'user-agent': 'hearthforge-music-fetch' } });
-        if (!res.ok) throw new Error(`answered ${res.status}`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytes.length < 10_000 || bytes.length > MAX_TRACK_BYTES) throw new Error(`unexpected size (${bytes.length} bytes)`);
-        if (!looksLikeAudio(bytes, res.headers.get('content-type') ?? '')) throw new Error('not an audio file');
-        mkdirSync(dirname(file), { recursive: true });
-        // Write under another name first, so a half-written file is never served.
-        writeFileSync(`${file}.part`, bytes);
-        renameSync(`${file}.part`, file);
+        writeAtomic(file, (await fetchAudio(t.url, fetchFn)).bytes);
         got++;
       } catch (err) {
         rmSync(`${file}.part`, { force: true });
-        failures.push(`"${t.title}" (${t.url}): ${err instanceof Error ? err.message : err}`);
+        failures.push(`"${t.title}" (${t.url}): ${(err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)}`);
       }
     }
     if (got) console.log(`[music] Fetched ${got} track${got === 1 ? '' : 's'} into ${dir}.`);
@@ -124,37 +194,200 @@ export async function ensureMusic(dir: string, env: NodeJS.ProcessEnv, fetchFn: 
   }
 }
 
-/** Every playable file in MUSIC_DIR, with credits for the ones that came from the track list. */
+// ---------------------------------------------------------------------------- what is there
+
+interface Found extends MusicItem { file: string }
+
+/** Every file on disk plus every built-in track that is not (yet), with the owner's choices applied. */
+function scan(dir: string): Found[] {
+  const state = loadState(dir);
+  const known = new Map(trackList(dir).map((t) => [fileFor(dir, t), t]));
+  const out: Found[] = [];
+  const seen = new Set<string>();
+  const add = (file: string, layer: MusicLayer, folderContext: MusicContext, ready: boolean) => {
+    const id = idOf(dir, file);
+    const own = state.files[id] ?? {};
+    const credit = known.get(file);
+    seen.add(file);
+    out.push({
+      id, file, layer, ready,
+      context: own.context && MUSIC_CONTEXTS.includes(own.context) ? own.context : folderContext,
+      title: own.title ?? credit?.title ?? basename(file).replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+      artist: own.artist ?? credit?.artist ?? '',
+      license: own.license ?? credit?.license ?? '',
+      url: own.url ?? credit?.url ?? '',
+      src: ready ? `/music/${id.split('/').map(encodeURIComponent).join('/')}` : '',
+      enabled: !own.disabled,
+      builtIn: !!credit,
+    });
+  };
+  for (const layer of ['music', 'ambient'] as const) {
+    for (const context of MUSIC_CONTEXTS) {
+      const folder = join(dir, ...(layer === 'ambient' ? ['ambient'] : []), context);
+      if (!existsSync(folder)) continue;
+      for (const name of readdirSync(folder).sort()) {
+        const file = join(folder, name);
+        if (AUDIO_TYPES[extname(name).toLowerCase()] && statSync(file).isFile()) add(file, layer, context, true);
+      }
+    }
+  }
+  for (const [file, t] of known) if (!seen.has(file)) add(file, t.layer === 'ambient' ? 'ambient' : 'music', t.context, false);
+  return out;
+}
+
+/** What the players' browsers get: files that are on the server and not switched off. */
 export function musicManifest(dir: string, env: NodeJS.ProcessEnv): MusicManifest {
   if (!musicEnabled(env)) return { enabled: false, pending: false, tracks: [] };
   const tracks: MusicTrack[] = [];
   try {
-    const known = new Map(trackList(dir).map((t) => [fileFor(dir, t), t]));
-    for (const layer of ['music', 'ambient'] as const) {
-      for (const context of MUSIC_CONTEXTS) {
-        const prefix = layer === 'ambient' ? 'ambient/' : '';
-        const folder = join(dir, ...(layer === 'ambient' ? ['ambient'] : []), context);
-        if (!existsSync(folder)) continue;
-        for (const name of readdirSync(folder).sort()) {
-          const file = join(folder, name);
-          if (!AUDIO_TYPES[extname(name).toLowerCase()] || !statSync(file).isFile()) continue;
-          const credit = known.get(file);
-          tracks.push({
-            id: `${prefix}${context}/${name}`,
-            context,
-            layer,
-            title: credit?.title ?? name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
-            artist: credit?.artist ?? '',
-            license: credit?.license ?? '',
-            src: `/music/${prefix}${context}/${encodeURIComponent(name)}`,
-          });
-        }
-      }
+    for (const f of scan(dir)) {
+      if (!f.ready || !f.enabled) continue;
+      tracks.push({ id: f.id, context: f.context, layer: f.layer, title: f.title, artist: f.artist, license: f.license, src: f.src });
     }
   } catch (err) {
     console.warn('[music] Could not read the music folder:', err);
   }
   return { enabled: true, pending: fetching, tracks };
+}
+
+/** What the Innkeeper sees: everything, including switched-off files and built-in tracks that are missing. */
+export function musicLibrary(dir: string, env: NodeJS.ProcessEnv): MusicLibrary {
+  let items: MusicItem[] = [];
+  try {
+    items = scan(dir).map(({ file: _file, ...item }) => item);
+  } catch (err) {
+    console.warn('[music] Could not read the music folder:', err);
+  }
+  return { enabled: musicEnabled(env), pending: fetching, items };
+}
+
+// ---------------------------------------------------------------------------- what the owner does
+
+const MAX_UPLOAD_BYTES = 96 * 1024 * 1024;
+const text = (v: unknown, max: number) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
+
+/** Home of a new file: MUSIC_DIR/<scene>, or MUSIC_DIR/ambient/<scene>. Never overwrites an existing file. */
+function freeFile(dir: string, layer: MusicLayer, context: MusicContext, title: string, ext: string): string {
+  const folder = join(dir, ...(layer === 'ambient' ? ['ambient'] : []), context);
+  const base = slug(title);
+  for (let n = 1; ; n++) {
+    const file = join(folder, `${base}${n > 1 ? `-${n}` : ''}${ext}`);
+    if (!existsSync(file)) return file;
+  }
+}
+
+function parseTarget(layerIn: unknown, contextIn: unknown): { layer: MusicLayer; context: MusicContext } {
+  if (!isContext(contextIn)) throw new MusicError('bad_request');
+  return { layer: layerIn === 'ambient' ? 'ambient' : 'music', context: contextIn };
+}
+
+/** Hosts a link may not point at: this machine and private networks. The panel is owner-only, so this is a second lock, not the first. */
+export function linkAllowed(raw: string): URL | null {
+  let u: URL;
+  try { u = new URL(raw); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || !h.includes('.') && !h.includes(':')) return null;
+  if (/^(10|127|0)\./.test(h) || /^169\.254\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return null;
+  if (h.includes(':') && /^(::1?$|f[cd]|fe80|::ffff)/.test(h)) return null;
+  return u;
+}
+
+export interface AddedFile { id: string }
+
+/** Take in an uploaded audio file, or a zip of them. Returns what was added. */
+export function addUpload(dir: string, fileName: string, data: Uint8Array, layerIn: unknown, contextIn: unknown): AddedFile[] {
+  const { layer, context } = parseTarget(layerIn, contextIn);
+  if (data.length > MAX_UPLOAD_BYTES) throw new MusicError('too_big');
+  const state = loadState(dir);
+  const added: AddedFile[] = [];
+  const keep = (name: string, bytes: Uint8Array) => {
+    const ext = extname(name).toLowerCase();
+    if (!AUDIO_TYPES[ext] || bytes.length < 1000 || bytes.length > MAX_TRACK_BYTES) return;
+    const title = basename(name).replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 120) || 'track';
+    const file = freeFile(dir, layer, context, title, ext);
+    writeAtomic(file, bytes);
+    state.files[idOf(dir, file)] = { title };
+    added.push({ id: idOf(dir, file) });
+  };
+  if (/\.zip$/i.test(fileName)) {
+    let files: Record<string, Uint8Array>;
+    try {
+      let count = 0;
+      files = unzipSync(data, { filter: (f) => !/(^|\/)(__MACOSX|\.)/.test(f.name) && !!AUDIO_TYPES[extname(f.name).toLowerCase()] && f.originalSize <= MAX_TRACK_BYTES && ++count <= 300 });
+    } catch {
+      throw new MusicError('not_audio');
+    }
+    for (const [name, bytes] of Object.entries(files)) keep(name, bytes);
+  } else {
+    if (!looksLikeAudio(data, '')) throw new MusicError('not_audio');
+    keep(fileName, data);
+  }
+  if (!added.length) throw new MusicError('not_audio');
+  saveState(dir, state);
+  return added;
+}
+
+export interface MusicAction {
+  do?: unknown; id?: unknown; enabled?: unknown; context?: unknown; layer?: unknown;
+  url?: unknown; title?: unknown; artist?: unknown; license?: unknown;
+}
+
+/** One change from the Innkeeper. Throws MusicError for what the owner can fix. */
+export async function musicAction(dir: string, env: NodeJS.ProcessEnv, m: MusicAction, fetchFn: typeof fetch = fetch): Promise<void> {
+  const state = loadState(dir);
+  const id = m.id;
+  const exists = () => validId(id) && (existsSync(fileOf(dir, id as string)) || trackList(dir).some((t) => idOf(dir, fileFor(dir, t)) === id));
+  switch (m.do) {
+    case 'set': {
+      if (!exists()) throw new MusicError('unknown_track');
+      const own = state.files[id as string] ?? {};
+      if (typeof m.enabled === 'boolean') own.disabled = m.enabled ? undefined : true;
+      if (m.context !== undefined) { if (!isContext(m.context)) throw new MusicError('bad_request'); own.context = m.context; }
+      state.files[id as string] = own;
+      break;
+    }
+    case 'remove': {
+      if (!exists()) throw new MusicError('unknown_track');
+      const known = trackList(dir).some((t) => idOf(dir, fileFor(dir, t)) === id);
+      rmSync(fileOf(dir, id as string), { force: true });
+      delete state.files[id as string];
+      // A built-in track would come back on the next start unless it is remembered as removed.
+      if (known && !state.removed.includes(id as string)) state.removed.push(id as string);
+      break;
+    }
+    case 'fetch': {
+      // The owner pressed "Download": one built-in track, or every one that is missing.
+      const wanted = m.id === undefined ? trackList(dir) : trackList(dir).filter((t) => idOf(dir, fileFor(dir, t)) === id);
+      if (m.id !== undefined && !wanted.length) throw new MusicError('unknown_track');
+      state.removed = state.removed.filter((r) => !wanted.some((t) => idOf(dir, fileFor(dir, t)) === r));
+      saveState(dir, state);
+      let failed = 0;
+      for (const t of wanted) {
+        const file = fileFor(dir, t);
+        if (existsSync(file)) continue;
+        try { writeAtomic(file, (await fetchAudio(t.url, fetchFn)).bytes); } catch { failed++; }
+      }
+      if (failed && failed === wanted.length) throw new MusicError('download_failed');
+      return;
+    }
+    case 'add_link': {
+      const { layer, context } = parseTarget(m.layer, m.context);
+      const link = linkAllowed(String(m.url ?? '').trim());
+      if (!link) throw new MusicError('bad_link');
+      const { bytes, type } = await fetchAudio(link.href, fetchFn);
+      let ext = extname(link.pathname).toLowerCase();
+      if (!AUDIO_TYPES[ext]) ext = /ogg/i.test(type) ? '.ogg' : /wav/i.test(type) ? '.wav' : /flac/i.test(type) ? '.flac' : /mp4|m4a/i.test(type) ? '.m4a' : '.mp3';
+      const title = text(m.title, 120) || decodeURIComponent(basename(link.pathname)).replace(/\.[^.]+$/, '').replace(/[-_+]+/g, ' ').trim() || 'track';
+      const file = freeFile(dir, layer, context, title, ext);
+      writeAtomic(file, bytes);
+      state.files[idOf(dir, file)] = { title, artist: text(m.artist, 120), license: text(m.license, 60), url: link.href };
+      break;
+    }
+    default:
+      throw new MusicError('bad_request');
+  }
+  saveState(dir, state);
 }
 
 /** The byte range to send for a Range header, or null when the header is absent or unusable. */

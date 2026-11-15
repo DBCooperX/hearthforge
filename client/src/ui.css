@@ -626,3 +626,13 @@
   .inn-setting-control { width: 100%; justify-content: flex-start; }
   .inn-card dl > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
+
+/* Innkeeper → Assets: Music / Ambient / Art tabs over a scrolling body. */
+.assets-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: -16px -20px -22px; }
+.assets-pane > .tabbar { padding: 10px 20px 0; flex: none; }
+.assets-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.assets-body > .art-embedded { margin: 0; }
+.snd-link { display: grid; gap: 6px; max-width: 460px; padding: 6px 0; }
+.snd-row-actions { display: flex; gap: 8px; align-items: center; }
+.snd-off { opacity: 0.55; }
+.art-pack-actions select { max-width: 120px; }

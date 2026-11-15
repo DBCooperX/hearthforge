@@ -12,9 +12,10 @@ import { useLang, useT, type Translate } from '../i18n';
 import { ArtWindow } from './ArtWindow';
 import { Icon, type IconName } from './icons';
 import { inn, innDownload, innkeeperSession, InnError, setInnkeeperSession } from './innkeeperApi';
-import { INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
+import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
-import { Window } from './Window';
+import { SoundLibrary } from './SoundLibrary';
+import { TabBar, Window } from './Window';
 
 type Tab = keyof typeof INN_TABS;
 const TAB_ICONS: Record<Tab, IconName> = { overview: 'innkeeper', tables: 'table', players: 'people', assets: 'inventory', settings: 'settings', server: 'up', usage: 'coin', logs: 'lore', backups: 'journal' };
@@ -140,6 +141,21 @@ function Overview({ fail, say, go, firstPassword }: PaneProps & { go: (tab: Tab)
         </form>
         <p className="muted small">{t('Shows for a few seconds on the screen of everyone who is connected.')}</p>
       </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------- assets
+
+function AssetsPane() {
+  const t = useT();
+  const [sub, setSub] = useState<keyof typeof ASSET_TABS>('music');
+  return (
+    <div className="assets-pane">
+      <TabBar tabs={(Object.keys(ASSET_TABS) as (keyof typeof ASSET_TABS)[]).map((id) => ({ id, label: t(ASSET_TABS[id]) }))} value={sub} onChange={setSub} />
+      <div className="assets-body">
+        {sub === 'art' ? <ArtWindow embedded /> : <SoundLibrary key={sub} layer={sub} />}
+      </div>
     </div>
   );
 }
@@ -611,7 +627,7 @@ export function Innkeeper({ onClose }: { onClose: () => void }) {
             {tab === 'overview' && <Overview {...pane} go={setTab} firstPassword={first} />}
             {tab === 'tables' && <Tables {...pane} />}
             {tab === 'players' && <PlayersPane {...pane} />}
-            {tab === 'assets' && <ArtWindow embedded />}
+            {tab === 'assets' && <AssetsPane />}
             {tab === 'settings' && <SettingsPane {...pane} go={setTab} />}
             {tab === 'server' && <ServerPane {...pane} firstPassword={first} onPassword={loadStatus} />}
             {tab === 'usage' && <UsagePane {...pane} />}

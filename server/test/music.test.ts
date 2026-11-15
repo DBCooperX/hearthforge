@@ -143,3 +143,64 @@ describe('music library', () => {
     expect(byteRange('lines=1-2', 100)).toBeNull();
   });
 });
+
+describe('music library managed by the owner', () => {
+  const audioFile = () => { const b = new Uint8Array(20_000).fill(0x55); b.set([0x49, 0x44, 0x33], 0); return b; };
+
+  it('lists built-in tracks that are missing and files that are there, and lets the owner switch one off and move it', async () => {
+    const d = dir();
+    const { musicAction, musicLibrary } = await import('../src/music');
+    mkdirSync(join(d, 'tavern'), { recursive: true });
+    writeFileSync(join(d, 'tavern', 'mine.mp3'), audioFile());
+    let lib = musicLibrary(d, {});
+    expect(lib.items.find((i) => i.id === 'tavern/mine.mp3')?.ready).toBe(true);
+    expect(lib.items.some((i) => !i.ready && i.builtIn)).toBe(true);
+    await musicAction(d, {}, { do: 'set', id: 'tavern/mine.mp3', enabled: false, context: 'dungeon' });
+    expect(musicManifest(d, {}).tracks.find((t) => t.id === 'tavern/mine.mp3')).toBeUndefined();
+    lib = musicLibrary(d, {});
+    expect(lib.items.find((i) => i.id === 'tavern/mine.mp3')).toMatchObject({ enabled: false, context: 'dungeon' });
+    await musicAction(d, {}, { do: 'set', id: 'tavern/mine.mp3', enabled: true });
+    expect(musicManifest(d, {}).tracks.find((t) => t.id === 'tavern/mine.mp3')?.context).toBe('dungeon');
+    await expect(musicAction(d, {}, { do: 'set', id: '../etc/passwd', enabled: false })).rejects.toMatchObject({ code: 'unknown_track' });
+  });
+
+  it('does not fetch a removed built-in track again, until the owner presses Download', async () => {
+    const d = dir();
+    const { musicAction } = await import('../src/music');
+    const calls: string[] = [];
+    const fetchFn = (async (u: string) => { calls.push(u); return answer(audioFile()); }) as unknown as typeof fetch;
+    await ensureMusic(d, {}, fetchFn);
+    const id = `tavern/thatched-villagers.mp3`;
+    expect(existsSync(join(d, id))).toBe(true);
+    await musicAction(d, {}, { do: 'remove', id });
+    expect(existsSync(join(d, id))).toBe(false);
+    calls.length = 0;
+    await ensureMusic(d, {}, fetchFn);
+    expect(existsSync(join(d, id))).toBe(false);
+    await musicAction(d, {}, { do: 'fetch', id }, fetchFn);
+    expect(existsSync(join(d, id))).toBe(true);
+  });
+
+  it('takes in uploads, single files and zips, into the chosen scene', async () => {
+    const d = dir();
+    const { addUpload, musicLibrary } = await import('../src/music');
+    const { zipSync } = await import('fflate');
+    const added = addUpload(d, 'Crackling Fire.ogg', Object.assign(audioFile(), { 0: 0x4f, 1: 0x67, 2: 0x67, 3: 0x53 }), 'ambient', 'tavern');
+    expect(added[0].id).toBe('ambient/tavern/crackling-fire.ogg');
+    const zip = zipSync({ 'a/Wind.mp3': audioFile(), 'readme.txt': new Uint8Array(5000) });
+    expect(addUpload(d, 'pack.zip', zip, 'ambient', 'overworld').map((a) => a.id)).toEqual(['ambient/overworld/wind.mp3']);
+    expect(musicLibrary(d, {}).items.filter((i) => i.layer === 'ambient')).toHaveLength(2);
+    expect(() => addUpload(d, 'x.mp3', new Uint8Array(5000), 'music', 'town')).toThrow();
+    expect(() => addUpload(d, 'x.mp3', audioFile(), 'music', 'nowhere')).toThrow();
+  });
+
+  it('adds a file from a link the owner pasted, and refuses private addresses', async () => {
+    const d = dir();
+    const { musicAction, musicLibrary, linkAllowed } = await import('../src/music');
+    const fetchFn = (async () => answer(audioFile())) as unknown as typeof fetch;
+    await musicAction(d, {}, { do: 'add_link', url: 'https://example.org/sounds/Tavern%20Crowd.mp3', layer: 'ambient', context: 'tavern', artist: 'Someone', license: 'CC0' }, fetchFn);
+    expect(musicLibrary(d, {}).items.find((i) => i.layer === 'ambient')).toMatchObject({ title: 'Tavern Crowd', artist: 'Someone', license: 'CC0', ready: true });
+    for (const bad of ['http://localhost/a.mp3', 'http://192.168.1.5/a.mp3', 'http://127.0.0.1/a.mp3', 'file:///etc/passwd', 'ftp://x.org/a.mp3', 'http://nas/a.mp3', 'http://[::1]/a.mp3']) expect(linkAllowed(bad), bad).toBeNull();
+    await expect(musicAction(d, {}, { do: 'add_link', url: 'http://127.0.0.1/a.mp3', layer: 'music', context: 'town' }, fetchFn)).rejects.toMatchObject({ code: 'bad_link' });
+  });
+});

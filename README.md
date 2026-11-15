@@ -195,7 +195,9 @@ Hearthforge ships no audio. On start the server downloads a small set of tracks 
 
 Every built-in link was checked on 15 November 2026 and answers with HTTP 200. Which scene a track is filed under was decided by its title and character, not by listening to all of them, so move or delete any that feel wrong (see below). `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
 
-**Your own music**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
+**Manage it in the Innkeeper** (Assets → Music and Ambient sounds): every track can be listened to, switched off, moved to another scene or removed; tracks that failed to download get a Download button; drop audio files (or a zip) onto the page, or paste a direct link and the server fetches the file from that site itself. Sources that need a login (Freesound, Sonniss, Pixabay) are listed with a "Get it here" link. Nothing is hosted by Hearthforge: every download goes from the artist's site to your server. Item icons from game-icons.net (CC BY 3.0) are fetched on first start too (`HEARTHFORGE_AUTO_ASSETS=off` stops that).
+
+**Your own music by hand**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
 
 ```bash
 docker compose exec hearthforge mkdir -p /data/music/tavern

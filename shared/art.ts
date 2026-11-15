@@ -140,12 +140,14 @@ export interface CatalogPack {
   license: string;
   url: string;
   match?: RegExp;
+  /** auto and click: the server fetches it. manual: itch.io and similar sites forbid that, so the owner gets a link and drops the zip in. */
+  access: 'auto' | 'click' | 'manual';
 }
 
 export const CATALOG: CatalogPack[] = [
-  { id: '0x72', kind: 'tiles', name: 'DungeonTileset II', author: '0x72', license: 'CC0 1.0', url: 'https://0x72.itch.io/dungeontileset-ii', match: /0x72|dungeontileset/i },
-  { id: 'alexs-rpg-items', kind: 'icons', name: '16x16 RPG Item Pack', author: "Alex's Assets", license: 'CC0 1.0', url: 'https://alexs-assets.itch.io/16x16-rpg-item-pack', match: /16x16.?rpg.?item/i },
-  { id: 'kyrise-rpg-icons', kind: 'icons', name: "Kyrise's Free 16x16 RPG Icon Pack", author: 'Kyrise', license: 'CC BY 4.0', url: 'https://kyrise.itch.io/kyrises-free-16x16-rpg-icon-pack', match: /kyrise/i },
-  { id: 'shikashi-fantasy-icons', kind: 'icons', name: "Shikashi's Fantasy Icons Pack", author: 'Matt Firth (cheekyinkling), game-icons.net', license: 'Free to use with credit', url: 'https://cheekyinkling.itch.io/shikashis-fantasy-icons-pack', match: /shikashi/i },
-  { id: 'raven-fantasy-icons', kind: 'icons', name: 'Raven Fantasy Icons (free version)', author: 'Clockwork Raven', license: 'Free to use, not to be passed on', url: 'https://clockworkraven.itch.io/raven-fantasy-icons', match: /raven/i },
+  { id: '0x72', kind: 'tiles', name: 'DungeonTileset II', author: '0x72', license: 'CC0 1.0', url: 'https://0x72.itch.io/dungeontileset-ii', match: /0x72|dungeontileset/i, access: 'manual' },
+  { id: 'alexs-rpg-items', kind: 'icons', name: '16x16 RPG Item Pack', author: "Alex's Assets", license: 'CC0 1.0', url: 'https://alexs-assets.itch.io/16x16-rpg-item-pack', match: /16x16.?rpg.?item/i, access: 'manual' },
+  { id: 'kyrise-rpg-icons', kind: 'icons', name: "Kyrise's Free 16x16 RPG Icon Pack", author: 'Kyrise', license: 'CC BY 4.0', url: 'https://kyrise.itch.io/kyrises-free-16x16-rpg-icon-pack', match: /kyrise/i, access: 'manual' },
+  { id: 'shikashi-fantasy-icons', kind: 'icons', name: "Shikashi's Fantasy Icons Pack", author: 'Matt Firth (cheekyinkling), game-icons.net', license: 'Free to use with credit', url: 'https://cheekyinkling.itch.io/shikashis-fantasy-icons-pack', match: /shikashi/i, access: 'manual' },
+  { id: 'raven-fantasy-icons', kind: 'icons', name: 'Raven Fantasy Icons (free version)', author: 'Clockwork Raven', license: 'Free to use, not to be passed on', url: 'https://clockworkraven.itch.io/raven-fantasy-icons', match: /raven/i, access: 'manual' },
 ];
