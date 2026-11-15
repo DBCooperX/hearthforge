@@ -33,30 +33,20 @@ const incompetech = (context: MusicContext, title: string): TrackSource => ({
 });
 
 /**
- * The built-in track list. NOTE: incompetech.com could not be reached from the environment
- * this was written in, so the titles and links are from memory and unverified. A link that
- * fails is skipped. Replace the whole list with MUSIC_DIR/tracks.json, an array of
- * {"context", "title", "artist", "license", "url"}.
+ * The built-in track list, all by Kevin MacLeod. Every link was checked on 15 November 2026
+ * (the file answers with HTTP 200); the contexts are assigned by the tracks' character, not
+ * by listening to every one. A link that fails later is skipped. Replace the whole list with
+ * MUSIC_DIR/tracks.json, an array of {"context", "title", "artist", "license", "url"}.
  */
-export const DEFAULT_TRACKS: TrackSource[] = [
-  incompetech('tavern', 'Thatched Villagers'),
-  incompetech('tavern', 'Master of the Feast'),
-  incompetech('tavern', 'Folk Round'),
-  incompetech('town', 'Minstrel Guild'),
-  incompetech('town', 'Village Consort'),
-  incompetech('town', 'Suonatore di Liuto'),
-  incompetech('overworld', 'Heroic Age'),
-  incompetech('overworld', 'Moorland'),
-  incompetech('overworld', 'Skye Cuillin'),
-  incompetech('dungeon', 'Ossuary 6 - Air'),
-  incompetech('dungeon', 'Dark Times'),
-  incompetech('dungeon', 'The Dread'),
-  incompetech('combat', 'Five Armies'),
-  incompetech('combat', 'Clash Defiant'),
-  incompetech('combat', 'Crossing the Chasm'),
-  incompetech('boss', 'Black Vortex'),
-  incompetech('boss', 'Death and Axes'),
-];
+const BY_CONTEXT: Record<MusicContext, string[]> = {
+  tavern: ['Thatched Villagers', 'Master of the Feast', 'Folk Round', 'Fiddles McGinty', 'Celtic Impulse', 'Dragon and Toast', 'Spazzmatica Polka'],
+  town: ['Minstrel Guild', 'Village Consort', 'Suonatore di Liuto', 'Virtutes Instrumenti', 'Mystery Bazaar', 'Lord of the Land', 'Winter Reflections', 'Evening Melodrama', 'Night in Venice'],
+  overworld: ['Heroic Age', 'Moorland', 'Skye Cuillin', 'Eternal Hope', 'Ice Flow', 'Dreamer', 'Heart of Nowhere', 'Echoes of Time v2', 'Hidden Past', 'Atlantean Twilight', 'Lightless Dawn'],
+  dungeon: ['Ossuary 6 - Air', 'Ossuary 5 - Rest', 'Dark Times', 'The Dread', 'The Descent', 'Oppressive Gloom', 'Gathering Darkness', 'Ghost Story', 'Disquiet', 'Dark Walk', 'Dark Fog', 'Anguish', 'Ancient Rite'],
+  combat: ['Five Armies', 'Clash Defiant', 'Crossing the Chasm', 'Volatile Reaction', 'Faster Does It', 'Prelude and Action', 'Impact Moderato', 'Killers', 'Unholy Knight', 'Crusade - Heavy Industry'],
+  boss: ['Black Vortex', 'Death and Axes', 'Giant Wyrm', 'Epic Unease', 'The Complex', 'Hall of the Mountain King', 'Danse Macabre'],
+};
+export const DEFAULT_TRACKS: TrackSource[] = MUSIC_CONTEXTS.flatMap((c) => BY_CONTEXT[c].map((t) => incompetech(c, t)));
 
 export function musicEnabled(env: NodeJS.ProcessEnv): boolean {
   return !/^(off|none|false|0|no)$/i.test((env.HEARTHFORGE_MUSIC ?? 'on').trim());

@@ -156,9 +156,9 @@ Sprites are matched by the names in the pack's own tile list, so this one does n
 
 ## Music
 
-Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 17 tracks, roughly 100 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
+Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 50 tracks, roughly 300 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
 
-This is **untested against the real site**: incompetech.com could not be reached from the environment this was built in, so the track titles and links were written from memory. `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
+Every built-in link was checked on 15 November 2026 and answers with HTTP 200. Which scene a track is filed under was decided by its title and character, not by listening to all of them, so move or delete any that feel wrong (see below). `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
 
 **Your own music**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
 
