@@ -17,7 +17,7 @@ interface Props {
   children?: ReactNode;
 }
 
-export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper }: Props) {
+export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper, children }: Props) {
   const t = useT();
   const prefs = usePrefs();
   return (
@@ -27,6 +27,7 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper 
           <h3>{t('Language')}</h3>
           <div className="setting"><span>{t('Interface language')}<small>{t('The language of the story is chosen by the host of the table.')}</small></span><LangSwitch /></div>
         </section>
+        {children && <section><h3>{t('The Dungeon Master')}</h3>{children}</section>}
         <section>
           <h3>{t('Sound')}</h3>
           <div className="setting"><span>{t('Music')}</span><MusicControl /><span className="muted small setting-none">{t('Music is switched off on this server.')}</span></div>

@@ -58,6 +58,7 @@ import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
 import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
+import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
 import { CLASSIC_START, CUSTOM_MAX, REGIONS, isPremise, newSeed, normalizeSeed, type RegionChoice, type StartOptions } from '../../../shared/start';
 
 export class GameError extends Error {}
@@ -196,9 +197,11 @@ export class Game {
     this.s = usable ? saved : Game.freshState(room, saved?.players ?? [], isLang(saved?.language) ? saved.language : 'en');
     this.s.rolled ??= {};
     // Tables saved before the lobby: open to anyone, run by whoever sat down first.
-    this.s.table ??= { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START } };
+    this.s.table ??= { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START }, style: { ...DEFAULT_STYLE } };
     // Tables saved before start options keep the classic region.
     this.s.table.start ??= { ...CLASSIC_START };
+    // Tables saved before DM style settings play with the default style.
+    this.s.table.style = cleanStyle(this.s.table.style);
     this.s.hostId ??= this.s.players[0]?.id ?? null;
     this.s.seats ??= {};
     this.s.ready ??= [];
@@ -245,7 +248,7 @@ export class Game {
       lastLongRest: -100000,
       language,
       rolled: {},
-      table: { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START } },
+      table: { title: room, maxPlayers: MAX_SEATS, code: null, start: { ...CLASSIC_START }, style: { ...DEFAULT_STYLE } },
       hostId: players[0]?.id ?? null,
       seats: {},
       ready: [],
@@ -291,6 +294,18 @@ export class Game {
     }
     if (patch.custom !== undefined) start.custom = String(patch.custom ?? '').replace(/\s+/g, ' ').trim().slice(0, CUSTOM_MAX);
     if (patch.seed !== undefined) start.seed = normalizeSeed(patch.seed) || newSeed();
+  }
+
+  /** The host sets how the Dungeon Master runs the table. Allowed at any time, also during play: the next turn follows it. */
+  setStyle(playerId: string, raw: unknown) {
+    this.requireHost(playerId);
+    const patch = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof DmStyle, unknown>>;
+    const cur = this.s.table.style;
+    const next = cleanStyle({ ...cur, ...patch }, cur);
+    // A value that is present but unknown is an error, not a silent fallback.
+    if (patch.tone !== undefined && next.tone !== patch.tone) throw new GameError(this.t`Unknown tone`);
+    if (patch.rating !== undefined && next.rating !== patch.rating) throw new GameError(this.t`Unknown content rating`);
+    this.s.table.style = next;
   }
 
   private d20Text(r: { value: number; rolls: number[] }, mode: RollMode) {

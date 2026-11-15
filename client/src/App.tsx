@@ -5,6 +5,7 @@ import type { Character } from '../../shared/types';
 import { CharacterSheet } from './components/CharacterSheet';
 import { ActionBar, TurnBar, type Targeting } from './components/Hud';
 import { Inventory } from './components/Inventory';
+import { StyleSetup } from './components/StyleSetup';
 import { ChatPanel, lastForeignChat } from './components/Chat';
 import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
@@ -254,7 +255,7 @@ export function App() {
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
-        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={() => { setOverlay(null); setInnkeeper(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined} />}
+        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={() => { setOverlay(null); setInnkeeper(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined}><StyleSetup bare state={state} conn={conn} /></Settings>}
         {overlay === 'art' && <ArtWindow onClose={() => setOverlay('settings')} />}
         {overlay === 'table' && (
           <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>
