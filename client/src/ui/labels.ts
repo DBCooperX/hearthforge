@@ -2,6 +2,7 @@
 // They live in one place so the translation test can check every one of them.
 import type { InvFilter, InvSort } from '../../../shared/inventory';
 import type { QuestStatus } from '../../../shared/types';
+import { MUSIC_ERRORS } from '../../../shared/music';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
 
 export const FILTER_LABELS: Record<InvFilter, string> = { all: 'All', weapon: 'Weapons', armor: 'Armor', consumable: 'Potions', quest: 'Quest', other: 'Other' };
@@ -52,6 +53,11 @@ export const ART_ERRORS = {
   bad_request: 'That did not work. The server log says more.',
 } as const;
 
+export { MUSIC_ERRORS };
+export const SCENE_LABELS = { tavern: 'Tavern', town: 'Town', overworld: 'Overworld', dungeon: 'Dungeon', combat: 'Combat', boss: 'Boss fight' } as const;
+export const ACCESS_LABELS = { auto: 'Downloads by itself', click: 'Paste a link', manual: 'Get it there, drop it here' } as const;
+export const ASSET_TABS = { music: 'Music', ambient: 'Ambient sounds', art: 'Art' } as const;
+
 /** The Innkeeper's sections. */
 export const INN_TABS = {
   overview: 'Overview', tables: 'Tables', players: 'Players', assets: 'Assets', settings: 'Settings',
@@ -77,7 +83,7 @@ export const INN_MISC = { empty: 'Empty' } as const;
 export const ALL_LABELS: string[] = [
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
-  ...Object.values(ART_ERRORS),
+  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
 ];

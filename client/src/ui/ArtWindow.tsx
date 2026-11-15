@@ -166,9 +166,11 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
           <b>{name}</b>
           <Credit p={p} />
           {p.kind === 'icons' && p.installed && p.source !== 'builtin' && <small>{t('{n} of {m} items have a picture', { n: p.matched ?? 0, m: lib!.slots })}</small>}
-          {!p.installed && p.source === 'upload' && <small>{t('Download the zip from the pack page, then drop it here.')}</small>}
+          {!p.installed && p.source === 'upload' && <small>{t('This site does not allow automatic downloads: get the zip there, then drop it here.')}</small>}
+          {!p.installed && p.source === 'download' && p.url && <small>{t('Downloads straight from {site}.', { site: new URL(p.url).hostname })}</small>}
         </div>
         <span className="art-pack-actions">
+          {!p.installed && p.source === 'upload' && p.url && <a href={p.url} target="_blank" rel="noreferrer noopener">{t('Get it here')}</a>}
           {p.active && <span className="art-inuse">{t('In use')}</span>}
           {edit && !p.active && p.installed && <button type="button" disabled={!!busy} onClick={() => void run(key, () => act({ do: 'use', kind: p.kind, pack: p.id }), p.kind === 'tiles')}>{t('Use')}</button>}
           {edit && !p.installed && p.source === 'download' && <button type="button" disabled={!!busy} onClick={() => void run(key, () => act({ do: 'install', pack: p.id }), p.kind === 'tiles')}>{busy === key ? t('Downloading…') : t('Download and use')}</button>}
@@ -190,7 +192,7 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
             {edit && (
               <div className={over ? 'art-drop over' : 'art-drop'}>
                 <b>{busy === 'upload' ? t('Unpacking…') : t('Drop the zip of an art pack here')}</b>
-                <span className="muted small">{t('Download a pack from its page (itch.io, Kenney, OpenGameArt), then drop the zip here. Nothing has to be copied onto the server.')}</span>
+                <span className="muted small">{t('Kenney and game-icons.net download by themselves. For packs from itch.io and similar sites, get the zip there, then drop it here. Nothing has to be copied onto the server.')}</span>
                 <button type="button" disabled={!!busy} onClick={() => file.current?.click()}>{t('Choose a file')}</button>
                 <input ref={file} type="file" accept=".zip,application/zip" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
               </div>
@@ -208,9 +210,9 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
             {more.length > 0 && (
               <section>
                 <h3>{t('More free packs')}</h3>
-                <p className="muted small">{t('These are free to download from their pages. Mind the credit each artist asks for.')}</p>
+                <p className="muted small">{t('These sites want a login or do not allow automatic downloads. Get the zip there and drop it above. Mind the credit each artist asks for.')}</p>
                 <ul className="art-packs">
-                  {more.map((c) => <li key={c.id} className="art-pack"><div><b>{c.name}</b><Credit p={c} /></div></li>)}
+                  {more.map((c) => <li key={c.id} className="art-pack"><div><b>{c.name}</b><Credit p={c} /></div><span className="art-pack-actions"><a href={c.url} target="_blank" rel="noreferrer noopener">{t('Get it here')}</a></span></li>)}
                 </ul>
               </section>
             )}

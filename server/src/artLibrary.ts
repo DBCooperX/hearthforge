@@ -102,6 +102,11 @@ export class ArtStore {
   /** On start: fetch the chosen tile pack and take in any zip someone copied into ART_DIR by hand. */
   async start(): Promise<void> {
     await ensureArt(this.dir, this.tiles, this.env);
+    // Free-licensed icons need no decision from the owner: fetch them straight from game-icons.net
+    // the first time, unless an icon pack was chosen on purpose (also "Emoji") or this is switched off.
+    if (!/^(off|false|0|no)$/i.test((this.env.HEARTHFORGE_AUTO_ASSETS ?? 'on').trim()) && this.state.icons === undefined && !this.gameIconsInstalled()) {
+      await this.install(GAME_ICONS).catch((err) => console.warn(`[art] Could not fetch game-icons.net: ${err instanceof Error ? err.message : err}`));
+    }
     if (!existsSync(this.dir)) return;
     for (const f of readdirSync(this.dir).filter((n) => /\.zip$/i.test(n))) {
       if (/kenney|tiny|0x72|dungeontileset/i.test(f)) continue; // ensureArt looks after these
