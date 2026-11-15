@@ -12,10 +12,12 @@ export interface Prefs {
   textSize: TextSize;
   invSort: InvSort;
   invFilter: InvFilter;
+  /** The character creator shows all eight steps instead of the short three. */
+  creatorDetailed: boolean;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, textSize: 'normal', invSort: 'manual', invFilter: 'all' };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {

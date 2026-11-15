@@ -11,6 +11,7 @@ import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
 import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
+import { Info } from './Hint';
 import { Icon, type IconName } from './icons';
 import { inn, innDownload, innkeeperSession, InnError, setInnkeeperSession } from './innkeeperApi';
 import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
@@ -279,8 +280,7 @@ function SettingRow({ def, value, draft, onDraft, onReset }: { def: SettingDef; 
   return (
     <div className={draft !== undefined ? 'inn-setting changed' : 'inn-setting'}>
       <span className="inn-setting-text">
-        {t(def.label)}
-        <small>{t(def.help)}</small>
+        <span>{t(def.label)} <Info text={t(def.help)} /></span>
         <small className="inn-source">
           {t(SOURCE_LABELS[value.source])}{value.pending && ` · ${t('applies after a restart')}`}
           {value.source === 'panel' && <button type="button" className="link" onClick={onReset}>{t('Reset')}</button>}
@@ -296,6 +296,7 @@ function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void })
   const [data, setData] = useState<{ settings: SettingValue[]; restartPending: boolean } | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [test, setTest] = useState<KeyResult | 'busy' | null>(null);
+  const [group, setGroup] = useState<SettingGroup>('dm');
   useEffect(() => { inn<typeof data>('/env').then(setData).catch(fail); }, [fail]);
   if (!data) return <p className="muted">{t('Loading…')}</p>;
   const dirty = Object.keys(draft).length > 0;
@@ -311,13 +312,14 @@ function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void })
     try { setTest(await inn<KeyResult>('/env/test', { body: { key: draft.ANTHROPIC_API_KEY } })); } catch (err) { setTest(null); fail(err); }
   };
   const groups = Object.keys(SETTING_GROUPS) as SettingGroup[];
+  const changedIn = (g: SettingGroup) => SETTINGS.filter((d) => d.group === g && d.key in draft).length;
   return (
-    <div className="inn-stack">
+    <div className="inn-stack inn-settings">
+      <TabBar tabs={groups.map((g) => ({ id: g, label: t(SETTING_GROUPS[g]), count: changedIn(g) || undefined }))} value={group} onChange={setGroup} />
       {data.restartPending && <Note kind="warn"><span>{t('Settings were changed. They apply after a restart.')}</span><button type="button" onClick={() => go('server')}>{t('To the restart')}</button></Note>}
       <datalist id="inn-models">{MODEL_SUGGESTIONS.map((m) => <option key={m} value={m} />)}</datalist>
-      {groups.map((g) => (
+      {[group].map((g) => (
         <section key={g}>
-          <h3>{t(SETTING_GROUPS[g])}</h3>
           {SETTINGS.filter((d) => d.group === g).map((def) => {
             const value = data.settings.find((v) => v.key === def.key);
             if (!value) return null;
@@ -344,10 +346,10 @@ function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void })
           })}
         </section>
       ))}
-      <p className="muted small">{t('The key is stored on the server, in its data folder, readable only by the server. It is never sent back to a browser in full. The port and the data folder are set where the container is started and cannot be changed here.')}</p>
       <div className="inn-savebar">
         <button type="button" className="primary" disabled={!dirty} onClick={() => void save(draft)}>{t('Save')}</button>
         {dirty && <button type="button" onClick={() => setDraft({})}>{t('Discard')}</button>}
+        <Info text={t('The key is stored on the server, in its data folder, readable only by the server. It is never sent back to a browser in full. The port and the data folder are set where the container is started and cannot be changed here.')} />
       </div>
     </div>
   );

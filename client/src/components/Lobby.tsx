@@ -13,6 +13,9 @@ import { ChatPanel } from './Chat';
 import { Embers, Logo } from '../ui/Brand';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
+import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
+import { Chip, Hint, Info } from '../ui/Hint';
+import { TabBar } from '../ui/Window';
 import { MusicControl } from '../music';
 import { classLabel } from '../game/util';
 
@@ -66,9 +69,8 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
           <p className="tagline">{t('Dungeons & Dragons at your own hearth, with an AI Dungeon Master.')}</p>
         </header>
         <label className="lobby-name">
-          {t('Your name')}
+          <span>{t('Your name')} <Info text={t('This is how the others see you. Each name can sit at a table only once, and this browser keeps your seat and your heroes for you.')} /></span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder={t('Adventurer')} autoFocus={!me} />
-          <small>{t('This is how the others see you. Each name can sit at a table only once, and this browser keeps your seat and your heroes for you.')}</small>
         </label>
         {conn.joinError && <p className="notice error" role="alert">{t(conn.joinError)}</p>}
         {!conn.connected && <p className="notice">{t('Connecting…')}</p>}
@@ -116,43 +118,38 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
         </ul>
 
         <div className="lobby-foot">
-          {opening ? (
-            <form className="open-table" onSubmit={open}>
-              <h2>{t('Open a new table')}</h2>
-              <label>
-                {t('Name of the table')}
-                <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder={me ? t("{name}'s table", { name: me }) : ''} autoFocus />
-              </label>
-              <div className="field">
-                <span>{t('Story language')}</span>
-                <span className="pick">
-                  {LANGS.map((l) => <button type="button" key={l.id} className={language === l.id ? 'on' : ''} onClick={() => setLanguage(l.id)}>{l.label}</button>)}
-                </span>
+          <form className="open-table" onSubmit={open}>
+            <div className="open-row">
+              <b>{t('Open a new table')}</b>
+              <span className="pick" role="group" aria-label={t('Players')}>
+                {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} title={n === 1 ? undefined : t('{n} players', { n })} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
+              </span>
+              <button className="primary" disabled={!ready} title={!me ? t('Enter your name first.') : undefined}>{t('Open the table')}</button>
+              <button type="button" className="link" aria-expanded={opening} onClick={() => setOpening(!opening)}>{opening ? '▴' : '▾'} {t('More options')}</button>
+            </div>
+            {opening && (
+              <div className="open-more">
+                <label>
+                  {t('Name of the table')}
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder={me ? t("{name}'s table", { name: me }) : ''} autoFocus />
+                </label>
+                <div className="field">
+                  <span>{t('Story language')}</span>
+                  <span className="pick">
+                    {LANGS.map((l) => <button type="button" key={l.id} className={language === l.id ? 'on' : ''} onClick={() => setLanguage(l.id)}>{l.label}</button>)}
+                  </span>
+                </div>
+                <label className="check">
+                  <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
+                  <span>{t('Only with an invite code')} <Info text={t('The table is listed for everyone, but only people you give the code or the invite link to can sit down.')} /></span>
+                </label>
               </div>
-              <div className="field">
-                <span>{t('Players')}</span>
-                <span className="pick">
-                  {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : n}</button>)}
-                </span>
-              </div>
-              <label className="check">
-                <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
-                <span>{t('Only with an invite code')}<small>{t('The table is listed for everyone, but only people you give the code or the invite link to can sit down.')}</small></span>
-              </label>
-              <div className="row">
-                <button className="primary" disabled={!ready} title={!me ? t('Enter your name first.') : undefined}>{t('Open the table')}</button>
-                <button type="button" className="link" onClick={() => setOpening(false)}>{t('Cancel')}</button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <button className="primary" disabled={!conn.connected} onClick={() => setOpening(true)}>{t('Open a new table')}</button>
-              <form className="by-code" onSubmit={(e) => { e.preventDefault(); if (anyCode.trim()) conn.join('', me, anyCode.trim()); }}>
-                <input value={anyCode} onChange={(e) => setAnyCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} aria-label={t('Invite code')} />
-                <button disabled={!ready || !anyCode.trim()}>{t('Join with a code')}</button>
-              </form>
-            </>
-          )}
+            )}
+          </form>
+          <form className="by-code" onSubmit={(e) => { e.preventDefault(); if (anyCode.trim()) conn.join('', me, anyCode.trim()); }}>
+            <input value={anyCode} onChange={(e) => setAnyCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} aria-label={t('Invite code')} />
+            <button disabled={!ready || !anyCode.trim()}>{t('Join with a code')}</button>
+          </form>
         </div>
       </div>
     </div>
@@ -246,40 +243,37 @@ function WorldSetup({ state, conn }: { state: GameState; conn: Connection }) {
   const seedField = useRef<HTMLInputElement>(null);
   useEffect(() => setSeed(start.seed), [start.seed]);
   useEffect(() => setCustom(start.custom), [start.custom]);
-  const preset = PREMISES.find((p) => p.id === start.premise);
-  const blurb = preset ? loc(preset.blurb, lang)
-    : start.premise === CUSTOM ? t('Describe in a sentence or two how the story opens. The Dungeon Master builds the first scene around it.')
-    : t('The seed picks one of the openings. You find out when the story begins.');
   return (
-    <div className="world-setup">
-      <h2>{t('The world')}</h2>
+    <div className="world-setup bare">
       <div className="field">
         <span>{t('Region')}</span>
         <span className="pick">
-          <button type="button" className={start.region === 'random' ? 'on' : ''} disabled={!host} onClick={() => set({ region: 'random' })}>🎲 {t('A new region')}</button>
-          <button type="button" className={start.region === 'classic' ? 'on' : ''} disabled={!host} onClick={() => set({ region: 'classic' })}>🔥 {t('Classic: the Emberfall Vale')}</button>
+          <Chip on={start.region === 'random'} disabled={!host} onClick={() => set({ region: 'random' })}
+            hint={t('Its own country, towns, people and troubles, rolled from the seed. Nobody at the table knows it yet.')}>🎲 {t('A new region')}</Chip>
+          <Chip on={start.region === 'classic'} disabled={!host} onClick={() => set({ region: 'classic' })}
+            hint={t('The handcrafted valley around Emberfall and the Old Hearthforge. Only its wilderness changes with the seed.')}>🔥 {t('Classic: the Emberfall Vale')}</Chip>
         </span>
-        <small className="muted">{start.region === 'random'
-          ? t('Its own country, towns, people and troubles, rolled from the seed. Nobody at the table knows it yet.')
-          : t('The handcrafted valley around Emberfall and the Old Hearthforge. Only its wilderness changes with the seed.')}</small>
       </div>
       <div className="field">
         <span>{t('How it begins')}</span>
         <span className="pick">
-          <button type="button" className={start.premise === SURPRISE ? 'on' : ''} disabled={!host} onClick={() => set({ premise: SURPRISE })}>✨ {t('Surprise us')}</button>
+          <Chip on={start.premise === SURPRISE} disabled={!host} onClick={() => set({ premise: SURPRISE })}
+            hint={t('The seed picks one of the openings. You find out when the story begins.')}>✨ {t('Surprise us')}</Chip>
           {PREMISES.map((p) => (
-            <button type="button" key={p.id} className={start.premise === p.id ? 'on' : ''} disabled={!host} onClick={() => set({ premise: p.id })}>{p.icon} {loc(p.label, lang)}</button>
+            <Chip key={p.id} on={start.premise === p.id} disabled={!host} hint={loc(p.blurb, lang)} onClick={() => set({ premise: p.id })}>{p.icon} {loc(p.label, lang)}</Chip>
           ))}
-          <button type="button" className={start.premise === CUSTOM ? 'on' : ''} disabled={!host} onClick={() => set({ premise: CUSTOM })}>✒️ {t('Our own idea')}</button>
+          <Chip on={start.premise === CUSTOM} disabled={!host} onClick={() => set({ premise: CUSTOM })}
+            hint={t('Describe in a sentence or two how the story opens. The Dungeon Master builds the first scene around it.')}>✒️ {t('Our own idea')}</Chip>
         </span>
-        <small className="muted">{blurb}</small>
         {start.premise === CUSTOM && (
-          <textarea value={custom} maxLength={CUSTOM_MAX} rows={3} disabled={!host} placeholder={t('For example: We are a travelling circus, and last night our bear went missing.')}
+          <textarea className="field-wide" value={custom} maxLength={CUSTOM_MAX} rows={2} disabled={!host} placeholder={t('For example: We are a travelling circus, and last night our bear went missing.')}
             onChange={(e) => setCustom(e.target.value)} onBlur={() => { if (custom !== start.custom) set({ custom }); }} />
         )}
       </div>
       <div className="field">
-        <span>{t('World seed')}</span>
+        <span>{t('World seed')} <Info text={host
+          ? t('The same seed with the same region and opening builds the same map, places, people and quests again. Type in a seed a friend gave you, or share yours. The Dungeon Master still tells the story anew each time.')
+          : t('The host chooses the world. The same seed with the same region and opening builds the same map, places, people and quests again.')} /></span>
         <span className="seed-row">
           <input ref={seedField} className="code" value={seed} maxLength={SEED_MAX} readOnly={!host} spellCheck={false} aria-label={t('World seed')}
             onChange={(e) => setSeed(e.target.value.toUpperCase())}
@@ -288,11 +282,71 @@ function WorldSetup({ state, conn }: { state: GameState; conn: Connection }) {
           {host && <button type="button" onClick={() => set({ seed: '' })} title={t('Roll a new seed')}>🎲 {t('New seed')}</button>}
           <button type="button" onClick={() => { setCopied(copyText(start.seed, seedField.current)); setTimeout(() => setCopied(false), 2000); }}>{copied ? t('Copied') : t('Copy')}</button>
         </span>
-        <small className="muted">{host
-          ? t('The same seed with the same region and opening builds the same map, places, people and quests again. Type in a seed a friend gave you, or share yours. The Dungeon Master still tells the story anew each time.')
-          : t('The host chooses the world. The same seed with the same region and opening builds the same map, places, people and quests again.')}</small>
       </div>
     </div>
+  );
+}
+
+type AdventureTab = 'world' | 'dm';
+
+/**
+ * Everything the host may decide about the adventure, folded into one line: what is set shows as chips,
+ * and the choices themselves open on demand. A new table is ready to start without opening it.
+ */
+function AdventureSetup({ state, conn }: { state: GameState; conn: Connection }) {
+  const t = useT();
+  const { lang } = useLang();
+  const [open, setOpen] = useState<AdventureTab | null>(null);
+  const host = state.hostId === playerId;
+  const { start, style } = state.table;
+  const premise = PREMISES.find((p) => p.id === start.premise);
+  const tone = TONE_INFO.find((x) => x.id === style.tone);
+  const rules = RULES_INFO.find((x) => x.value === style.rules);
+  const rating = RATING_INFO.find((x) => x.id === style.rating);
+  const chips: { tab: AdventureTab; label: string; text: string }[] = [
+    { tab: 'world', label: t('Region'), text: start.region === 'random' ? `🎲 ${t('A new region')}` : `🔥 ${t('Classic: the Emberfall Vale')}` },
+    { tab: 'world', label: t('How it begins'), text: premise ? `${premise.icon} ${loc(premise.label, lang)}` : start.premise === CUSTOM ? `✒️ ${t('Our own idea')}` : `✨ ${t('Surprise us')}` },
+    ...(tone ? [{ tab: 'dm' as const, label: t('Tone'), text: `${tone.icon} ${loc(tone.label, lang)}` }] : []),
+    ...(rules ? [{ tab: 'dm' as const, label: t('Rules'), text: `⚖️ ${loc(rules.label, lang)}` }] : []),
+    ...(rating ? [{ tab: 'dm' as const, label: t('Content rating'), text: `${rating.icon} ${loc(rating.label, lang)}` }] : []),
+    { tab: 'dm', label: t('Story language'), text: `💬 ${LANGS.find((l) => l.id === state.language)?.label ?? state.language}` },
+  ];
+  return (
+    <section className={open ? 'adventure open' : 'adventure'}>
+      <div className="adventure-bar">
+        <h2>{t('The adventure')}</h2>
+        <span className="sum-chips">
+          {chips.map((c) => (
+            <Hint key={c.label} text={c.label}>
+              <button type="button" className={open === c.tab ? 'sum-chip on' : 'sum-chip'} onClick={() => setOpen(c.tab)}>{c.text}</button>
+            </Hint>
+          ))}
+        </span>
+        <button type="button" className="adventure-toggle" aria-expanded={!!open} onClick={() => setOpen(open ? null : 'world')}>
+          {open ? `▴ ${t('Hide options')}` : `▾ ${host ? t('Customize') : t('Show details')}`}
+        </button>
+      </div>
+      {open && (
+        <>
+          <TabBar tabs={[{ id: 'world', label: t('The world') }, { id: 'dm', label: t('The Dungeon Master') }]} value={open} onChange={setOpen} />
+          <div className="adventure-body">
+            {open === 'world' ? <WorldSetup state={state} conn={conn} /> : (
+              <>
+                <StyleSetup bare state={state} conn={conn} />
+                <div className="style-setup bare">
+                  <div className="field">
+                    <span>{t('Story language')} <Info text={host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')} /></span>
+                    <span className="pick">
+                      {LANGS.map((l) => <Chip key={l.id} on={state.language === l.id} disabled={!host} onClick={() => conn.send({ t: 'set_language', lang: l.id })}>{l.label}</Chip>)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -300,17 +354,24 @@ function WorldSetup({ state, conn }: { state: GameState; conn: Connection }) {
 export function PartySetup({ state, conn }: { state: GameState; conn: Connection }) {
   const t = useT();
   const { lang } = useLang();
-  const [flipped, setFlipped] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [creating, setCreating] = useState<Draft | null>(null);
   const full = state.characters.length >= 4;
   const host = state.hostId === playerId;
   const hostName = state.players.find((p) => p.id === state.hostId)?.name ?? '';
   const many = state.players.length > 1;
+  const shared = state.table.maxPlayers > 1;
   const iAmReady = state.ready.includes(playerId);
   const myHeroes = state.characters.filter((c) => c.ownerId === playerId).length;
   const waiting = state.players.filter((p) => p.connected && p.id !== state.hostId && !state.ready.includes(p.id));
+  const free = PREMADES.filter((p) => !state.characters.some((c) => c.premadeId === p.id));
+  const shown = PREMADES.find((p) => p.id === picked);
+  const addPremade = (id: string) => { conn.send({ t: 'add_premade', premadeId: id, name: '' }); setPicked(null); };
+  const addRandom = () => { const p = free[Math.floor(Math.random() * free.length)]; if (p) addPremade(p.id); };
   const begin = () => {
     if (waiting.length && !window.confirm(t('Not everyone is ready yet ({names}). Begin anyway?', { names: waiting.map((p) => p.name).join(', ') }))) return;
+    // Quick start: with no hero chosen, the table gets one and the adventure begins with the settings as they are.
+    if (!state.characters.length) addRandom();
     conn.send({ t: 'start' });
   };
   const close = () => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) conn.send({ t: 'close_table' }); };
@@ -318,56 +379,78 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
     <div className="splash">
       <Embers count={14} />
       <div className="splash-tools"><MusicControl /><LangSwitch /></div>
-      <div className="panel setup">
-        <h1>{state.table.title}</h1>
-        <p className="tagline">{t('Gather your party')}</p>
-        <div className="table-room">
-          <section className="seats">
-            <h2>{t('At the table')} ({state.players.length}/{state.table.maxPlayers})</h2>
-            <Players state={state} conn={conn} pregame />
-            <Invite state={state} conn={conn} />
-          </section>
-          {state.table.maxPlayers > 1 && <ChatPanel state={state} conn={conn} />}
+      <div className={shared ? 'panel setup with-side' : 'panel setup'}>
+        <header className="setup-head">
+          <h1>{state.table.title}</h1>
+          <p className="tagline">{t('Gather your party')}</p>
+        </header>
+        <div className="setup-body">
+          <div className="setup-main">
+            <section className="party-bar">
+              <h2>{t('Party')} ({state.characters.length}/4) <Info text={t('Take a ready-made hero, or create your own. Playing solo? Add up to four and control them all.')} /></h2>
+              <ul className="party-slots">
+                {[0, 1, 2, 3].map((i) => {
+                  const c = state.characters[i];
+                  if (!c) return <li key={i} className="slot empty" aria-label={t('Free place in the party')}>＋</li>;
+                  return (
+                    <li key={c.id} className="slot">
+                      <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+                      <span className="slot-text">
+                        <b>{c.name}</b>
+                        <small>{t(SPECIES[c.speciesId]?.name ?? '')} {classLabel(c, t)}</small>
+                        {shared && <small className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</small>}
+                      </span>
+                      {c.ownerId === playerId && <button type="button" className="slot-x" title={t('remove')} aria-label={`${t('remove')}: ${c.name}`} onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>×</button>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+            <section className="hero-pick">
+              <h2>{t('Choose a hero')}</h2>
+              <div className="hero-strip">
+                <Hint text={t('Choose class, species, background, abilities, skills and gear, with an explanation and a recommendation for every choice.')}>
+                  <button type="button" className="hero-tile make" disabled={full} onClick={() => setCreating({})}><span className="tile-icon">✒️</span><b>{t('Create your own')}</b></button>
+                </Hint>
+                <Hint text={t('Adds one of the ready-made heroes that is still free.')}>
+                  <button type="button" className="hero-tile make" disabled={full || !free.length} onClick={addRandom}><span className="tile-icon">🎲</span><b>{t('Random hero')}</b></button>
+                </Hint>
+                {PREMADES.map((p) => {
+                  const taken = state.characters.some((c) => c.premadeId === p.id);
+                  return (
+                    <button type="button" key={p.id} className={['hero-tile', picked === p.id && 'on', taken && 'taken'].filter(Boolean).join(' ')} aria-pressed={picked === p.id}
+                      onClick={() => setPicked(picked === p.id ? null : p.id)}>
+                      <img className="pixel" src={heroUrl(artOfDraft(p.spec)!)} alt="" />
+                      <b style={{ color: CLASS_INFO[p.spec.classId].color }}>{p.spec.name}</b>
+                      <small>{taken ? `✓ ${t('In the party')}` : t(CLASSES[p.spec.classId].name)}</small>
+                    </button>
+                  );
+                })}
+              </div>
+              {shown && (
+                <PremadeDetail premade={shown} taken={state.characters.some((c) => c.premadeId === shown.id)} full={full} onClose={() => setPicked(null)}
+                  onAdd={() => addPremade(shown.id)} onCustomize={() => setCreating({ ...shown.spec, premadeId: undefined, backstory: loc(shown.bio, lang) })} />
+              )}
+            </section>
+            <AdventureSetup state={state} conn={conn} />
+          </div>
+          {shared && (
+            <aside className="setup-side">
+              <section className="seats">
+                <h2>{t('At the table')} ({state.players.length}/{state.table.maxPlayers})</h2>
+                <Players state={state} conn={conn} pregame />
+                <Invite state={state} conn={conn} />
+              </section>
+              <ChatPanel state={state} conn={conn} />
+            </aside>
+          )}
         </div>
-        <p className="muted center">{t('Take a ready-made hero, or create your own. Click a card to turn it over and read who they are.')}</p>
-        <div className="hero-grid">
-          <button type="button" className="hero-card create" disabled={full} onClick={() => setCreating({})}>
-            <span className="create-icon">✒️</span>
-            <h3>{t('Create your own hero')}</h3>
-            <p>{t('Choose class, species, background, abilities, skills and gear, with an explanation and a recommendation for every choice.')}</p>
-          </button>
-          {PREMADES.map((p) => (
-            <PremadeCard key={p.id} premade={p} flipped={flipped === p.id} onFlip={() => setFlipped(flipped === p.id ? null : p.id)}
-              taken={state.characters.some((c) => c.premadeId === p.id)} full={full}
-              onAdd={() => { conn.send({ t: 'add_premade', premadeId: p.id, name: '' }); setFlipped(null); }}
-              onCustomize={() => setCreating({ ...p.spec, premadeId: undefined, backstory: loc(p.bio, lang) })} />
-          ))}
-        </div>
-        <div className="session-lang">
-          <span>{t('Story language')}</span>
-          {LANGS.map((l) => (
-            <button key={l.id} className={state.language === l.id ? 'on' : ''} disabled={!host} onClick={() => conn.send({ t: 'set_language', lang: l.id })}>{l.label}</button>
-          ))}
-          <small className="muted">{host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')}</small>
-        </div>
-        <WorldSetup state={state} conn={conn} />
-        <StyleSetup state={state} conn={conn} />
-        <h2>{t('Party')} ({state.characters.length}/4)</h2>
-        {state.characters.length === 0 && <p className="muted">{t('No heroes yet. Playing solo? Add up to four and control them all.')}</p>}
-        <ul className="roster">
-          {state.characters.map((c) => (
-            <li key={c.id}>
-              <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
-              <span><b>{c.name}</b> · {t(SPECIES[c.speciesId]?.name ?? '')} {classLabel(c, t)}</span>
-              <span className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</span>
-              {c.ownerId === playerId && <button className="link" onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>{t('remove')}</button>}
-            </li>
-          ))}
-        </ul>
-        <div className="begin">
+        <footer className="begin">
           {host ? (
             <>
-              <button className="primary" disabled={!state.characters.length} onClick={begin}>{t('Begin the adventure')}</button>
+              <Hint text={state.characters.length ? '' : t('Picks a hero for you and begins right away with the settings above.')}>
+                <button className="primary" onClick={begin}>{state.characters.length ? t('Begin the adventure') : `⚡ ${t('Quick start')}`}</button>
+              </Hint>
               {many && <small className="muted">{waiting.length ? t('Still getting ready: {names}', { names: waiting.map((p) => p.name).join(', ') }) : t('Everyone is ready.')}</small>}
             </>
           ) : (
@@ -377,22 +460,22 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
             </>
           )}
           <span className="spacer" />
+          <Hint text={state.dmMode === 'claude' ? '' : t('scripted fallback. Set ANTHROPIC_API_KEY on the server for the AI Dungeon Master.')}>
+            <small className="muted dm-mode" tabIndex={state.dmMode === 'claude' ? undefined : 0}>{t('Dungeon Master')}: {state.dmMode === 'claude' ? `Claude (${state.dmModel})` : t('scripted')}</small>
+          </Hint>
           <button className="link" onClick={() => conn.leave()} title={t('Your seat and your heroes at this table are given up')}>{t('Leave the table')}</button>
           {host && <button className="link danger" onClick={close}>{t('Close the table')}</button>}
-        </div>
-        <p className="muted small">
-          {t('Dungeon Master')}: {state.dmMode === 'claude' ? `Claude (${state.dmModel})` : t('scripted fallback. Set ANTHROPIC_API_KEY on the server for the AI Dungeon Master.')}
-        </p>
+        </footer>
       </div>
       {creating && <Creator state={state} conn={conn} initial={creating} onClose={() => setCreating(null)} />}
     </div>
   );
 }
 
-interface CardProps { premade: Premade; flipped: boolean; taken: boolean; full: boolean; onFlip: () => void; onAdd: () => void; onCustomize: () => void }
+interface DetailProps { premade: Premade; taken: boolean; full: boolean; onClose: () => void; onAdd: () => void; onCustomize: () => void }
 
-/** A premade hero: portrait and pitch on the front, story and numbers on the back. */
-function PremadeCard({ premade: p, flipped, taken, full, onFlip, onAdd, onCustomize }: CardProps) {
+/** A premade hero opened up: who they are, how they play and their numbers, with the buttons to take or change them. */
+function PremadeDetail({ premade: p, taken, full, onClose, onAdd, onCustomize }: DetailProps) {
   const t = useT();
   const { lang } = useLang();
   const sheet = useMemo(() => buildSheet(p.spec)!, [p]);
@@ -400,33 +483,24 @@ function PremadeCard({ premade: p, flipped, taken, full, onFlip, onAdd, onCustom
   const title = `${t(SPECIES[spec.speciesId].name)} ${t(CLASSES[spec.classId].name)}`;
   const spells = sheet.abilityIds.filter((id) => ABILITIES[id]?.spellLevel !== undefined || ABILITIES[id]?.oncePerRest);
   return (
-    <div className={['hero-card', flipped && 'flipped', taken && 'taken'].filter(Boolean).join(' ')}>
-      <div className="hero-inner">
-        <button type="button" className="hero-face front" onClick={onFlip} tabIndex={flipped ? -1 : 0} aria-label={t('Turn the card over')}>
-          <img className="pixel" src={heroUrl(artOfDraft(spec)!)} alt="" />
-          <h3 style={{ color: CLASS_INFO[spec.classId].color }}>{spec.name}</h3>
-          <small>{title}</small>
-          <p>{loc(p.tagline, lang)}</p>
-          <span className="hero-stats"><b>{sheet.maxHp}</b> {t('HP')} · <b>{sheet.ac}</b> {t('AC')}{sheet.maxMana > 0 && <> · <b>{sheet.maxMana}</b> {t('Mana')}</>}</span>
-          <span className="flip-hint">{taken ? t('In the party') : `↻ ${t('Turn over')}`}</span>
-        </button>
-        <div className="hero-face back" aria-hidden={!flipped}>
-          <button type="button" className="link flip-back" onClick={onFlip} tabIndex={flipped ? 0 : -1} title={t('Turn the card over')}>↻</button>
-          <h3 style={{ color: CLASS_INFO[spec.classId].color }}>{spec.name}</h3>
-          <small>{title} · {t(BACKGROUNDS[spec.backgroundId].name)}</small>
-          <div className="hero-scroll">
-            <p className="bio">{loc(p.bio, lang)}</p>
-            <p><b>{t('How to play')}:</b> {loc(p.playstyle, lang)}</p>
-            <p className="abil">{ABILITY_KEYS.map((k) => <span key={k}>{t(k.toUpperCase())} <b>{sheet.abilities[k]}</b></span>)}</p>
-            <p><b>{t('Skills')}:</b> {sheet.skills.map((s) => t(s)).join(', ')}</p>
-            {spells.length > 0 && <p><b>{t('Spells')}:</b> {spells.map((id) => t(ABILITIES[id].name)).join(', ')}</p>}
-            {sheet.attack && <p><b>{t('Attack')}:</b> {t(sheet.attack.name)} {sheet.attack.bonus >= 0 ? '+' : ''}{sheet.attack.bonus}</p>}
-          </div>
-          <div className="hero-actions">
-            <button type="button" className="primary" disabled={full || taken} tabIndex={flipped ? 0 : -1} onClick={onAdd}>{taken ? t('In the party') : t('Add to party')}</button>
-            <button type="button" disabled={full} tabIndex={flipped ? 0 : -1} onClick={onCustomize} title={t('Open this hero in the character creator and change anything you like')}>{t('Customize')}</button>
-          </div>
-        </div>
+    <div className="hero-detail">
+      <img className="pixel" src={heroUrl(artOfDraft(spec)!)} alt="" />
+      <div className="hero-detail-text">
+        <h3>{spec.name} <small>{title} · {t(BACKGROUNDS[spec.backgroundId].name)}</small></h3>
+        <p className="bio"><b>{loc(p.tagline, lang)}.</b> {loc(p.bio, lang)}</p>
+        <p><b>{t('How to play')}:</b> {loc(p.playstyle, lang)}</p>
+      </div>
+      <div className="hero-detail-stats">
+        <p className="hero-stats"><b>{sheet.maxHp}</b> {t('HP')} · <b>{sheet.ac}</b> {t('AC')}{sheet.maxMana > 0 && <> · <b>{sheet.maxMana}</b> {t('Mana')}</>}</p>
+        <p className="abil">{ABILITY_KEYS.map((k) => <span key={k}>{t(k.toUpperCase())} <b>{sheet.abilities[k]}</b></span>)}</p>
+        <p><b>{t('Skills')}:</b> {sheet.skills.map((s) => t(s)).join(', ')}</p>
+        {spells.length > 0 && <p><b>{t('Spells')}:</b> {spells.map((id) => t(ABILITIES[id].name)).join(', ')}</p>}
+        {sheet.attack && <p><b>{t('Attack')}:</b> {t(sheet.attack.name)} {sheet.attack.bonus >= 0 ? '+' : ''}{sheet.attack.bonus}</p>}
+      </div>
+      <div className="hero-actions">
+        <button type="button" className="primary" disabled={full || taken} onClick={onAdd}>{taken ? t('In the party') : t('Add to party')}</button>
+        <button type="button" disabled={full} onClick={onCustomize} title={t('Open this hero in the character creator and change anything you like')}>{t('Customize')}</button>
+        <button type="button" className="link" onClick={onClose}>{t('Close')}</button>
       </div>
     </div>
   );

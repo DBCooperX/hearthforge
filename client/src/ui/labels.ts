@@ -25,6 +25,9 @@ export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
   lore: 'Nothing written down yet.',
 };
 
+/** The tabs of the Settings window. */
+export const SETTINGS_TABS = { game: 'Game', dm: 'Dungeon Master', keys: 'Keyboard', table: 'Table & server' } as const;
+
 export const TEXT_SIZES = ['normal', 'large', 'larger'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 export const SIZE_LABELS: Record<TextSize, string> = { normal: 'Normal', large: 'Large', larger: 'Larger' };
@@ -86,6 +89,7 @@ export const INN_MISC = { empty: 'Empty' } as const;
 export const TRADE_MOODS = ['Prices are 10% worse today', 'Prices are 10% better today', 'Prices are 20% better today'] as const;
 
 export const ALL_LABELS: string[] = [
+  ...Object.values(SETTINGS_TABS),
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
