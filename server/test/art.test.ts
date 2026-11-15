@@ -132,7 +132,7 @@ describe('art library', () => {
   it('takes in a zip copied into the folder by hand', async () => {
     const dir = fresh();
     writeFileSync(join(dir, 'My Icons.zip'), zip({ 'ring.png': pngOf(24, 24) }));
-    const lib = new ArtStore(dir, {});
+    const lib = new ArtStore(dir, { HEARTHFORGE_ART: 'generated', HEARTHFORGE_AUTO_ASSETS: 'off' });
     await lib.start();
     expect(lib.manifest().icons.ring_protection.src).toBe('/art/icons/my-icons/ring.png');
     expect(existsSync(join(dir, 'imported', 'My Icons.zip'))).toBe(true);
