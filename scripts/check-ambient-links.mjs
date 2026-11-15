@@ -1,9 +1,7 @@
-// Usage: node scripts/check-ambient-links.mjs   (Node 18+, run from the repo root)
-// Reads AMBIENT_TRACKS in server/src/music.ts and checks that every link answers with audio.
-import { readFileSync } from 'node:fs';
-const src = readFileSync(process.argv[2] ?? 'server/src/music.ts', 'utf8');
-const block = src.slice(src.indexOf('AMBIENT_TRACKS: TrackSource[]'), src.indexOf('export const DEFAULT_TRACKS'));
-const files = [...block.matchAll(/oga\('([^']+)'\)/g)].map((m) => m[1]);
+// Usage: node check-ambient-links.mjs   (Node 18+, any folder)
+// Checks that every ambient link answers with audio.
+// Works from any folder: the file names are listed here (keep in step with AMBIENT_TRACKS).
+const files = ['qubodupFireLoop.ogg', 'wind-01.ogg', 'forest_2.ogg'];
 let bad = 0;
 for (const f of files) {
   const url = `https://opengameart.org/sites/default/files/${f}`;
