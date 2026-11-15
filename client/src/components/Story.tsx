@@ -210,7 +210,7 @@ function DiceRoll({ roll, animate }: { roll: RollInfo; animate: boolean }) {
 
 // ----------------------------------------------------------------- feed
 
-function Entry({ entry, animate }: { entry: LogEntry; animate: boolean }) {
+function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean; takeBack?: () => void }) {
   const t = useT();
   switch (entry.kind) {
     case 'dm':
@@ -221,7 +221,7 @@ function Entry({ entry, animate }: { entry: LogEntry; animate: boolean }) {
         </article>
       );
     case 'chat':
-      return <p className="said"><b>{entry.speaker}</b>{entry.text}</p>;
+      return <p className="said"><b>{entry.speaker}</b>{entry.text}{takeBack && <button type="button" className="takeback" onClick={takeBack}>↩ {t('Take back')}</button>}</p>;
     case 'roll':
       return entry.roll ? <DiceRoll roll={entry.roll} animate={animate} /> : <p className="line roll"><RichText text={entry.text} /></p>;
     case 'levelup':
@@ -261,12 +261,14 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
   const sceneAt = state.log.reduce((at, l, i) => (l.kind === 'dm' ? i : at), -1);
   const answered = state.log.slice(sceneAt + 1).some((l) => l.kind === 'chat' && l.speaker === me);
   const chips = exploring && !state.dmBusy && !state.travelling && sceneAt >= 0 && !answered ? state.log[sceneAt].scene?.actions ?? [] : [];
+  // The newest line of mine that the Dungeon Master has not started on can still be taken back.
+  const takeBackId = state.unanswered.filter((u) => u.playerId === playerId).pop()?.logId;
   const writing = state.players.filter((p) => p.id !== playerId && conn.typing[p.id] === 'story').map((p) => p.name);
 
   return (
     <section className={compact ? 'story compact' : 'story'}>
       <div className="feed">
-        {state.log.map((l) => <Entry key={l.id} entry={l} animate={l.id > seen.current} />)}
+        {state.log.map((l) => <Entry key={l.id} entry={l} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />)}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}
         {state.travelling && <p className="line typing">{t('On the road…')}</p>}
         {state.gathering && !state.dmBusy && <p className="line typing">{answered ? t('The Dungeon Master gives the others a moment to act…') : t('The Dungeon Master is listening. Say what you do, and it is resolved together with the others.')}</p>}

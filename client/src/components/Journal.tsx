@@ -4,6 +4,8 @@ import { ItemIcon } from '../ui/ItemIcon';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { HEX_MILES, direction, formatTime, hexDistance, type Hex } from '../../../shared/hex';
 import type { Disposition, GameState, ItemDef, Location, Npc, Quest, QuestStatus } from '../../../shared/types';
+import { TROPHIES } from '../../../shared/achievements';
+import { TIER_PRICE, TIER_TEXT, type FactionView } from '../../../shared/reputation';
 import { useLang, useT } from '../i18n';
 import { KIND_ICON } from './HexMap';
 import { RichText } from './Story';
@@ -13,8 +15,10 @@ import { sfx } from '../ui/sound';
 import { TabBar, Window } from '../ui/Window';
 
 type Tab = keyof typeof JOURNAL_TABS;
-const TABS: { id: Tab; icon: IconName }[] = [{ id: 'quests', icon: 'quest' }, { id: 'people', icon: 'people' }, { id: 'places', icon: 'places' }, { id: 'lore', icon: 'lore' }];
+const TABS: { id: Tab; icon: IconName }[] = [{ id: 'quests', icon: 'quest' }, { id: 'people', icon: 'people' }, { id: 'places', icon: 'places' }, { id: 'standing', icon: 'shield' }, { id: 'lore', icon: 'lore' }];
 const CHRONICLE = '~chronicle';
+const RUMOURS = '~rumours';
+const TROPHY_BOOK = '~trophies';
 
 /** Where the book was last open, kept for as long as the page is. */
 const remembered: { tab: Tab; entry: Partial<Record<Tab, string>> } = { tab: 'quests', entry: {} };
@@ -55,6 +59,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
   const { lang } = useLang();
   const w = state.world!;
   const { quests, deeds, npcs } = state.memory;
+  const { factions, rumours, trophies } = state;
   const [tab, setTabState] = useState<Tab>(remembered.tab);
   const [picked, setPicked] = useState<Partial<Record<Tab, string>>>(remembered.entry);
   const finds = useMemo(() => Object.values(state.items).filter((i) => i.story), [state.items]);
@@ -75,12 +80,18 @@ export function Journal({ state, onClose, onShowMap }: Props) {
       sub: l.visited ? t(l.kind) : `${t(l.kind)} · ${t('not yet visited')}`,
       mark: <span className="place-mark">{KIND_ICON[l.kind]}</span>,
     }));
+    const standing = factions.map((f): Entry => ({
+      id: f.id, title: f.name, sub: `${t(f.tier)} · ${f.standing > 0 ? '+' : ''}${f.standing}`, mark: <span className={`tier-pip ${f.tier}`} />,
+    }));
+    const earned = trophies.filter((x) => x.day !== null).length;
     const lore: Entry[] = [
       { id: CHRONICLE, title: t('Chronicle of deeds'), sub: deeds.length ? t('{n} entries', { n: deeds.length }) : t('Still unwritten'), head: t('The story so far'), mark: <span className="place-mark">📜</span> },
+      { id: RUMOURS, title: t('Rumours'), sub: rumours.length ? t('{n} entries', { n: rumours.length }) : t('Nothing heard yet'), mark: <span className="place-mark">👂</span> },
+      { id: TROPHY_BOOK, title: t('Trophies'), sub: t('{n} of {total}', { n: earned, total: trophies.length }), mark: <span className="place-mark">🏆</span> },
       ...finds.map((i, n): Entry => ({ id: i.id, title: i.name, sub: `${t(i.story!.category)}${i.story!.quest ? ` · ${t('Quest item')}` : ''}`, head: n === 0 ? t('Clues and keepsakes') : undefined, mark: <span className="place-mark"><ItemIcon def={i} /></span> })),
     ];
-    return { quests: questList, people, places, lore };
-  }, [quests, npcs, w.locations, deeds.length, finds, t]);
+    return { quests: questList, people, places, standing, lore };
+  }, [quests, npcs, w.locations, deeds.length, finds, factions, rumours, trophies, t]);
 
   const list = entries[tab];
   const current = list.find((e) => e.id === picked[tab]) ?? list[0] ?? null;
@@ -93,7 +104,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
       const el = e.target as HTMLElement;
       if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
       const byNumber = TABS[Number(e.key) - 1];
-      if (byNumber && /^[1-4]$/.test(e.key)) { if (byNumber.id !== tab) { setTab(byNumber.id); sfx('page'); } return; }
+      if (byNumber && /^[1-5]$/.test(e.key)) { if (byNumber.id !== tab) { setTab(byNumber.id); sfx('page'); } return; }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       e.preventDefault();
       const at = list.findIndex((x) => x.id === current?.id);
@@ -212,6 +223,67 @@ export function Journal({ state, onClose, onShowMap }: Props) {
     );
   };
 
+  const factionPage = (f: FactionView) => {
+    const price = f.id === 'guild' ? Math.round((TIER_PRICE[f.tier] - 1) * 100) : null;
+    return (
+      <article className="entry" key={f.id}>
+        <span className={`stamp tier-${f.tier}`}>{t(f.tier)}</span>
+        <h2>{f.name}</h2>
+        <p className="byline">{f.blurb}</p>
+        <div className="meter" role="img" aria-label={`${f.standing}`}>
+          <span className="meter-mid" />
+          <span className={`meter-mark ${f.tier}`} style={{ left: `${(f.standing + 100) / 2}%` }} />
+        </div>
+        <div className="meter-scale"><small>−100</small><small>0</small><small>+100</small></div>
+        <dl className="facts">
+          <div><dt>{t('Standing')}</dt><dd>{f.standing > 0 ? '+' : ''}{f.standing}</dd></div>
+          <div><dt>{t('Opinion')}</dt><dd>{t(TIER_TEXT[f.tier])}</dd></div>
+          {price !== null && <div><dt>{t('Prices in shops')}</dt><dd>{price > 0 ? '+' : ''}{price} %</dd></div>}
+        </dl>
+        <h3>{t('Lately')}</h3>
+        {f.history.length === 0
+          ? <p className="aside">{t('Nothing they would remember yet.')}</p>
+          : <ul className="notes">{[...f.history].reverse().map((h, i) => <li key={i}><small>{t('Day')} {h.day}</small> <b className={h.delta > 0 ? 'up' : 'down'}>{h.delta > 0 ? '+' : ''}{h.delta}</b> {h.why}</li>)}</ul>}
+      </article>
+    );
+  };
+
+  const rumourPage = () => (
+    <article className="entry" key={RUMOURS}>
+      <h2>{t('Rumours')}</h2>
+      <p className="byline">{t('Word on the road. Gossip travels from place to place, a few miles a day.')}</p>
+      {rumours.length === 0 && <p className="aside">{t('You have not heard any gossip yet. Listen in taverns and market squares.')}</p>}
+      <ul className="notes">
+        {[...rumours].reverse().map((r) => (
+          <li key={r.id}>
+            <small>{t('Day')} {r.heard}</small> <RichText text={r.text} />
+            {(r.from || r.aboutParty) && <small className="rumour-meta"> {r.aboutParty ? t('about you') : ''}{r.aboutParty && r.from ? ' · ' : ''}{r.from ? t('from {place}', { place: r.from }) : ''}</small>}
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+
+  const trophyPage = () => (
+    <article className="entry" key={TROPHY_BOOK}>
+      <h2>{t('Trophies')}</h2>
+      <ul className="trophies">
+        {TROPHIES.map((def) => {
+          const v = trophies.find((x) => x.id === def.id);
+          const got = v?.day != null;
+          return (
+            <li key={def.id} className={got ? 'got' : ''}>
+              <span className="trophy-icon">{def.icon}</span>
+              <span><b>{t(def.name)}</b><small>{t(def.text)}</small>
+                {got ? <small className="trophy-day">{t('Day')} {v!.day}</small> : def.need > 1 && <small className="trophy-day">{v?.have ?? 0} / {def.need}</small>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </article>
+  );
+
   const findPage = (i: ItemDef) => {
     const st = i.story!;
     const holder = state.characters.find((c) => c.bag.some((b) => b?.defId === i.id) || Object.values(c.equipment).some((e) => e?.defId === i.id));
@@ -244,11 +316,14 @@ export function Journal({ state, onClose, onShowMap }: Props) {
     if (tab === 'quests') { const q = quests.find((x) => x.id === current.id); page = q && questPage(q); }
     else if (tab === 'people') { const n = npcs.find((x) => x.id === current.id); page = n && personPage(n); }
     else if (tab === 'places') { const l = w.locations.find((x) => x.id === current.id); page = l && placePage(l); }
+    else if (tab === 'standing') { const f = factions.find((x) => x.id === current.id); page = f && factionPage(f); }
     else if (current.id === CHRONICLE) page = chroniclePage();
+    else if (current.id === RUMOURS) page = rumourPage();
+    else if (current.id === TROPHY_BOOK) page = trophyPage();
     else { const i = finds.find((x) => x.id === current.id); page = i && findPage(i); }
   }
 
-  const counts: Record<Tab, number> = { quests: quests.filter((q) => q.status === 'active').length, people: npcs.length, places: w.locations.length, lore: finds.length + (deeds.length ? 1 : 0) };
+  const counts: Record<Tab, number> = { quests: quests.filter((q) => q.status === 'active').length, people: npcs.length, places: w.locations.length, standing: factions.length, lore: finds.length + (deeds.length ? 1 : 0) + rumours.length };
 
   return (
     <Window title={t('Journal')} icon="journal" hotkey="J" size="book" className="journal" onClose={onClose} subtitle={formatTime(w.minutes, lang)}>

@@ -9,6 +9,8 @@ import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } fro
 import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS } from '../data/monsters';
 import { buyPrice } from '../../../shared/trade';
+import { TIER_TEXT, tierOf } from '../../../shared/reputation';
+import { attitude, factionOfNpc, rumoursHere } from '../game/reputation';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
 import { trueTerrain, type SettingState } from '../game/world';
@@ -28,6 +30,8 @@ Running the game
 - Crossing the map is the players' job: they pick a hex and the server moves them, tracks time and rolls for encounters. Use move_to_place only for known places in the party's current hex, such as walking into a tavern in town.
 - Rewards are yours to give, in moderation. Use award_xp for clever or brave achievements outside combat (25 to 100 is typical), change_gold for purchases, sales, payments and found coin (item values are in the catalogue), and give_item for items from the catalogue. Combat experience and loot are handled by the server.
 - Merchants are real. Every town has a general store, a smithy and an apothecary and every village a trader; they are listed under "Shops here" with their stock, prices and gold. When the party wants to buy, sell or browse, or meets a travelling peddler, call open_shop: the players get a trade window and do the trading themselves, and the server moves gold and goods, so never use change_gold, give_item or take_item for what goes through the window. Give a shop its keeper by passing a merchant name, and play that merchant in the scene. Prices you quote must come from the list. Haggling is a Persuasion check the players start in the window. Keep change_gold for everything that is not shop trade: bribes, fees, rewards, a round of drinks.
+- Reputation is real. The region's factions are listed under "Standing" with how they feel about the party. When the party does something a faction would notice (saves their people, robs or insults them, keeps a promise, breaks one), call change_standing with a small number: 1 to 4 for a favour, 5 to 8 for something that matters, up to 12 for something people will talk about for years. The server clamps it. Play people according to the attitude listed for them: someone whose faction distrusts the party is curt and charges more, someone whose faction honours them goes out of their way to help. Prices in shops already include the traders' guild opinion.
+- Word travels. Ordinary deeds become rumours by themselves when you call record_deed. Call rumour with action "start" for gossip you make up (a sighting, a scandal, news from elsewhere) and let people in other places repeat it later. The rumours going round the place the party is in are listed for you; weave one or two into conversations when they fit and mark each with action "heard" when the party hears it.
 - Anything else a hero picks up, is handed or buys (a clue, a letter, a key, a trophy, a curio) becomes real through give_story_item. Never tell a player that something is "only part of the story": if a hero has it, it belongs in their backpack. If your journal or the story so far says the party carries an object that is not listed under the story items they carry, add it with give_story_item the next time it comes up. Use update_story_item when they learn more about one, and take_item when something is used up, sold, given away or lost.
 
 Writing scenes
@@ -138,6 +142,13 @@ function partyLines(game: Game): string[] {
   });
 }
 
+/** How someone feels about the party: what they felt to begin with, and what their faction's opinion makes of it. */
+function feels(game: Game, n: Parameters<typeof attitude>[1]): string {
+  const now = attitude(game, n);
+  const f = factionOfNpc(game, n);
+  return now === n.disposition ? now : `${now} (was ${n.disposition}; ${f?.name ?? 'their people'} think ${tierOf(f?.standing ?? 0)} of the party)`;
+}
+
 /** The world outside combat: where the party is, what it knows and what the DM remembers. */
 export function describeWorld(game: Game): string {
   const s = game.s, w = game.world, mem = s.memory;
@@ -182,23 +193,32 @@ export function describeWorld(game: Game): string {
     lines.push('Shops here (open_shop shows the players the trade window; prices already include today\'s haggling):');
     for (const sh of shops) {
       const v = game.shopView(sh);
-      const wares = v.stock.slice(0, 16).map((e) => { const d = game.def(e.defId); return `${d.name}${e.qty > 1 ? ` ×${e.qty}` : ''} ${buyPrice(d, sh)} gp`; }).join(', ');
+      const wares = v.stock.slice(0, 16).map((e) => { const d = game.def(e.defId); return `${d.name}${e.qty > 1 ? ` ×${e.qty}` : ''} ${buyPrice(d, game.priced(sh))} gp`; }).join(', ');
       lines.push(`- ${sh.name} [${sh.id}], ${sh.kind}, ${v.merchant ? `kept by ${v.merchant}` : 'keeper not named yet'}, ${v.purse} gp to buy with. For sale: ${wares || 'nothing left'}${v.stock.length > 16 ? ', and more' : ''}.`);
     }
   }
   const present = game.presentNpcs();
   if (present.length) {
     lines.push('People here:');
-    for (const n of present) lines.push(`- ${n.name} [${n.id}], ${n.role || 'no known role'}, ${n.disposition}. ${n.description}${n.notes.length ? ` Notes: ${n.notes.join(' / ')}` : ''}`);
+    for (const n of present) lines.push(`- ${n.name} [${n.id}], ${n.role || 'no known role'}, ${feels(game, n)}. ${n.description}${n.notes.length ? ` Notes: ${n.notes.join(' / ')}` : ''}`);
   }
   const others = mem.npcs.filter((n) => n.met && !present.includes(n));
   if (others.length) {
     lines.push('Other people the party has met:');
-    for (const n of others) lines.push(`- ${n.name} (${n.role || 'no known role'}, ${n.disposition}), last seen at ${game.location(n.locationId ?? '')?.name ?? 'an unknown place'}.${n.notes.length ? ` Notes: ${n.notes.slice(-3).join(' / ')}` : ''}`);
+    for (const n of others) lines.push(`- ${n.name} (${n.role || 'no known role'}, ${feels(game, n)}), last seen at ${game.location(n.locationId ?? '')?.name ?? 'an unknown place'}.${n.notes.length ? ` Notes: ${n.notes.slice(-3).join(' / ')}` : ''}`);
   }
   if (mem.quests.length) {
     lines.push('Quests:');
     for (const q of mem.quests) lines.push(`- [${q.status}] ${q.title}: ${q.summary}${q.notes.length ? ` Notes: ${q.notes.slice(-4).join(' / ')}` : ''}`);
+  }
+  if (s.factions.length) {
+    lines.push('Standing with the factions of the region (from -100 to 100; only change_standing moves it, and the attitudes listed for people already count it):');
+    for (const f of s.factions) lines.push(`- ${f.name} [${f.id}]: ${f.standing > 0 ? '+' : ''}${f.standing}, ${tierOf(f.standing)}. ${f.blurb}${f.history.length ? ` Lately: ${f.history.slice(-3).map((h) => `${h.delta > 0 ? '+' : ''}${h.delta} ${h.why}`).join('; ')}.` : ''}`);
+  }
+  const talk = rumoursHere(game);
+  if (talk.length) {
+    lines.push('Rumours going round here (people may bring them up in conversation; when the party hears one, call rumour with action "heard" and its id):');
+    for (const r of talk) lines.push(`- [${r.id}] ${r.text}${r.aboutParty ? ' (about the party)' : ''}${r.heard !== null ? ' (the party has heard it)' : ''}`);
   }
   if (mem.deeds.length) lines.push('Deeds the party is known for:', ...mem.deeds.slice(-12).map((d) => `- Day ${d.day}: ${d.text}`));
   if (mem.chronicle) lines.push(`The story so far: ${mem.chronicle}`);

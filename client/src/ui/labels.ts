@@ -5,6 +5,8 @@ import type { QuestStatus } from '../../../shared/types';
 import { MUSIC_ERRORS } from '../../../shared/music';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
 import { SHOP_BLURBS, SHOP_NAMES } from '../../../shared/trade';
+import { TROPHIES } from '../../../shared/achievements';
+import { FACTIONS, TIER_TEXT } from '../../../shared/reputation';
 
 export const FILTER_LABELS: Record<InvFilter, string> = { all: 'All', weapon: 'Weapons', armor: 'Armor', consumable: 'Potions', quest: 'Quest', other: 'Other' };
 export const SORT_LABELS: Record<InvSort, string> = { manual: 'As packed', type: 'Type', rarity: 'Rarity', value: 'Value', weight: 'Weight', name: 'Name' };
@@ -16,12 +18,15 @@ export const ITEM_KIND_LABELS = {
 
 export const NAV_LABELS = { sheet: 'Character', inventory: 'Inventory', journal: 'Journal', map: 'Map' } as const;
 
-export const JOURNAL_TABS = { quests: 'Quests', people: 'People', places: 'Places', lore: 'Lore' } as const;
+export const JOURNAL_TABS = { quests: 'Quests', people: 'People', places: 'Places', standing: 'Standing', lore: 'Lore' } as const;
+/** How a faction rates the party, in the order from worst to best. */
+export const TIER_LABELS = { hated: 'hated', distrusted: 'distrusted', neutral: 'neutral', liked: 'liked', honoured: 'honoured' } as const;
 export const QUEST_HEADS: Record<QuestStatus, string> = { active: 'Open quests', completed: 'Completed', failed: 'Failed' };
 export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
   quests: 'No quests yet. The Vale is wide; go and find trouble.',
   people: 'You have met nobody yet.',
   places: 'No places on the map yet.',
+  standing: 'Nobody here knows you yet.',
   lore: 'Nothing written down yet.',
 };
 
@@ -95,5 +100,6 @@ export const ALL_LABELS: string[] = [
   ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
   ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
+  ...Object.values(TIER_LABELS), ...Object.values(TIER_TEXT), ...FACTIONS.map((f) => f.blurb), ...TROPHIES.flatMap((x) => [x.name, x.text]),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
 ];
