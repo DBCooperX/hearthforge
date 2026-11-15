@@ -164,9 +164,9 @@ function validId(id: unknown): id is string {
 // ---------------------------------------------------------------------------- fetching
 
 /** Fetch one audio file. Throws MusicError('download_failed') when it is not one. */
-export async function fetchAudio(url: string, fetchFn: typeof fetch = fetch): Promise<{ bytes: Uint8Array; type: string }> {
+export async function fetchAudio(url: string, fetchFn: typeof fetch = fetch, timeoutMs = 120_000): Promise<{ bytes: Uint8Array; type: string }> {
   try {
-    const res = await fetchFn(url, { signal: AbortSignal.timeout(120_000), headers: { 'user-agent': 'hearthforge-music-fetch' } });
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(timeoutMs), headers: { 'user-agent': 'hearthforge-music-fetch' } });
     if (!res.ok) throw new Error(`answered ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.length < 10_000 || bytes.length > MAX_TRACK_BYTES) throw new Error(`unexpected size (${bytes.length} bytes)`);
@@ -392,7 +392,14 @@ export async function musicAction(dir: string, env: NodeJS.ProcessEnv, m: MusicA
     }
     case 'freesound': {
       // The owner pressed "Get CC0 loops from Freesound".
-      await fetchFreesound(dir, env, undefined, fetchFn);
+      // Freesound's file server can take minutes, so answer at once and let the panel poll while `pending` is set.
+      if (!(env.FREESOUND_API_KEY ?? '').trim()) throw new MusicError('no_key');
+      if (fetching) return;
+      fetching = true;
+      void fetchFreesound(dir, env, undefined, fetchFn)
+        .then((n) => console.log(`[music] Fetched ${n} CC0 ambient loop${n === 1 ? '' : 's'} from Freesound.`))
+        .catch((err) => console.warn('[music] Freesound fetch failed:', (err as { detail?: string }).detail ?? (err instanceof Error ? err.message : err)))
+        .finally(() => { fetching = false; });
       return;
     }
     case 'add_link': {
@@ -450,7 +457,7 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
       try {
         const api = new URL('https://freesound.org/apiv2/search/text/');
         api.searchParams.set('query', query);
-        api.searchParams.set('filter', 'license:"Creative Commons 0" duration:[15 TO 180]');
+        api.searchParams.set('filter', 'license:"Creative Commons 0" duration:[15 TO 90]');
         api.searchParams.set('sort', 'downloads_desc');
         api.searchParams.set('fields', 'id,name,username,url,previews');
         api.searchParams.set('page_size', '15');
@@ -463,7 +470,9 @@ export async function fetchFreesound(dir: string, env: NodeJS.ProcessEnv, scenes
           const src = h.previews?.['preview-hq-mp3'];
           if (!src || state.freesound.includes(h.id) || !src.startsWith('https://')) continue;
           try {
-            const { bytes } = await fetchAudio(src, fetchFn);
+            // Freesound's file server can be slow (a 3 MB preview took 45 s), so give each file up to 5 minutes.
+            console.log(`[music] Freesound: downloading "${h.name}" for ${scene}`);
+            const { bytes } = await fetchAudio(src, fetchFn, 300_000);
             const title = text(h.name.replace(/\.[^.]+$/, ''), 120) || `Freesound ${h.id}`;
             const file = freeFile(dir, 'ambient', scene, title, '.mp3');
             writeAtomic(file, bytes);
