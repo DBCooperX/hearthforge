@@ -6,6 +6,9 @@ import { COMPASS, TERRAIN, formatHours, formatTime } from '../../shared/hex';
 import { classLabel, hasTranslation, tagged, tr } from '../../shared/i18n';
 import { DE } from '../../shared/i18n-de';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS } from '../../shared/types';
+import { BACKGROUNDS, CLASS_GUIDE, FEATS, GLOSSARY, KITS, SPECIES, STYLES } from '../../shared/rules';
+import { PREMADES } from '../../shared/premades';
+import * as RULES from '../../shared/rules';
 import { CLASSES } from '../src/data/classes';
 import { MONSTERS } from '../src/data/monsters';
 import { SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS } from '../src/data/world';
@@ -64,8 +67,12 @@ describe('translations', () => {
     for (const i of Object.values(ITEMS)) { add(i.name, i.description, i.kind, i.rarity); if (i.weapon) add(`${i.weapon.damageType} damage`); }
     for (const a of Object.values(ABILITIES)) { add(a.name, a.description); if (a.damageType) add(`${a.damageType} damage`); }
     for (const c of Object.values(CLASS_INFO)) add(c.name, c.blurb);
-    for (const c of Object.values(CLASSES)) { add(c.name); for (const g of Object.values(c.levels)) add(...(g.features ?? [])); }
-    add('Sneak Attack: 1d6');
+    for (const c of Object.values(CLASSES)) { add(c.name, c.subclass.name, ...c.features); for (const g of Object.values(c.levels)) add(...(g.features ?? [])); }
+    for (const o of [...Object.values(SPECIES), ...Object.values(BACKGROUNDS), ...Object.values(FEATS), ...Object.values(STYLES), ...Object.values(KITS), ...Object.values(CLASS_GUIDE)]) {
+      add(o.name, ...o.effects.map((e) => e.name));
+    }
+    for (const f of [...Object.values(FEATS), ...Object.values(STYLES)]) add(f.feature);
+    add('mage armor', 'Unarmed strike');
     add(...Object.values(SLOT_LABELS), ...Object.keys(SKILLS), ...Object.values(ABILITY_NAMES), ...Object.keys(ABILITY_NAMES).map((k) => k.toUpperCase()));
     for (const m of Object.values(MONSTERS)) { add(m.name, m.description); for (const a of m.attacks) add(a.name, `${a.damageType} damage`); }
     for (const t of Object.values(TERRAIN)) add(t.name);
@@ -74,6 +81,25 @@ describe('translations', () => {
     for (const n of SEED_NPCS) add(n.name, n.role, n.description);
     for (const q of SEED_QUESTS) add(q.title, q.summary);
     expect([...terms].filter((t) => !hasTranslation('de', t))).toEqual([]);
+  });
+});
+
+describe('character options', () => {
+  it('explains every option in both languages', () => {
+    const empty: string[] = [];
+    const walk = (x: unknown, path: string) => {
+      if (!x || typeof x !== 'object') return;
+      const o = x as Record<string, unknown>;
+      if (typeof o.en === 'string' && 'de' in o) { if (!o.en.trim() || typeof o.de !== 'string' || !o.de.trim()) empty.push(path); return; }
+      for (const [k, v] of Object.entries(o)) walk(v, `${path}.${k}`);
+    };
+    walk(RULES, 'rules');
+    walk(PREMADES, 'premades');
+    expect(empty).toEqual([]);
+  });
+
+  it('has glossary patterns that match their own names', () => {
+    for (const g of GLOSSARY) for (const lang of ['en', 'de'] as const) expect(() => new RegExp(g.match[lang], 'iu'), g.id).not.toThrow();
   });
 });
 

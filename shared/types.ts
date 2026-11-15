@@ -14,6 +14,26 @@ export const BAG_SIZE = 20;
 
 export type ItemKind = 'weapon' | 'armor' | 'shield' | 'consumable' | 'wondrous' | 'misc';
 
+export const ITEM_CATEGORIES = ['quest', 'clue', 'key', 'document', 'trinket', 'material', 'consumable', 'weapon', 'armor', 'tool'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
+export const RARITIES = ['common', 'uncommon', 'rare'] as const;
+
+/** What sets an item the Dungeon Master invented apart from a catalogue item. */
+export interface StoryItemInfo {
+  category: ItemCategory;
+  /** Quest items stay with the party until the story itself uses them up. */
+  quest: boolean;
+  /** Catalogue item whose rules it uses (a strange dagger still fights as a dagger), or null. */
+  baseId: string | null;
+  /** When and where the party came by it. */
+  foundDay: number;
+  foundAt: string | null;
+  /** What the party has learned about it since, oldest first. */
+  notes: { day: number; text: string }[];
+  /** Reserved for phase 3: id of a generated, cached picture of this item. */
+  imageId: string | null;
+}
+
 export interface ItemDef {
   id: string;
   name: string;
@@ -46,7 +66,67 @@ export interface ItemDef {
   consumable?: { heal: string };
   stackable?: boolean;
   rarity?: 'common' | 'uncommon' | 'rare';
+  /** Set on items the Dungeon Master created during play. Their name and description are in the table's language. */
+  story?: StoryItemInfo;
 }
+
+export type SpeciesId = 'human' | 'dwarf' | 'elf' | 'halfling' | 'gnome' | 'orc' | 'dragonborn' | 'tiefling' | 'goliath';
+export type BackgroundId = 'acolyte' | 'criminal' | 'sage' | 'soldier';
+export const GENDERS: Gender[] = ['female', 'male', 'neutral'];
+export type FeatId = 'asi' | 'alert' | 'savage_attacker' | 'skilled' | 'magic_initiate_cleric' | 'magic_initiate_wizard';
+
+/** A feat together with the sub-choices it asks for. */
+export interface FeatPick {
+  id: FeatId;
+  /** Ability Score Improvement: the same ability twice (+2) or two different ones (+1 each). */
+  abilities?: AbilityKey[];
+  /** Skilled: three skills. */
+  skills?: string[];
+  /** Magic Initiate: a cantrip and a 1st-level spell. */
+  spells?: string[];
+}
+
+/** Everything a player decides in the character creator. The server validates it and builds the hero. */
+export interface CharacterSpec {
+  name: string;
+  /** How the Dungeon Master refers to the hero. */
+  gender: Gender;
+  speciesId: SpeciesId;
+  classId: ClassId;
+  backgroundId: BackgroundId;
+  method: 'array' | 'pointbuy' | 'roll';
+  /** Ability scores before the background's increases. */
+  base: Abilities;
+  /** Background increases: the same ability twice and another once (+2/+1), or three different ones (+1 each). */
+  boosts: AbilityKey[];
+  /** Skills picked from the class list. */
+  skills: string[];
+  /** The extra skill some species grant. */
+  speciesSkill?: string;
+  /** Rogue: two skills with doubled proficiency. */
+  expertise?: string[];
+  /** Fighter: fighting style id. */
+  fightingStyle?: string;
+  /** Human: the extra origin feat. */
+  originFeat?: FeatPick;
+  /** Sub-choices of the background's feat. */
+  backgroundFeat?: Pick<FeatPick, 'skills' | 'spells'>;
+  /** Cantrips and spells picked from the class list. */
+  spells: string[];
+  /** Starting equipment package id. */
+  kit: string;
+  appearance: string;
+  backstory: string;
+  /** Set when the hero was taken from the premade roster. */
+  premadeId?: string;
+}
+
+/** A choice from a level-up that the player still has to make. */
+export type PendingChoice =
+  | { id: string; kind: 'feat'; level: number }
+  | { id: string; kind: 'spell'; level: number; pool: 'cantrip' | 'spell' };
+
+export type ChoicePick = { feat: FeatPick } | { spell: string };
 
 export interface ItemInstance {
   uid: string;
@@ -93,8 +173,22 @@ export interface Character {
   skills: string[];
   /** Experience points earned so far. */
   xp: number;
-  /** Passive class features gained from levels, as short readable lines. */
+  /** Passive features from species, class, feats and levels, as short readable lines. */
   features: string[];
+  speciesId: SpeciesId;
+  backgroundId: BackgroundId;
+  /** Set at level 3. */
+  subclass: string | null;
+  feats: string[];
+  /** Skills with doubled proficiency bonus. */
+  expertise: string[];
+  /** Damage types this hero takes half damage from. */
+  resist: string[];
+  appearance: string;
+  backstory: string;
+  /** Level-up choices the player has not made yet. */
+  pending: PendingChoice[];
+  premadeId: string | null;
 }
 
 export interface MonsterView {
@@ -121,7 +215,7 @@ export interface MonsterView {
   description: string;
 }
 
-export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash';
+export type AbilityKind = 'attack' | 'save' | 'auto' | 'heal' | 'self_heal' | 'dodge' | 'surge' | 'dash' | 'ward';
 
 export interface AbilityDef {
   id: string;
@@ -140,6 +234,14 @@ export interface AbilityDef {
   bonusAction?: boolean;
   /** Usable once per rest. */
   oncePerRest?: boolean;
+  /** Spell level: 0 for a cantrip. Absent for things that are not spells. */
+  spellLevel?: number;
+  /** A successful save still takes half damage. */
+  half?: boolean;
+  /** Also catches every enemy next to the target. */
+  area?: boolean;
+  /** Ability that sets the save DC when it is not a spell (a dragonborn's breath). */
+  dcAbility?: AbilityKey;
   target: 'enemy' | 'ally' | 'self';
 }
 
@@ -159,6 +261,8 @@ export interface CombatState {
   bonusUsed: boolean;
   /** Further weapon attacks still allowed by the Attack action taken this turn (Extra Attack). */
   attacksLeft: number;
+  /** Savage Attacker has been used this turn. */
+  savageUsed?: boolean;
 }
 
 export type LogKind = 'dm' | 'system' | 'roll' | 'chat' | 'levelup';
@@ -316,6 +420,8 @@ export interface GameState {
   /** The current fight includes a boss. Drives the music. */
   bossFight: boolean;
   gold: number;
+  /** Items the Dungeon Master created for this table, by id. Catalogue items are in shared/content.ts. */
+  items: Record<string, ItemDef>;
   shortRestsLeft: number;
   log: LogEntry[];
   players: PlayerInfo[];
@@ -329,6 +435,8 @@ export interface GameState {
   language: Lang;
   /** The player who may change the session language (whoever opened the table). */
   hostId: string | null;
+  /** Ability scores each player rolled in the character creator, by player id. */
+  rolled: Record<string, number[]>;
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };
@@ -336,6 +444,10 @@ export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: numb
 export type ClientMessage =
   | { t: 'join'; room: string; playerId: string; name: string }
   | { t: 'add_character'; classId: ClassId; name: string }
+  | { t: 'create_character'; spec: CharacterSpec }
+  | { t: 'add_premade'; premadeId: string; name: string }
+  | { t: 'roll_abilities' }
+  | { t: 'choose'; characterId: string; choiceId: string; pick: ChoicePick }
   | { t: 'remove_character'; characterId: string }
   | { t: 'start' }
   | { t: 'move'; characterId: string; x: number; y: number }

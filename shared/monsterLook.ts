@@ -70,6 +70,12 @@ export const LOOK_TOKENS: readonly string[] = [
   ...MUTATIONS.map((m) => `mutation:${m}`),
 ];
 
+/** The same values grouped for a tool description. */
+export const LOOK_HELP = [
+  `body:${BODIES.join('|')}`, `size:${SIZES.join('|')}`, `color:${COLORS.join('|')}`, 'heads:2|3', 'arms:4', 'horns', 'tail', `wings:${WINGS.join('|')}`,
+  'eyes:<a colour> (glowing)', `armor:${ARMORS.join('|')}`, `weapon:${WEAPONS.join('|')}|none`, `aura:${AURAS.join('|')}`, `mutation:${MUTATIONS.join('|')}`,
+].join('; ');
+
 const has = <T extends string>(list: readonly T[], v: string): v is T => (list as readonly string[]).includes(v);
 
 /** Applies requested extras to a look. Unknown tokens are ignored and reported. */
