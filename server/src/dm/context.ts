@@ -7,6 +7,7 @@ import type { Character } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS } from '../data/monsters';
+import { buyPrice } from '../../../shared/trade';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
 import { trueTerrain, type SettingState } from '../game/world';
@@ -25,6 +26,7 @@ Running the game
 - Every monster fights with the statistics of a catalogue entry; you cannot invent stronger ones. When the story calls for a creature that is not in the catalogue, such as a three-headed ogre or a hell hound, build it on the closest entry in start_combat: give it a name, a one-sentence description and look changes, and it appears on the battle map looking the part. Describe monsters the way their token looks.
 - Crossing the map is the players' job: they pick a hex and the server moves them, tracks time and rolls for encounters. Use move_to_place only for known places in the party's current hex, such as walking into a tavern in town.
 - Rewards are yours to give, in moderation. Use award_xp for clever or brave achievements outside combat (25 to 100 is typical), change_gold for purchases, sales, payments and found coin (item values are in the catalogue), and give_item for items from the catalogue. Combat experience and loot are handled by the server.
+- Merchants are real. Every town has a general store, a smithy and an apothecary and every village a trader; they are listed under "Shops here" with their stock, prices and gold. When the party wants to buy, sell or browse, or meets a travelling peddler, call open_shop: the players get a trade window and do the trading themselves, and the server moves gold and goods, so never use change_gold, give_item or take_item for what goes through the window. Give a shop its keeper by passing a merchant name, and play that merchant in the scene. Prices you quote must come from the list. Haggling is a Persuasion check the players start in the window. Keep change_gold for everything that is not shop trade: bribes, fees, rewards, a round of drinks.
 - Anything else a hero picks up, is handed or buys (a clue, a letter, a key, a trophy, a curio) becomes real through give_story_item. Never tell a player that something is "only part of the story": if a hero has it, it belongs in their backpack. If your journal or the story so far says the party carries an object that is not listed under the story items they carry, add it with give_story_item the next time it comes up. Use update_story_item when they learn more about one, and take_item when something is used up, sold, given away or lost.
 
 Writing scenes
@@ -167,6 +169,15 @@ export function describeWorld(game: Game): string {
     for (const h of held) {
       const st = h.def.story!;
       lines.push(`- ${h.def.name}${h.qty > 1 ? ` ×${h.qty}` : ''} [${h.def.id}], ${st.category}${st.quest ? ', quest item' : ''}, carried by ${h.holder.name}. ${h.def.description}${st.notes.length ? ` Notes: ${st.notes.map((n) => n.text).join(' / ')}` : ''}`);
+    }
+  }
+  const shops = game.shopsHere();
+  if (shops.length) {
+    lines.push('Shops here (open_shop shows the players the trade window; prices already include today\'s haggling):');
+    for (const sh of shops) {
+      const v = game.shopView(sh);
+      const wares = v.stock.slice(0, 16).map((e) => { const d = game.def(e.defId); return `${d.name}${e.qty > 1 ? ` ×${e.qty}` : ''} ${buyPrice(d, sh)} gp`; }).join(', ');
+      lines.push(`- ${sh.name} [${sh.id}], ${sh.kind}, ${v.merchant ? `kept by ${v.merchant}` : 'keeper not named yet'}, ${v.purse} gp to buy with. For sale: ${wares || 'nothing left'}${v.stock.length > 16 ? ', and more' : ''}.`);
     }
   }
   const present = game.presentNpcs();

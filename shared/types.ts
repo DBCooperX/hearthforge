@@ -5,6 +5,7 @@ import type { CreatureType, MonsterLook } from './monsterLook';
 
 import type { Lang } from './i18n';
 import type { StartOptions } from './start';
+import type { ShopView } from './trade';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -477,6 +478,10 @@ export interface GameState {
   gold: number;
   /** Items the Dungeon Master created for this table, by id. Catalogue items are in shared/content.ts. */
   items: Record<string, ItemDef>;
+  /** Merchants the party can trade with where it stands right now. */
+  shops: ShopView[];
+  /** Set when the Dungeon Master shows the players a merchant's wares; a new `seq` opens the trade window. */
+  tradeOffer: { shopId: string; seq: number } | null;
   shortRestsLeft: number;
   log: LogEntry[];
   players: PlayerInfo[];
@@ -527,6 +532,9 @@ export type ClientMessage =
   | { t: 'end_turn'; characterId: string }
   | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc }
   | { t: 'give'; characterId: string; from: InvLoc; toCharacterId: string }
+  | { t: 'buy'; characterId: string; shopId: string; defId: string; qty: number }
+  | { t: 'sell'; characterId: string; shopId: string; from: InvLoc; qty: number }
+  | { t: 'haggle'; characterId: string; shopId: string }
   | { t: 'short_rest' }
   | { t: 'long_rest' }
   | { t: 'travel'; q: number; r: number }

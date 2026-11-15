@@ -18,6 +18,12 @@ const items: ItemDef[] = [
   { id: 'rapier', weight: 2, name: 'Rapier', kind: 'weapon', icon: '🤺', value: 25, description: 'Martial melee weapon, finesse. 1d8 piercing.', weapon: { damage: '1d8', damageType: 'piercing', category: 'martial', finesse: true } },
   { id: 'greatsword', weight: 6, name: 'Greatsword', kind: 'weapon', icon: '⚔️', value: 50, description: 'Martial melee weapon, two-handed. 2d6 slashing.', weapon: { damage: '2d6', damageType: 'slashing', category: 'martial', twoHanded: true } },
   { id: 'longbow', weight: 2, name: 'Longbow', kind: 'weapon', icon: '🏹', value: 50, description: 'Martial ranged weapon, two-handed. 1d8 piercing, range 150/600 ft.', weapon: { damage: '1d8', damageType: 'piercing', category: 'martial', ranged: { normal: 150, long: 600 }, twoHanded: true } },
+  { id: 'battleaxe', weight: 4, name: 'Battleaxe', kind: 'weapon', icon: '🪓', value: 10, description: 'Martial melee weapon. 1d8 slashing.', weapon: { damage: '1d8', damageType: 'slashing', category: 'martial' } },
+  { id: 'warhammer', weight: 2, name: 'Warhammer', kind: 'weapon', icon: '🔨', value: 15, description: 'Martial melee weapon. 1d8 bludgeoning.', weapon: { damage: '1d8', damageType: 'bludgeoning', category: 'martial' } },
+  { id: 'greataxe', weight: 7, name: 'Greataxe', kind: 'weapon', icon: '🪓', value: 30, description: 'Martial melee weapon, two-handed. 1d12 slashing.', weapon: { damage: '1d12', damageType: 'slashing', category: 'martial', twoHanded: true } },
+  { id: 'scimitar', weight: 3, name: 'Scimitar', kind: 'weapon', icon: '🗡️', value: 25, description: 'Martial melee weapon, finesse. 1d6 slashing.', weapon: { damage: '1d6', damageType: 'slashing', category: 'martial', finesse: true } },
+  { id: 'light_crossbow', weight: 5, name: 'Light Crossbow', kind: 'weapon', icon: '🏹', value: 25, description: 'Simple ranged weapon, two-handed. 1d8 piercing, range 80/320 ft.', weapon: { damage: '1d8', damageType: 'piercing', category: 'simple', ranged: { normal: 80, long: 320 }, twoHanded: true } },
+  { id: 'dagger_plus1', weight: 1, name: 'Dagger +1', kind: 'weapon', icon: '🔪', value: 400, rarity: 'uncommon', description: 'A slim blade with a faint blue sheen. +1 to attack and damage rolls. Finesse, 1d4 piercing.', weapon: { damage: '1d4', damageType: 'piercing', category: 'simple', finesse: true, bonus: 1 } },
   // Armor
   { id: 'leather', weight: 10, name: 'Leather Armor', kind: 'armor', icon: '🧥', value: 10, description: 'Light armor. AC 11 + DEX.', armor: { category: 'light', baseAc: 11, dexCap: null } },
   { id: 'studded_leather', weight: 13, name: 'Studded Leather', kind: 'armor', icon: '🧥', value: 45, description: 'Light armor. AC 12 + DEX.', armor: { category: 'light', baseAc: 12, dexCap: null } },
@@ -25,9 +31,17 @@ const items: ItemDef[] = [
   { id: 'scale_mail', weight: 45, name: 'Scale Mail', kind: 'armor', icon: '🥋', value: 50, description: 'Medium armor. AC 14 + DEX (max 2).', armor: { category: 'medium', baseAc: 14, dexCap: 2 } },
   { id: 'chain_mail', weight: 55, name: 'Chain Mail', kind: 'armor', icon: '🛡', value: 75, description: 'Heavy armor. AC 16.', armor: { category: 'heavy', baseAc: 16, dexCap: 0 } },
   { id: 'shield', weight: 6, name: 'Shield', kind: 'shield', icon: '🛡️', value: 10, description: '+2 AC while held in the off hand.', acBonus: 2 },
+  { id: 'hide_armor', weight: 12, name: 'Hide Armor', kind: 'armor', icon: '🧥', value: 10, description: 'Medium armor. AC 12 + DEX (max 2).', armor: { category: 'medium', baseAc: 12, dexCap: 2 } },
+  { id: 'breastplate', weight: 20, name: 'Breastplate', kind: 'armor', icon: '🥋', value: 400, description: 'Medium armor. AC 14 + DEX (max 2).', armor: { category: 'medium', baseAc: 14, dexCap: 2 } },
+  { id: 'half_plate', weight: 40, name: 'Half Plate', kind: 'armor', icon: '🥋', value: 750, description: 'Medium armor. AC 15 + DEX (max 2).', armor: { category: 'medium', baseAc: 15, dexCap: 2 } },
+  { id: 'splint', weight: 60, name: 'Splint Armor', kind: 'armor', icon: '🛡', value: 200, description: 'Heavy armor. AC 17.', armor: { category: 'heavy', baseAc: 17, dexCap: 0 } },
+  { id: 'plate', weight: 65, name: 'Plate Armor', kind: 'armor', icon: '🛡', value: 1500, description: 'Heavy armor. AC 18.', armor: { category: 'heavy', baseAc: 18, dexCap: 0 } },
+  { id: 'studded_leather_plus1', weight: 13, name: 'Studded Leather +1', kind: 'armor', icon: '🧥', value: 700, rarity: 'uncommon', description: 'Supple leather set with silvered studs that turn blades aside. Light armor. AC 13 + DEX.', armor: { category: 'light', baseAc: 13, dexCap: null } },
+  { id: 'shield_plus1', weight: 6, name: 'Shield +1', kind: 'shield', icon: '🛡️', value: 600, rarity: 'uncommon', description: 'A shield whose rim glints with warding runes. +3 AC while held in the off hand.', acBonus: 3 },
   // Consumables
   { id: 'potion_healing', weight: 0.5, name: 'Potion of Healing', kind: 'consumable', icon: '🧪', value: 50, description: 'Restores 2d4+2 hit points. Using it in combat takes your action.', consumable: { heal: '2d4+2' }, stackable: true },
   { id: 'potion_greater_healing', weight: 0.5, name: 'Potion of Greater Healing', kind: 'consumable', icon: '⚗️', value: 150, rarity: 'uncommon', description: 'Restores 4d4+4 hit points. Using it in combat takes your action.', consumable: { heal: '4d4+4' }, stackable: true },
+  { id: 'potion_superior_healing', weight: 0.5, name: 'Potion of Superior Healing', kind: 'consumable', icon: '⚗️', value: 500, rarity: 'rare', description: 'Restores 8d4+8 hit points. Using it in combat takes your action.', consumable: { heal: '8d4+8' }, stackable: true },
   // Wondrous items
   { id: 'cloak_protection', weight: 1, name: 'Cloak of Protection', kind: 'wondrous', slot: 'cloak', icon: '🧣', value: 800, rarity: 'uncommon', description: '+1 AC while worn.', acBonus: 1 },
   { id: 'ring_protection', weight: 0, name: 'Ring of Protection', kind: 'wondrous', slot: 'ring', icon: '💍', value: 1500, rarity: 'rare', description: '+1 AC while worn.', acBonus: 1 },
@@ -36,6 +50,20 @@ const items: ItemDef[] = [
   { id: 'spellbook', weight: 3, name: 'Spellbook', kind: 'misc', icon: '📖', value: 50, description: 'A leather-bound tome of arcane formulae.' },
   { id: 'thieves_tools', weight: 1, name: "Thieves' Tools", kind: 'misc', icon: '🗝️', value: 25, description: 'Picks, files and a small mirror on a handle.' },
   { id: 'torch', weight: 1, name: 'Torch', kind: 'misc', icon: '🔥', value: 0, description: 'Burns for an hour.', stackable: true },
+  // Adventuring gear. It has no rules of its own: the Dungeon Master sees it in the backpack and lets it matter in the story.
+  { id: 'rope_hemp', weight: 10, name: 'Hempen Rope', kind: 'misc', icon: '🪢', value: 1, description: 'Fifty feet of stout rope.' },
+  { id: 'rations', weight: 2, name: 'Rations', kind: 'misc', icon: '🍖', value: 1, description: 'Dried meat, hard cheese and biscuit for two days on the road.', stackable: true },
+  { id: 'bedroll', weight: 7, name: 'Bedroll', kind: 'misc', icon: '🛏️', value: 1, description: 'A wool blanket and a waxed groundsheet, rolled tight.' },
+  { id: 'tent', weight: 20, name: 'Tent', kind: 'misc', icon: '⛺', value: 2, description: 'A canvas shelter for two.' },
+  { id: 'lantern_hooded', weight: 2, name: 'Hooded Lantern', kind: 'misc', icon: '🏮', value: 5, description: 'Sheds bright light for thirty feet. The hood dims it to a glimmer.' },
+  { id: 'shovel', weight: 5, name: 'Shovel', kind: 'misc', icon: '⛏️', value: 2, description: 'An iron-shod spade.' },
+  { id: 'grappling_hook', weight: 4, name: 'Grappling Hook', kind: 'misc', icon: '🪝', value: 2, description: 'Three iron tines on a ring for a rope.' },
+  { id: 'manacles', weight: 6, name: 'Manacles', kind: 'misc', icon: '⛓️', value: 2, description: 'Iron cuffs with a lock. They hold a creature of human size.' },
+  { id: 'mirror_steel', weight: 0.5, name: 'Steel Mirror', kind: 'misc', icon: '🪞', value: 5, description: 'A polished hand mirror, good for looking round corners.' },
+  { id: 'healers_kit', weight: 3, name: "Healer's Kit", kind: 'misc', icon: '🩹', value: 5, description: 'Bandages, salves and splints in a leather pouch.' },
+  { id: 'antitoxin', weight: 0.5, name: 'Antitoxin', kind: 'misc', icon: '🧫', value: 50, description: 'A bitter vial that steadies the body against poison for an hour.', stackable: true },
+  { id: 'holy_water', weight: 1, name: 'Holy Water', kind: 'misc', icon: '💧', value: 25, description: 'A flask of blessed water. The undead and fiends shrink from it.', stackable: true },
+  { id: 'lute', weight: 2, name: 'Lute', kind: 'misc', icon: '🎵', value: 35, description: 'A well-kept lute with a good, warm voice.' },
 ];
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(items.map((i) => [i.id, i]));

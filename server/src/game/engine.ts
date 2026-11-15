@@ -58,6 +58,9 @@ import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
 import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
+import { RESTOCK_DAYS, MAX_SHOPS, SHELVES, rollStock, shopKindOf } from '../data/shops';
+import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type Mood as HaggleMood, type ShopKind, type ShopStock, type ShopView } from '../../../shared/trade';
+import { seedStream } from '../../../shared/start';
 import { CLASSIC_START, CUSTOM_MAX, REGIONS, isPremise, newSeed, normalizeSeed, type RegionChoice, type StartOptions } from '../../../shared/start';
 
 export class GameError extends Error {}
@@ -95,6 +98,33 @@ export interface EncounterState {
   boss: boolean;
 }
 
+/** A merchant's shop as the server keeps it. */
+export interface ShopState {
+  id: string;
+  name: string;
+  kind: ShopKind;
+  /** The place it stands in. Null for a peddler met on the road. */
+  locationId: string | null;
+  /** Where a peddler without a place was met. */
+  at: Hex | null;
+  /** The merchant, once the story has named one. */
+  npcId: string | null;
+  /** Price level: 1 is the listed value. */
+  markup: number;
+  /** `keep` marks wares the Dungeon Master put there, which survive a restock until sold. */
+  stock: (ShopStock & { keep?: boolean })[];
+  /** Gold the merchant has left to buy with. */
+  gold: number;
+  /** The restock cycle the shelves were last filled in; -1 before the first. */
+  cycle: number;
+  mood: HaggleMood;
+  /** The day the mood was set. It lasts until the day is over. */
+  moodDay: number;
+  /** The day the party last haggled here. */
+  haggledDay: number;
+  origin: 'seed' | 'dm';
+}
+
 export interface InternalState {
   room: string;
   phase: Phase;
@@ -109,6 +139,10 @@ export interface InternalState {
   gold: number;
   /** Items the DM created during play, by id. */
   items: Record<string, ItemDef>;
+  /** Every merchant this table has met, by id. Missing in saves from before trading. */
+  shops: Record<string, ShopState>;
+  /** The shop the Dungeon Master last showed the players, and a counter that opens their trade window. */
+  tradeOffer: { shopId: string; seq: number } | null;
   shortRestsLeft: number;
   log: LogEntry[];
   logSeq: number;
@@ -205,6 +239,8 @@ export class Game {
     this.s.chat ??= [];
     this.s.chatSeq ??= 0;
     this.s.items ??= {}; // saves from before story items
+    this.s.shops ??= {}; // saves from before trading
+    this.s.tradeOffer ??= null;
     // Heroes saved before the character creator existed get the fields it added.
     for (const c of this.s.characters) {
       c.speciesId ??= 'human';
@@ -233,6 +269,8 @@ export class Game {
       encounter: null,
       gold: 0,
       items: {},
+      shops: {},
+      tradeOffer: null,
       shortRestsLeft: 2,
       log: [],
       logSeq: 0,
@@ -783,6 +821,8 @@ export class Game {
     const charted = isExplored(w, to) || w.locations.some((l) => l.discovered && sameHex(l, to));
     if (!charted) throw new GameError(this.t`That is uncharted. Travel to the edge of what you know first.`);
     if (!this.knownRoute(to)) throw new GameError(isExplored(w, to) && !TERRAIN[trueTerrain(w, to)].passable ? this.t`You cannot cross open water` : this.t`You know no way there`);
+    // A peddler met on the road does not follow the party.
+    for (const sh of Object.values(this.s.shops)) if (!sh.locationId) delete this.s.shops[sh.id];
     this.s.travel = { to, hexes: 0, minutes: 0, terrain: [] };
   }
 
@@ -1844,6 +1884,211 @@ export class Game {
     this.beats.push({ kind: 'rest', long: true });
   }
 
+  // ---------------------------------------------------------------- trading
+  // Merchants keep real stock and real gold. Players buy and sell through the trade window;
+  // the server prices everything, moves the gold and the goods, and writes it to the log.
+
+  /** The settlement a place belongs to: a tavern's town, or the place itself. */
+  private rootOf(loc: LocationState): LocationState {
+    return (loc.parentId && this.location(loc.parentId)) || loc;
+  }
+
+  /** Thin shelves and light purses outside the towns. */
+  private shopScale(shop: ShopState): number {
+    const loc = shop.locationId ? this.location(shop.locationId) : undefined;
+    return loc && this.rootOf(loc).kind === 'village' ? 0.6 : 1;
+  }
+
+  /** Every town has a general store, a smith and an apothecary; a village has one trader. */
+  private seedShops(root: LocationState) {
+    const kinds: ShopKind[] = root.kind === 'town' ? ['general', 'smith', 'alchemist'] : root.kind === 'village' ? ['general'] : [];
+    for (const kind of kinds) {
+      const id = `shop_${root.id}_${kind}`;
+      if (this.s.shops[id] || Object.keys(this.s.shops).length >= MAX_SHOPS) continue;
+      this.s.shops[id] = {
+        id, name: this.n(SHOP_NAMES[kind]), kind, locationId: root.id, at: null, npcId: null, markup: root.kind === 'village' ? 1.1 : 1,
+        stock: [], gold: 0, cycle: -1, mood: 0, moodDay: 0, haggledDay: 0, origin: 'seed',
+      };
+    }
+  }
+
+  /** Refill the shelves when a restock is due, and let yesterday's haggling wear off. */
+  private refreshShop(shop: ShopState) {
+    const day = this.day();
+    const cycle = Math.floor((day - 1) / RESTOCK_DAYS);
+    if (shop.cycle !== cycle) {
+      const scale = this.shopScale(shop);
+      const fresh = rollStock(shop.kind, seedStream(String(this.s.world?.seed ?? 0), `${shop.id}|${cycle}`), scale);
+      const kept = shop.stock.filter((e) => e.keep && e.qty > 0);
+      shop.stock = [...kept, ...fresh.filter((f) => !kept.some((k) => k.defId === f.defId))];
+      shop.gold = Math.round(SHELVES[shop.kind].purse * scale);
+      shop.cycle = cycle;
+    }
+    if (shop.moodDay !== day) shop.mood = 0;
+  }
+
+  /** The merchants the party can trade with where it stands. None in a fight or on the road. */
+  shopsHere(): ShopState[] {
+    const s = this.s, w = s.world;
+    if (!w || s.phase !== 'explore' || s.travel) return [];
+    const place = this.place();
+    const root = place ? this.rootOf(place) : null;
+    if (root) this.seedShops(root);
+    const here = Object.values(s.shops).filter((sh) => {
+      if (!sh.locationId) return !place && !!sh.at && sameHex(sh.at, w.party);
+      const loc = this.location(sh.locationId);
+      return !!root && !!loc && this.rootOf(loc).id === root.id;
+    });
+    for (const sh of here) this.refreshShop(sh);
+    return here;
+  }
+
+  private shopNpc(shop: ShopState): NpcState | undefined {
+    return shop.npcId ? this.s.memory.npcs.find((n) => n.id === shop.npcId) : undefined;
+  }
+
+  shopView(shop: ShopState): ShopView {
+    const npc = this.shopNpc(shop);
+    const day = this.day();
+    return {
+      id: shop.id, name: shop.name, kind: shop.kind, merchant: npc?.name ?? null, disposition: npc?.disposition ?? 'neutral',
+      stock: shop.stock.filter((e) => e.qty > 0 && this.def(e.defId)).map(({ defId, qty }) => ({ defId, qty })),
+      purse: shop.gold, markup: shop.markup, mood: shop.mood, haggled: shop.haggledDay === day,
+      restockIn: (shop.cycle + 1) * RESTOCK_DAYS + 1 - day,
+    };
+  }
+
+  /** The shop a player wants to trade with, if it is here and its keeper is willing. */
+  private tradingShop(shopId: string): ShopState {
+    const shop = this.shopsHere().find((sh) => sh.id === shopId);
+    if (!shop) throw new GameError(this.t`That merchant is not here`);
+    if (this.shopNpc(shop)?.disposition === 'hostile') throw new GameError(this.t`${this.shopNpc(shop)!.name} will not trade with you`);
+    return shop;
+  }
+
+  private countOf(def: ItemDef, qty: number) { return `${qty > 1 ? `${qty}× ` : ''}${this.n(def.name)}`; }
+
+  /** A hero buys from a merchant with the party's gold. */
+  buy(playerId: string, characterId: string, shopId: string, defId: string, qtyRaw: number) {
+    const c = this.actor(playerId, characterId, false);
+    const shop = this.tradingShop(shopId);
+    const entry = shop.stock.find((e) => e.defId === defId && e.qty > 0);
+    const def = entry && this.def(entry.defId);
+    if (!entry || !def) throw new GameError(this.t`That is sold out`);
+    const qty = Math.max(1, Math.min(entry.qty, def.stackable ? 20 : 1, Math.round(qtyRaw) || 1));
+    const price = buyPrice(def, shop) * qty;
+    if (this.s.gold < price) throw new GameError(this.t`The party only has ${this.s.gold} gp`);
+    if (!this.hasRoomFor(c, def)) throw new GameError(this.t`${c.name}'s bag is full`);
+    this.addToBag(c, def.id, qty);
+    this.s.gold -= price;
+    shop.gold += price;
+    entry.qty -= qty;
+    if (entry.qty <= 0) shop.stock.splice(shop.stock.indexOf(entry), 1);
+    this.log('system', this.t`${c.name} buys ${this.countOf(def, qty)} at ${shop.name} for ${price} gp.`);
+    return { item: def.name, quantity: qty, price, gold: this.s.gold };
+  }
+
+  /** A hero sells something to a merchant. The gold goes to the party. */
+  sell(playerId: string, characterId: string, shopId: string, from: InvLoc, qtyRaw: number) {
+    const c = this.actor(playerId, characterId, false);
+    const shop = this.tradingShop(shopId);
+    if (!this.validLoc(from)) throw new GameError(this.t`Bad inventory slot`);
+    const item = this.getLoc(c, from);
+    if (!item) throw new GameError(this.t`Nothing there`);
+    const def = this.def(item.defId);
+    if (def.story?.quest) throw new GameError(this.t`${this.n(def.name)} is a quest item and stays with the party`);
+    const each = sellPrice(def, shop);
+    if (each <= 0) throw new GameError(this.t`Nobody here will pay for ${this.n(def.name)}`);
+    if (shop.gold < each) throw new GameError(this.t`The merchant cannot afford that right now`);
+    const qty = Math.max(1, Math.min(item.qty, Math.floor(shop.gold / each), Math.round(qtyRaw) || 1));
+    const total = each * qty;
+    item.qty -= qty;
+    if (item.qty <= 0) this.setLoc(c, from, null);
+    c.ac = this.computeAc(c);
+    this.s.gold += total;
+    shop.gold -= total;
+    const shelf = shop.stock.find((e) => e.defId === def.id);
+    if (shelf) shelf.qty += qty; else shop.stock.push({ defId: def.id, qty });
+    this.log('system', this.t`${c.name} sells ${this.countOf(def, qty)} at ${shop.name} for ${total} gp.`);
+    return { item: def.name, quantity: qty, price: total, gold: this.s.gold };
+  }
+
+  /** One Persuasion check a day at each shop. A good one lowers the prices, a bad one raises them. */
+  haggle(playerId: string, characterId: string, shopId: string) {
+    const c = this.actor(playerId, characterId, false);
+    const shop = this.tradingShop(shopId);
+    const day = this.day();
+    if (shop.haggledDay === day) throw new GameError(this.t`You have already haggled here today`);
+    const dc = HAGGLE_DC[this.shopNpc(shop)?.disposition ?? 'neutral'];
+    const check = this.skillCheck(c.id, 'cha', 'persuasion', dc);
+    const result = haggleMood(check.total, dc);
+    shop.haggledDay = day;
+    if (result !== 0) { shop.mood = result; shop.moodDay = day; }
+    this.log('system', result === 2 ? this.t`${c.name} drives a hard bargain at ${shop.name}: much better prices for the rest of the day.`
+      : result === 1 ? this.t`${c.name} talks the prices down at ${shop.name} for the rest of the day.`
+      : result === -1 ? this.t`${c.name} oversteps at ${shop.name}, and the prices go up for the rest of the day.`
+      : this.t`${c.name} haggles at ${shop.name}, but the prices stay as they are.`);
+    return { ...check, mood: shop.mood };
+  }
+
+  /**
+   * The Dungeon Master shows the players a merchant's wares. An existing shop here is reused
+   * (by id, name, merchant or kind); otherwise a new one is set up where the party stands.
+   */
+  openShop(input: { merchant?: string; shop?: string; kind?: string; prices?: string; stock?: string; discount?: number }) {
+    this.needExplore();
+    const s = this.s;
+    const here = this.shopsHere();
+    const ref = (input.shop ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    const merchant = (input.merchant ?? '').trim().slice(0, 60);
+    const kind = shopKindOf(input.kind ?? '');
+    const known = merchant ? s.memory.npcs.find((n) => n.name.toLowerCase() === merchant.toLowerCase() || n.id === merchant) : undefined;
+    const key = ref.toLowerCase();
+    let shop = (key ? here.find((sh) => sh.id.toLowerCase() === key || sh.name.toLowerCase() === key) : undefined)
+      ?? (known ? here.find((sh) => sh.npcId === known.id) : undefined)
+      // A town's nameless smithy becomes this smith's forge instead of gaining a rival next door.
+      ?? (kind ? here.find((sh) => sh.kind === kind && sh.origin === 'seed' && !sh.npcId) : undefined)
+      ?? (!key && !merchant && !kind && here.length === 1 ? here[0] : undefined);
+    const created = !shop;
+    const place = this.place();
+    if (!shop) {
+      if (Object.keys(s.shops).length >= MAX_SHOPS) throw new GameError('This table already has as many shops as it can hold. Reopen an existing one.');
+      const k: ShopKind = kind ?? (place ? 'general' : 'peddler');
+      const name = ref || this.n(SHOP_NAMES[k]);
+      const village = !!place && this.rootOf(place).kind === 'village';
+      shop = {
+        id: this.uniqueId('shop', ref || merchant || k, (id) => !!s.shops[id]), name, kind: k, locationId: place?.id ?? null, at: place ? null : { ...this.world.party },
+        npcId: null, markup: place ? (village ? 1.1 : 1) : 1.15, stock: [], gold: 0, cycle: -1, mood: 0, moodDay: 0, haggledDay: 0, origin: 'dm',
+      };
+      s.shops[shop.id] = shop;
+      this.refreshShop(shop);
+    } else if (ref && key !== shop.id.toLowerCase()) {
+      shop.name = ref;
+    }
+    if (merchant) shop.npcId = this.rememberNpc({ name: merchant, locationId: place?.id ?? '' }).id;
+    const prices = (input.prices ?? '').trim().toLowerCase();
+    if (prices === 'cheap') shop.markup = 0.9;
+    else if (prices === 'steep') shop.markup = 1.25;
+    else if (prices === 'fair') shop.markup = 1;
+    const unknown: string[] = [];
+    for (const want of (input.stock ?? '').split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 8)) {
+      const def = this.findItemDef(want);
+      if (!def || def.story?.quest) { unknown.push(want); continue; }
+      const shelf = shop.stock.find((e) => e.defId === def.id);
+      if (shelf) { shelf.keep = true; shelf.qty = Math.max(1, shelf.qty); } else shop.stock.push({ defId: def.id, qty: 1, keep: true });
+    }
+    const discount = Number(input.discount);
+    if (Number.isFinite(discount) && Math.round(discount / 10) !== 0) { shop.mood = clampMood(discount / 10); shop.moodDay = this.day(); }
+    s.tradeOffer = { shopId: shop.id, seq: (s.tradeOffer?.seq ?? 0) + 1 };
+    const view = this.shopView(shop);
+    return {
+      shop_id: shop.id, name: shop.name, kind: shop.kind, created, merchant: view.merchant, party_gold: s.gold, merchant_gold: shop.gold,
+      for_sale: view.stock.map((e) => `${this.def(e.defId).name}${e.qty > 1 ? ` ×${e.qty}` : ''}: ${buyPrice(this.def(e.defId), shop)} gp`),
+      ...(unknown.length ? { unknown_items: unknown } : {}),
+      note: 'The trade window is now open on the players\' screens. They buy, sell and haggle there themselves and the server moves the gold and the goods, so do not call change_gold, give_item or take_item for what is traded in the window. Have the merchant show the wares in a sentence or two; quote only prices from this list.',
+    };
+  }
+
   // ------------------------------------------------ Dungeon Master's tools
   // Everything below is called by the DM. The DM proposes; these methods
   // validate, clamp and apply, so the server stays the owner of the state.
@@ -2181,6 +2426,7 @@ export class Game {
   publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean }): GameState {
     const s = this.s;
     const w = s.world;
+    const shops = this.shopsHere();
     return {
       room: s.room,
       phase: s.phase,
@@ -2196,6 +2442,8 @@ export class Game {
       bossFight: s.phase === 'combat' && !!s.encounter?.boss,
       gold: s.gold,
       items: s.items,
+      shops: shops.map((sh) => this.shopView(sh)),
+      tradeOffer: s.tradeOffer && shops.some((sh) => sh.id === s.tradeOffer!.shopId) ? s.tradeOffer : null,
       shortRestsLeft: s.shortRestsLeft,
       log: s.log.slice(-150),
       players: s.players,

@@ -53,6 +53,8 @@ You run Hearthforge as one Docker container on your own server. You and your fri
 
 **Inventory and sheet.** Paper-doll slots, a backpack, shared party gold, drag and drop, and items the Dungeon Master invents in play (a letter, a strange key) with their own notes. A full character sheet on `c`.
 
+**Merchants.** Every town has a general store, a smithy and an apothecary, every village a trader, and the Dungeon Master can open more (a curio shop, a peddler on the road). Shops keep real stock that changes every three days and a purse of their own. Buy and sell in the trade window (`t`), and haggle with a Persuasion check once a day.
+
 **Solo or multiplayer.** A lobby lists the tables. Each table has a host, a ready check, invite links, an optional invite code and an out-of-character chat. See [Playing together](#playing-together).
 
 **English and German.** Every player picks their own interface language. The table picks the story language, and the narration, the game log and the starting region follow it. German uses the terms of the official German edition.
@@ -224,6 +226,7 @@ With an API key, one short call to the background model rewords a rolled region 
 | Key | Action |
 | --- | --- |
 | `i` / `c` / `m` / `j` | Inventory / character sheet / full map / journal |
+| `t` | Trade, where there is a merchant |
 | `1`–`4` | In a window: switch hero or journal chapter |
 | `WASD`, arrows | Move the active hero in a fight |
 | `1`–`9` | Action bar buttons |
