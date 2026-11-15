@@ -1,7 +1,45 @@
-// Monster statistics from the D&D 5e System Reference Document 5.1 (CC-BY-4.0).
+// Monster statistics from the System Reference Document 5.2.1 and, for seven creatures that
+// are not in it, the System Reference Document 5.1 (both CC BY 4.0). The 5.2.1 stat blocks
+// are imported by scripts/srd/import-monsters.mjs into srd/monsters.json; this file adds what
+// Hearthforge keeps by hand (looks, loot, a line of description) and the spells monsters cast.
 
 import { baseLook, type CreatureType, type MonsterLook, type Size } from '../../../shared/monsterLook';
 import type { LightKindId } from '../../../shared/light';
+import type { AbilityKey } from '../../../shared/types';
+import srd from './srd/monsters.json';
+import { MONSTER_SPELLS } from './monsterSpells';
+
+export interface Dmg {
+  dice: string;
+  type: string;
+  /** Only when the attack roll had advantage. */
+  ifAdv?: boolean;
+}
+
+/** How a condition a monster inflicts ends. */
+export type RiderEnd = 'save_end' | 'target_end' | 'target_start' | 'source_start' | 'source_end' | 'escape' | 'minute' | 'none';
+
+/** What a hit or a failed save does besides damage. */
+export interface Rider {
+  condition?: string;
+  /** A second condition that lasts as long as the first (Restrained while Grappled). */
+  also?: string;
+  /** The condition that replaces the first when the repeated save fails (Restrained, then Petrified). */
+  escalate?: string;
+  /** Only creatures of this size or smaller are affected. */
+  maxSize?: Size;
+  escapeDc?: number;
+  /** Feet the target is pushed away. */
+  push?: number;
+  /** The rider needs the monster to have moved at least this many feet towards the target first. */
+  ifMoved?: number;
+  /** Extra damage that comes with the rider (a charge). */
+  extra?: Dmg;
+  /** A saving throw that avoids the rider of an attack. */
+  save?: { ability: AbilityKey; dc: number };
+  ends?: RiderEnd;
+  noHealing?: boolean;
+}
 
 export interface MonsterAttack {
   name: string;
@@ -12,6 +50,88 @@ export interface MonsterAttack {
   range: number;
   longRange?: number;
   ranged?: boolean;
+  /** Damage of other types that a hit also deals. */
+  extra?: Dmg[];
+  rider?: Rider;
+  /** Advantage against a target it grapples, a wounded target, or in the first round. */
+  advIf?: 'grappled' | 'wounded' | 'first_round';
+  /** The SRD wording, when the attack does more than damage. For the Dungeon Master. */
+  text?: string;
+  /** A spell: how many attack rolls one casting makes, and how often a day it can be cast. */
+  spell?: boolean;
+  count?: number;
+  perDay?: number;
+  /** Hits without a roll (Magic Missile). */
+  auto?: boolean;
+}
+
+export interface MonsterArea {
+  shape: 'cone' | 'line' | 'sphere' | 'emanation';
+  /** Length, radius or reach in feet. */
+  size: number;
+  width?: number;
+  /** How far away a sphere may be centred. */
+  range?: number;
+}
+
+/** An action resolved by saving throws: a breath weapon, a gaze, a stench, a spell. */
+export interface MonsterSpecial {
+  name: string;
+  /** When it is used: as the action, a bonus action, a legendary action, on a hero who starts a turn near it, or when it dies. */
+  slot: 'action' | 'bonus' | 'legendary' | 'aura' | 'death';
+  save: AbilityKey;
+  dc: number;
+  area?: MonsterArea;
+  /** Range in feet of an action against one creature. */
+  range?: number;
+  damage: Dmg[];
+  /** Half damage on a successful save. */
+  half?: boolean;
+  rider?: Rider;
+  /** Comes back on a d6 roll of this or higher at the start of its turn. */
+  recharge?: number;
+  perDay?: number;
+  /** Not twice before its next turn (legendary actions). */
+  cooldown?: boolean;
+  /** Only against a creature it grapples, or one that is prone. */
+  needs?: 'grappled' | 'prone';
+  text: string;
+  spell?: boolean;
+}
+
+export type MultiStep = [name: string, count: number];
+export interface Multiattack {
+  fixed: MultiStep[];
+  /** One of these is added to the fixed steps. */
+  options?: MultiStep[][];
+}
+
+export interface LegendaryOption {
+  name: string;
+  text: string;
+  move?: 'half' | 'full';
+  /** The attack or special it uses. */
+  use?: string;
+  spell?: string;
+  cooldown?: boolean;
+}
+
+export interface MonsterFlags {
+  packTactics?: boolean;
+  nimbleEscape?: boolean;
+  flyby?: boolean;
+  /** Advantage on saving throws against spells. */
+  magicResistance?: boolean;
+  /** Times a day it turns a failed save into a success. */
+  legendaryResistance?: number;
+  regeneration?: { amount: number; stop?: string[] };
+  undeadFortitude?: boolean;
+  /** Advantage on attack rolls while at half its hit points or fewer. */
+  bloodiedFury?: boolean;
+  /** Reaction: this much armour class against one melee hit a round. */
+  parry?: number;
+  /** Damage to everyone within this many feet at the end of its turn. */
+  aura?: { size: number; dice: string; type: string };
 }
 
 export interface MonsterDef {
@@ -29,15 +149,30 @@ export interface MonsterDef {
   ac: number;
   hp: number;
   speed: number;
+  fly?: number;
+  swim?: number;
+  climb?: number;
+  burrow?: number;
   dexMod: number;
-  saves: Partial<Record<'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', number>>;
+  saves: Partial<Record<AbilityKey, number>>;
   attacks: MonsterAttack[];
+  specials?: MonsterSpecial[];
+  multi?: Multiattack;
+  legendary?: { uses: number; options: LegendaryOption[] };
+  /** Traits and actions the engine does not resolve, in the SRD's words, for the Dungeon Master to narrate. */
+  traits?: { name: string; slot?: string; text: string }[];
+  flags?: MonsterFlags;
+  swarm?: boolean;
   vulnerable?: string[];
+  resist?: string[];
   immune?: string[];
+  conditionImmune?: string[];
   packTactics?: boolean;
   /** Senses in feet (SRD). Missing: none. */
   darkvision?: number;
   blindsight?: number;
+  truesight?: number;
+  tremorsense?: number;
   /** A light it brings to a fight in the dark, because it cannot see without one. */
   carriesLight?: LightKindId;
   /** Nimble Escape: it can Disengage as a bonus action and still attack. */
@@ -48,9 +183,15 @@ export interface MonsterDef {
   /** Coins it carries, as a dice expression. */
   gold?: string;
   description: string;
+  /** Reserved for the icon pass: an icon id for lists and cards. */
+  icon?: string;
+  /** Which SRD the statistics follow. */
+  source: '5.1' | '5.2.1';
 }
 
-export const MONSTERS: Record<string, MonsterDef> = {
+type Legacy = Omit<MonsterDef, 'source'>;
+
+const LEGACY: Record<string, Legacy> = {
   goblin: {
     id: 'goblin',
     xp: 50,
@@ -577,3 +718,77 @@ export const MONSTERS: Record<string, MonsterDef> = {
     description: "A selfish brute as tall as a house. Deadly for a low-level party.",
   },
 };
+
+// ------------------------------------------------------------ SRD 5.2.1
+
+interface SrdMonster {
+  id: string; name: string; type: string; size: string; swarm?: boolean; cr: string; xp: number; ac: number; hp: number; speed: number;
+  fly?: number; swim?: number; climb?: number; burrow?: number; abilities: number[]; saves?: Record<string, number>; pb: number;
+  resist?: string[]; immune?: string[]; vulnerable?: string[]; conditionImmune?: string[];
+  darkvision?: number; blindsight?: number; truesight?: number; tremorsense?: number; languages?: string;
+  attacks?: MonsterAttack[]; specials?: MonsterSpecial[]; multi?: Multiattack; spells?: { id: string; name: string; perDay?: number }[]; spellDc?: number; spellHit?: number;
+  legendary?: { uses: number; options: LegendaryOption[] }; flags?: MonsterFlags; traits?: { name: string; slot?: string; text: string }[]; look: MonsterLook; gold?: string;
+}
+
+const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const mod = (score: number) => Math.floor((score - 10) / 2);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The line players read when they point at a creature that has no hand-written one: "Huge dragon". */
+export const plainDescription = (size: string, type: string) => `${cap(size)} ${type}`;
+
+function fromSrd(m: SrdMonster, legacy?: Legacy): MonsterDef {
+  const saves = Object.fromEntries(ABILITY_KEYS.map((k, i) => [k, m.saves?.[k] ?? mod(m.abilities[i])])) as Record<AbilityKey, number>;
+  const attacks = [...(m.attacks ?? [])];
+  const specials = [...(m.specials ?? [])];
+  // Spells the engine can resolve become attacks and specials of their own; the rest stay text.
+  for (const s of m.spells ?? []) {
+    const shape = MONSTER_SPELLS[s.id];
+    if (!shape) continue;
+    if (shape.attack) attacks.push({ ...shape.attack, name: s.name, toHit: m.spellHit ?? m.pb + 3, spell: true, ...(s.perDay ? { perDay: s.perDay } : {}) });
+    else if (shape.save) specials.push({ ...shape.save, name: s.name, slot: 'action', dc: m.spellDc ?? 8 + m.pb + 3, spell: true, text: '', ...(s.perDay ? { perDay: s.perDay } : {}) });
+  }
+  const other = (m.spells ?? []).filter((s) => !MONSTER_SPELLS[s.id]).map((s) => s.name);
+  const traits = [...(m.traits ?? [])];
+  if (other.length) traits.push({ name: 'Other spells', slot: 'action', text: `Not resolved by the server; narrate them when they fit: ${other.join(', ')}.` });
+  if (m.languages) traits.push({ name: 'Languages', text: m.languages });
+  const sees = !!(m.darkvision || m.blindsight || m.truesight || m.tremorsense);
+  const handy = ['humanoid', 'giant'].includes(m.look.body);
+  return {
+    id: m.id, name: m.name, sprite: legacy?.sprite ?? m.id, type: m.type as CreatureType, size: m.size as Size, cr: m.cr, xp: m.xp,
+    look: legacy?.look ?? m.look, ac: m.ac, hp: m.hp, speed: m.speed,
+    ...(m.fly ? { fly: m.fly } : {}), ...(m.swim ? { swim: m.swim } : {}), ...(m.climb ? { climb: m.climb } : {}), ...(m.burrow ? { burrow: m.burrow } : {}),
+    dexMod: mod(m.abilities[1]), saves, attacks, specials,
+    ...(m.multi ? { multi: m.multi } : {}), ...(m.legendary ? { legendary: m.legendary } : {}),
+    traits, flags: m.flags ?? {}, ...(m.swarm ? { swarm: true } : {}),
+    ...(m.vulnerable ? { vulnerable: m.vulnerable } : {}), ...(m.resist ? { resist: m.resist } : {}), ...(m.immune ? { immune: m.immune } : {}), ...(m.conditionImmune ? { conditionImmune: m.conditionImmune } : {}),
+    ...(m.flags?.packTactics ? { packTactics: true } : {}), ...(m.flags?.nimbleEscape ? { nimbleEscape: true } : {}),
+    ...(m.darkvision ? { darkvision: m.darkvision } : {}), ...(m.blindsight ? { blindsight: m.blindsight } : {}), ...(m.truesight ? { truesight: m.truesight } : {}), ...(m.tremorsense ? { tremorsense: m.tremorsense } : {}),
+    ...(legacy?.carriesLight ? { carriesLight: legacy.carriesLight } : !sees && handy ? { carriesLight: 'torch' as LightKindId } : {}),
+    ...(legacy?.boss ? { boss: true } : {}),
+    ...(legacy?.gold ?? m.gold ? { gold: legacy?.gold ?? m.gold } : {}),
+    description: legacy?.description ?? plainDescription(m.size, m.type),
+    icon: m.type,
+    source: '5.2.1',
+  };
+}
+
+/**
+ * Every creature the game knows, by id. The 5.2.1 stat block wins where a hand-written entry
+ * has the same id; the hand-written look, loot and description stay.
+ */
+export const MONSTERS: Record<string, MonsterDef> = (() => {
+  const out: Record<string, MonsterDef> = {};
+  for (const [id, l] of Object.entries(LEGACY)) out[id] = { ...l, icon: l.type, source: '5.1' };
+  for (const m of srd as unknown as SrdMonster[]) out[m.id] = fromSrd(m, LEGACY[m.id]);
+  return out;
+})();
+
+/** Challenge rating as a number: "1/4" is 0.25. */
+export function crValue(cr: string): number {
+  const [a, b] = cr.split('/').map(Number);
+  return b ? a / b : a;
+}
+
+/** Every damaging or disabling thing a creature can do on its turn, by name. */
+export const actionNames = (d: MonsterDef): string[] => [...new Set([...d.attacks.map((a) => a.name), ...(d.specials ?? []).filter((s) => s.slot === 'action' || s.slot === 'bonus').map((s) => s.name)])];

@@ -1,5 +1,6 @@
 // Types shared between the server (authoritative game state) and the browser client.
 import type { HeroLook } from './heroLook';
+import type { HeroEffect } from './conditions';
 import type { Biome } from './battlemap';
 import type { CreatureType, MonsterLook } from './monsterLook';
 
@@ -170,6 +171,8 @@ export interface Character {
   /** Speed in feet. One tile is 5 feet. */
   speed: number;
   conditions: string[];
+  /** Conditions put on the hero by monsters, with how each one ends. Missing in old saves: none. */
+  effects?: HeroEffect[];
   equipment: Record<SlotId, ItemInstance | null>;
   bag: (ItemInstance | null)[];
   x: number;
@@ -237,6 +240,12 @@ export interface MonsterView {
   senses: Senses;
   /** Squares its melee attacks reach; 0 for a creature without one. Leaving them provokes an opportunity attack. */
   reach: number;
+  /** SRD challenge rating, such as "1/4" or "17". */
+  cr: string;
+  /** Names of what it can do beyond plain attacks, in the table's language: breath weapons, auras, regeneration. */
+  abilities: string[];
+  /** Legendary actions it has left this round, and how many it gets. Missing for ordinary creatures. */
+  legendary?: { left: number; uses: number };
   /** The light it carries, or null. */
   light: LightKindId | null;
 }
@@ -574,6 +583,7 @@ export type ClientMessage =
   | { t: 'use_item'; characterId: string; uid: string; targetId?: string }
   | { t: 'end_turn'; characterId: string }
   | { t: 'disengage'; characterId: string }
+  | { t: 'escape'; characterId: string }
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }

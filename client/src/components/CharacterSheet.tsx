@@ -5,7 +5,7 @@ import { castingAbility, weaponAttack } from '../../../shared/build';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
-import { classLabel } from '../game/util';
+import { classLabel, conditionHelp } from '../game/util';
 import { ABILITY_HELP, BACKGROUNDS, CLASSES, GLOSSARY, SKILL_HELP, SPECIES, loc } from '../../../shared/rules';
 import { useLang, useT } from '../i18n';
 import { Rich, dice, featureText, signed } from './Guide';
@@ -81,7 +81,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               </Hint>
             ))}
           </div>
-          {c.conditions.length > 0 && <div className="conditions">{c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{t(x)}</span>)}</div>}
+          {c.conditions.length > 0 && <div className="conditions">{c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}</div>}
         </aside>
 
         <section className="cs-core">

@@ -1,6 +1,7 @@
 // Translations. English is the source language: the English text is the lookup key,
 // so untranslated strings fall back to English instead of breaking.
 import { DE } from './i18n-de';
+import { DE_SRD } from './i18n-de-srd';
 
 export type Lang = 'en' | 'de';
 export const LANGS: { id: Lang; label: string }[] = [
@@ -9,7 +10,7 @@ export const LANGS: { id: Lang; label: string }[] = [
 ];
 export const isLang = (x: unknown): x is Lang => x === 'en' || x === 'de';
 
-const DICTS: Record<Lang, Record<string, string> | null> = { en: null, de: DE };
+const DICTS: Record<Lang, Record<string, string> | null> = { en: null, de: { ...DE_SRD, ...DE } };
 
 /** Translate `text`, filling `{name}` placeholders from `vars`. */
 export function tr(lang: Lang, text: string, vars?: Record<string, string | number>): string {

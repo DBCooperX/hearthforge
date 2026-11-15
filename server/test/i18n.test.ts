@@ -12,6 +12,8 @@ import { PREMADES } from '../../shared/premades';
 import * as RULES from '../../shared/rules';
 import { CLASSES } from '../src/data/classes';
 import { MONSTERS } from '../src/data/monsters';
+import { CONDITION_HELP, HERO_CONDITIONS } from '../../shared/conditions';
+import { DE_SRD } from '../../shared/i18n-de-srd';
 import { SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS } from '../src/data/world';
 import { DM_SYSTEM_PROMPT, describeCombat, describeWorld, genderRoster } from '../src/dm/context';
 import { scriptedScene } from '../src/dm/scripted';
@@ -50,7 +52,7 @@ describe('translations', () => {
 
   it('keeps every placeholder in the German text', () => {
     const placeholders = (s: string) => [...s.matchAll(/\{\w+\}/g)].map((m) => m[0]).sort().join();
-    for (const [en, de] of Object.entries(DE)) expect(placeholders(de), en).toBe(placeholders(en));
+    for (const [en, de] of [...Object.entries(DE), ...Object.entries(DE_SRD)]) expect(placeholders(de), en).toBe(placeholders(en));
   });
 
   it('has German for every string the interface asks for', () => {
@@ -84,7 +86,13 @@ describe('translations', () => {
     for (const f of [...Object.values(FEATS), ...Object.values(STYLES)]) add(f.feature);
     add('mage armor', 'Unarmed strike', ...Object.values(LOOK_NAMES));
     add(...Object.values(SLOT_LABELS), ...Object.keys(SKILLS), ...Object.values(ABILITY_NAMES), ...Object.keys(ABILITY_NAMES).map((k) => k.toUpperCase()));
-    for (const m of Object.values(MONSTERS)) { add(m.name, m.description); for (const a of m.attacks) add(a.name, `${a.damageType} damage`); }
+    for (const m of Object.values(MONSTERS)) {
+      add(m.name, m.description);
+      for (const a of m.attacks) { add(a.name, `${a.damageType} damage`); for (const x of a.extra ?? []) add(`${x.type} damage`); }
+      for (const sp of m.specials ?? []) { add(sp.name); for (const d of sp.damage) add(`${d.type} damage`); }
+      for (const o of m.legendary?.options ?? []) add(o.name);
+    }
+    add(...HERO_CONDITIONS, ...Object.values(CONDITION_HELP), 'Multiattack', 'Spellcasting', 'Regeneration', 'Pack Tactics', 'Magic Resistance', 'Legendary Resistance', 'Undead Fortitude', 'Parry', 'Flyby', 'Fire Aura', 'Legendary actions');
     for (const t of Object.values(TERRAIN)) add(t.name);
     add(...COMPASS, ...DISPOSITIONS, ...LOCATION_KINDS, ...MOODS, 'active', 'completed', 'failed', 'advantage', 'disadvantage');
     for (const l of SEED_LOCATIONS) { add(l.name, l.description); for (const s of l.stages ?? []) add(s.name, s.description); }

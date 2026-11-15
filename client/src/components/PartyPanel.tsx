@@ -3,7 +3,7 @@ import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc }
 import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { playerId } from '../net';
 import { useT } from '../i18n';
-import { classLabel } from '../game/util';
+import { classLabel, conditionHelp } from '../game/util';
 
 interface Props {
   state: GameState;
@@ -67,7 +67,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
               </div>
               {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}>⬆ {t('Level up')}</button>}
               <div className="conditions">
-                {c.conditions.map((x) => <span key={x} className={`chip ${x}`}>{t(x)}</span>)}
+                {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}
                 {down && !c.conditions.includes('stable') && (
                   <span className="saves" title={t('Death saves')}>
                     {'●'.repeat(c.deathSaves.successes)}{'○'.repeat(3 - c.deathSaves.successes)} <i>{'✖'.repeat(c.deathSaves.failures)}</i>

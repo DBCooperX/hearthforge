@@ -4,7 +4,9 @@
 
 This work includes material from the System Reference Document 5.1 ("SRD 5.1") and the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at <https://dnd.wizards.com/resources/systems-reference-document> and <https://www.dndbeyond.com/srd>. Both are licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
 
-Which parts come from which: classes, spells, equipment and monster statistics (`shared/content.ts`, `server/src/data/`), the subclasses and the Dueling style follow the SRD 5.1. Species, backgrounds, origin feats and the other fighting styles (`shared/rules.ts`) follow the SRD 5.2.1. All descriptions, hints and German texts are written for Hearthforge in its own words, and nothing is taken from the Player's Handbook or any other book outside the SRD. The Spell Points mana bar and the Hearth's Blessing are house rules.
+Which parts come from which: classes, spells, equipment, the subclasses and the Dueling style (`shared/content.ts`, `server/src/data/`) follow the SRD 5.1. The 341 monster stat blocks (`server/src/data/srd/monsters.json`) follow the SRD 5.2.1; seven older ones without a 5.2.1 counterpart (goblin, orc, kobold, hobgoblin, gnoll, bugbear, wyrmling) keep their SRD 5.1 numbers. Species, backgrounds, origin feats and the other fighting styles (`shared/rules.ts`) follow the SRD 5.2.1. All descriptions, hints and German texts are written for Hearthforge in its own words, and nothing is taken from the Player's Handbook or any other book outside the SRD. The Spell Points mana bar and the Hearth's Blessing are house rules.
+
+The monster data is converted by `scripts/srd/import-monsters.mjs` from the JSON edition of the SRD 5.2.1 in [5e-bits/5e-database](https://github.com/5e-bits/5e-database) (MIT License, see `server/src/data/srd/LICENSE-5e-database.md`).
 
 Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.
 
