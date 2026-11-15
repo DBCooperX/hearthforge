@@ -180,7 +180,8 @@ describe('the table', () => {
     expect(g.place()?.id).toBe('home');
     const state = g.publicState({ busy: false, mode: 'scripted', model: null });
     expect(state.world?.name).toBe(s.name);
-    expect(describeWorld(g)).toContain(`Setting: ${s.name}. ${s.premise}`);
+    expect(describeWorld(g)).toContain(`Setting: ${s.name}. Background for you only`);
+    expect(describeWorld(g)).toContain(s.premise);
     expect(describeBeats([{ kind: 'start' }], g)).toContain('festival');
     expect(DM_SYSTEM_PROMPT).not.toContain('Emberfall');
     const scene = scriptedScene(g, [{ kind: 'start' }]);
@@ -208,7 +209,7 @@ describe('the table', () => {
     delete saved.table.start;
     const loaded = new Game('test', () => 0.42, saved);
     expect(loaded.s.table.start.region).toBe('classic');
-    expect(describeWorld(loaded)).toContain('Setting: the Emberfall Vale. The Emberfall Vale is a frontier valley');
+    expect(describeWorld(loaded)).toContain('The Emberfall Vale is a frontier valley');
     expect(loaded.publicState({ busy: false, mode: 'scripted', model: null }).world?.name).toBe('the Emberfall Vale');
   });
 
