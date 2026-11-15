@@ -10,6 +10,7 @@ import { useLang, useT } from '../i18n';
 import { dice } from './Guide';
 import { Hint } from '../ui/Hint';
 import { Kbd } from '../ui/Window';
+import { AbilityGlyph } from '../ui/Glyph';
 
 /** Powers that stay on once used, and the chip that shows them. */
 const ACTIVE: Record<string, string> = {
@@ -126,7 +127,7 @@ export function ActionBar({ state, actor, targeting, setTargeting, conn, hint }:
             else toggle({ kind: 'ability', abilityId: id, ...(lv ? { level: lv } : {}) });
           }}
         >
-          <span className="icon">{ab.icon}</span>{t(ab.name)}
+          <span className="icon"><AbilityGlyph def={ab} /></span>{t(ab.name)}
           {mana > 0 && <span className="cost">{mana}</span>}
           {left !== null && !(mana > 0) && <span className="cost uses">{left}</span>}
         </button>

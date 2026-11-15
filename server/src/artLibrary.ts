@@ -9,6 +9,7 @@ import {
   CATALOG, EMOJI_ICONS, GAME_ICONS, GAME_ICON_PATHS, ICON_SLOTS, isIconSlot,
   type ArtLibrary, type ArtManifest, type ArtRef, type PackIcon, type PackInfo, type TilePack,
 } from '../../shared/art';
+import { GLYPH_PATHS } from '../../shared/glyphs';
 import { artManifest, artMode, download, ensureArt, walk } from './art';
 
 /** A refusal the interface can explain. `code` is one of the keys of ART_ERRORS in the client. */
@@ -107,6 +108,10 @@ export class ArtStore {
     if (!/^(off|false|0|no)$/i.test((this.env.HEARTHFORGE_AUTO_ASSETS ?? 'on').trim()) && this.state.icons === undefined && !this.gameIconsInstalled()) {
       await this.install(GAME_ICONS).catch((err) => console.warn(`[art] Could not fetch game-icons.net: ${err instanceof Error ? err.message : err}`));
     }
+    // Pictures added in later versions (skills, feats, spells...) are fetched into a set that is already in use.
+    if (!/^(off|false|0|no)$/i.test((this.env.HEARTHFORGE_AUTO_ASSETS ?? 'on').trim()) && this.state.icons === GAME_ICONS && this.gameIconsInstalled() && this.gameIconsMissing()) {
+      void this.install(GAME_ICONS).catch((err) => console.warn(`[art] Could not top up game-icons.net: ${err instanceof Error ? err.message : err}`));
+    }
     if (!existsSync(this.dir)) return;
     for (const f of readdirSync(this.dir).filter((n) => /\.zip$/i.test(n))) {
       if (/kenney|tiny|0x72|dungeontileset/i.test(f)) continue; // ensureArt looks after these
@@ -123,6 +128,9 @@ export class ArtStore {
   }
 
   private gameIconFiles() { return walk(join(this.dir, GAME_ICONS)).filter((f) => f.endsWith('.svg')); }
+  /** Every file of game-icons.net the game can show. */
+  private gameIconPaths() { return [...new Set([...Object.values(GAME_ICON_PATHS), ...Object.values(GLYPH_PATHS)])]; }
+  private gameIconsMissing() { return this.gameIconPaths().some((p) => !existsSync(join(this.dir, GAME_ICONS, `${p}.svg`))); }
   private gameIconsInstalled() { return this.gameIconFiles().length >= 20; }
 
   private imagesOf(id: string): Image[] {
@@ -166,7 +174,8 @@ export class ArtStore {
   private iconsOf(id: string): Record<string, ArtRef> {
     if (id === GAME_ICONS) {
       const have = new Set(this.gameIconFiles().map((f) => relative(join(this.dir, GAME_ICONS), f).split(sep).join('/').replace(/\.svg$/, '')));
-      return Object.fromEntries(Object.entries(GAME_ICON_PATHS).filter(([, p]) => have.has(p)).map(([slot, p]) => [slot, { src: `/art/${GAME_ICONS}/${p}.svg` }]));
+      // Item slots, then the pictures of skills, feats, spells and class features (keys like "spell:fire_bolt").
+      return Object.fromEntries([...Object.entries(GAME_ICON_PATHS), ...Object.entries(GLYPH_PATHS)].filter(([, p]) => have.has(p)).map(([slot, p]) => [slot, { src: `/art/${GAME_ICONS}/${p}.svg` }]));
     }
     const pack = this.state.packs[id];
     if (!pack) return {};
@@ -193,7 +202,7 @@ export class ArtStore {
     packs.push({ id: EMOJI_ICONS, kind: 'icons', name: 'Emoji', author: '', license: '', url: '', source: 'builtin', installed: true, active: icons === EMOJI_ICONS });
     packs.push({
       id: GAME_ICONS, kind: 'icons', name: 'Game-icons.net', author: 'Lorc, Delapouite and contributors', license: 'CC BY 3.0', url: 'https://game-icons.net',
-      source: 'download', installed: this.gameIconsInstalled(), active: icons === GAME_ICONS, matched: Object.keys(this.iconsOf(GAME_ICONS)).length,
+      source: 'download', installed: this.gameIconsInstalled(), active: icons === GAME_ICONS, matched: Object.keys(this.iconsOf(GAME_ICONS)).filter(isIconSlot).length,
     });
     for (const [id, p] of Object.entries(this.state.packs)) {
       packs.push({
@@ -279,7 +288,7 @@ export class ArtStore {
         this.state.tiles = 'kenney';
       } else if (id === GAME_ICONS) {
         const base = (this.env.HEARTHFORGE_GAME_ICONS_URL || GAME_ICONS_BASE).replace(/\/+$/, '');
-        const paths = [...new Set(Object.values(GAME_ICON_PATHS))];
+        const paths = this.gameIconPaths();
         let ok = 0;
         const next = async (): Promise<void> => {
           for (let p = paths.pop(); p; p = paths.pop()) {

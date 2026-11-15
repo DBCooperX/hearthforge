@@ -22,6 +22,7 @@ import { Hint, Info } from '../ui/Hint';
 import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
 import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
+import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 const STEPS: StepId[] = ['class', 'species', 'background', 'abilities', 'skills', 'talents', 'equipment', 'identity'];
 /** The short creator asks only for these; the rest is chosen to suit the class. */
@@ -170,7 +171,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
 
   const hoverPatch = (patch: Draft | null) => setHover(patch ? { ...d, ...patch } : null);
   const optionRow = (o: Option, patch: Draft, selected: boolean, recommended: boolean, kicker: string, sub?: string) => (
-    <PickRow key={o.id} icon={o.icon} title={t(o.name)} sub={sub ?? loc(o.summary, lang)} selected={selected} recommended={recommended}
+    <PickRow key={o.id} icon={<OptionGlyph option={o} />} title={t(o.name)} sub={sub ?? loc(o.summary, lang)} selected={selected} recommended={recommended}
       focused={focus?.kind === 'option' && focus.option === o}
       onClick={() => { update(patch); setFocus({ kind: 'option', option: o, kicker }); setHover(null); }}
       onFocus={() => { setFocus({ kind: 'option', option: o, kicker }); hoverPatch(selected ? null : patch); }}
@@ -308,7 +309,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     const granted = [...fromBg, ...picks, ...(d.speciesSkill ? [d.speciesSkill] : [])];
     const recSkills = rec?.skills ?? [];
     const skillRow = (s: string, o: { selected: boolean; patch?: Draft; locked?: string; recommended?: boolean; mark?: 'check' | 'radio'; key?: string }) => (
-      <PickRow key={o.key ?? s} compact mark={o.mark ?? 'check'} title={t(s)} sub={t(ABILITY_NAMES[SKILLS[s]])} selected={o.selected} locked={o.locked} recommended={o.recommended}
+      <PickRow key={o.key ?? s} compact mark={o.mark ?? 'check'} icon={<SkillGlyph skill={s} />} title={t(s)} sub={t(ABILITY_NAMES[SKILLS[s]])} selected={o.selected} locked={o.locked} recommended={o.recommended}
         focused={focus?.kind === 'skill' && focus.id === s}
         onClick={() => o.patch && update(o.patch)}
         onFocus={() => { setFocus({ kind: 'skill', id: s }); hoverPatch(o.selected || !o.patch ? null : o.patch); }}
@@ -349,7 +350,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
             const on = mine.includes(s);
             const patch = { spells: [...picks.filter((x) => !pool.includes(x)), ...(on ? mine.filter((x) => x !== s) : mine.length >= want ? [...mine.slice(1), s] : [...mine, s])] };
             return (
-              <PickRow key={s} mark="check" icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected={on} recommended={rec?.spells.includes(s)}
+              <PickRow key={s} mark="check" icon={<AbilityGlyph def={ABILITIES[s]} />} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected={on} recommended={rec?.spells.includes(s)}
                 focused={focus?.kind === 'spell' && focus.id === s}
                 onClick={() => update(patch)} onFocus={() => { setFocus({ kind: 'spell', id: s }); hoverPatch(on ? null : patch); }} onLeave={() => setHover(null)} />
             );
@@ -382,7 +383,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
         {known.length > 0 && (
           <Section title={t('You already know')}>
             {known.map((s) => (
-              <PickRow key={s} icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected locked={sp?.grants?.includes(s) ? t(sp.name) : t(cls.name)}
+              <PickRow key={s} icon={<AbilityGlyph def={ABILITIES[s]} />} title={t(ABILITIES[s].name)} sub={t(ABILITIES[s].description)} selected locked={sp?.grants?.includes(s) ? t(sp.name) : t(cls.name)}
                 focused={focus?.kind === 'spell' && focus.id === s} onFocus={() => setFocus({ kind: 'spell', id: s })} />
             ))}
           </Section>
@@ -391,7 +392,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
         {list && spellSection(t('1st-level spells'), spellOptions(start, list, 'spell', 1), cls.spellPicks)}
         {bgFeat && beforeBg && (
           <Section title={t('From your background: {name}', { name: t(bgFeat.name) })}>
-            <PickRow icon={bgFeat.icon} title={t(bgFeat.name)} sub={loc(bgFeat.summary, lang)} selected locked={t(bg!.name)}
+            <PickRow icon={<OptionGlyph option={bgFeat} />} title={t(bgFeat.name)} sub={loc(bgFeat.summary, lang)} selected locked={t(bg!.name)}
               focused={focus?.kind === 'option' && focus.option === bgFeat} onFocus={() => setFocus({ kind: 'option', option: bgFeat, kicker: t('Feat') })} />
             <FeatPicker build={beforeBg} fixed={bgFeat.id} value={{ id: bgFeat.id, ...d.backgroundFeat }} focus={focus}
               onChange={(p) => update({ backgroundFeat: { skills: p.skills, spells: p.spells } })}
@@ -523,7 +524,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     const bonus = sheet ? abilityMod(sheet.abilities[SKILLS[s]]) + (prof ? sheet.profBonus * (sheet.expertise.includes(s) ? 2 : 1) : 0) : 0;
     detail = (
       <article className="detail">
-        <header><div><small className="kicker">{t('Skill')} · {t(ABILITY_NAMES[SKILLS[s]])}</small><h2 className="cap">{t(s)}</h2><p className="summary">{loc(SKILL_HELP[s], lang)}</p></div></header>
+        <header><span className="detail-icon"><SkillGlyph skill={s} /></span><div><small className="kicker">{t('Skill')} · {t(ABILITY_NAMES[SKILLS[s]])}</small><h2 className="cap">{t(s)}</h2><p className="summary">{loc(SKILL_HELP[s], lang)}</p></div></header>
         <h4>{t('How a check works')}</h4>
         <p><Rich text={t('The Dungeon Master sets a DC, usually between 10 (easy) and 20 (very hard). You roll a d20 and add your {ability} modifier, plus your proficiency bonus if you are proficient in the skill.', { ability: t(ABILITY_NAMES[SKILLS[s]]) })} /></p>
         {sheet && <><h4>{t('Your bonus')}</h4><p className="goodfor"><b>{signed(bonus)}</b> {prof ? (sheet.expertise.includes(s) ? t('(proficient, with Expertise)') : t('(proficient)')) : t('(not proficient)')}</p></>}
