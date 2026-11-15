@@ -3,6 +3,7 @@
 // tile size matches Kenney's "Tiny Dungeon" and 0x72's "DungeonTileset II" so those
 // CC0 packs can be dropped in later.
 
+import { setItemIcons } from './itemArt';
 import { battleTileGrid } from './battleTiles';
 
 export const TILE = 16;
@@ -254,7 +255,8 @@ export async function loadArtPack(): Promise<void> {
   try {
     const res = await fetch('/api/art');
     if (!res.ok) return;
-    const manifest = (await res.json()) as { sprites: Record<string, { src: string; rect?: { x: number; y: number; w: number; h: number } }> };
+    const manifest = (await res.json()) as { sprites: Record<string, { src: string; rect?: { x: number; y: number; w: number; h: number } }>; icons?: Record<string, { src: string; rect?: { x: number; y: number; w: number; h: number } }> };
+    void setItemIcons(manifest.icons ?? {});
     const images = new Map<string, Promise<HTMLImageElement>>();
     await Promise.all(
       Object.entries(manifest.sprites ?? {}).map(async ([name, ref]) => {

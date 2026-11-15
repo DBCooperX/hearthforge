@@ -56,7 +56,7 @@ export function artMode(env: NodeJS.ProcessEnv): ArtMode {
   return v === 'kenney' || v === '0x72' ? v : 'generated';
 }
 
-function walk(dir: string): string[] {
+export function walk(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
 }
@@ -73,7 +73,7 @@ function unpack(zip: Uint8Array, dest: string) {
   }
 }
 
-async function download(url: string): Promise<Uint8Array> {
+export async function download(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000), headers: { 'user-agent': 'hearthforge-art-fetch' } });
   if (!res.ok) throw new Error(`${url} answered ${res.status}`);
   return new Uint8Array(await res.arrayBuffer());

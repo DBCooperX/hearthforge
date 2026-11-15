@@ -1,3 +1,4 @@
+import { itemArtUrl } from '../game/itemArt';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
@@ -72,10 +73,10 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
       st.foundAt ? t('Found on day {day} at {place}', { day: st.foundDay, place: st.foundAt }) : t('Found on day {day}', { day: st.foundDay }),
       ...st.notes.map((n) => n.text),
     ];
-    out.push({ name: i.name, kind: 'item', icon: i.icon, subtitle: `${t(st.category)}${st.quest ? ` · ${t('Quest item')}` : ''}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: i.description, facts });
+    out.push({ name: i.name, kind: 'item', icon: i.icon, image: itemArtUrl(i), subtitle: `${t(st.category)}${st.quest ? ` · ${t('Quest item')}` : ''}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: i.description, facts });
   }
   for (const i of Object.values(ITEMS)) {
-    out.push({ name: story(i.name), kind: 'item', icon: i.icon, subtitle: `${t(i.kind)}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: t(i.description), facts: [t('Worth {n} gp', { n: i.value })] });
+    out.push({ name: story(i.name), kind: 'item', icon: i.icon, image: itemArtUrl(i), subtitle: `${t(i.kind)}${i.rarity ? ` · ${t(i.rarity)}` : ''}`, description: t(i.description), facts: [t('Worth {n} gp', { n: i.value })] });
   }
   return out;
 }
@@ -114,7 +115,7 @@ export function EntityProvider({ state, children }: { state: GameState; children
       {card && (
         <div className={`hovercard ${card.entity.kind}`} style={{ left: card.x, top: card.y, transform: card.below ? undefined : 'translateY(-100%)' }}>
           <div className="hc-head">
-            <span className="hc-portrait">{card.entity.image ? <img className="pixel" src={card.entity.image} alt="" /> : card.entity.icon}</span>
+            <span className="hc-portrait">{card.entity.image ? <img className={card.entity.image.endsWith('.svg') ? '' : 'pixel'} src={card.entity.image} alt="" /> : card.entity.icon}</span>
             <div>
               <b>{card.entity.name}</b>
               <small>{card.entity.subtitle}</small>

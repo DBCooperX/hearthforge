@@ -12,10 +12,11 @@ interface Props {
   /** Shown for the host only: abandon the adventure. */
   onNewAdventure?: () => void;
   onTable: () => void;
+  onArt: () => void;
   children?: ReactNode;
 }
 
-export function Settings({ onClose, onNewAdventure, onTable }: Props) {
+export function Settings({ onClose, onNewAdventure, onTable, onArt }: Props) {
   const t = useT();
   const prefs = usePrefs();
   return (
@@ -46,6 +47,10 @@ export function Settings({ onClose, onNewAdventure, onTable }: Props) {
               {TEXT_SIZES.map((s) => <button key={s} type="button" className={prefs.textSize === s ? 'on' : ''} aria-pressed={prefs.textSize === s} onClick={() => { setPrefs({ textSize: s }); sfx('tab'); }}>{t(SIZE_LABELS[s])}</button>)}
             </span>
           </div>
+        </section>
+        <section>
+          <h3>{t('Art')}</h3>
+          <div className="setting"><span>{t('Art packs')}<small>{t('Icons for items and tiles for the map, with their credits.')}</small></span><button type="button" onClick={onArt}>{t('Art & Assets')}</button></div>
         </section>
         <section>
           <h3>{t('Keyboard')}</h3>
