@@ -17,8 +17,15 @@ export const SETTING_PREMISE =
   'The heroes have just arrived in Emberfall looking for work and a name for themselves. Where they go and what they do is up to them.';
 
 export interface GroupSpec {
+  /** The catalogue entry whose statistics the monsters use. */
   defId: string;
   count: number;
+  /** A restyled monster: its own name and description (in the table's language) and look extras. */
+  name?: string;
+  description?: string;
+  look?: string[];
+  /** 'weaker' | 'standard' | 'stronger': scales hit points and experience only. */
+  power?: string;
 }
 
 export interface StageDef {

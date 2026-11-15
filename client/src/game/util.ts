@@ -15,7 +15,7 @@ export function reachable(state: GameState, c: Character, steps: number): Set<st
   const out = new Set<string>();
   if (steps <= 0) return out;
   const blocked = new Set<string>();
-  for (const m of state.monsters) if (m.alive) blocked.add(key(m.x, m.y));
+  for (const m of state.monsters) if (m.alive) for (let dy = 0; dy < m.tiles; dy++) for (let dx = 0; dx < m.tiles; dx++) blocked.add(key(m.x + dx, m.y + dy));
   for (const o of state.characters) if (o.id !== c.id && !o.dead && o.hp > 0) blocked.add(key(o.x, o.y));
   for (const [k, v] of movementCosts(state.map.rows, c, steps, (x, y) => blocked.has(key(x, y)))) if (v.cost > 0) out.add(k);
   return out;

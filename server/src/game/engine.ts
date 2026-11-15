@@ -41,6 +41,7 @@ import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/wor
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollMode, signed, type Rng, type RollMode } from './dice';
 import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
+import { POWER, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type WorldState } from './world';
 
 export class GameError extends Error {}
@@ -55,6 +56,14 @@ export interface Monster {
   maxHp: number;
   alive: boolean;
   conditions: string[];
+  /** Squares along one side of the space it occupies; (x, y) is the top-left one. Missing in old saves: 1. */
+  tiles?: number;
+  /** How it is drawn. Missing in old saves: the catalogue look. */
+  look?: MonsterLook;
+  /** What the hover card says, in the table's language. */
+  description?: string;
+  /** Share of the catalogue entry's experience it is worth, for scaled monsters. */
+  xpScale?: number;
 }
 
 /** The fight in progress: where it came from and what winning it is worth. */
@@ -233,6 +242,13 @@ export class Game {
   private pathCost(path: Pt[]) { return path.reduce((n, p) => n + tileCost(this.tile(p.x, p.y)), 0); }
 
   /** Half cover for the target of a shot: +2 AC behind a tree, boulder or furniture. */
+  /** Squares along one side of a monster's space. */
+  tilesOf(m: Monster) { return m.tiles ?? 1; }
+  /** Distance in squares between a monster's space and a point. */
+  private mdist(m: Monster, p: Pt) { return distToFootprint(m, this.tilesOf(m), p); }
+  /** The square of a monster's space nearest to a point: where sight and shots are measured from. */
+  private mpoint(m: Monster, p: Pt): Pt { return nearestFootprintTile(m, this.tilesOf(m), p); }
+
   private coverBonus(from: Pt, to: Pt) { return cheb(from, to) > 1 && hasCover(this.s.rows, from, to) ? COVER_BONUS : 0; }
 
   char(id: string): Character {
@@ -248,7 +264,7 @@ export class Game {
   }
 
   private monsterAt(x: number, y: number) {
-    return this.s.monsters.find((m) => m.alive && m.x === x && m.y === y);
+    return this.s.monsters.find((m) => m.alive && inFootprint(m, this.tilesOf(m), x, y));
   }
 
   /** A conscious hero standing here. The fallen do not block movement. */
@@ -575,12 +591,13 @@ export class Game {
     if (!this.consciousChars().length) throw new GameError(this.t`Nobody in the party can fight`);
     const scale = Math.min(1, heroes.length / 4);
     const chosen: MonsterDef[] = [];
+    const specs: GroupSpec[] = [];
     for (const g of groups) {
       const def = MONSTERS[g.defId];
       if (!def) throw new GameError(this.t`Unknown monster type "${g.defId}". Known types: ${Object.keys(MONSTERS).join(', ')}.`);
       const wanted = Math.max(1, Math.min(8, Math.round(Number(g.count) || 1)));
       const count = def.boss ? wanted : Math.max(1, Math.ceil(wanted * scale));
-      for (let i = 0; i < count && chosen.length < 8; i++) chosen.push(def);
+      for (let i = 0; i < count && chosen.length < 8; i++) { chosen.push(def); specs.push(g); }
     }
     if (!chosen.length) throw new GameError(this.t`An encounter needs at least one monster`);
     s.travel = null;
@@ -596,14 +613,22 @@ export class Game {
     };
     const heroSpots = column([3, 2]);
     heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
-    const foeSpots = column([this.width - 4, this.width - 3]);
     const boss = chosen.some((d) => d.boss);
+    const label = (i: number) => specs[i].name?.trim().slice(0, 40) || this.n(chosen[i].name);
     s.monsters = chosen.map((def, i) => {
-      const total = chosen.filter((d) => d.id === def.id).length;
-      const n = chosen.slice(0, i + 1).filter((d) => d.id === def.id).length;
-      const hp = def.boss ? Math.max(Math.ceil(def.hp * 0.5), Math.round(def.hp * Math.max(scale, 0.5))) : def.hp;
-      return { id: this.uid('m'), defId: def.id, name: total > 1 ? `${this.n(def.name)} ${n}` : this.n(def.name), x: foeSpots[i].x, y: foeSpots[i].y, hp, maxHp: hp, alive: true, conditions: [] };
+      const spec = specs[i];
+      const name = label(i);
+      const total = chosen.filter((_, j) => label(j) === name).length;
+      const n = chosen.slice(0, i + 1).filter((_, j) => label(j) === name).length;
+      const power = POWER[(spec.power ?? 'standard') as Power] ?? 1;
+      const base = def.boss ? Math.max(Math.ceil(def.hp * 0.5), Math.round(def.hp * Math.max(scale, 0.5))) : def.hp;
+      const hp = Math.max(1, Math.round(base * power));
+      const look = applyLookTokens(def.look, spec.look ?? []).look;
+      const m: Monster = { id: this.uid('m'), defId: def.id, name: total > 1 ? `${name} ${n}` : name, x: 0, y: 0, hp, maxHp: hp, alive: true, conditions: [], tiles: SIZE_TILES[look.size], look, description: spec.description?.trim().slice(0, 300) || this.n(def.description) };
+      if (power !== 1) m.xpScale = power;
+      return m;
     });
+    this.placeMonsters(midY);
     s.encounter = { source: opts.source, locationId: opts.locationId ?? null, boss };
     const order = [
       ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.initiativeFor(abilityMod(c.abilities.dex)) })),
@@ -614,6 +639,47 @@ export class Game {
     this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.initiative}`).join(', ')}.`);
     this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
     this.nextTurn();
+  }
+
+  /**
+   * Stands the monsters on the far side of the map, the biggest first. A big
+   * creature gets a lane cleared through the middle so it can reach the party.
+   */
+  private placeMonsters(midY: number) {
+    const s = this.s;
+    const W = this.width, H = this.height;
+    const rows = s.rows.map((r) => [...r]);
+    const open = s.biome === 'tavern' ? '=' : '.';
+    const clear = (x: number, y: number) => {
+      if (x < 1 || y < 1 || x > W - 2 || y > H - 2 || tileWalkable(rows[y][x])) return;
+      rows[y][x] = rows[y][x] === 'W' ? (s.biome === 'bridge' ? '=' : '~') : open;
+    };
+    const biggest = Math.max(...s.monsters.map((m) => this.tilesOf(m)));
+    if (biggest > 1) {
+      const top = midY - Math.floor(biggest / 2);
+      for (let y = top - 1; y <= top + biggest; y++) for (let x = 1; x < W - 1; x++) clear(x, y);
+    }
+    const taken = new Set<string>();
+    for (const m of [...s.monsters].sort((a, b) => this.tilesOf(b) - this.tilesOf(a))) {
+      const n = this.tilesOf(m);
+      const xs = n === 1 ? [W - 4, W - 3, W - 5, W - 6, W - 7, W - 8] : [W - 2 - n, W - 3 - n, W - 4 - n, W - 5 - n, W - 6 - n, W - 7 - n];
+      const top = Math.max(1, Math.min(H - 1 - n, midY - Math.floor(n / 2)));
+      let spot: Pt | null = null;
+      for (const x of xs) {
+        for (const dy of [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5]) {
+          const y = top + dy;
+          if (y < 1 || y + n > H - 1) continue;
+          let free = true;
+          for (let j = 0; j < n && free; j++) for (let i = 0; i < n; i++) if (taken.has(key(x + i, y + j))) { free = false; break; }
+          if (free) { spot = { x, y }; break; }
+        }
+        if (spot) break;
+      }
+      spot ??= { x: xs[0], y: top };
+      m.x = spot.x; m.y = spot.y;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { taken.add(key(m.x + i, m.y + j)); clear(m.x + i, m.y + j); }
+    }
+    s.rows = rows.map((r) => r.join(''));
   }
 
   private initiativeFor(dexMod: number) { return d20(this.rng).value + dexMod; }
@@ -724,7 +790,7 @@ export class Game {
     const rewards: string[] = [];
     let gold = 0;
     for (const m of s.monsters) { const g = MONSTERS[m.defId].gold; if (g) gold += roll(g, this.rng).total; }
-    const xp = s.monsters.reduce((n, m) => n + MONSTERS[m.defId].xp, 0);
+    const xp = s.monsters.reduce((n, m) => n + Math.round(MONSTERS[m.defId].xp * (m.xpScale ?? 1)), 0);
     const slain = s.monsters.map((m) => m.name).join(', ');
     const loc = enc?.source === 'dungeon' && enc.locationId ? this.location(enc.locationId) : undefined;
     const stage = loc?.stages?.[loc.cleared ?? 0];
@@ -881,7 +947,7 @@ export class Game {
   // ---------------------------------------------------------------- attacks
 
   private hostileAdjacentToChar(c: Character) {
-    return this.s.monsters.some((m) => m.alive && cheb(m, c) <= 1);
+    return this.s.monsters.some((m) => m.alive && this.mdist(m, c) <= 1);
   }
 
   private damageMonster(m: Monster, amount: number, type: string): { dealt: number; note: string } {
@@ -932,8 +998,8 @@ export class Game {
   private targetMonster(c: Character, targetId: string, rangeFeet: number): Monster {
     const m = this.monster(targetId);
     if (!m.alive) throw new GameError(this.t`No such target`);
-    if (cheb(c, m) * 5 > Math.max(5, rangeFeet)) throw new GameError(this.t`${m.name} is out of range`);
-    if (!this.los(c, m)) throw new GameError(this.t`${c.name} cannot see ${m.name}`);
+    if (this.mdist(m, c) * 5 > Math.max(5, rangeFeet)) throw new GameError(this.t`${m.name} is out of range`);
+    if (!this.los(c, this.mpoint(m, c))) throw new GameError(this.t`${c.name} cannot see ${m.name}`);
     return m;
   }
 
@@ -945,7 +1011,7 @@ export class Game {
     const wp = w?.weapon;
     const ranged = wp?.ranged;
     const m = this.targetMonster(c, targetId, ranged ? ranged.long : 5);
-    const dist = cheb(c, m) * 5;
+    const dist = this.mdist(m, c) * 5;
     const strMod = abilityMod(c.abilities.str), dexMod = abilityMod(c.abilities.dex);
     const mod = ranged ? dexMod : wp?.finesse ? Math.max(strMod, dexMod) : strMod;
     const proficient = !w || this.proficient(c, w);
@@ -957,7 +1023,7 @@ export class Game {
     const r = d20(this.rng, mode);
     const total = r.value + bonus;
     const crit = r.value >= (c.classId === 'fighter' && c.level >= 3 ? 19 : 20);
-    const cover = ranged ? this.coverBonus(c, m) : 0;
+    const cover = ranged ? this.coverBonus(c, this.mpoint(m, c)) : 0;
     const ac = MONSTERS[m.defId].ac + cover;
     const label = w ? this.n(w.name) : this.t`an unarmed strike`;
     const head = this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
@@ -968,7 +1034,7 @@ export class Game {
     } else {
       let dmg = wp ? roll(wp.damage, this.rng, crit).total + mod + (wp.bonus ?? 0) : 1 + strMod;
       let extra = '';
-      const flanked = this.s.characters.some((a) => a.id !== c.id && this.conscious(a) && cheb(a, m) <= 1);
+      const flanked = this.s.characters.some((a) => a.id !== c.id && this.conscious(a) && this.mdist(m, a) <= 1);
       if (c.classId === 'rogue' && wp && (wp.finesse || ranged) && (flanked || mode === 'advantage')) {
         dmg += roll(`${Math.ceil(c.level / 2)}d6`, this.rng, crit).total;
         extra = ` ${this.t`(with Sneak Attack)`}`;
@@ -1055,7 +1121,7 @@ export class Game {
         const r = d20(this.rng, mode);
         const total = r.value + bonus;
         const crit = r.value === 20;
-        const cover = this.coverBonus(c, m);
+        const cover = this.coverBonus(c, this.mpoint(m, c));
         const ac = MONSTERS[m.defId].ac + cover;
         const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '');
         const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
@@ -1132,10 +1198,16 @@ export class Game {
     this.nextTurn();
   }
 
+  /** Could this monster not stand with its top-left square at p? Checks every square of its space. */
   private monsterBlocked(p: Pt, self: Monster) {
-    const m = this.monsterAt(p.x, p.y);
-    if (m && m.id !== self.id) return true;
-    return !!this.charAt(p.x, p.y);
+    const n = this.tilesOf(self);
+    for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) {
+      const x = p.x + dx, y = p.y + dy;
+      if (!this.walkable(x, y)) return true;
+      const m = this.monsterAt(x, y);
+      if ((m && m.id !== self.id) || this.charAt(x, y)) return true;
+    }
+    return false;
   }
 
   monsterAct(monsterId: string, intent: MonsterIntent = {}): MonsterActResult {
@@ -1145,13 +1217,14 @@ export class Game {
     const targets = this.consciousChars();
     if (!targets.length) return { monster: m.name, moved: 0, note: 'no targets' };
     const speed = Math.floor(def.speed / 5);
+    const size = this.tilesOf(m);
     const canEnter = (p: Pt) => !this.monsterBlocked(p, m);
-    const pathToAdjacent = (t: Character) => this.bfs(m, (p) => cheb(p, t) <= 1 && (p.x === m.x && p.y === m.y || !this.monsterBlocked(p, m)), canEnter);
+    const pathToAdjacent = (t: Character) => this.bfs(m, (p) => distToFootprint(p, size, t) <= 1 && (p.x === m.x && p.y === m.y || !this.monsterBlocked(p, m)), canEnter);
 
     let target = targets.find((t) => t.id === intent.targetId);
     if (!target) {
       const scored = targets.map((t) => { const p = pathToAdjacent(t); return { t, d: p ? this.pathCost(p) : 999 }; });
-      scored.sort((a, b) => a.d - b.d || cheb(m, a.t) - cheb(m, b.t));
+      scored.sort((a, b) => a.d - b.d || this.mdist(m, a.t) - this.mdist(m, b.t));
       target = scored[0].t;
     }
     const melee = def.attacks.find((a) => !a.ranged);
@@ -1172,13 +1245,13 @@ export class Game {
       if (!chosen.ranged) {
         for (const p of this.afford(meleePath ?? [], speed).walked) stepTo(p);
       } else {
-        const inRange = () => cheb(m, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(m, target!);
+        const inRange = () => this.mdist(m, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(this.mpoint(m, target!), target!);
         const path = meleePath ?? [];
         for (const p of this.afford(path, speed).walked) { if (inRange()) break; stepTo(p); }
       }
     } else if (tactic === 'retreat') {
       for (let left = speed; left > 0; ) {
-        const score = (p: Pt) => Math.min(...targets.map((t) => cheb(p, t)));
+        const score = (p: Pt) => Math.min(...targets.map((t) => distToFootprint(p, size, t)));
         let best: Pt | null = null;
         for (const d of DIRS) {
           const n = { x: m.x + d.x, y: m.y + d.y };
@@ -1194,22 +1267,23 @@ export class Game {
     if (walked.length) this.moves.push({ id: m.id, path: walked });
 
     // Attack
-    const dist = cheb(m, target) * 5;
-    if (!chosen.ranged && dist > chosen.range && rangedAtk && this.los(m, target)) chosen = rangedAtk;
+    const dist = this.mdist(m, target) * 5;
+    const eye = this.mpoint(m, target);
+    if (!chosen.ranged && dist > chosen.range && rangedAtk && this.los(eye, target)) chosen = rangedAtk;
     if (chosen.ranged && dist <= 5 && melee && tactic !== 'retreat') chosen = melee;
     const maxRange = chosen.ranged ? chosen.longRange ?? chosen.range : chosen.range;
-    if (dist > maxRange || !this.los(m, target)) {
+    if (dist > maxRange || !this.los(eye, target)) {
       this.log('roll', walked.length ? this.t`${m.name} moves but cannot reach ${target.name}.` : this.t`${m.name} cannot reach ${target.name}.`);
       return { monster: m.name, moved: walked.length, note: `could not reach ${target.name}` };
     }
-    const adjacentFoe = this.consciousChars().some((c) => cheb(c, m) <= 1);
-    const pack = !!def.packTactics && this.s.monsters.some((o) => o.alive && o.id !== m.id && cheb(o, target!) <= 1);
+    const adjacentFoe = this.consciousChars().some((c) => this.mdist(m, c) <= 1);
+    const pack = !!def.packTactics && this.s.monsters.some((o) => o.alive && o.id !== m.id && this.mdist(o, target!) <= 1);
     const dis = target.conditions.includes('dodging') || (!!chosen.ranged && (adjacentFoe || dist > chosen.range));
     const mode = rollMode(pack, dis);
     const r = d20(this.rng, mode);
     const total = r.value + chosen.toHit;
     const crit = r.value === 20;
-    const cover = chosen.ranged ? this.coverBonus(m, target) : 0;
+    const cover = chosen.ranged ? this.coverBonus(eye, target) : 0;
     const ac = target.ac + cover;
     const head = this.t`${m.name} attacks ${target.name} with ${this.n(chosen.name)}: ${this.d20Text(r, mode)}${signed(chosen.toHit)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${target.name} has half cover.`}` : '');
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
@@ -1615,6 +1689,8 @@ export class Game {
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
         ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions, sprite: MONSTERS[m.defId].sprite,
+        tiles: this.tilesOf(m), look: m.look ?? MONSTERS[m.defId].look, restyled: !!m.look && lookKey(m.look) !== lookKey(MONSTERS[m.defId].look),
+        kind: MONSTERS[m.defId].type, description: m.description ?? this.n(MONSTERS[m.defId].description),
       })),
       combat: s.combat,
       bossFight: s.phase === 'combat' && !!s.encounter?.boss,

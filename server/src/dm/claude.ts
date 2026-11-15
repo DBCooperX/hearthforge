@@ -3,6 +3,7 @@
 // validates and resolves with real dice, and Claude narrates the result.
 import Anthropic from '@anthropic-ai/sdk';
 import { BIOMES } from '../../../shared/battlemap';
+import { LOOK_TOKENS, POWER } from '../../../shared/monsterLook';
 import { ITEMS } from '../../../shared/content';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, LOCATION_KINDS, MOODS, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
@@ -109,7 +110,19 @@ const STORY_TOOLS: Tool[] = [
     monsters: {
       type: 'array',
       description: 'The enemies, grouped by type.',
-      items: { type: 'object', properties: { type: { type: 'string', enum: Object.keys(MONSTERS) }, count: int('How many of this type.') }, required: ['type', 'count'], additionalProperties: false },
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: Object.keys(MONSTERS), description: 'The catalogue creature whose statistics these monsters use. For a creature that is not in the catalogue, pick the entry closest in kind and challenge and restyle it with the fields below.' },
+          count: int('How many of this type.'),
+          name: str('Leave empty for the catalogue creature as it is. For a restyled creature, its name in the table language, for example "Three-headed Ogre".'),
+          description: str('Leave empty for the catalogue creature. For a restyled creature, one sentence on what it looks like, in the table language. Players see it when they point at the monster.'),
+          look: { type: 'array', items: { type: 'string', enum: [...LOOK_TOKENS] }, description: 'Changes to how the token is drawn, on top of the catalogue look. Empty for the catalogue creature. Examples: ["heads:3"] for a three-headed ogre, ["color:red", "aura:fire", "eyes:orange"] for a hell hound built on a wolf, ["mutation:spectral"] for a ghostly knight, ["size:large", "horns"] for a bigger, horned version. A larger size takes more squares on the map but does not change the statistics.' },
+          power: { type: 'string', enum: Object.keys(POWER), description: 'Hit points and experience relative to the catalogue entry: "weaker" is three quarters, "standard" is as written, "stronger" is one and a half times. Attacks and armour class never change.' },
+        },
+        required: ['type', 'count', 'name', 'description', 'look', 'power'],
+        additionalProperties: false,
+      },
     },
     reason: str('One sentence on how the fight started, for the record.'),
     setting: { type: 'string', enum: ['here', ...BIOMES], description: 'What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup.' },
@@ -240,7 +253,7 @@ export class ClaudeDM implements DungeonMaster {
           case 'give_item':
             return game.grantItem(String(i.character_id), String(i.item_id), Number(i.quantity));
           case 'start_combat': {
-            const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count) }));
+            const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
             game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             return { started: true, enemies: game.s.monsters.map((m) => m.name), note: 'Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.' };

@@ -13,6 +13,7 @@ import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
 import { tileWalkable } from '../../shared/battlemap';
+import { inFootprint } from '../../shared/monsterLook';
 import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
@@ -77,7 +78,7 @@ export function App() {
   const onTile = useCallback(
     (x: number, y: number) => {
       if (!state || !combat) return;
-      const monster = state.monsters.find((m) => m.alive && m.x === x && m.y === y);
+      const monster = state.monsters.find((m) => m.alive && inFootprint(m, m.tiles, x, y));
       const hero = state.characters.find((c) => !c.dead && c.x === x && c.y === y);
       if (monster) {
         if (!actor) return conn.toast(t('Wait for your turn'));
@@ -109,7 +110,7 @@ export function App() {
       if (dirs[k] && actor) {
         e.preventDefault();
         const nx = actor.x + dirs[k][0], ny = actor.y + dirs[k][1];
-        const occupied = state.monsters.some((m) => m.alive && m.x === nx && m.y === ny);
+        const occupied = state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, nx, ny));
         if (tileWalkable(tileAt(state, nx, ny)) && !occupied) send({ t: 'move', characterId: actor.id, x: nx, y: ny });
         return;
       }

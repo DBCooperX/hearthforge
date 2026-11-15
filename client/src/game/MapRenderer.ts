@@ -2,12 +2,16 @@
 // floating combat numbers. React owns the UI; this class owns the canvas.
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { GameState } from '../../../shared/types';
-import { TILE, spriteCanvas } from './sprites';
+import { TILE, packSprites, spriteCanvas } from './sprites';
 import { tileWalkable } from '../../../shared/battlemap';
+import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
+import { monsterCanvas } from './monsterArt';
 import { battleTileName } from './battleTiles';
 import { tileAt } from './util';
 
 interface Ent {
+  /** Squares along one side. */
+  size: number;
   root: Container;
   sprite: Sprite;
   bar: Graphics;
@@ -42,6 +46,21 @@ function tex(name: string): Texture {
   return t;
 }
 
+const monsterTextures = new Map<string, Texture>();
+function monsterTex(look: MonsterLook): Texture {
+  const k = lookKey(look);
+  let t = monsterTextures.get(k);
+  if (!t) {
+    t = Texture.from(monsterCanvas(look));
+    t.source.scaleMode = 'nearest';
+    monsterTextures.set(k, t);
+  }
+  return t;
+}
+
+/** Where a hovered monster's token is on screen, relative to the map element. */
+export interface TokenHover { id: string; left: number; top: number; size: number }
+
 export class MapRenderer {
   private app = new Application();
   private world = new Container();
@@ -62,6 +81,8 @@ export class MapRenderer {
   private ready = false;
   private destroyed = false;
   onTile: (x: number, y: number) => void = () => {};
+  onHoverMonster: (hover: TokenHover | null) => void = () => {};
+  private hoverId: string | null = null;
 
   async init(host: HTMLElement) {
     await this.app.init({ resizeTo: host, background: 0x0c0a0e, antialias: false, autoDensity: true, resolution: Math.min(window.devicePixelRatio || 1, 2) });
@@ -75,8 +96,8 @@ export class MapRenderer {
       const p = this.world.toLocal({ x: gx, y: gy });
       return { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) };
     };
-    this.app.stage.on('pointermove', (e) => { this.hover = toTile(e.global.x, e.global.y); });
-    this.app.stage.on('pointerleave', () => { this.hover = null; });
+    this.app.stage.on('pointermove', (e) => { this.hover = toTile(e.global.x, e.global.y); this.reportHover(); });
+    this.app.stage.on('pointerleave', () => { this.hover = null; this.reportHover(); });
     this.app.stage.on('pointertap', (e) => { const t = toTile(e.global.x, e.global.y); this.onTile(t.x, t.y); });
     this.app.ticker.add((ticker) => this.tick(ticker.deltaMS / 1000));
     this.ready = true;
@@ -135,20 +156,26 @@ export class MapRenderer {
 
     // Tokens
     const seen = new Set<string>();
-    const place = (id: string, kind: 'pc' | 'monster', sprite: string, x: number, y: number, hp: number, maxHp: number) => {
+    const place = (id: string, kind: 'pc' | 'monster', texture: Texture, x: number, y: number, hp: number, maxHp: number, size = 1) => {
       seen.add(id);
       let e = this.ents.get(id);
       if (!e) {
         const root = new Container();
-        const sp = new Sprite(tex(sprite));
+        const sp = new Sprite(texture);
         sp.anchor.set(0.5);
-        // Sprites taller than a tile (some art packs) stand on the tile's bottom edge.
-        sp.position.set(TILE / 2, TILE - sp.height / 2);
+        if (kind === 'monster') {
+          // Monster tokens fill the square (or the block of squares) the creature occupies.
+          sp.scale.set((size * TILE) / Math.max(texture.width, texture.height));
+          sp.position.set((size * TILE) / 2, size * TILE - sp.height / 2);
+        } else {
+          // Sprites taller than a tile (some art packs) stand on the tile's bottom edge.
+          sp.position.set(TILE / 2, TILE - sp.height / 2);
+        }
         const bar = new Graphics();
         root.addChild(sp, bar);
         root.position.set(x * TILE, y * TILE);
         this.entLayer.addChild(root);
-        e = { root, sprite: sp, bar, path: [], x, y, hp, kind };
+        e = { root, sprite: sp, bar, path: [], x, y, hp, kind, size };
         this.ents.set(id, e);
       }
       if (hp !== e.hp) {
@@ -163,7 +190,7 @@ export class MapRenderer {
       }
       e.bar.clear();
       if (hp > 0 && (kind === 'monster' || hp < maxHp)) {
-        const w = 12, frac = Math.max(0, Math.min(1, hp / maxHp));
+        const w = size * TILE - 4, frac = Math.max(0, Math.min(1, hp / maxHp));
         e.bar.rect(2, -3, w, 2).fill(0x1a1418);
         e.bar.rect(2, -3, Math.max(1, Math.round(w * frac)), 2).fill(kind === 'monster' ? 0xd9534f : frac > 0.5 ? 0x5cb85c : 0xf0ad4e);
       }
@@ -171,7 +198,7 @@ export class MapRenderer {
     };
     for (const c of state.characters) {
       if (c.dead) continue;
-      const e = place(c.id, 'pc', c.classId, c.x, c.y, c.hp, c.maxHp);
+      const e = place(c.id, 'pc', tex(c.classId), c.x, c.y, c.hp, c.maxHp);
       const down = c.hp <= 0;
       e.sprite.rotation = down ? Math.PI / 2 : 0;
       e.sprite.tint = c.dead ? 0x555555 : 0xffffff;
@@ -180,7 +207,7 @@ export class MapRenderer {
     }
     for (const m of state.monsters) {
       if (!m.alive) continue;
-      const e = place(m.id, 'monster', m.sprite, m.x, m.y, m.hp, m.maxHp);
+      const e = place(m.id, 'monster', !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look), m.x, m.y, m.hp, m.maxHp, m.tiles);
       e.root.zIndex = 1;
     }
     this.entLayer.sortableChildren = true;
@@ -193,11 +220,21 @@ export class MapRenderer {
     }
   }
 
+  /** Tells the page which monster the pointer is over, so it can show its card. */
+  private reportHover() {
+    const h = this.hover;
+    const m = h && this.state?.phase === 'combat' ? this.state.monsters.find((o) => o.alive && inFootprint(o, o.tiles, h.x, h.y)) : undefined;
+    if ((m?.id ?? null) === this.hoverId) return;
+    this.hoverId = m?.id ?? null;
+    const unit = TILE * this.scale;
+    this.onHoverMonster(m ? { id: m.id, left: this.world.x + m.x * unit, top: this.world.y + m.y * unit, size: m.tiles * unit } : null);
+  }
+
   private float(e: Ent, label: string, color: number) {
     const text = new Text({ text: label, style: { fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 'bold', fill: color, stroke: { color: 0x000000, width: 5 } } });
     text.anchor.set(0.5, 1);
     text.scale.set(1 / this.scale / 1.6);
-    text.position.set(e.root.x + TILE / 2, e.root.y);
+    text.position.set(e.root.x + (e.size * TILE) / 2, e.root.y);
     this.fxLayer.addChild(text);
     this.floaters.push({ text, life: 1.1 });
   }
@@ -240,7 +277,7 @@ export class MapRenderer {
     const ring = (id: string | null, color: number, alpha: number) => {
       const e = id ? this.ents.get(id) : undefined;
       if (!e || !e.root.visible) return;
-      g.rect(e.root.x + 0.5, e.root.y + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color, alpha });
+      g.rect(e.root.x + 0.5, e.root.y + 0.5, e.size * TILE - 1, e.size * TILE - 1).stroke({ width: 1, color, alpha });
     };
     const beat = 0.55 + 0.45 * Math.sin(this.pulse * 5);
     for (const id of this.opts.targetIds) ring(id, 0xff5252, beat);
