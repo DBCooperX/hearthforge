@@ -1047,4 +1047,13 @@ export const DE: Record<string, string> = {
   'No such player at this table': 'Diesen Spieler gibt es an diesem Tisch nicht',
   'Choose a hero before you say you are ready': 'Wähle einen Helden, bevor du dich bereit meldest',
   'Nothing to say': 'Nichts zu sagen',
+  // Hero looks
+  'Skin': 'Haut', 'Hair': 'Haare', 'Hair colour': 'Haarfarbe', 'Beard': 'Bart', 'Colours': 'Farben',
+  'Porcelain': 'Porzellan', 'Fair': 'Hell', 'Tan': 'Gebräunt', 'Olive': 'Oliv', 'Brown': 'Braun', 'Dark': 'Dunkel',
+  'Moss green': 'Moosgrün', 'Grey-green': 'Graugrün', 'Deep green': 'Tiefgrün', 'Ash grey': 'Aschgrau', 'Crimson': 'Karmesinrot', 'Violet': 'Violett', 'Dusk blue': 'Dämmerblau',
+  'Bronze': 'Bronze', 'Brass': 'Messing', 'Copper': 'Kupfer', 'Silver': 'Silber', 'Red': 'Rot', 'Green': 'Grün', 'Blue': 'Blau', 'Black': 'Schwarz', 'White': 'Weiß',
+  'Stone grey': 'Steingrau', 'Slate': 'Schiefer', 'Chalk': 'Kreide',
+  'Bald': 'Kahl', 'Short': 'Kurz', 'Long': 'Lang', 'Braid': 'Zopf', 'Topknot': 'Dutt', 'Wild': 'Wild',
+  'Auburn': 'Kastanienrot', 'Blond': 'Blond', 'Grey': 'Grau', 'None': 'Keiner', 'Braided': 'Geflochten',
+  'Purple': 'Lila', 'Gold': 'Gold', 'Teal': 'Petrol',
 };

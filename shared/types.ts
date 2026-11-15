@@ -1,4 +1,5 @@
 // Types shared between the server (authoritative game state) and the browser client.
+import type { HeroLook } from './heroLook';
 import type { Biome } from './battlemap';
 import type { CreatureType, MonsterLook } from './monsterLook';
 
@@ -115,6 +116,8 @@ export interface CharacterSpec {
   spells: string[];
   /** Starting equipment package id. */
   kit: string;
+  /** How the hero is drawn: skin, hair, beard and colour. Anything left out gets a default. */
+  look?: Partial<HeroLook>;
   appearance: string;
   backstory: string;
   /** Set when the hero was taken from the premade roster. */
@@ -184,6 +187,8 @@ export interface Character {
   expertise: string[];
   /** Damage types this hero takes half damage from. */
   resist: string[];
+  /** How the hero is drawn in portraits and on the battle map. */
+  look: HeroLook;
   appearance: string;
   backstory: string;
   /** Level-up choices the player has not made yet. */

@@ -74,6 +74,7 @@ export function recommend(d: Draft & { classId: ClassId }, keep: (keyof Characte
     spells: [], kit: kept('kit') ?? (kitsFor(d.classId).some((k) => k.id === g.recKit) ? g.recKit : kitsFor(d.classId)[0].id),
     appearance: kept('appearance') ?? '', backstory: kept('backstory') ?? '',
     ...(d.premadeId && keep.includes('premadeId') ? { premadeId: d.premadeId } : {}),
+    ...(d.look ? { look: d.look } : {}),
   };
   const granted = [...bg.skills, ...out.skills];
   if (sp.skillChoice) {

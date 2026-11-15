@@ -134,3 +134,37 @@ describe('character creator rules', () => {
     expect(() => g.choose('p1', w.id, spell.id, { spell: w.abilityIds[0] })).toThrow(GameError);
   });
 });
+
+describe('hero looks', () => {
+  it('gives every premade its own picture', async () => {
+    const { heroArtKey, heroGear, heroLook } = await import('../../shared/heroLook');
+    const { ITEMS } = await import('../../shared/content');
+    const keys = PREMADES.map((p) => {
+      const eq = buildSheet(p.spec)!.equipment;
+      const def = (id?: string | null) => (id ? ITEMS[id] : null);
+      return heroArtKey({ speciesId: p.spec.speciesId, gender: p.spec.gender, classId: p.spec.classId, look: heroLook(p.spec), gear: heroGear(def(eq.armor), def(eq.mainHand), def(eq.offHand)) });
+    });
+    expect(new Set(keys).size).toBe(PREMADES.length);
+  });
+
+  it('stores a valid look on the hero and repairs a bad one', async () => {
+    const { SPECIES_SKINS, heroLook } = await import('../../shared/heroLook');
+    const g = lobby();
+    const c = g.createCharacter('p1', { ...spec('fighter', { speciesId: 'orc' }), look: { skin: 'porcelain', hair: 'braid', hairColor: 'nope', beard: 'long', color: 'teal' } as never });
+    expect(SPECIES_SKINS.orc).toContain(c.look.skin);
+    expect(c.look).toMatchObject({ hair: 'braid', beard: 'long', color: 'teal' });
+    expect(c.look.hairColor).not.toBe('nope');
+    const saved = JSON.parse(JSON.stringify(g.s));
+    delete saved.characters[0].look;
+    expect(new Game('creator-test', () => 0.5, saved).s.characters[0].look).toEqual(heroLook({ ...c, look: undefined }));
+  });
+
+  it('reads the gear from what is equipped', async () => {
+    const { heroGear } = await import('../../shared/heroLook');
+    const { ITEMS } = await import('../../shared/content');
+    expect(heroGear(ITEMS.chain_mail, ITEMS.longsword, ITEMS.shield)).toEqual({ armor: 'heavy', weapon: 'sword', shield: true });
+    expect(heroGear(null, ITEMS.quarterstaff, null)).toEqual({ armor: 'none', weapon: 'staff', shield: false });
+    expect(heroGear(ITEMS.leather, ITEMS.shortbow, null).weapon).toBe('bow');
+    expect(heroGear(null, ITEMS.greatsword, null).weapon).toBe('greatsword');
+  });
+});

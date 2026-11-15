@@ -5,7 +5,7 @@ import { PREMADES, type Premade } from '../../../shared/premades';
 import { ABILITY_KEYS, BACKGROUNDS, CLASSES, SPECIES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { Creator } from './Creator';
-import { spriteUrl } from '../game/sprites';
+import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
 import { ChatPanel } from './Chat';
 import { LangSwitch, useLang, useT } from '../i18n';
@@ -284,7 +284,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
         <ul className="roster">
           {state.characters.map((c) => (
             <li key={c.id}>
-              <img className="pixel" src={spriteUrl(c.classId)} alt="" />
+              <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
               <span><b>{c.name}</b> · {t(SPECIES[c.speciesId]?.name ?? '')} {classLabel(c, t)}</span>
               <span className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</span>
               {c.ownerId === playerId && <button className="link" onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>{t('remove')}</button>}
@@ -330,7 +330,7 @@ function PremadeCard({ premade: p, flipped, taken, full, onFlip, onAdd, onCustom
     <div className={['hero-card', flipped && 'flipped', taken && 'taken'].filter(Boolean).join(' ')}>
       <div className="hero-inner">
         <button type="button" className="hero-face front" onClick={onFlip} tabIndex={flipped ? -1 : 0} aria-label={t('Turn the card over')}>
-          <img className="pixel" src={spriteUrl(spec.classId)} alt="" />
+          <img className="pixel" src={heroUrl(artOfDraft(spec)!)} alt="" />
           <h3 style={{ color: CLASS_INFO[spec.classId].color }}>{spec.name}</h3>
           <small>{title}</small>
           <p>{loc(p.tagline, lang)}</p>

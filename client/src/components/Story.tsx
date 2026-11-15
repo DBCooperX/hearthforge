@@ -3,7 +3,7 @@ import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo } from '../../../shared/types';
 import { monsterUrl } from '../game/monsterArt';
-import { spriteUrl } from '../game/sprites';
+import { artOfCharacter, heroUrl } from '../game/heroArt';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
 import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
@@ -45,7 +45,7 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
   }
   for (const c of state.characters) {
     out.push({
-      name: c.name, kind: 'hero', icon: '🛡️', image: spriteUrl(c.classId), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
+      name: c.name, kind: 'hero', icon: '🛡️', image: heroUrl(artOfCharacter(c, state.items)), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
       facts: [`${t('HP')} ${c.hp}/${c.maxHp} · ${t('AC')} ${c.ac}`, state.players.find((p) => p.id === c.ownerId)?.name ? t('Played by {name}', { name: state.players.find((p) => p.id === c.ownerId)!.name }) : ''].filter(Boolean),
     });
   }

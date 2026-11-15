@@ -5,6 +5,7 @@
 import { ABILITIES, ABILITY_NAMES, ITEMS } from '../../../shared/content';
 import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isProficient, spellOptions, weaponAttack } from '../../../shared/build';
 import { DEFAULT_PREMADE, PREMADE_BY_ID } from '../../../shared/premades';
+import { heroLook } from '../../../shared/heroLook';
 import { BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, loc, type L } from '../../../shared/rules';
 import { pickIcon } from '../../../shared/items';
 import {
@@ -208,6 +209,7 @@ export class Game {
       c.feats ??= [];
       c.expertise ??= [];
       c.resist ??= [];
+      c.look = heroLook(c);
       c.appearance ??= '';
       c.backstory ??= '';
       c.pending ??= [];
@@ -549,7 +551,7 @@ export class Game {
     const pre = PREMADE_BY_ID[DEFAULT_PREMADE[classId]];
     const own = String(name ?? '').trim();
     // A name of the player's own says nothing about gender, looks or history, so those stay open.
-    if (own && own !== pre.spec.name) return this.createCharacter(playerId, { ...pre.spec, name: own, gender: 'neutral', appearance: '', backstory: '', premadeId: undefined });
+    if (own && own !== pre.spec.name) return this.createCharacter(playerId, { ...pre.spec, name: own, gender: 'neutral', look: undefined, appearance: '', backstory: '', premadeId: undefined });
     return this.addPremade(playerId, pre.id, '');
   }
 
@@ -620,6 +622,7 @@ export class Game {
       feats: sheet.feats,
       expertise: sheet.expertise,
       resist: sheet.resist,
+      look: heroLook({ speciesId: spec.speciesId, gender: GENDERS.includes(spec.gender) ? spec.gender : 'neutral', classId: spec.classId, name: clean, look: spec.look }),
       appearance: String(spec.appearance ?? '').trim().slice(0, 400),
       backstory: String(spec.backstory ?? '').trim().slice(0, 1200),
       pending: [],
