@@ -14,6 +14,7 @@ import { useLang, useT } from '../i18n';
 import { CloseButton } from '../ui/Window';
 import type { Connection } from '../net';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, featProblem, type Focus } from './Guide';
+import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 /** A character in play, in the shape the stat preview understands. */
 export function sheetOf(c: Character, items?: Record<string, ItemDef>): Sheet {
@@ -87,7 +88,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
   else if (focus?.kind === 'skill') {
     detail = (
       <article className="detail">
-        <header><div><small className="kicker">{t('Skill')} · {t(ABILITY_NAMES[SKILLS[focus.id]])}</small><h2 className="cap">{t(focus.id)}</h2><p className="summary">{loc(SKILL_HELP[focus.id], lang)}</p></div></header>
+        <header><span className="detail-icon"><SkillGlyph skill={focus.id} /></span><div><small className="kicker">{t('Skill')} · {t(ABILITY_NAMES[SKILLS[focus.id]])}</small><h2 className="cap">{t(focus.id)}</h2><p className="summary">{loc(SKILL_HELP[focus.id], lang)}</p></div></header>
       </article>
     );
   } else if (focus?.kind === 'spell') detail = <SpellDetail id={focus.id} sheet={next ?? now} />;
@@ -136,12 +137,12 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
             ) : choice.kind === 'option' ? (
               <Section title={t(GROUPS[group]?.name ?? group)} hint={`${opts.length}/${want}`} done={opts.length === want}>
                 {cards.map((o) => (
-                  <PickRow key={o.id} mark={want > 1 ? 'check' : 'radio'} icon={o.icon} title={t(o.name)} sub={loc(o.summary, lang)} selected={opts.includes(o.id)}
+                  <PickRow key={o.id} mark={want > 1 ? 'check' : 'radio'} icon={<OptionGlyph option={o} />} title={t(o.name)} sub={loc(o.summary, lang)} selected={opts.includes(o.id)}
                     focused={focus?.kind === 'option' && focus.option === o}
                     onClick={() => toggle(o.id)} onFocus={() => setFocus({ kind: 'option', option: o, kicker: t(GROUPS[group]?.name ?? group) })} />
                 ))}
                 {skillPicks.map((x) => (
-                  <PickRow key={x} compact mark="check" title={t(x)} sub={t(ABILITY_NAMES[SKILLS[x]])} selected={opts.includes(x)}
+                  <PickRow key={x} compact mark="check" icon={<SkillGlyph skill={x} />} title={t(x)} sub={t(ABILITY_NAMES[SKILLS[x]])} selected={opts.includes(x)}
                     focused={focus?.kind === 'skill' && focus.id === x} onClick={() => toggle(x)} onFocus={() => setFocus({ kind: 'skill', id: x })} />
                 ))}
               </Section>
@@ -156,7 +157,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
                   return (
                     <Section key={l} title={l === 0 ? t('Cantrips') : t('Spells of level {n}', { n: l })}>
                       {shown.map((s) => (
-                        <PickRow key={s} icon={ABILITIES[s].icon} title={t(ABILITIES[s].name)} sub={(ABILITIES[s].kind === 'story' ? `${t('Told by the Dungeon Master.')} ` : '') + t(ABILITIES[s].description)} selected={spell === s}
+                        <PickRow key={s} icon={<AbilityGlyph def={ABILITIES[s]} />} title={t(ABILITIES[s].name)} sub={(ABILITIES[s].kind === 'story' ? `${t('Told by the Dungeon Master.')} ` : '') + t(ABILITIES[s].description)} selected={spell === s}
                           focused={focus?.kind === 'spell' && focus.id === s}
                           onClick={() => { setSpell(s); setHover(null); }} onFocus={() => { setFocus({ kind: 'spell', id: s }); setHover(spell === s ? null : { spell: s }); }} onLeave={() => setHover(null)} />
                       ))}

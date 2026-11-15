@@ -50,6 +50,12 @@ export function itemArtUrl(def: Pick<ItemDef, 'id' | 'icon'> | undefined): strin
   return undefined;
 }
 
+/** The picture for skills, feats, spells and class features: the first key the icon set has a file for. */
+export function glyphUrl(keys: string[]): string | undefined {
+  for (const k of keys) if (urls.has(k)) return urls.get(k);
+  return undefined;
+}
+
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 /** Re-renders when the icon pack changes. */
 export function useItemArt(): (def: Pick<ItemDef, 'id' | 'icon'> | undefined) => string | undefined {

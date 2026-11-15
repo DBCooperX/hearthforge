@@ -15,6 +15,7 @@ import { Rich, dice, featureText, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { Icon } from '../ui/icons';
 import { HeroTabs, TabBar, Window } from '../ui/Window';
+import { AbilityGlyph, FeatureGlyph, LineGlyph, SkillGlyph } from '../ui/Glyph';
 
 const KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 type Side = 'features' | 'actions' | 'story';
@@ -96,7 +97,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
           </div>
           {uses.length > 0 && (
             <div className="sheet-uses">
-              {uses.map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={t(r.def.rest === 'short' ? 'Comes back after a short rest.' : 'Comes back after a long rest.')}>{r.def.icon} {t(r.def.name)} {r.left}/{r.max}</span>)}
+              {uses.map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={t(r.def.rest === 'short' ? 'Comes back after a short rest.' : 'Comes back after a long rest.')}><FeatureGlyph id={r.def.id} emoji={r.def.icon} /> {t(r.def.name)} {r.left}/{r.max}</span>)}
             </div>
           )}
           {c.conditions.length > 0 && <div className="conditions">{c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}</div>}
@@ -129,9 +130,10 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               const bonus = prof ? c.profBonus * (expert ? 2 : 1) : 0;
               const parts = `${t(ABILITY_NAMES[ability])} ${signed(mod)}${bonus ? ` · ${t(expert ? 'Expertise' : 'Proficiency')} ${signed(bonus)}` : ''}`;
               return (
-                <Hint key={skill} title={<span className="cap">{t(skill)}</span>} text={<>{SKILL_HELP[skill] ? loc(SKILL_HELP[skill], lang) : ''}<br /><em>{parts}</em></>}>
+                <Hint key={skill} title={<span className="cap"><SkillGlyph skill={skill} /> {t(skill)}</span>} text={<>{SKILL_HELP[skill] ? loc(SKILL_HELP[skill], lang) : ''}<br /><em>{parts}</em></>}>
                   <li className={prof ? 'prof' : ''} tabIndex={0}>
                     <i className={expert ? 'pip double' : prof ? 'pip on' : 'pip'} />
+                    <span className="skill-glyph"><SkillGlyph skill={skill} /></span>
                     <span className="cap">{t(skill)}</span>
                     <small>{t(ability.toUpperCase())}</small>
                     <b>{signed(mod + bonus)}</b>
@@ -174,7 +176,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                 {c.features.map((f) => {
                   const text = featureText(f, lang, t);
                   const cut = text.indexOf(': ');
-                  return <li key={f}>{cut > 0 ? <><b>{text.slice(0, cut)}</b><span><Rich text={text.slice(cut + 2)} /></span></> : <span><Rich text={text} /></span>}</li>;
+                  return <li key={f}><span className="feat-glyph"><LineGlyph line={f} /></span>{cut > 0 ? <><b>{text.slice(0, cut)}</b><span><Rich text={text.slice(cut + 2)} /></span></> : <span><Rich text={text} /></span>}</li>;
                 })}
               </ul>
             )}
@@ -188,7 +190,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                   <Fragment key={a.id}>
                   {a.spellLevel && a.kind !== 'feature' && a.spellLevel !== (actions[i - 1]?.kind === 'feature' ? undefined : actions[i - 1]?.spellLevel) ? <li className="spell-group">{t('Spell level {n}', { n: a.spellLevel })}</li> : null}
                   <li>
-                    <span className="act-icon">{a.icon}</span>
+                    <span className="act-icon"><AbilityGlyph def={a} /></span>
                     <div>
                       <b>{t(a.name)}{a.cost > 0 && <span className="cost" title={t('Mana (spell points)')}>{a.cost}</span>}{a.oncePerRest && <span className={c.spent.includes(a.id) ? 'use spent' : 'use'}>{c.spent.includes(a.id) ? t('Used') : t('Ready')}</span>}</b>
                       <span><Rich text={t(a.description)} /></span>

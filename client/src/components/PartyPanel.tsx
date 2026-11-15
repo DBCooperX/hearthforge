@@ -5,6 +5,7 @@ import { artOfCharacter, heroUrl } from '../game/heroArt';
 import { playerId } from '../net';
 import { useT } from '../i18n';
 import { classLabel, conditionHelp } from '../game/util';
+import { FeatureGlyph } from '../ui/Glyph';
 
 interface Props {
   state: GameState;
@@ -69,7 +70,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
               {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}>⬆ {t('Level up')}</button>}
               {shownResources(c).length > 0 && (
                 <div className="uses">
-                  {shownResources(c).map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={`${t(r.def.name)}: ${r.left} / ${r.max}`}>{r.def.icon} {r.left}</span>)}
+                  {shownResources(c).map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={`${t(r.def.name)}: ${r.left} / ${r.max}`}><FeatureGlyph id={r.def.id} emoji={r.def.icon} /> {r.left}</span>)}
                 </div>
               )}
               <div className="conditions">

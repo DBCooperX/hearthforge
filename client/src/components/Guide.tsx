@@ -8,6 +8,7 @@ import { fillFeat } from '../../../shared/recommend';
 import { ABILITY_KEYS, EFFECT_LINES, FEATS, GLOSSARY, SPELL_TIPS, loc, type Effect, type L, type Option, type Term } from '../../../shared/rules';
 import { abilityMod, type AbilityKey, type FeatId, type FeatPick } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
+import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 export const signed = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 /** German dice notation uses W (Würfel) where English uses d. */
@@ -73,7 +74,7 @@ export function Rich({ text }: { text: string }) {
 // --------------------------------------------------------------- pick rows
 
 interface PickProps {
-  icon?: string;
+  icon?: ReactNode;
   title: string;
   sub?: string;
   selected?: boolean;
@@ -149,7 +150,7 @@ export function OptionDetail({ option, kicker, children }: { option: Option; kic
   return (
     <article className="detail">
       <header>
-        <span className="detail-icon">{option.icon}</span>
+        <span className="detail-icon"><OptionGlyph option={option} /></span>
         <div>
           {kicker && <small className="kicker">{kicker}</small>}
           <h2>{t(option.name)}</h2>
@@ -186,7 +187,7 @@ export function SpellDetail({ id, sheet }: { id: string; sheet: Pick<Sheet, 'spe
   return (
     <article className="detail">
       <header>
-        <span className="detail-icon">{a.icon}</span>
+        <span className="detail-icon"><AbilityGlyph def={a} /></span>
         <div>
           <small className="kicker">{level}</small>
           <h2>{t(a.name)}</h2>
@@ -272,14 +273,14 @@ export function Preview({ now, next, title }: { now: Sheet | null; next: Sheet |
       <ul className="pv-skills">
         {Object.keys(SKILLS).filter((k) => s.skills.includes(k) || lostSkills.includes(k)).map((k) => (
           <li key={k} className={newSkills.includes(k) ? 'up' : lostSkills.includes(k) ? 'down' : ''}>
-            {t(k)}{s.expertise.includes(k) && <span title={t('Expertise')}> ★</span>} <b>{signed(skillBonus(s, k))}</b>
+            <SkillGlyph skill={k} /> {t(k)}{s.expertise.includes(k) && <span title={t('Expertise')}> ★</span>} <b>{signed(skillBonus(s, k))}</b>
           </li>
         ))}
         {s.skills.length === 0 && <li className="muted">{t('None yet.')}</li>}
       </ul>
       <h4>{t('Actions and spells')}</h4>
       <ul className="pv-skills">
-        {spells.map((id) => <li key={id} className={base.abilityIds.includes(id) ? '' : 'up'}>{ABILITIES[id].icon} {t(ABILITIES[id].name)}</li>)}
+        {spells.map((id) => <li key={id} className={base.abilityIds.includes(id) ? '' : 'up'}><AbilityGlyph def={ABILITIES[id]} /> {t(ABILITIES[id].name)}</li>)}
       </ul>
       {s.resist.length > 0 && <p className="pv-line"><small>{t('Resistance')}</small> {s.resist.map((r) => t(`${r} damage`)).join(', ')}</p>}
     </aside>
@@ -333,7 +334,7 @@ export function FeatPicker({ build, fixed, options, recommended, value, onChange
     const mine = (pick?.spells ?? []).filter((x) => pool.includes(x));
     const next = { ...pick!, spells: [...others, ...toggle(mine, sid, max)] };
     return (
-      <PickRow key={sid} mark="check" icon={ABILITIES[sid].icon} title={t(ABILITIES[sid].name)} sub={t(ABILITIES[sid].description)} selected={mine.includes(sid)}
+      <PickRow key={sid} mark="check" icon={<AbilityGlyph def={ABILITIES[sid]} />} title={t(ABILITIES[sid].name)} sub={t(ABILITIES[sid].description)} selected={mine.includes(sid)}
         focused={focus?.kind === 'spell' && focus.id === sid} onClick={() => onChange(next)} onFocus={() => onFocus({ kind: 'spell', id: sid }, mine.includes(sid) ? undefined : next)} onLeave={() => onFocus(focus)} />
     );
   };
@@ -343,7 +344,7 @@ export function FeatPicker({ build, fixed, options, recommended, value, onChange
         const o = FEATS[f];
         const filled = fillFeat(build, f);
         return (
-          <PickRow key={f} icon={o.icon} title={t(o.name)} sub={loc(o.summary, lang)} selected={id === f} recommended={recommended === f} focused={isFocus(o)}
+          <PickRow key={f} icon={<OptionGlyph option={o} />} title={t(o.name)} sub={loc(o.summary, lang)} selected={id === f} recommended={recommended === f} focused={isFocus(o)}
             onClick={() => onChange(id === f ? pick! : filled)} onFocus={() => onFocus({ kind: 'option', option: o, kicker: t('Feat') }, id === f ? undefined : filled)} onLeave={() => onFocus(focus)} />
         );
       })}
@@ -390,7 +391,7 @@ export function FeatPicker({ build, fixed, options, recommended, value, onChange
               return (
                 <button key={s} type="button" className={pick.skills?.includes(s) ? 'on' : ''} onClick={() => onChange(next)}
                   onMouseEnter={() => onFocus({ kind: 'skill', id: s }, pick.skills?.includes(s) ? undefined : next)} onMouseLeave={() => onFocus(focus)}>
-                  {t(s)} <small>{t(SKILLS[s].toUpperCase())}</small>
+                  <SkillGlyph skill={s} /> {t(s)} <small>{t(SKILLS[s].toUpperCase())}</small>
                 </button>
               );
             })}

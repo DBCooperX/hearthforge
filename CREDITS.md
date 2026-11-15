@@ -16,7 +16,7 @@ All sprites and tiles are original pixel art generated procedurally in `client/s
 
 Fetched by the server on request:
 
-- Game-icons.net, item icons by Lorc, Delapouite, Sbed, Skoll, Willdabeast, Lucas, Faithtoken and other contributors, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/): <https://game-icons.net>. The server downloads about 100 icons from <https://github.com/game-icons/icons> and recolours them.
+- Game-icons.net, icons for items, skills, feats, spells and class features by Lorc, Delapouite, Sbed, Skoll, Willdabeast, Carl Olsen, Cathelineau, Lucas, Faithtoken and other contributors, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/): <https://game-icons.net>. The server downloads about 400 icons from <https://github.com/game-icons/icons> (none are bundled) and recolours them. `shared/art.ts` and `shared/glyphs.ts` name every icon and its author; `node scripts/check-game-icons.mjs` checks the list.
 - Kenney, "Tiny Dungeon", CC0 1.0: <https://kenney.nl/assets/tiny-dungeon>
 
 Recognised when uploaded, with the license as stated on the pack's page on 15 November 2026:
