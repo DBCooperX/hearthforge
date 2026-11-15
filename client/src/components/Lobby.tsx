@@ -6,6 +6,7 @@ import { ABILITY_KEYS, BACKGROUNDS, CLASSES, SPECIES, loc } from '../../../share
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
+import { StyleSetup } from './StyleSetup';
 import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
 import { ChatPanel } from './Chat';
@@ -350,6 +351,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
           <small className="muted">{host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')}</small>
         </div>
         <WorldSetup state={state} conn={conn} />
+        <StyleSetup state={state} conn={conn} />
         <h2>{t('Party')} ({state.characters.length}/4)</h2>
         {state.characters.length === 0 && <p className="muted">{t('No heroes yet. Playing solo? Add up to four and control them all.')}</p>}
         <ul className="roster">

@@ -1,5 +1,6 @@
 // Builds the text the Dungeon Master sees: a stable system prompt, and a compact,
 // factual snapshot of the world, the party and everything the DM should remember.
+import { styleText } from '../../../shared/style';
 import { ITEMS } from '../../../shared/content';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
@@ -71,6 +72,11 @@ export function settingOf(game: Game): Pick<SettingState, 'name' | 'premise' | '
   };
 }
 
+/** How this table wants its story told, sent with every turn so a change by the host takes effect at once. */
+export function styleNote(game: Game): string[] {
+  return ['Table style (set by the host; follow it in every scene):', styleText(game.s.table.style), ''];
+}
+
 /** Tells the DM which language the table plays in. English needs no note. */
 export function languageNote(game: Game): string[] {
   if (game.lang !== 'de') return [];
@@ -133,7 +139,7 @@ function partyLines(game: Game): string[] {
 /** The world outside combat: where the party is, what it knows and what the DM remembers. */
 export function describeWorld(game: Game): string {
   const s = game.s, w = game.world, mem = s.memory;
-  const lines: string[] = languageNote(game);
+  const lines: string[] = [...languageNote(game), ...styleNote(game)];
   const place = game.place();
   const terrain = TERRAIN[trueTerrain(w, w.party)].name;
   const setting = settingOf(game);
@@ -208,7 +214,7 @@ export function describeLook(l: MonsterLook): string {
 /** The battle in progress, for narrating and playing monsters. */
 export function describeCombat(game: Game): string {
   const s = game.s;
-  const lines: string[] = languageNote(game);
+  const lines: string[] = [...languageNote(game), ...styleNote(game)];
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
   lines.push(`The battle map shows: ${s.biome ?? 'dungeon'}. Mud, undergrowth, rubble and shallow water are difficult terrain (double movement); trees, boulders and furniture give half cover (+2 AC) against shots. The server applies both; use them to colour the narration.`);

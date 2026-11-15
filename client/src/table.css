@@ -112,3 +112,15 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
 .world-setup textarea { width: 100%; resize: vertical; font: inherit; }
 .seed-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .seed-row input { width: 15ch; flex: 0 1 auto; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* DM style: the same look as the world setup, plus the rules slider. */
+.style-setup { display: grid; gap: 12px; }
+.style-setup.bare { gap: 12px; }
+.style-setup .field { display: grid; gap: 6px; font-size: 14px; }
+.style-setup .field > span:first-child { font-weight: 600; }
+.style-setup .pick button:disabled { opacity: 0.55; cursor: default; }
+.style-setup .pick button.on:disabled { opacity: 1; }
+.rules-slider { display: flex; align-items: center; gap: 10px; }
+.rules-slider small { color: var(--muted); white-space: nowrap; }
+.rules-slider input[type='range'] { flex: 1; min-width: 120px; padding: 0; accent-color: #d9a851; background: none; border: none; box-shadow: none; }
+.rules-slider input[type='range']:disabled { opacity: 0.7; }
