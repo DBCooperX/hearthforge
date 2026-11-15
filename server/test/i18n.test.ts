@@ -205,3 +205,14 @@ describe('hero gender', () => {
     expect(DM_SYSTEM_PROMPT).toContain('Never infer it from a name');
   });
 });
+
+describe('DM knowledge boundary', () => {
+  it('marks the premise as background the party does not know and tells the DM to introduce unmet things', () => {
+    const g = germanGame();
+    g.start();
+    const world = describeWorld(g);
+    expect(world).toContain('Background for you only');
+    expect(world).toContain(g.s.setting ? g.s.setting.premise : world);
+    expect(DM_SYSTEM_PROMPT).toContain('introduce it the way the speaker would');
+  });
+});
