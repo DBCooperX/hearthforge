@@ -11,6 +11,8 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **Open world**: a hex overworld (6 miles per hex) that you travel freely. Pick any hex to see distance, travel time, terrain and the chance of an encounter, then set out. Explored country stays on the map, and the Dungeon Master can add new places as the story finds them.
 - **Story first**: narration arrives as short scene cards with a location header and a mood colour. Each scene suggests a few actions as buttons, and you can always type anything instead. Names of people, places and items are highlighted, with details on hover. Dice roll inline with the full breakdown (d20 + modifier vs AC or DC).
 - **A world that remembers**: people you met, quests, deeds and places are saved with the game and given to the Dungeon Master every turn. Press `j` for the journal.
+- **Premade heroes or your own**: eight ready-made heroes on flip cards with their story and numbers, or a guided creator: class, species, background, ability scores (standard array, point buy or dice rolled by the server), skills, talents, equipment, name, gender, looks and backstory. Every option explains what it is, what it does in numbers and who it is good for, with recommended picks per class, tooltips on rules terms and a live preview of your sheet. A premade can be used as it is or customized.
+- **Level-up choices**: a subclass at level 3 (Champion, Thief, Evoker, Life Domain), new spells, and a feat or ability score increase at level 4, each with the same explanations and preview.
 - **Progression**: XP from fights and quests, levels 1 to 5 with a level-up summary, and a full character sheet (press `c`).
 - **Turn-based 5e combat** on a battle map that is generated for each fight and matches where it breaks out (swamp, forest, plains, hills, mountains, road, bridge, camp, town streets, tavern, cave, ruin or dungeon). Mud, undergrowth, rubble and shallow water are difficult terrain; trees, boulders and furniture give half cover against shots. Also: initiative, movement, attack rolls against AC, advantage and disadvantage, critical hits, saving throws, Sneak Attack, cantrips and 1st-level spells, potions, death saves, and short rests.
 - **AI Dungeon Master**: narrates, plays every character you meet, chooses what each monster does, calls for skill checks, starts fights, hands out rewards and keeps the journal. It picks a cheaper or stronger Claude model depending on the moment (see [Configuration](#configuration)). Without an API key a scripted fallback runs travel, fights, rests and dungeons, but cannot improvise.
@@ -19,7 +21,7 @@ Hearthforge runs as a single Docker container on your own server. You and your f
 - **Background music** that follows the story: tavern, town, the open road, dungeons, fights and boss fights each have their own tracks and crossfade into each other. Every player has a mute button and a volume slider in the top bar, remembered in their browser. See [Music](#music).
 - **Solo or multiplayer**: one player can run up to four heroes, or friends can join the same table and each bring their own. Games are saved in SQLite and survive restarts.
 
-Four heroes are available: Fighter, Rogue, Wizard and Cleric. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
+Four classes are available (Fighter, Rogue, Wizard and Cleric) with nine species and four backgrounds. Each hero has a gender (female, male or neutral) that the Dungeon Master is told on every turn, so the narration never guesses or switches. The starting region, the Emberfall Vale, has a town, a village, a shrine, a ruin and the goblin warren under the old Hearthforge smithy.
 
 ## Install on Proxmox
 
@@ -164,7 +166,7 @@ Title, artist and license are shown in the game when a player points at the musi
 ## How to play
 
 1. Enter your name and a table name. Everyone who enters the same table name shares one adventure.
-2. Add heroes. Playing alone? Add up to four and control them all.
+2. Add heroes: flip a premade card and add it, customize it, or create your own. Playing alone? Add up to four and control them all.
 3. Read the scene, then click a suggested action or type what you do. The panel on the right shows where you are, who is here, the map and your quests.
 4. To travel, click a hex on the map (press `m` for the big one), check the journey and press **Set out**. Places inside a town, such as the tavern, are listed under *Here*, and dungeons are entered with **Delve**.
 5. When a fight starts, the battle map appears and initiative is rolled. On your hero's turn you get 30 ft of movement and one action: click an enemy to attack, or pick a spell or ability from the action bar. `Space` ends the turn.
@@ -190,6 +192,8 @@ The rules follow the 5e SRD with a few simplifications:
 - Parties smaller than four get the Hearth's Blessing (+4 max HP per missing hero) and face fewer monsters.
 - Heroes left unconscious when a fight is won get back up with 1 HP.
 - A long rest is allowed once every 16 hours.
+- Species traits and feats that the rules engine cannot enforce (darkvision, speaking with small beasts and the like) are handed to the Dungeon Master to honour in the story. The creator marks which is which.
+- Each class has one subclass, the one in the SRD. Magic Initiate spells are cast with mana like any other spell.
 - No opportunity attacks, ammunition tracking, attunement or encumbrance yet.
 
 ## Development

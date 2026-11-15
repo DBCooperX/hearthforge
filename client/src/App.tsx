@@ -9,6 +9,7 @@ import { JoinScreen, PartySetup } from './components/Lobby';
 import { MapView } from './components/MapView';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
+import { LevelUp } from './components/LevelUp';
 import { Journal, MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
@@ -18,7 +19,7 @@ import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
 import { playerId, useConnection } from './net';
 
-type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | null;
+type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | null;
 
 export function App() {
   const t = useT();
@@ -166,6 +167,7 @@ export function App() {
           onPick={pickCharacter}
           onGive={(fromId, from, to) => send({ t: 'give', characterId: fromId, from, toCharacterId: to.id })}
           onSheet={(c) => { setSelectedId(c.id); setOverlay('sheet'); }}
+          onLevelUp={(c) => { setSelectedId(c.id); setOverlay('levelup'); }}
         />
         {combat ? (
           <>
@@ -191,7 +193,8 @@ export function App() {
           </>
         )}
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
-        {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
+        {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
+        {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} />}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
         <Toasts conn={conn} />

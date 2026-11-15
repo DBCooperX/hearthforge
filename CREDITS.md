@@ -4,7 +4,9 @@
 
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at <https://dnd.wizards.com/resources/systems-reference-document>. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
 
-Classes, spells, equipment and monster statistics in `shared/content.ts` and `server/src/data/` are adapted from the SRD 5.1. The Spell Points mana bar and the Hearth's Blessing are house rules.
+This work also includes material from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at <https://www.dndbeyond.com/srd>. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at <https://creativecommons.org/licenses/by/4.0/legalcode>.
+
+Classes, spells, equipment and monster statistics in `shared/content.ts` and `server/src/data/` are adapted from the SRD 5.1. Species, backgrounds, origin feats and most fighting styles in `shared/rules.ts` are adapted from the SRD 5.2.1; the Dueling style and the subclasses follow the SRD 5.1. All descriptions, hints and German texts are written for Hearthforge in its own words. Nothing is taken from the Player's Handbook or any other book outside the SRD. The Spell Points mana bar and the Hearth's Blessing are house rules.
 
 Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.
 

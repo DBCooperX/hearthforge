@@ -104,6 +104,10 @@ export class Room {
     const g = this.game;
     switch (msg.t) {
       case 'add_character': return void g.addCharacter(playerId, msg.classId, String(msg.name ?? ''));
+      case 'add_premade': return void g.addPremade(playerId, String(msg.premadeId), String(msg.name ?? ''));
+      case 'create_character': return void g.createCharacter(playerId, msg.spec);
+      case 'roll_abilities': return void g.rollAbilities(playerId);
+      case 'choose': return g.choose(playerId, String(msg.characterId), String(msg.choiceId), msg.pick);
       case 'remove_character': return g.removeCharacter(playerId, String(msg.characterId));
       case 'start': return g.start();
       case 'move': return g.move(playerId, String(msg.characterId), Math.round(Number(msg.x)), Math.round(Number(msg.y)));
