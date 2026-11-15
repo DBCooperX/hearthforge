@@ -3,7 +3,6 @@
 // validates and resolves with real dice, and Claude narrates the result.
 import Anthropic from '@anthropic-ai/sdk';
 import { BIOMES } from '../../../shared/battlemap';
-import { ITEMS } from '../../../shared/content';
 import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
@@ -115,7 +114,7 @@ const STORY_TOOLS: Tool[] = [
   }),
   tool('give_item', 'Put an item from the catalogue into a hero\'s backpack.', {
     character_id: str('Id of the hero who receives it.'),
-    item_id: { type: 'string', enum: Object.keys(ITEMS) },
+    item_id: str('Id of the item, exactly as listed in the item catalogue, for example "potion_healing".'),
     quantity: int('How many. Usually 1.'),
   }),
   looseTool('give_story_item', "Put something that is not in the catalogue into a hero's backpack: a clue, a keepsake, a letter, a key, a trophy, odd loot. Call it whenever a hero pockets, is handed or buys such a thing, so it shows up in their inventory. Reusing the name of an existing item hands out more of it.", {
@@ -128,7 +127,7 @@ const STORY_TOOLS: Tool[] = [
     value: int('What a merchant would pay in gold pieces. 0 for things with no market value. Capped by the server.'),
     quantity: int('How many. Usually 1.'),
     quest_item: { type: 'boolean', description: 'True if losing it would break a quest or a lead. Such items cannot leave the party by accident.' },
-    base_item: { type: 'string', enum: ['none', ...Object.keys(ITEMS)], description: 'For gear that should work in play, the catalogue item whose rules it uses: an orcish cleaver might use "handaxe", a bitter draught "potion_healing". "none" for everything else. Story items never have rules of their own.' },
+    base_item: str('For gear that should work in play, the id of the catalogue item whose rules it uses: an orcish cleaver might use "handaxe", a bitter draught "potion_healing". "none" for everything else. Story items never have rules of their own.'),
     note: str('Where it came from or what is known about it so far, in one line, or an empty string.'),
   }),
   looseTool('update_story_item', 'Change a story item as the party learns more: add what they found out, rewrite its description, or rename it once its true nature is known.', {
@@ -293,7 +292,11 @@ export class ClaudeDM implements DungeonMaster {
           case 'change_gold':
             return game.changeGold(Number(i.amount), String(i.reason ?? ''));
           case 'give_item':
-            return game.grantItem(String(i.character_id), String(i.item_id), Number(i.quantity));
+            {
+            // The id is free text now, so accept an item's name as well and keep story items out of this path.
+            const found = game.findItemDef(String(i.item_id ?? ''));
+            return game.grantItem(String(i.character_id), found && !found.story ? found.id : String(i.item_id), Number(i.quantity));
+          }
           case 'give_story_item':
             return game.giveStoryItem({
               characterId: String(i.character_id), name: String(i.name ?? ''), description: String(i.description ?? ''), category: i.category, icon: String(i.icon ?? 'auto'),

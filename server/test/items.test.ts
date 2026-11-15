@@ -171,9 +171,11 @@ describe('strict tool schemas', () => {
       return Object.entries(node).reduce((n, [k, v]) => n + (k === 'enum' && Array.isArray(v) ? v.length : enumValues(v)), 0);
     };
     const params = strict.reduce((n, t) => n + Object.keys((t.input_schema as any).properties).length, 0);
-    // Currently 44 parameters and 88 enum values; the room above that is for new monsters and catalogue items.
+    // Currently 44 parameters and 66 enum values; the room above that is for new monsters and biomes.
+    // Item ids are plain strings checked by the engine, so the catalogue can grow freely.
     expect(params).toBeLessThanOrEqual(44);
-    expect(enumValues(strict.map((t) => t.input_schema))).toBeLessThanOrEqual(100);
+    expect(enumValues(strict.map((t) => t.input_schema))).toBeLessThanOrEqual(80);
+    expect(JSON.stringify(DM_TOOLS)).not.toContain('"longsword_plus1"');
   });
 
   it('drops strict and carries on if the API still refuses the grammar', async () => {
