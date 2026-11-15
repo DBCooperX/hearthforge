@@ -18,12 +18,13 @@ export const ITEM_KIND_LABELS = {
 
 export const NAV_LABELS = { sheet: 'Character', inventory: 'Inventory', journal: 'Journal', map: 'Map' } as const;
 
-export const JOURNAL_TABS = { quests: 'Quests', people: 'People', places: 'Places', standing: 'Standing', lore: 'Lore' } as const;
+export const JOURNAL_TABS = { quests: 'Quests', clues: 'Clues', people: 'People', places: 'Places', standing: 'Standing', lore: 'Lore' } as const;
 /** How a faction rates the party, in the order from worst to best. */
 export const TIER_LABELS = { hated: 'hated', distrusted: 'distrusted', neutral: 'neutral', liked: 'liked', honoured: 'honoured' } as const;
 export const QUEST_HEADS: Record<QuestStatus, string> = { active: 'Open quests', completed: 'Completed', failed: 'Failed' };
 export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
   quests: 'No quests yet. The Vale is wide; go and find trouble.',
+  clues: 'No clues yet. What you find out about the mysteries of this region is written here.',
   people: 'You have met nobody yet.',
   places: 'No places on the map yet.',
   standing: 'Nobody here knows you yet.',

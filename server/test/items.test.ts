@@ -136,7 +136,8 @@ describe('Dungeon Master item tools', () => {
     expect(scene?.text).toMatch(/splinter/);
     const names = requests[0].tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining(['give_story_item', 'update_story_item', 'take_item']));
-    expect(requests[0].tools.length).toBeLessThanOrEqual(20);
+    // Loose tools add nothing to the strict grammar; the cap keeps the tool list (and its cached prefix) from creeping.
+    expect(requests[0].tools.length).toBeLessThanOrEqual(22);
     expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false && t.input_schema.required.length === Object.keys(t.input_schema.properties).length)).toBe(true);
     expect(requests[0].system[0].text).toMatch(/give_story_item/);
     expect(requests[1].messages[2].content.map((r: any) => !!r.is_error)).toEqual([false, false, true]);

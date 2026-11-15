@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Playing
+- **A story you can follow.** Every scene card names where it plays, the time of day and who is there. The Dungeon Master stages each scene and tags every speaker, explains what the heroes would plainly know, adds at most one new mystery per scene, and lets people answer what they are asked instead of pushing hooks. Clues the party finds are filed in a new Clues tab of the journal, grouped by open question.
+
 ## 0.9.0 (15 November 2026): first playtest release
 
 The first version meant for real play-testing with the live AI Dungeon Master. Features that have only been tested against the scripted fallback and the unit tests are listed in [docs/PLAYTEST.md](docs/PLAYTEST.md).

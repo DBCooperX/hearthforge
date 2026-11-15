@@ -2,7 +2,7 @@
 // players (and the route planner) only ever see hexes they have explored.
 
 import { HEX_MILES, UNKNOWN, direction, findRoute, hexDistance, neighbors, type Hex, type TerrainCode } from '../../../shared/hex';
-import type { Deed, Location, Npc, Quest } from '../../../shared/types';
+import type { Deed, Location, Mystery, Npc, Quest } from '../../../shared/types';
 import { hashSeed, seedStream, type RegionChoice, type StartOptions } from '../../../shared/start';
 import type { Siting, TerrainStyle } from '../data/regions';
 import { WORLD_HEIGHT, WORLD_WIDTH, type RegionDef, type SeedLocation, type StageDef } from '../data/world';
@@ -68,6 +68,8 @@ export interface MemoryState {
   chronicle: string;
   /** What people are saying, newest last. Missing in saves from before rumours. */
   rumours: RumourState[];
+  /** The story's open questions and the clues found for each. Missing in saves from before clue tracking. */
+  mysteries: Mystery[];
 }
 
 /** Where and how this table's story is set. Saved with the game; tables from before start options have none. */
@@ -296,6 +298,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
     journal: [],
     chronicle: '',
     rumours: [],
+    mysteries: [],
   };
   const lair = region.locations.find((l) => l.questId);
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';

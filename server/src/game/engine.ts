@@ -14,7 +14,7 @@ import { heroLook } from '../../../shared/heroLook';
 import { BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, STYLES, classFeatureLines, loc, type L } from '../../../shared/rules';
 import { pickIcon } from '../../../shared/items';
 import {
-  COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex,
+  COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex, timeOfDay,
   type Compass, type Hex,
 } from '../../../shared/hex';
 import {
@@ -221,6 +221,11 @@ export interface InternalState {
   travel: { to: Hex; hexes: number; minutes: number; terrain: string[] } | null;
   /** The DM flagged the last scene as a turning point, so the next reply gets the strongest model. */
   escalate: boolean;
+  /**
+   * Where the current scene plays and who is in it, as the Dungeon Master last set it. It holds only
+   * while the party stays where it was set; anywhere else the scene header falls back to the place.
+   */
+  stage?: { at: string; where: string; present: string[] };
   /** World clock (minutes) when the party last finished a long rest. */
   lastLongRest: number;
   /** Language of the game log, world text and narration. The host picks it. */
@@ -319,7 +324,7 @@ const DIRS: Pt[] = [
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
 ];
 const MAX_LOG = 400;
-const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [] });
+const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [] });
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
 export class Game {
@@ -350,6 +355,7 @@ export class Game {
     this.s.tradeOffer ??= null;
     // Saves from before reputation, rumours and trophies.
     this.s.memory.rumours ??= [];
+    this.s.memory.mysteries ??= []; // saves from before clue tracking
     this.s.achievements ??= [];
     this.s.stats = { ...emptyStats(), ...this.s.stats };
     this.s.factions ??= this.s.world ? makeFactions(this.s.setting?.seed ?? 'HEARTH', this.lang, !this.s.setting || this.s.setting.region === 'classic') : [];
@@ -932,6 +938,7 @@ export class Game {
   private settleIn(loc: LocationState): boolean {
     const first = !loc.visited;
     this.world.placeId = loc.id;
+    delete this.s.stage; // a new place starts with its own scene
     loc.visited = true;
     loc.discovered = true;
     for (const n of this.s.memory.npcs) if (n.locationId === loc.id) n.met = true;
@@ -984,6 +991,7 @@ export class Game {
     const minutes = hoursFor(code) * 60;
     w.party = next;
     w.placeId = null;
+    delete this.s.stage;
     w.minutes += minutes;
     t.hexes++;
     t.minutes += minutes;
@@ -4776,10 +4784,74 @@ export class Game {
     return { character: c.name, roll: r, modifier: mod, total, dc, success };
   }
 
-  /** Narration shown to the players as a scene card. */
+  /** Narration shown to the players as a scene card, headed by where it plays, when, and who is there. */
   addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }) {
     const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
+    if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
     this.log('dm', scene.text.trim(), { scene: meta });
+  }
+
+  /** A key for where the party stands, so a stage set in one place is not shown in another. */
+  private stageKey() { const w = this.world; return w.placeId ?? `${w.party.q},${w.party.r}`; }
+
+  /**
+   * Where the current scene plays and who is in it besides the heroes. What the Dungeon Master
+   * set holds while the party stays put; otherwise it is the place and the people known to be there.
+   */
+  stage(): { where: string; present: string[] } {
+    const set = this.s.stage;
+    if (set && set.at === this.stageKey()) return { where: set.where, present: [...set.present] };
+    const place = this.place();
+    const parent = place?.parentId ? this.location(place.parentId) : null;
+    const where = place ? (parent ? `${place.name}, ${parent.name}` : place.name) : this.n(TERRAIN[trueTerrain(this.world, this.world.party)].name);
+    return { where, present: this.presentNpcs().filter((n) => n.met).map((n) => n.name).slice(0, 6) };
+  }
+
+  /**
+   * The Dungeon Master says where exactly the scene plays and who is in it. Plain strings:
+   * an empty "where" keeps the place, "present" is a comma-separated list of names, or "none".
+   */
+  setStage(input: { where?: string; present?: string }) {
+    const now = this.stage();
+    const where = (input.where ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || now.where;
+    const raw = (input.present ?? '').trim();
+    const heroes = new Set(this.s.characters.map((c) => c.name.toLowerCase()));
+    const present = !raw ? now.present : /^(none|nobody|niemand|keine?r?)$/i.test(raw) ? [] : [...new Set(raw.split(/[,;\n]+/).map((x) => x.trim().slice(0, 40)).filter((x) => x && !heroes.has(x.toLowerCase())))].slice(0, 8);
+    this.s.stage = { at: this.stageKey(), where, present };
+    return { where, present: present.length ? present : 'nobody but the party' };
+  }
+
+  /**
+   * File what the party found out under the open question it helps to answer, so the journal
+   * can show what they know. A new question opens a new entry; "solved" closes it.
+   */
+  noteClue(input: { question?: string; clue?: string; source?: string; solved?: boolean }) {
+    const mem = this.s.memory;
+    const question = (input.question ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const text = (input.clue ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!question) throw new GameError(this.t`Name the question this clue belongs to`);
+    const key = (q: string) => q.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    let m = mem.mysteries.find((x) => x.id === question || key(x.question) === key(question));
+    if (!m) {
+      if (!text) throw new GameError(this.t`Describe what the party found out`);
+      if (mem.mysteries.length >= 40) {
+        const old = mem.mysteries.findIndex((x) => x.solved);
+        if (old < 0) throw new GameError(this.t`The journal has no room for another open question`);
+        mem.mysteries.splice(old, 1);
+      }
+      m = { id: this.uniqueId('mystery', question, (id) => mem.mysteries.some((x) => x.id === id)), question, solved: false, clues: [] };
+      mem.mysteries.push(m);
+    }
+    if (text && !m.clues.some((c) => key(c.text) === key(text))) {
+      m.clues.push({ day: this.day(), text, source: (input.source ?? '').trim().slice(0, 60), place: this.stage().where });
+      if (m.clues.length > 15) m.clues.shift();
+      this.log('system', this.t`A clue for your journal: ${m.question}`);
+    }
+    if (input.solved !== undefined && input.solved !== m.solved) {
+      m.solved = input.solved;
+      if (m.solved) this.log('system', this.t`Solved: ${m.question}`);
+    }
+    return { id: m.id, question: m.question, clues: m.clues.length, solved: m.solved };
   }
 
   addJournal(text: string) {
@@ -5183,6 +5255,7 @@ export class Game {
         npcs: s.memory.npcs.filter((n) => n.met).map(({ met: _met, ...n }) => n),
         quests: s.memory.quests.map(({ rewardXp: _x, rewardGold: _g, ...q }) => q),
         deeds: s.memory.deeds,
+        mysteries: s.memory.mysteries,
       },
       travelling: !!s.travel,
       dmBusy: dm.busy,

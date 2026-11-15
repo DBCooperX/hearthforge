@@ -198,6 +198,17 @@ const STORY_TOOLS: Tool[] = [
     setting: str(`What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup. One of: here, ${BIOMES.join(', ')}.`),
     light: str('How lit the battlefield is: "auto" follows the time of day and the place (dungeons and caves are dark), which is right nearly always. "bright", "dim" or "dark" when the story says otherwise, such as "dark" for a cellar whose lamps were smashed. Heroes with torches light them by themselves.'),
   }),
+  // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
+  looseTool('set_stage', 'Say where exactly the scene plays and who is in it besides the heroes. The players see it as a header above your scene ("Zollhaus, upper floor · morning · Hendrick"). Call it whenever the heroes step into another room or out of the door, or people join or leave them, in the same response as scene. Going to another place with move_to_place or by travel resets it by itself.', {
+    where: str('Where the heroes are now, a few words in the table language, for example "Zollhaus, upper floor" or "outside the mill, by the wheel". Empty string to keep the place.'),
+    present: str('Everyone in the scene besides the heroes, by name or as the heroes would call them ("the toll keeper"), separated by commas. "none" when the heroes are alone. Empty string to leave it unchanged.'),
+  }),
+  looseTool('note_clue', "Write a clue into the party's journal: something the heroes found out, saw or were told that helps answer an open question of the story. The journal groups the clues by question, so the players can always look up what they know. Call it in the same response as scene, once for each new clue.", {
+    question: str('The open question this clue belongs to, as the heroes would ask it, in the table language, for example "Who wants the guild silver back?". Reuse the exact wording of a question listed under "Open questions" to add to it.'),
+    clue: str('What the heroes now know, as one plain sentence of fact in the table language, for example "Griet says the guild shipped crates down the river past the mill when the mine flooded." Empty string when you only mark the question solved.'),
+    source: str('Who or what it came from, for example "Griet Möllner" or "the wet coin".'),
+    solved: str('"yes" once the heroes know the answer, otherwise "no".'),
+  }),
   tool('delve', 'The party pushes into the next uncleared section of the dungeon it is standing in. The server sets up that fight.', {}),
   tool('move_to_place', "Move the party to another known place in its current hex, such as into a tavern in the town it is in.", {
     location_id: str('Id of the place.'),
@@ -393,6 +404,10 @@ export class ClaudeDM implements DungeonMaster {
             game.goTo(String(i.location_id));
             game.dropBeats('arrive'); // the DM is already narrating this arrival
             return { now_at: game.place()?.name, people_here: game.presentNpcs().map((n) => `${n.name} (${n.role})`) };
+          case 'set_stage':
+            return game.setStage({ where: String(i.where ?? ''), present: String(i.present ?? '') });
+          case 'note_clue':
+            return game.noteClue({ question: String(i.question ?? ''), clue: String(i.clue ?? ''), source: String(i.source ?? ''), ...(truthy(i.solved) || i.solved === 'yes' ? { solved: true } : {}) });
           case 'advance_time':
             game.advanceTime(Math.max(1, Math.min(720, Number(i.minutes) || 0)));
             return { ok: true };
