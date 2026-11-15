@@ -145,6 +145,15 @@ const STORY_TOOLS: Tool[] = [
     quantity: int('How many to take. Usually 1.'),
     allow_quest_item: { type: 'boolean', description: 'Quest items are refused unless this is true. Set it only when the story truly consumes the item or the party knowingly hands it over.' },
   }),
+  // Loose on purpose, like every tool added since the grammar limit: all plain strings, checked by the engine.
+  looseTool('open_shop', "Show the players a merchant's wares: their trade window opens with the shop's stock and prices, and they buy, sell and haggle there themselves while the server moves the gold and the goods. Call it whenever the party wants to trade with someone, browse a shop or meets a peddler. It reuses a shop listed under \"Shops here\" and otherwise sets up a new one with stock that fits its kind. Returns what is for sale and at what price.", {
+    merchant: str("The merchant's full name. They are saved to your memory like with remember_npc. Empty string for a nameless keeper."),
+    shop: str('Name of the shop or stall as the players will see it, for example "Marta\'s Forge", or the id or name of a shop listed under "Shops here" to reopen it. Empty string to use the plain name of its kind.'),
+    kind: str('What they deal in: "general", "smith", "alchemist", "curio" (rare and magic things) or "peddler" (a small travelling stock).'),
+    prices: str('"fair" normally. "cheap" or "steep" when the story gives a reason. Empty string to leave them as they are.'),
+    stock: str('Up to eight extra things this merchant has on offer, as catalogue item ids or story item names separated by commas, for example "longsword_plus1, potion_greater_healing". Empty string for the usual stock.'),
+    discount: int('Percent off for today that the party earned in the story (a favour, a rescued daughter): 0 normally, 10 or 20. Use -10 for a merchant they have angered. Ordinary haggling is a button in the trade window, so leave it at 0 for that.'),
+  }),
   // Loose on purpose: creature ids and look changes are plain strings that the engine checks,
   // because enums of that size push the compiled grammar of the strict tools over the API's limit.
   looseTool('start_combat', 'Begin a fight. The server builds a battle map, places the party and the monsters, and rolls initiative. Counts are for a party of four and are scaled down for smaller parties.', {
@@ -328,6 +337,8 @@ export class ClaudeDM implements DungeonMaster {
             return game.updateStoryItem({ item: String(i.item ?? ''), name: String(i.name ?? ''), description: String(i.description ?? ''), note: String(i.note ?? ''), ...(i.quest_item === 'yes' || i.quest_item === 'no' ? { quest: i.quest_item === 'yes' } : {}) });
           case 'take_item':
             return game.takeItem({ characterId: String(i.character_id ?? ''), item: String(i.item ?? ''), quantity: Number(i.quantity), allowQuest: truthy(i.allow_quest_item) });
+          case 'open_shop':
+            return game.openShop({ merchant: String(i.merchant ?? ''), shop: String(i.shop ?? ''), kind: String(i.kind ?? ''), prices: String(i.prices ?? ''), stock: String(i.stock ?? ''), discount: Number(i.discount) });
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
             game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined });
