@@ -50,6 +50,8 @@ Ambient loops (under the music) are downloaded the same way, straight from [Open
 
 Deutsch: Umgebungsschleifen werden genauso direkt von OpenGameArt geladen (Feuer: qubodup, CC BY 3.0; Wind: AntumDeluge nach InspectorJ, CC BY 3.0; Kathedrale im Wald: congusbongus, CC0) und lassen sich im Innkeeper abschalten oder entfernen.
 
+If the owner adds a free Freesound API key in the Innkeeper, the server also fetches CC0 ambient loops through Freesound's official API. They are CC0, so no credit is owed, but the author and the Freesound page are recorded and shown with each loop. Deutsch: Mit einem kostenlosen Freesound-API-Schlüssel lädt der Server zusätzlich CC0-Umgebungsschleifen über die offizielle Schnittstelle; Autor und Freesound-Seite werden bei jeder Schleife angezeigt.
+
 Loops you add yourself are credited in the game by whatever title, artist and license you give them.
 
 The game shows title, artist and license of the track that is playing. For tracks you add yourself, crediting them is up to you.
