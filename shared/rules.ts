@@ -108,17 +108,17 @@ const START: Record<ClassId, { abilityIds?: string[]; cantrips?: { fixed: string
 
 const SUBCLASS_TEXT: Record<ClassId, L> = {
   fighter: L('A fighter who wins through raw physical excellence. Your weapon attacks score a critical hit on a roll of 19 or 20.', 'Ein Kämpfer, der durch pure körperliche Überlegenheit siegt. Deine Waffenangriffe treffen schon bei einer gewürfelten 19 oder 20 kritisch.'),
-  rogue: L('A nimble burglar and treasure hunter. Fast Hands lets you drink or hand out a potion as a bonus action, so you can still attack in the same turn.', 'Ein flinker Einbrecher und Schatzjäger. Mit Flinken Händen trinkst oder verabreichst du einen Trank als Bonusaktion und kannst im selben Zug trotzdem angreifen.'),
-  wizard: L('A specialist in raw destructive magic. Potent Cantrip makes your damaging cantrips deal half damage even when they miss or the target saves.', 'Ein Spezialist für rohe Zerstörungsmagie. Durch Mächtigen Zaubertrick verursachen deine Schadens-Zaubertricks auch dann halben Schaden, wenn sie verfehlen oder das Ziel den Rettungswurf schafft.'),
-  cleric: L('A servant of the gods of healing and vitality. Disciple of Life makes every healing spell you cast stronger, and Preserve Life heals several allies at once.', 'Ein Diener der Götter der Heilung und Lebenskraft. Jünger des Lebens verstärkt jeden deiner Heilzauber, und Leben bewahren heilt mehrere Verbündete auf einmal.'),
+  rogue: L('A nimble burglar and treasure hunter. Fast Hands lets you drink or hand out a potion as a bonus action, so you can still attack in the same turn.', 'Ein flinker Einbrecher und Schatzjäger. Mit Flinken Fingern trinkst oder verabreichst du einen Trank als Bonusaktion und kannst im selben Zug trotzdem angreifen.'),
+  wizard: L('A specialist in raw destructive magic. Potent Cantrip makes your damaging cantrips deal half damage even when they miss or the target saves.', 'Ein Spezialist für rohe Zerstörungsmagie. Durch Kraftvollen Zaubertrick verursachen deine Schadens-Zaubertricks auch dann halben Schaden, wenn sie verfehlen oder das Ziel den Rettungswurf schafft.'),
+  cleric: L('A servant of the gods of healing and vitality. Disciple of Life makes every healing spell you cast stronger, and Preserve Life heals several allies at once.', 'Ein Diener der Götter der Heilung und Lebenskraft. Jünger des Lebens verstärkt jeden deiner Heilzauber, und Leben erhalten heilt mehrere Verbündete auf einmal.'),
   barbarian: L('A barbarian who gives in to fury completely. Frenzy adds extra dice to your first reckless hit each turn while you rage.', 'Ein Barbar, der sich dem Zorn ganz hingibt. Raserei fügt deinem ersten rücksichtslosen Treffer in jedem Zug Zusatzwürfel hinzu, solange du im Kampfrausch bist.'),
   bard: L('A collector of knowledge and secrets. You learn three more skills, and Cutting Words spends your inspiration to make an enemy\'s attack miss.', 'Ein Sammler von Wissen und Geheimnissen. Du lernst drei weitere Fertigkeiten, und Schneidende Worte verbrauchen deine Inspiration, um den Angriff eines Gegners danebengehen zu lassen.'),
-  druid: L('A keeper of old rites, bound to one kind of land. Land\'s Aid turns a use of Wild Shape into thorns that hurt your enemies and heal a friend.', 'Ein Hüter alter Riten, an eine Art von Land gebunden. Hilfe des Landes verwandelt eine Anwendung der Tiergestalt in Dornen, die deine Gegner verletzen und einen Freund heilen.'),
+  druid: L('A keeper of old rites, bound to one kind of land. Land\'s Aid turns a use of Wild Shape into thorns that hurt your enemies and heal a friend.', 'Ein Hüter alter Riten, an eine Art von Land gebunden. Beistand des Landes verwandelt eine Anwendung der Tiergestalt in Dornen, die deine Gegner verletzen und einen Freund heilen.'),
   monk: L('A master of unarmed combat. Every hit of your Flurry of Blows can knock the target to the ground.', 'Ein Meister des waffenlosen Kampfes. Jeder Treffer deines Schlaghagels kann das Ziel zu Boden werfen.'),
   paladin: L('A knight sworn to honesty, courage and duty. Sacred Weapon adds your Charisma to weapon attack rolls for a whole fight.', 'Ein Ritter, der Ehrlichkeit, Mut und Pflicht geschworen hat. Heilige Waffe addiert einen ganzen Kampf lang dein Charisma auf Waffenangriffswürfe.'),
   ranger: L('A stalker of dangerous prey. You choose extra damage against wounded enemies or an extra attack against a second one.', 'Ein Jäger gefährlicher Beute. Du wählst Zusatzschaden gegen verwundete Gegner oder einen zusätzlichen Angriff gegen einen zweiten.'),
   sorcerer: L('Magic from a dragon among your ancestors. You gain extra hit points, and scales that protect you without armor.', 'Magie von einem Drachen unter deinen Ahnen. Du erhältst zusätzliche Trefferpunkte und Schuppen, die dich ohne Rüstung schützen.'),
-  warlock: L('A pact with a lord of the lower planes. Dark One\'s Blessing gives you temporary hit points whenever you slay an enemy.', 'Ein Pakt mit einem Herrscher der Niederen Ebenen. Segen des Finsteren gibt dir temporäre Trefferpunkte, wann immer du einen Gegner tötest.'),
+  warlock: L('A pact with a lord of the lower planes. Dark One\'s Blessing gives you temporary hit points whenever you slay an enemy.', 'Ein Pakt mit einem Herrscher der Niederen Ebenen. Segen des Dunklen Meisters gibt dir temporäre Trefferpunkte, wann immer du einen Gegner tötest.'),
 };
 
 function levelGains(id: ClassId): Record<number, LevelGain> {
@@ -211,7 +211,7 @@ export interface ClassGuide extends Option {
 
 const SUBCLASS_DE: Record<ClassId, string> = {
   fighter: 'Champion', rogue: 'Dieb', wizard: 'Hervorrufer', cleric: 'Domäne des Lebens', barbarian: 'Pfad des Berserkers', bard: 'Schule des Wissens',
-  druid: 'Zirkel des Landes', monk: 'Krieger der Offenen Hand', paladin: 'Schwur der Hingabe', ranger: 'Jäger', sorcerer: 'Drakonische Zauberei', warlock: 'Unhold als Schutzherr',
+  druid: 'Zirkel des Landes', monk: 'Krieger der Offenen Hand', paladin: 'Schwur der Hingabe', ranger: 'Jäger', sorcerer: 'Drakonische Zauberei', warlock: 'Unhold-Schutzherr',
 };
 
 const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
@@ -414,7 +414,7 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'sorcerer', name: 'Sorcerer', icon: '🐉', recommendedFor: ALL,
     role: L('Ranged damage · flexible', 'Fernkampfschaden · flexibel'),
     summary: L('A caster born with magic in the blood, who bends spells to the moment.', 'Ein Zauberwirker, dem die Magie im Blut liegt und der Zauber dem Augenblick anpasst.'),
-    description: L('Sorcerers know the wizard\'s attack spells and more cantrips than anyone at the start. Innate Sorcery makes your magic harder to resist for a whole fight. From level 2 sorcery points buy extra mana or Metamagic: a spell as a bonus action, a spell at twice the range. As fragile as a wizard.', 'Zauberer beherrschen die Angriffszauber des Magiers und anfangs mehr Zaubertricks als jeder andere. Angeborene Zauberei macht deine Magie einen ganzen Kampf lang schwerer zu widerstehen. Ab Stufe 2 kaufen Zauberpunkte zusätzliches Mana oder Metamagie: ein Zauber als Bonusaktion, ein Zauber mit doppelter Reichweite. So zerbrechlich wie ein Magier.'),
+    description: L('Sorcerers know the wizard\'s attack spells and more cantrips than anyone at the start. Innate Sorcery makes your magic harder to resist for a whole fight. From level 2 sorcery points buy extra mana or Metamagic: a spell as a bonus action, a spell at twice the range. As fragile as a wizard.', 'Zauberer beherrschen die Angriffszauber des Magiers und anfangs mehr Zaubertricks als jeder andere. Intuitive Zauberei macht deine Magie einen ganzen Kampf lang schwerer zu widerstehen. Ab Stufe 2 kaufen Zauberpunkte zusätzliches Mana oder Metamagie: ein Zauber als Bonusaktion, ein Zauber mit doppelter Reichweite. So zerbrechlich wie ein Magier.'),
     effects: [
       E('Hit die d6', '6 + CON modifier hit points at level 1, then 4 + CON per level.', '6 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 4 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Constitution and Charisma saves.', 'Geübt in Konstitutions- und Charismarettungswürfen.'),
@@ -431,11 +431,11 @@ const GUIDES: Record<ClassId, Omit<ClassGuide, 'path'> & { path?: unknown }> = {
     id: 'warlock', name: 'Warlock', icon: '🧿', recommendedFor: ALL,
     role: L('Ranged damage · rests often', 'Fernkampfschaden · rastet oft'),
     summary: L('An occultist who traded service for power and hurls it as crackling beams.', 'Ein Okkultist, der Dienst gegen Macht getauscht hat und sie als knisternde Strahlen schleudert.'),
-    description: L('Warlocks have very little mana, but all of it returns after a short rest. Between rests you rely on Eldritch Blast, the strongest cantrip in the game, and on Hex, which adds a d6 to every hit on one enemy. Invocations shape you further: armor of shadow, a pact blade, sight in the dark.', 'Hexenmeister haben sehr wenig Mana, doch es kehrt nach einer kurzen Rast vollständig zurück. Zwischen den Rasten verlässt du dich auf den Schauerstrahl, den stärksten Zaubertrick im Spiel, und auf Verhexen, das jedem Treffer gegen einen Gegner einen W6 hinzufügt. Anrufungen formen dich weiter: Rüstung aus Schatten, eine Paktklinge, Sicht im Dunkeln.'),
+    description: L('Warlocks have very little mana, but all of it returns after a short rest. Between rests you rely on Eldritch Blast, the strongest cantrip in the game, and on Hex, which adds a d6 to every hit on one enemy. Invocations shape you further: armor of shadow, a pact blade, sight in the dark.', 'Hexenmeister haben sehr wenig Mana, doch es kehrt nach einer kurzen Rast vollständig zurück. Zwischen den Rasten verlässt du dich auf den Schauriger Strahl, den stärksten Zaubertrick im Spiel, und auf Verwünschung, die jedem Treffer gegen einen Gegner einen W6 hinzufügt. Anrufungen formen dich weiter: Rüstung aus Schatten, eine Paktklinge, Sicht im Dunkeln.'),
     effects: [
       E('Hit die d8', '8 + CON modifier hit points at level 1, then 5 + CON per level.', '8 + KON-Modifikator Trefferpunkte auf Stufe 1, danach 5 + KON pro Stufe.'),
       E('Saving throws', 'Proficient in Wisdom and Charisma saves.', 'Geübt in Weisheits- und Charismarettungswürfen.'),
-      E('Pact Magic', 'Charisma is your spellcasting ability. You start with Eldritch Blast, one more cantrip, Hex and 2 mana, which return on a short rest.', 'Charisma ist dein Zauberattribut. Du beginnst mit Schauerstrahl, einem weiteren Zaubertrick, Verhexen und 2 Mana, die bei einer kurzen Rast zurückkehren.'),
+      E('Pact Magic', 'Charisma is your spellcasting ability. You start with Eldritch Blast, one more cantrip, Hex and 2 mana, which return on a short rest.', 'Charisma ist dein Zauberattribut. Du beginnst mit Schauriger Strahl, einem weiteren Zaubertrick, Verwünschung und 2 Mana, die bei einer kurzen Rast zurückkehren.'),
       E('Eldritch Invocations', 'You choose one lasting power at level 1 and more as you level.', 'Du wählst auf Stufe 1 eine dauerhafte Kraft und mit dem Aufstieg weitere.'),
     ],
     goodFor: L('Players who want a simple, strong attack every turn and a hero with a dark secret.', 'Spieler, die in jedem Zug einen einfachen, starken Angriff und einen Helden mit dunklem Geheimnis wollen.'),
@@ -882,7 +882,7 @@ const kits: KitDef[] = [
     L('Strength fighters who want to be the party\'s wall.', 'Stärke-Kämpfer, die die Mauer der Gruppe sein wollen.')),
   kit('fighter_greatsword', 'fighter', 'Greatsword', '⚔️', false, { armor: 'chain_mail', mainHand: 'greatsword' }, [{ id: 'handaxe' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Chain mail and a two-handed greatsword. Less armor, much more damage.', 'Kettenpanzer und ein zweihändiger Zweihänder. Weniger Rüstung, deutlich mehr Schaden.'),
-    L('2d6 damage instead of 1d8, at the price of the shield (AC 16 instead of 18). Pairs with Great Weapon Fighting and Savage Attacker.', '2W6 Schaden statt 1W8, zum Preis des Schilds (RK 16 statt 18). Passt zu Kampf mit Zweihandwaffen und Wilder Angreifer.'),
+    L('2d6 damage instead of 1d8, at the price of the shield (AC 16 instead of 18). Pairs with Great Weapon Fighting and Savage Attacker.', '2W6 Schaden statt 1W8, zum Preis des Schilds (RK 16 statt 18). Passt zu Kampf mit großen Waffen und Wilder Angreifer.'),
     L('Strength fighters who want fights to end quickly.', 'Stärke-Kämpfer, die Kämpfe schnell beenden wollen.')),
   kit('fighter_archer', 'fighter', 'Longbow', '🏹', false, { armor: 'studded_leather', mainHand: 'longbow' }, [{ id: 'shortsword' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Studded leather, a longbow and a shortsword for close quarters.', 'Beschlagenes Leder, ein Langbogen und ein Kurzschwert für den Nahkampf.'),
@@ -970,7 +970,7 @@ const kits: KitDef[] = [
     L('Sorcerers without darkvision.', 'Zauberer ohne Dunkelsicht.')),
   kit('warlock_occultist', 'warlock', 'Occultist\'s Pack', '🧿', true, { armor: 'leather', mainHand: 'dagger' }, [{ id: 'potion_healing', qty: 2 }, { id: 'torch', qty: 3 }],
     L('Leather armor, a dagger, two healing potions and torches.', 'Lederrüstung, ein Dolch, zwei Heiltränke und Fackeln.'),
-    L('Eldritch Blast is your weapon. With the Armor of Shadows invocation, take the leather off: 13 + Dexterity is better.', 'Der Schauerstrahl ist deine Waffe. Mit der Anrufung Rüstung der Schatten legst du das Leder ab: 13 + Geschicklichkeit ist besser.'),
+    L('Eldritch Blast is your weapon. With the Armor of Shadows invocation, take the leather off: 13 + Dexterity is better.', 'Der Schauriger Strahl ist deine Waffe. Mit der Anrufung Rüstung der Schatten legst du das Leder ab: 13 + Geschicklichkeit ist besser.'),
     L('Most warlocks.', 'Die meisten Hexenmeister.')),
   kit('warlock_blade', 'warlock', 'Pact Blade', '🗡️', false, { armor: 'leather', mainHand: 'longsword' }, [{ id: 'dagger' }, { id: 'potion_healing' }, { id: 'torch', qty: 3 }],
     L('Leather armor, a longsword, a dagger and a healing potion.', 'Lederrüstung, ein Langschwert, ein Dolch und ein Heiltrank.'),

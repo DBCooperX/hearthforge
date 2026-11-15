@@ -369,7 +369,7 @@ export class ClaudeDM implements DungeonMaster {
           case 'find_monsters': {
             const num = (x: unknown) => (x === undefined || x === null || x === '' ? undefined : Number(x));
             const found = findMonsters({ query: String(i.query ?? ''), type: String(i.type ?? ''), crMin: num(i.cr_min), crMax: num(i.cr_max) });
-            return { monsters: found.map(monsterLine), budget: fightBudget(game), ...(found.length ? {} : { note: 'Nothing matches. Try fewer words, the English name, or only a type and a challenge range.' }) };
+            return { monsters: found.map((d) => monsterLine(d, game.lang)), budget: fightBudget(game), ...(found.length ? {} : { note: 'Nothing matches. Try fewer words, the English name, or only a type and a challenge range.' }) };
           }
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));

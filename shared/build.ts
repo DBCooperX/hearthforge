@@ -207,7 +207,7 @@ export function applyFeat(c: Build, pick: FeatPick, origin: boolean): L | null {
     const cantrips = picks.filter((id) => need.cantrips.includes(id));
     const spells = picks.filter((id) => need.spells.includes(id));
     if (!uniq(picks) || picks.length !== cantrips.length + spells.length || cantrips.length !== need.needCantrip || spells.length !== need.needSpell) {
-      return L(`${def.name}: choose a cantrip and a 1st-level spell you do not know yet`, 'Magischer Eingeweihter: Wähle einen Zaubertrick und einen Zauber des 1. Grades, die du noch nicht kennst');
+      return L(`${def.name}: choose a cantrip and a 1st-level spell you do not know yet`, 'Eingeweihter der Magie: Wähle einen Zaubertrick und einen Zauber des 1. Grades, die du noch nicht kennst');
     }
     c.abilityIds.unshift(...picks);
     c.maxMana += 2;

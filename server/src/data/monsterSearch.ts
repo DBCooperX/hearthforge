@@ -60,7 +60,7 @@ export function suggestMonsters(ref: string, limit = 5): string[] {
 }
 
 /** One line of a creature for the Dungeon Master: what it is and how dangerous. */
-export function monsterLine(d: MonsterDef): string {
+export function monsterLine(d: MonsterDef, lang: 'en' | 'de' = 'en'): string {
   const extras = [
     d.multi ? 'multiattack' : '',
     ...(d.specials ?? []).filter((s) => s.slot === 'action' && !s.spell).map((s) => s.name.toLowerCase()),
@@ -69,7 +69,8 @@ export function monsterLine(d: MonsterDef): string {
     d.legendary ? 'legendary actions' : '',
     d.fly ? 'flies' : '',
   ].filter(Boolean);
-  return `${d.id}: ${d.name}, ${d.size} ${d.type}, CR ${d.cr}, AC ${d.ac}, ${d.hp} HP, ${d.xp} XP${extras.length ? `; ${[...new Set(extras)].join(', ')}` : ''}`;
+  const de = lang === 'de' && tr('de', d.name) !== d.name ? ` (German: ${tr('de', d.name)})` : '';
+  return `${d.id}: ${d.name}${de}, ${d.size} ${d.type}, CR ${d.cr}, AC ${d.ac}, ${d.hp} HP, ${d.xp} XP${extras.length ? `; ${[...new Set(extras)].join(', ')}` : ''}`;
 }
 
 /** XP a fight may be worth per hero of a level before it counts as low, moderate or high difficulty (SRD 5.2.1). */

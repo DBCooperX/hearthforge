@@ -167,12 +167,25 @@ export function styleNote(game: Game): string[] {
   return ['Table style (set by the host; follow it in every scene):', styleText(game.s.table.style), ''];
 }
 
+/**
+ * The official German names of the creatures this adventure mentions, so the Dungeon Master
+ * does not translate "bugbear" into something of its own.
+ */
+function creatureNamesDe(game: Game): string[] {
+  const ids = new Set([...JSON.stringify(game.s).matchAll(/"(?:defId|type)":"([a-z_]+)"/g)].map((m) => m[1]).filter((id) => MONSTERS[id]));
+  ids.add('bugbear');
+  const names = [...ids].map((id) => `${MONSTERS[id].name} = ${tr('de', MONSTERS[id].name)}`);
+  return [`Creatures have official German names; use them and never translate a creature name yourself. find_monsters gives the German name of any creature. In this adventure: ${names.join('; ')}. A bugbear is a "Grottenschrat", never a "Bugbär".`];
+}
+
 /** Tells the DM which language the table plays in. English needs no note. */
 export function languageNote(game: Game): string[] {
   if (game.lang !== 'de') return [];
   return [
     'LANGUAGE: This table plays in German. Write everything the players read in natural, idiomatic German, addressing the party as "ihr": scene titles, narration, suggested actions, dialogue, and the names, roles and descriptions of any place, person, quest or story item you create, as well as quest notes, item notes, deeds and journal lines.',
     'Use the established German D&D 5e terms: Rettungswurf, Rüstungsklasse (RK), Trefferpunkte (TP), Schwierigkeitsgrad (SG), Fertigkeitswurf, Vorteil and Nachteil, Kämpfer, Schurke, Magier, Kleriker, Goblin, Grottenschrat, Skelett. Keep proper names exactly as they appear in the state below.',
+    ...creatureNamesDe(game),
+    'Distances, weights and travel are metric in German, as in the German rulebooks: 5 feet are 1,5 m, 30 feet 9 m, a mile 1,5 km, a pound 0,5 kg. Write Swiss Standard German: "ss" instead of "ß" (gross, Strasse, heisst).',
     'German marks gender in nouns, articles and pronouns, so follow each hero\'s listed gender exactly: the listed German form (for example "die Magierin" or "der Magier") is the only one you may use for that hero.',
     'Tool arguments that are ids or fixed choices (character ids, monster types, item ids, moods, abilities, skills, kinds, statuses) stay exactly as specified in English. Only free text is German. The "appearance" fields stay in English.',
     '',

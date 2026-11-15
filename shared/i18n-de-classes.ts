@@ -12,7 +12,7 @@ export const DE_CLASSES: Record<string, string> = {
   'Holy knight in heavy armor. Lay on Hands and Divine Smite.': 'Heiliger Ritter in schwerer Rüstung. Handauflegen und Göttliches Niederstrecken.',
   "Wilderness hunter with bow and Hunter's Mark.": 'Jäger der Wildnis mit Bogen und Zeichen des Jägers.',
   'Born with magic. Bends spells with sorcery points.': 'Mit Magie geboren. Formt Zauber mit Zauberpunkten.',
-  'Bound to a patron. Eldritch Blast and mana that returns on a short rest.': 'An einen Schutzherrn gebunden. Schauerstrahl und Mana, das bei einer kurzen Rast zurückkehrt.',
+  'Bound to a patron. Eldritch Blast and mana that returns on a short rest.': 'An einen Schutzherrn gebunden. Schauriger Strahl und Mana, das bei einer kurzen Rast zurückkehrt.',
   'Path of the Berserker': 'Pfad des Berserkers', 'College of Lore': 'Schule des Wissens', 'Circle of the Land': 'Zirkel des Landes',
   'Warrior of the Open Hand': 'Krieger der Offenen Hand', 'Oath of Devotion': 'Schwur der Hingabe', 'Hunter': 'Jäger',
   'Draconic Sorcery': 'Drakonische Zauberei', 'Fiend Patron': 'Schutzherr: Unhold',
@@ -24,22 +24,22 @@ export const DE_CLASSES: Record<string, string> = {
 
   // Feats and boons
   'Grappler': 'Ringer', 'Punch and Grab': 'Schlagen und Packen',
-  'Boon of Combat Prowess': 'Gabe der Kampfkunst', 'Peerless Aim': 'Unvergleichliches Zielen',
-  'Boon of Irresistible Offense': 'Gabe des unwiderstehlichen Angriffs', 'Overcome Defenses': 'Verteidigung überwinden', 'Overwhelming Strike': 'Überwältigender Schlag',
+  'Boon of Combat Prowess': 'Gabe der Kampffertigkeit', 'Peerless Aim': 'Unvergleichliches Zielen',
+  'Boon of Irresistible Offense': 'Gabe des Unwiderstehlichen Angriffs', 'Overcome Defenses': 'Verteidigung überwinden', 'Overwhelming Strike': 'Überwältigender Schlag',
   'Boon of Spell Recall': 'Gabe der Zaubererinnerung', 'Free Casting': 'Freies Wirken',
   'Boon of Fate': 'Gabe des Schicksals', 'Improve Fate': 'Schicksal wenden',
   'Boon of Truesight': 'Gabe des Wahren Blicks', 'Truesight': 'Wahrer Blick',
   'Boon of the Night Spirit': 'Gabe des Nachtgeists', 'Shadowy Form': 'Schattengestalt',
-  'Boon of Dimensional Travel': 'Gabe der Dimensionsreise', 'Blink Steps': 'Flimmerschritte',
+  'Boon of Dimensional Travel': 'Gabe des Dimensionsreisens', 'Blink Steps': 'Flimmerschritte',
   'Grappler: +1 Strength or Dexterity; you are skilled at seizing and holding foes': 'Ringer: +1 Stärke oder Geschicklichkeit; du verstehst dich darauf, Gegner zu packen und festzuhalten',
-  'Boon of Combat Prowess: once per turn, an attack that misses hits instead': 'Gabe der Kampfkunst: Einmal pro Zug trifft ein Angriff, der verfehlt, stattdessen doch',
+  'Boon of Combat Prowess: once per turn, an attack that misses hits instead': 'Gabe der Kampffertigkeit: Einmal pro Zug trifft ein Angriff, der verfehlt, stattdessen doch',
   'Boon of Irresistible Offense: your weapon damage ignores resistance, and a natural 20 deals extra damage equal to your Strength or Dexterity score':
-    'Gabe des unwiderstehlichen Angriffs: Dein Waffenschaden ignoriert Resistenzen, und eine natürliche 20 verursacht Zusatzschaden in Höhe deines Stärke- oder Geschicklichkeitswerts',
+    'Gabe des Unwiderstehlichen Angriffs: Dein Waffenschaden ignoriert Resistenzen, und eine natürliche 20 verursacht Zusatzschaden in Höhe deines Stärke- oder Geschicklichkeitswerts',
   'Boon of Spell Recall: a spell of 1st to 4th level has a one in four chance to cost no mana': 'Gabe der Zaubererinnerung: Ein Zauber des 1. bis 4. Grades kostet mit einer Chance von eins zu vier kein Mana',
   'Boon of Fate: once per fight, add 2d4 to a saving throw you would fail': 'Gabe des Schicksals: Einmal pro Kampf 2W4 auf einen Rettungswurf, der misslingen würde',
   'Boon of Truesight: you see in darkness out to 60 ft': 'Gabe des Wahren Blicks: Du siehst in Dunkelheit bis 60 ft weit',
   'Boon of the Night Spirit: in dim light or darkness you resist all damage except psychic and radiant': 'Gabe des Nachtgeists: In schwachem Licht oder Dunkelheit bist du gegen allen Schaden außer psychischem und gleißendem resistent',
-  'Boon of Dimensional Travel: after an attack or a spell you may teleport up to 30 ft': 'Gabe der Dimensionsreise: Nach einem Angriff oder Zauber darfst du dich bis zu 30 ft weit teleportieren',
+  'Boon of Dimensional Travel: after an attack or a spell you may teleport up to 30 ft': 'Gabe des Dimensionsreisens: Nach einem Angriff oder Zauber darfst du dich bis zu 30 ft weit teleportieren',
 
   // Kits
   'Axe and Shield': 'Axt und Schild', "Troubadour's Pack": 'Troubadour-Ausrüstung', "Wanderer's Pack": 'Wanderer-Ausrüstung', 'Staff and Shield': 'Stab und Schild',
@@ -112,7 +112,7 @@ export const DE_CLASSES: Record<string, string> = {
   '{0} cannot be {1}.': '{0} kann nicht {1} werden.',
   '{0}: {1} adds {2}, {3} vs DC {4}. {5}': '{0}: {1} addiert {2}, {3} gegen SG {4}. {5}',
   '{0}: {1} rolls the save again, {2}{3} = {4} vs DC {5}. {6}': '{0}: {1} wiederholt den Rettungswurf, {2}{3} = {4} gegen SG {5}. {6}',
-  "{0}'s Countercharm": 'Gegenzauber von {0}',
+  "{0}'s Countercharm": 'Bannlied von {0}',
 
   // Resources
   '{0}: {1} restores {2}.': '{0}: {1} stellt {2} wieder her.',
@@ -151,7 +151,7 @@ export const DE_CLASSES: Record<string, string> = {
   '{0} settles into Patient Defense.': '{0} geht in die Geduldige Verteidigung.',
   '{0} moves with the Step of the Wind, gaining {1} ft of movement.': '{0} bewegt sich mit dem Schritt des Windes und gewinnt {1} ft Bewegung.',
   '{0} gathers focus for a Stunning Strike.': '{0} sammelt Fokus für einen Betäubenden Schlag.',
-  '{0} readies the Quivering Palm.': '{0} bereitet die Zitternde Handfläche vor.',
+  '{0} readies the Quivering Palm.': '{0} bereitet die Vibrierende Handfläche vor.',
   '{0} hardens body and mind against all harm.': '{0} härtet Körper und Geist gegen jeden Schaden.',
   // Paladin
   '{0} lays hands on {1}, restoring {2} HP ({3} left in the pool).': '{0} legt {1} die Hände auf und stellt {2} TP wieder her (noch {3} im Vorrat).',

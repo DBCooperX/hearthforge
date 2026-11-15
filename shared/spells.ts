@@ -104,7 +104,7 @@ export const SPELL_BUFFS: Record<string, SpellBuff> = {
   minor_elementals: B('elemental spirits', 'Elementargeister', 'fight', 'Your attacks that hit deal 2d8 extra lightning damage, and 1d8 more per spell level above the fourth.', 'Deine Angriffe, die treffen, verursachen 2W8 zusätzlichen Blitzschaden und 1W8 mehr je Zaubergrad über dem vierten.', { hit: { dice: '2d8', type: 'lightning', up: '1d8' } }),
   heroes_feast: B('feasted', 'gestärkt vom Festmahl', 'long', 'Maximum and current hit points rise by 2d10; cannot be frightened or poisoned and resists poison. Lasts until the next long rest.', 'Maximale und aktuelle Trefferpunkte steigen um 2W10; kann nicht verängstigt oder vergiftet werden und ist gegen Gift resistent. Hält bis zur nächsten langen Rast.', { maxHp: '2d10', immune: ['frightened', 'poisoned'], resist: ['poison'] }),
   holy_aura: B('holy aura', 'Heilige Aura', 'fight', 'Advantage on all saving throws, and attacks against the hero have disadvantage.', 'Vorteil bei allen Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil.', { saveAdv: 'all', blur: true }),
-  foresight: B('foresight', 'Vorhersehung', 'long', 'Advantage on attack rolls and saving throws, and attacks against the hero have disadvantage. Lasts until the next long rest.', 'Vorteil bei Angriffs- und Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil. Hält bis zur nächsten langen Rast.', { saveAdv: 'all', attackAdv: true, blur: true }),
+  foresight: B('foresight', 'Voraussicht', 'long', 'Advantage on attack rolls and saving throws, and attacks against the hero have disadvantage. Lasts until the next long rest.', 'Vorteil bei Angriffs- und Rettungswürfen, und Angriffe gegen den Helden sind im Nachteil. Hält bis zur nächsten langen Rast.', { saveAdv: 'all', attackAdv: true, blur: true }),
 };
 
 /** Help for the chips of spell effects, by chip name. */
@@ -121,7 +121,7 @@ export const SPELL_CONDITIONS: Record<string, { de: string; text: L2 }> = {
   charmed: { de: 'bezaubert', text: { en: 'it loses its turns', de: 'es verliert seine Züge' } },
   banished: { de: 'verbannt', text: { en: 'it is gone from the fight and cannot be harmed while that lasts', de: 'es ist aus dem Kampf verschwunden und kann solange nicht verletzt werden' } },
   restrained: { de: 'festgesetzt', text: { en: 'it cannot move, its attacks have disadvantage and attacks against it have advantage', de: 'es kann sich nicht bewegen, seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
-  blinded: { de: 'geblendet', text: { en: 'its attacks have disadvantage and attacks against it have advantage', de: 'seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
+  blinded: { de: 'blind', text: { en: 'its attacks have disadvantage and attacks against it have advantage', de: 'seine Angriffe sind im Nachteil und Angriffe gegen es im Vorteil' } },
   frightened: { de: 'verängstigt', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },
   poisoned: { de: 'vergiftet', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },
   cursed: { de: 'verflucht', text: { en: 'its attacks have disadvantage', de: 'seine Angriffe sind im Nachteil' } },

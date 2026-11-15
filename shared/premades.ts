@@ -96,12 +96,12 @@ export const PREMADES: Premade[] = [
   premade('ignar', 'sorcerer', { look: { skin: 'redscale', hair: 'bald', hairColor: 'black', beard: 'none', color: 'red' }, name: 'Ignar', gender: 'male', speciesId: 'dragonborn', backgroundId: 'acolyte', kit: 'sorcerer_wanderer' },
     L('The ember in the blood', 'Die Glut im Blut'),
     L('Ignar set fire to his first sermon without meaning to. The temple decided his gift came from somewhere older than their god and sent him out, kindly, to find where.', 'Ignar setzte seine erste Predigt in Brand, ohne es zu wollen. Der Tempel befand, seine Gabe stamme von etwas Älterem als ihrem Gott, und schickte ihn freundlich hinaus, um herauszufinden, woher.'),
-    L('Four cantrips and raw magical force. Fragile, so stay back; Innate Sorcery makes your spells hard to resist for a whole fight.', 'Vier Zaubertricks und rohe magische Gewalt. Zerbrechlich, also bleib hinten; Angeborene Zauberei macht deine Zauber einen ganzen Kampf lang schwer abzuwehren.'),
+    L('Four cantrips and raw magical force. Fragile, so stay back; Innate Sorcery makes your spells hard to resist for a whole fight.', 'Vier Zaubertricks und rohe magische Gewalt. Zerbrechlich, also bleib hinten; Intuitive Zauberei macht deine Zauber einen ganzen Kampf lang schwer abzuwehren.'),
     'A red-scaled dragonborn in a scorched crimson robe, with small flames dancing around his claws when he is nervous.'),
   premade('morwen', 'warlock', { look: { skin: 'violet', hair: 'long', hairColor: 'white', beard: 'none', color: 'black' }, name: 'Morwen', gender: 'female', speciesId: 'tiefling', backgroundId: 'acolyte', kit: 'warlock_occultist' },
     L('The signed name', 'Der unterschriebene Name'),
     L('Morwen copied forbidden texts for a monastery library and one night answered the voice in the margins. Her patron asks for small things so far. She keeps a careful list of them.', 'Morwen schrieb für eine Klosterbibliothek verbotene Texte ab und antwortete eines Nachts der Stimme am Seitenrand. Ihr Schutzherr verlangt bisher nur Kleinigkeiten. Sie führt sorgfältig Buch darüber.'),
-    L('Eldritch Blast every turn, the hardest-hitting cantrip there is, with Hex on the target. Her mana returns on a short rest.', 'In jedem Zug Schauerstrahl, der stärkste Zaubertrick überhaupt, mit Verhexen auf dem Ziel. Ihr Mana kehrt bei einer kurzen Rast zurück.'),
+    L('Eldritch Blast every turn, the hardest-hitting cantrip there is, with Hex on the target. Her mana returns on a short rest.', 'In jedem Zug Schauriger Strahl, der stärkste Zaubertrick überhaupt, und Verwünschung auf dem Ziel. Ihr Mana kehrt bei einer kurzen Rast zurück.'),
     'A violet-skinned tiefling woman with long white hair, swept-back horns, a black high-collared coat and ink-stained fingers.'),
 ];
 
