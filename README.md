@@ -191,9 +191,9 @@ Sprites are matched by the names in the pack's own tile list, so this one does n
 
 ## Music
 
-Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 17 tracks, roughly 100 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
+Hearthforge ships no audio. On start the server downloads a small set of tracks by Kevin MacLeod ([incompetech.com](https://incompetech.com), CC BY 4.0, 50 tracks, roughly 300 MB) into the data volume (`/data/music`, one folder per kind of scene: `tavern`, `town`, `overworld`, `dungeon`, `combat`, `boss`). Downloads run in the background, tracks appear in the game as they arrive, and missing ones are tried again on the next start. A scene with no track is simply silent, so a failed download never breaks the game. Set `HEARTHFORGE_MUSIC=off` to skip all of this.
 
-This is **untested against the real site**: incompetech.com could not be reached from the environment this was built in, so the track titles and links were written from memory. `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
+Every built-in link was checked on 15 November 2026 and answers with HTTP 200. Which scene a track is filed under was decided by its title and character, not by listening to all of them, so move or delete any that feel wrong (see below). `docker compose logs` lists every track that could not be fetched. Playback, crossfading and the switch between scenes were tested with generated test tones.
 
 **Your own music**: copy audio files (`.mp3`, `.ogg`, `.opus`, `.m4a`, `.wav`, `.flac`) into the folder of the scene they fit. No restart is needed; players hear them after reloading the page:
 
@@ -208,7 +208,16 @@ docker cp my-tavern-song.mp3 hearthforge:/data/music/tavern/
 [{ "context": "tavern", "title": "Song name", "artist": "Who made it", "license": "CC BY 4.0", "url": "https://example.org/song.mp3" }]
 ```
 
-Title, artist and license are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
+**Ambient sound** (crowd murmur, a crackling fire, wind, rain) plays as a quiet loop under the music and has its own volume slider next to the music one. It appears once the server has at least one loop. Nothing is downloaded for it, because the usual sources (Freesound, Sonniss) either need a login or do not allow passing the files on. Put loops, ideally seamless ones, in `/data/music/ambient/<scene>/`, with the same scene names as the music (`tavern`, `town`, `overworld`, `dungeon`). A scene without a loop is quiet, and fights keep the loop of the scene they started in:
+
+```bash
+docker compose exec hearthforge mkdir -p /data/music/ambient/tavern
+docker cp tavern-crowd.ogg hearthforge:/data/music/ambient/tavern/
+```
+
+Loops with a direct download link you have tested (for example CC0 ones) can go into `tracks.json` with `"layer": "ambient"`; they are then fetched like the music.
+
+Title, artist and license of the music and of the ambient loop are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
 
 ## Playing together
 

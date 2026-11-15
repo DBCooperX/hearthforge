@@ -3,11 +3,13 @@
 // A track that cannot be fetched is skipped, and with no tracks at all the game is silent.
 // Audio files the owner copies into a context folder are played too.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
-import { MUSIC_CONTEXTS, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
+import { dirname, extname, join } from 'node:path';
+import { MUSIC_CONTEXTS, type MusicContext, type MusicLayer, type MusicManifest, type MusicTrack } from '../../shared/music';
 
 export interface TrackSource {
   context: MusicContext;
+  /** Defaults to music. Ambient files are kept in MUSIC_DIR/ambient/<context>. */
+  layer?: MusicLayer;
   title: string;
   artist: string;
   license: string;
@@ -28,35 +30,25 @@ const MAX_TRACK_BYTES = 40_000_000;
 const MACLEOD = 'Kevin MacLeod (incompetech.com)';
 const CC_BY = 'CC BY 4.0';
 const incompetech = (context: MusicContext, title: string): TrackSource => ({
-  context, title, artist: MACLEOD, license: CC_BY,
+  context, title, artist: MACLEOD, license: CC_BY, layer: 'music',
   url: `https://incompetech.com/music/royalty-free/mp3-royaltyfree/${encodeURIComponent(title)}.mp3`,
 });
 
 /**
- * The built-in track list. NOTE: incompetech.com could not be reached from the environment
- * this was written in, so the titles and links are from memory and unverified. A link that
- * fails is skipped. Replace the whole list with MUSIC_DIR/tracks.json, an array of
- * {"context", "title", "artist", "license", "url"}.
+ * The built-in track list, all by Kevin MacLeod. Every link was checked on 15 November 2026
+ * (the file answers with HTTP 200); the contexts are assigned by the tracks' character, not
+ * by listening to every one. A link that fails later is skipped. Replace the whole list with
+ * MUSIC_DIR/tracks.json, an array of {"context", "title", "artist", "license", "url"}.
  */
-export const DEFAULT_TRACKS: TrackSource[] = [
-  incompetech('tavern', 'Thatched Villagers'),
-  incompetech('tavern', 'Master of the Feast'),
-  incompetech('tavern', 'Folk Round'),
-  incompetech('town', 'Minstrel Guild'),
-  incompetech('town', 'Village Consort'),
-  incompetech('town', 'Suonatore di Liuto'),
-  incompetech('overworld', 'Heroic Age'),
-  incompetech('overworld', 'Moorland'),
-  incompetech('overworld', 'Skye Cuillin'),
-  incompetech('dungeon', 'Ossuary 6 - Air'),
-  incompetech('dungeon', 'Dark Times'),
-  incompetech('dungeon', 'The Dread'),
-  incompetech('combat', 'Five Armies'),
-  incompetech('combat', 'Clash Defiant'),
-  incompetech('combat', 'Crossing the Chasm'),
-  incompetech('boss', 'Black Vortex'),
-  incompetech('boss', 'Death and Axes'),
-];
+const BY_CONTEXT: Record<MusicContext, string[]> = {
+  tavern: ['Thatched Villagers', 'Master of the Feast', 'Folk Round', 'Fiddles McGinty', 'Celtic Impulse', 'Dragon and Toast', 'Spazzmatica Polka'],
+  town: ['Minstrel Guild', 'Village Consort', 'Suonatore di Liuto', 'Virtutes Instrumenti', 'Mystery Bazaar', 'Lord of the Land', 'Winter Reflections', 'Evening Melodrama', 'Night in Venice'],
+  overworld: ['Heroic Age', 'Moorland', 'Skye Cuillin', 'Eternal Hope', 'Ice Flow', 'Dreamer', 'Heart of Nowhere', 'Echoes of Time v2', 'Hidden Past', 'Atlantean Twilight', 'Lightless Dawn'],
+  dungeon: ['Ossuary 6 - Air', 'Ossuary 5 - Rest', 'Dark Times', 'The Dread', 'The Descent', 'Oppressive Gloom', 'Gathering Darkness', 'Ghost Story', 'Disquiet', 'Dark Walk', 'Dark Fog', 'Anguish', 'Ancient Rite'],
+  combat: ['Five Armies', 'Clash Defiant', 'Crossing the Chasm', 'Volatile Reaction', 'Faster Does It', 'Prelude and Action', 'Impact Moderato', 'Killers', 'Unholy Knight', 'Crusade - Heavy Industry'],
+  boss: ['Black Vortex', 'Death and Axes', 'Giant Wyrm', 'Epic Unease', 'The Complex', 'Hall of the Mountain King', 'Danse Macabre'],
+};
+export const DEFAULT_TRACKS: TrackSource[] = MUSIC_CONTEXTS.flatMap((c) => BY_CONTEXT[c].map((t) => incompetech(c, t)));
 
 export function musicEnabled(env: NodeJS.ProcessEnv): boolean {
   return !/^(off|none|false|0|no)$/i.test((env.HEARTHFORGE_MUSIC ?? 'on').trim());
@@ -68,7 +60,7 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').
 function fileFor(dir: string, t: TrackSource): string {
   let ext = '.mp3';
   try { const e = extname(new URL(t.url).pathname).toLowerCase(); if (AUDIO_TYPES[e]) ext = e; } catch { /* keep .mp3 */ }
-  return join(dir, t.context, `${slug(t.title)}${ext}`);
+  return join(dir, ...(t.layer === 'ambient' ? ['ambient'] : []), t.context, `${slug(t.title)}${ext}`);
 }
 
 /** The tracks to fetch: MUSIC_DIR/tracks.json when present and valid, else the built-in list. */
@@ -80,7 +72,7 @@ export function trackList(dir: string): TrackSource[] {
     if (!Array.isArray(raw)) throw new Error('expected an array');
     return raw.flatMap((r): TrackSource[] => {
       if (!r || typeof r !== 'object' || !isContext(r.context) || typeof r.title !== 'string' || typeof r.url !== 'string' || !/^https?:\/\//i.test(r.url)) return [];
-      return [{ context: r.context, title: r.title.slice(0, 120), artist: String(r.artist ?? '').slice(0, 120), license: String(r.license ?? '').slice(0, 60), url: r.url }];
+      return [{ context: r.context, layer: r.layer === 'ambient' ? 'ambient' : 'music', title: r.title.slice(0, 120), artist: String(r.artist ?? '').slice(0, 120), license: String(r.license ?? '').slice(0, 60), url: r.url }];
     });
   } catch (err) {
     console.warn(`[music] Ignoring ${custom}: ${err instanceof Error ? err.message : err}`);
@@ -113,7 +105,7 @@ export async function ensureMusic(dir: string, env: NodeJS.ProcessEnv, fetchFn: 
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytes.length < 10_000 || bytes.length > MAX_TRACK_BYTES) throw new Error(`unexpected size (${bytes.length} bytes)`);
         if (!looksLikeAudio(bytes, res.headers.get('content-type') ?? '')) throw new Error('not an audio file');
-        mkdirSync(join(dir, t.context), { recursive: true });
+        mkdirSync(dirname(file), { recursive: true });
         // Write under another name first, so a half-written file is never served.
         writeFileSync(`${file}.part`, bytes);
         renameSync(`${file}.part`, file);
@@ -138,21 +130,25 @@ export function musicManifest(dir: string, env: NodeJS.ProcessEnv): MusicManifes
   const tracks: MusicTrack[] = [];
   try {
     const known = new Map(trackList(dir).map((t) => [fileFor(dir, t), t]));
-    for (const context of MUSIC_CONTEXTS) {
-      const folder = join(dir, context);
-      if (!existsSync(folder)) continue;
-      for (const name of readdirSync(folder).sort()) {
-        const file = join(folder, name);
-        if (!AUDIO_TYPES[extname(name).toLowerCase()] || !statSync(file).isFile()) continue;
-        const credit = known.get(file);
-        tracks.push({
-          id: `${context}/${name}`,
-          context,
-          title: credit?.title ?? name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
-          artist: credit?.artist ?? '',
-          license: credit?.license ?? '',
-          src: `/music/${context}/${encodeURIComponent(name)}`,
-        });
+    for (const layer of ['music', 'ambient'] as const) {
+      for (const context of MUSIC_CONTEXTS) {
+        const prefix = layer === 'ambient' ? 'ambient/' : '';
+        const folder = join(dir, ...(layer === 'ambient' ? ['ambient'] : []), context);
+        if (!existsSync(folder)) continue;
+        for (const name of readdirSync(folder).sort()) {
+          const file = join(folder, name);
+          if (!AUDIO_TYPES[extname(name).toLowerCase()] || !statSync(file).isFile()) continue;
+          const credit = known.get(file);
+          tracks.push({
+            id: `${prefix}${context}/${name}`,
+            context,
+            layer,
+            title: credit?.title ?? name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+            artist: credit?.artist ?? '',
+            license: credit?.license ?? '',
+            src: `/music/${prefix}${context}/${encodeURIComponent(name)}`,
+          });
+        }
       }
     }
   } catch (err) {

@@ -297,10 +297,10 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/music/')) {
-    // Only MUSIC_DIR/<context>/<file> is ever served. Browsers ask for audio in byte ranges.
+    // Only MUSIC_DIR/<context>/<file> and MUSIC_DIR/ambient/<context>/<file> are ever served. Browsers ask for audio in byte ranges.
     const parts = url.pathname.slice(7).split('/').map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
-    const ok = parts.length === 2 && parts.every((p) => p && !p.startsWith('.') && !/[\\/]/.test(p));
-    const file = ok ? join(MUSIC_DIR, parts[0], parts[1]) : '';
+    const ok = (parts.length === 2 || (parts.length === 3 && parts[0] === 'ambient')) && parts.every((p) => p && !p.startsWith('.') && !/[\\/]/.test(p));
+    const file = ok ? join(MUSIC_DIR, ...parts) : '';
     const type = AUDIO_TYPES[extname(file).toLowerCase()];
     if (!ok || !type || !existsSync(file) || !statSync(file).isFile()) {
       res.writeHead(404, { 'content-type': 'text/plain' });

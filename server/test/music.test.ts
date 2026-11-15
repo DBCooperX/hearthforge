@@ -81,7 +81,7 @@ describe('music library', () => {
     await expect(ensureMusic(d, {}, fetchFn)).resolves.toBeUndefined();
     expect(asked).toHaveLength(DEFAULT_TRACKS.length);
     const m = musicManifest(d, {});
-    expect(m.tracks).toEqual([{ id: 'tavern/thatched-villagers.mp3', context: 'tavern', title: 'Thatched Villagers', artist: 'Kevin MacLeod (incompetech.com)', license: 'CC BY 4.0', src: '/music/tavern/thatched-villagers.mp3' }]);
+    expect(m.tracks).toEqual([{ id: 'tavern/thatched-villagers.mp3', context: 'tavern', layer: 'music', title: 'Thatched Villagers', artist: 'Kevin MacLeod (incompetech.com)', license: 'CC BY 4.0', src: '/music/tavern/thatched-villagers.mp3' }]);
     expect(existsSync(join(d, 'tavern', 'master-of-the-feast.mp3'))).toBe(false);
     // A second start only asks for what is still missing.
     asked.length = 0;
@@ -101,16 +101,35 @@ describe('music library', () => {
     writeFileSync(join(d, 'combat', 'My_Battle-Song.ogg'), mp3);
     writeFileSync(join(d, 'combat', 'notes.txt'), 'x');
     writeFileSync(join(d, 'elsewhere', 'song.mp3'), mp3);
-    expect(musicManifest(d, {}).tracks).toEqual([{ id: 'combat/My_Battle-Song.ogg', context: 'combat', title: 'My Battle Song', artist: '', license: '', src: '/music/combat/My_Battle-Song.ogg' }]);
+    expect(musicManifest(d, {}).tracks).toEqual([{ id: 'combat/My_Battle-Song.ogg', context: 'combat', layer: 'music', title: 'My Battle Song', artist: '', license: '', src: '/music/combat/My_Battle-Song.ogg' }]);
 
     writeFileSync(join(d, 'tracks.json'), JSON.stringify([
       { context: 'town', title: 'Market Day', artist: 'Someone', license: 'CC0', url: 'https://example.org/market.ogg' },
       { context: 'nowhere', title: 'Bad', url: 'https://example.org/x.mp3' },
       { context: 'town', title: 'Local file', url: 'file:///etc/passwd' },
     ]));
-    expect(trackList(d)).toEqual([{ context: 'town', title: 'Market Day', artist: 'Someone', license: 'CC0', url: 'https://example.org/market.ogg' }]);
+    expect(trackList(d)).toEqual([{ context: 'town', layer: 'music', title: 'Market Day', artist: 'Someone', license: 'CC0', url: 'https://example.org/market.ogg' }]);
     writeFileSync(join(d, 'tracks.json'), 'not json');
     expect(trackList(d)).toBe(DEFAULT_TRACKS);
+  });
+
+  it('keeps ambient loops apart from the music', async () => {
+    const d = dir();
+    mkdirSync(join(d, 'ambient', 'tavern'), { recursive: true });
+    writeFileSync(join(d, 'ambient', 'tavern', 'crowd_murmur.ogg'), mp3);
+    writeFileSync(join(d, 'tracks.json'), JSON.stringify([
+      { context: 'tavern', layer: 'ambient', title: 'Crowd murmur', artist: 'Someone', license: 'CC0', url: 'https://example.org/crowd.ogg' },
+      { context: 'town', title: 'Market Day', url: 'https://example.org/market.ogg' },
+    ]));
+    await ensureMusic(d, {}, (async () => answer(mp3)) as unknown as typeof fetch);
+    expect(existsSync(join(d, 'ambient', 'tavern', 'crowd-murmur.ogg'))).toBe(true);
+    expect(existsSync(join(d, 'tavern', 'crowd-murmur.ogg'))).toBe(false);
+    const tracks = musicManifest(d, {}).tracks;
+    expect(tracks.filter((x) => x.layer === 'music').map((x) => x.id)).toEqual(['town/market-day.ogg']);
+    expect(tracks.filter((x) => x.layer === 'ambient')).toEqual([
+      { id: 'ambient/tavern/crowd-murmur.ogg', context: 'tavern', layer: 'ambient', title: 'Crowd murmur', artist: 'Someone', license: 'CC0', src: '/music/ambient/tavern/crowd-murmur.ogg' },
+      { id: 'ambient/tavern/crowd_murmur.ogg', context: 'tavern', layer: 'ambient', title: 'crowd murmur', artist: '', license: '', src: '/music/ambient/tavern/crowd_murmur.ogg' },
+    ]);
   });
 
   it('answers byte ranges', () => {

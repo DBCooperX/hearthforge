@@ -4,9 +4,13 @@ import type { GameState } from './types';
 export const MUSIC_CONTEXTS = ['tavern', 'town', 'overworld', 'dungeon', 'combat', 'boss'] as const;
 export type MusicContext = (typeof MUSIC_CONTEXTS)[number];
 
+export type MusicLayer = 'music' | 'ambient';
+
 export interface MusicTrack {
   id: string;
   context: MusicContext;
+  /** Music is the tune; ambient is a quiet loop under it (crowd, fire, wind). */
+  layer: MusicLayer;
   title: string;
   /** Empty for files the server owner dropped in by hand. */
   artist: string;
