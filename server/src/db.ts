@@ -42,6 +42,12 @@ export class Store {
     return (this.db.prepare('SELECT room FROM rooms ORDER BY updated_at').all() as { room: string }[]).map((r) => r.room);
   }
 
+  /** When each table was last saved and how large it is, for the Innkeeper. */
+  info(): { room: string; savedAt: string; bytes: number }[] {
+    const rows = this.db.prepare('SELECT room, updated_at AS at, length(state) AS bytes FROM rooms').all() as { room: string; at: string; bytes: number }[];
+    return rows.map((r) => ({ room: r.room, savedAt: `${r.at.replace(' ', 'T')}Z`, bytes: Number(r.bytes) }));
+  }
+
   delete(room: string) {
     this.db.prepare('DELETE FROM rooms WHERE room = ?').run(room);
   }

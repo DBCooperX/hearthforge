@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from '../../shared/i18n';
+import { CLOSED_REASONS } from './ui/labels';
 import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
 
 function makeId(bytes = 16): string {
@@ -71,14 +72,15 @@ export interface Connection {
   joinError: string | null;
   /** True between asking for a seat and the server's answer. */
   joining: boolean;
-  toasts: { id: number; text: string }[];
+  /** Short messages at the edge of the screen. A notice comes from the owner of the server and stays longer. */
+  toasts: { id: number; text: string; notice?: boolean }[];
   send: (msg: ClientMessage) => void;
   join: (room: string, name: string, code?: string) => void;
   create: (name: string, table: NewTable) => void;
   /** Get up from the table and go back to the lobby. */
   leave: () => void;
   onMoved: (fn: MoveListener) => () => void;
-  toast: (text: string) => void;
+  toast: (text: string, notice?: boolean) => void;
 }
 
 type Session = { room: string; name: string; code?: string };
@@ -91,17 +93,17 @@ export function useConnection(): Connection {
   const [typing, setTyping] = useState<Record<string, TypingWhere>>({});
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; text: string; notice?: boolean }[]>([]);
   const ws = useRef<WebSocket | null>(null);
   const session = useRef<Session | null>(null);
   const listeners = useRef(new Set<MoveListener>());
   const toastSeq = useRef(0);
   const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  const toast = useCallback((text: string) => {
+  const toast = useCallback((text: string, notice = false) => {
     const id = ++toastSeq.current;
-    setToasts((t) => [...t.slice(-3), { id, text }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+    setToasts((t) => [...t.slice(-3), { id, text, notice }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), notice ? 15000 : 3500);
   }, []);
 
   const raw = useCallback((msg: ClientMessage) => {
@@ -158,16 +160,27 @@ export function useConnection(): Connection {
             toLobby();
             if (msg.reason === 'kicked') toast('The host has removed you from the table.');
             if (msg.reason === 'closed') toast('The host has closed the table.');
+            if (msg.reason === 'removed') toast('The innkeeper has removed you from the table.');
+            if (msg.reason === 'restored') toast('This table was restored from a backup. Sit down again to carry on.');
             break;
+          case 'notice': toast(msg.text, true); break;
           case 'error':
             if (msg.join) { toLobby(); setJoinError(msg.message); }
             else toast(msg.message);
             break;
         }
       };
-      sock.onclose = () => {
+      sock.onclose = (ev) => {
         setConnected(false);
         if (closed) return;
+        // The owner of the server closed this connection: do not knock again until the page is reloaded.
+        if (ev.code === 4403) {
+          closed = true;
+          session.current = null;
+          setState(null);
+          setJoinError(ev.reason === 'banned' ? CLOSED_REASONS.banned : CLOSED_REASONS.removed);
+          return;
+        }
         timer = setTimeout(connect, retry);
         retry = Math.min(retry * 2, 8000);
       };

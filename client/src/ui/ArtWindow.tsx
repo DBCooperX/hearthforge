@@ -1,17 +1,17 @@
 // Art & Assets: which art packs are on the server, which are in use, and a way to add more
-// from the browser. Everyone can read it (it also carries the credits); the host of a table
-// can upload packs, switch between them and decide which icon stands for which item.
+// from the browser. Everyone can read it (it also carries the credits); the owner of the server
+// uploads packs, switches between them and decides which icon stands for which item in the Innkeeper.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import { CATALOG, ICON_SLOTS, type ArtLibrary, type ArtRef, type PackIcon, type PackInfo } from '../../../shared/art';
 import { reloadItemIcons, useItemArt } from '../game/itemArt';
 import { useT } from '../i18n';
-import { token } from '../net';
+import { innkeeperSession } from './innkeeperApi';
 import { ART_ERRORS } from './labels';
 import { sfx } from './sound';
 import { Window } from './Window';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, 'x-hearthforge-token': token } });
+  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, 'x-innkeeper-session': innkeeperSession() } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(String(body?.error ?? 'failed'));
   return body as T;
@@ -116,7 +116,11 @@ function Assign({ pack, onBack, onLibrary }: { pack: PackInfo; onBack: () => voi
   );
 }
 
-export function ArtWindow({ onClose }: { onClose: () => void }) {
+/**
+ * The art library. As a window of its own it shows everyone the packs and their credits;
+ * inside the Innkeeper (`embedded`) it is where the owner manages them.
+ */
+export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedded?: boolean }) {
   const t = useT();
   const [lib, setLib] = useState<ArtLibrary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -176,13 +180,13 @@ export function ArtWindow({ onClose }: { onClose: () => void }) {
   };
   const more = CATALOG.filter((c) => c.kind === 'icons' && !lib?.packs.some((p) => p.id === c.id));
 
-  return (
-    <Window title={t('Art & Assets')} icon="settings" size={packEditing ? 'large' : 'medium'} className="art-window" onClose={onClose}>
+  const body = (
+    <>
       {!lib ? <div className="settings-body"><p className="muted">{error ? t(ART_ERRORS.failed) : t('Loading…')}</p></div>
         : packEditing ? <Assign key={packEditing.id} pack={packEditing} onBack={() => setEditing(null)} onLibrary={setLib} />
         : (
           <div className="settings-body" onDragOver={(e) => { if (edit) { e.preventDefault(); setOver(true); } }} onDragLeave={() => setOver(false)} onDrop={drop}>
-            {!edit && <p className="art-note">{t(lib.uploads ? 'Only the host of a table can change the art packs.' : 'Changing art packs is switched off on this server.')}</p>}
+            {!edit && <p className="art-note">{t(lib.uploads ? 'Art packs are changed in the Innkeeper, by the owner of this server.' : 'Changing art packs is switched off on this server.')}</p>}
             {edit && (
               <div className={over ? 'art-drop over' : 'art-drop'}>
                 <b>{busy === 'upload' ? t('Unpacking…') : t('Drop the zip of an art pack here')}</b>
@@ -212,6 +216,8 @@ export function ArtWindow({ onClose }: { onClose: () => void }) {
             )}
           </div>
         )}
-    </Window>
+    </>
   );
+  if (embedded) return <div className={packEditing ? 'art-window art-embedded large' : 'art-window art-embedded'}>{body}</div>;
+  return <Window title={t('Art & Assets')} icon="settings" size={packEditing ? 'large' : 'medium'} className="art-window" onClose={onClose ?? (() => {})}>{body}</Window>;
 }

@@ -34,6 +34,7 @@ const PATHS = {
   up: <path d="M12 19V5M6 11l6-6 6 6" />,
   down: <path d="M12 5v14M6 13l6 6 6-6" />,
   pin: <><path d="M9 3.500h6l-1 6 3.500 3.500h-11L10 9.500Z" /><path d="M12 13v7.500" /></>,
+  innkeeper: <><circle cx="8" cy="15.500" r="4.200" /><path d="m11 12.500 8.500-8.500M16.500 7l2.800 2.800M13.800 9.700l2.200 2.200" /></>,
   search: <><circle cx="10.500" cy="10.500" r="6" /><path d="m15 15 5.500 5.500" /></>,
 } satisfies Record<string, ReactNode>;
 

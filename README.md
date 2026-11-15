@@ -35,9 +35,9 @@ On the Proxmox host, as root:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/DBCooperX/hearthforge/main/scripts/proxmox-install.sh)"
 ```
 
-The script creates an unprivileged Debian 12 LXC named `hearthforge` (nesting and keyctl enabled for Docker), installs Docker, clones this repository to `/opt/hearthforge`, asks for your Anthropic API key, writes `.env`, and runs `docker compose up -d --build`. When it finishes it prints the address to open.
+The script creates an unprivileged Debian 12 LXC named `hearthforge` (nesting and keyctl enabled for Docker), installs Docker, clones this repository to `/opt/hearthforge`, asks for your Anthropic API key, writes `.env`, and runs `docker compose up -d --build`. When it finishes it prints the address to open and the first password for the [Innkeeper](#the-innkeeper), the owner's panel in the game. From then on you should not need a terminal: updates, restarts, the API key and every setting are handled there.
 
-**Run the same command again to update.** It finds the existing container, pulls the latest code and rebuilds.
+**Run the same command again to update** an install from before the Innkeeper existed (it adds the updater and prints the first password), or whenever you prefer the terminal. It finds the existing container, pulls the latest code and rebuilds.
 
 Defaults are 2 cores, 2 GB RAM, 8 GB disk, DHCP on `vmbr0`, the next free container id and your `local-lvm` or `local-zfs` storage. Override any of them by setting variables first:
 
@@ -90,7 +90,9 @@ Open `http://<guest-ip>:3000` in a browser. Friends on your network use the same
 
 ### Updating
 
-Re-run the one-command installer, or inside the guest:
+Open the **Innkeeper → Server & updates** and press **Update now**, or switch on automatic updates there. See [The Innkeeper](#the-innkeeper) for how that works.
+
+By hand, re-run the one-command installer, or inside the guest:
 
 ```bash
 cd /opt/hearthforge
@@ -102,7 +104,7 @@ Saved games live in the `hearthforge-data` Docker volume and are kept across upd
 
 ### Configuration
 
-Set these in `.env`:
+All of these can be changed in the **Innkeeper → Settings** without a terminal; a value set there wins over `.env` and takes effect after a restart, which the panel offers. To set them in `.env` instead:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -116,15 +118,48 @@ Set these in `.env`:
 | `HEARTHFORGE_ART_UPLOADS` | `on` | `off` stops anyone from adding or switching art packs in the browser. |
 | `HEARTHFORGE_MUSIC` | `on` | `on` or `off`. See [Music](#music). |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the Dungeon Master waits for the other players after the first one acts. `0` answers every action at once. See [Playing together](#playing-together). |
-| `HEARTHFORGE_PORT` | `3000` | Port on the host. |
+| `HEARTHFORGE_PORT` | `3000` | Port on the host. `.env` only. |
+| `HEARTHFORGE_ADMIN_PASSWORD` | generated | First password for the Innkeeper. The installer writes one. It is only read until you change the password in the panel. `.env` only. |
+| `HEARTHFORGE_ADMIN` | `on` | `off` removes the Innkeeper altogether. `.env` only. |
+| `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs a new version by itself as soon as nobody sits at a table. |
+| `HEARTHFORGE_TRUST_PROXY` | `off` | `on` reads the player's address from `X-Forwarded-For`. Only switch it on behind your own reverse proxy. |
+| `HEARTHFORGE_BRANCH` | checked-out branch | Git branch the updater follows. `.env` only. |
 
 The server decides the tier from what just happened in the game, and the DM can mark a scene as a turning point so the next reply is escalated. Every call is logged as `[dm] <purpose>: tier=<tier> model=<model>`, so `docker compose logs` shows what was used. The older `HEARTHFORGE_DM_MODEL` setting is no longer read; use `HEARTHFORGE_DM_FORCE_MODEL` if you want a single model. The DM makes roughly one API call per story beat and two per round of monster turns. With an Opus-class or Fable-class model, a declined request falls back to another Claude model automatically.
 
-Hearthforge has no accounts or passwords. Each browser keeps a secret token that proves a seat is its own, and a table can ask for an invite code, but anyone who can reach the port can see the list of tables and open one, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
+Players have no accounts or passwords; only the Innkeeper has one. Each browser keeps a secret token that proves a seat is its own, and a table can ask for an invite code, but anyone who can reach the port can see the list of tables and open one, so keep it on your LAN or behind a VPN or an authenticating reverse proxy. If you put it behind a reverse proxy, forward WebSocket upgrades for `/ws`.
+
+## The Innkeeper
+
+The Innkeeper is the owner's panel. Open it from the lobby (**Innkeeper**, bottom of the page), from **Settings → Server**, or directly at `http://<address>:3000/?innkeeper`, and sign in with the password the installer printed. If you did not set one, the server makes one up on first start and writes it to its log and to `/data/innkeeper-first-password.txt`. Change it under **Server & updates**; that file is removed when you do.
+
+| Page | What it does |
+| --- | --- |
+| **Overview** | What is running, who is playing, today's AI cost, and an announcement that pops up for every player. |
+| **Tables** | Every table with its players, region, world seed and last save. Pause one (players can still chat), resume it, remove a player, or delete it. |
+| **Players** | Every open connection with its address, browser and how long it has been connected. Disconnect someone or ban an address. |
+| **Assets** | The art library: upload packs, fetch the known ones, assign icons. Only the Innkeeper can change it. See [Art packs](#art-packs). |
+| **Settings** | Everything from the configuration table above, including the API key (shown masked) with a **Test key** button that asks Anthropic whether the key works and whether your chosen models exist. Changes apply with a restart. |
+| **Server & updates** | Version, update, restart (now, or with a warning to the players one or five minutes ahead) and the password. |
+| **AI costs** | Calls, tokens and estimated cost per day, table and model for the last 90 days. The cost is an estimate from list prices, not your invoice. |
+| **Log** | The server log, live, with a filter. |
+| **Backups** | A backup of all tables and settings every day (the last 14 are kept), on demand, as a download, and restore from either. Art packs and music are not part of a backup, and neither is the API key. |
+
+**How updating works.** The game cannot rebuild its own container, so a second small container, the *updater*, sits next to it. When you press **Update now** the game leaves the word `update` in a folder both share. The updater pulls the latest version from GitHub, builds the new image while the game keeps running, then swaps the container, which takes a few seconds. If the new version does not build, or does not come up healthy, it puts the previous version back and says so in the panel; such a version is not tried again automatically. Saved games are not touched.
+
+The updater needs the Docker socket to do this, which is as good as root inside the guest. It opens no port, runs nothing the game sends it, and only understands the words `check` and `update`. If you would rather not have it, remove the `updater` service from `docker-compose.yml`; the panel then says that updates are done in the terminal, and everything else still works.
+
+The Innkeeper's password travels like the rest of the game: over plain HTTP unless you put a reverse proxy with TLS in front. That is fine on your LAN or a VPN, and one more reason not to expose the port to the internet. Five wrong passwords lock an address out for five minutes.
+
+**Forgot the password?** Delete `/data/innkeeper.json` and restart; the first password applies again (bans and paused tables are forgotten with it):
+
+```bash
+docker compose exec hearthforge rm /data/innkeeper.json && docker compose restart hearthforge
+```
 
 ## Art packs
 
-Out of the box Hearthforge draws its own 16×16 pixel art and shows items as emoji, so it needs no downloads. Everything else is added in the game: open **Settings → Art & Assets**. The host of a table can change things there; everyone else sees which packs are in use and whom to credit.
+Out of the box Hearthforge draws its own 16×16 pixel art and shows items as emoji, so it needs no downloads. Everything else is added in the game: open the **Innkeeper → Assets**. Players see which packs are in use and whom to credit under **Settings → Art & Assets**.
 
 - **Drop a zip.** Download a pack from its page (itch.io, Kenney, OpenGameArt) and drag the zip into the window. The server unpacks it into the data volume (`/data/art`), keeps only the PNG images, and switches to it. No `docker cp`, no restart.
 - **Item icons.** *Game-icons.net* (CC BY 3.0) is fetched with one click and has a picture for every item. Any other zip with PNG images becomes an icon pack: pictures are matched by file name (`sword_01.png`, `potion_red.png`), and **Assign icons** lets you pick the rest by hand, also out of sprite sheets. Items without a picture keep their emoji.
@@ -252,6 +287,7 @@ Layout:
 - `server/src/dm/` the Dungeon Master: Claude integration, model tiers and the scripted fallback
 - `server/src/data/` classes, monsters and the starting region
 - `client/src/` React UI, the SVG hex map and the PixiJS battle map
+- `server/src/admin/` the Innkeeper: sign-in, settings laid over `.env`, usage, logs, backups and the link to the updater; `shared/admin.ts` its settings list and types; `client/src/ui/Innkeeper.tsx` the panel; `updater/` the updater container
 - `client/src/theme.css` the tavern look; `client/src/music.tsx` the music player; `shared/music.ts` decides which kind of music fits the game state; `server/src/music.ts` fetches and lists tracks
 
 Saves from before the open world cannot be converted: such a table keeps its players and starts a new adventure.
