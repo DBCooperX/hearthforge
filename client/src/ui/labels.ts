@@ -4,6 +4,7 @@ import type { InvFilter, InvSort } from '../../../shared/inventory';
 import type { QuestStatus } from '../../../shared/types';
 import { MUSIC_ERRORS } from '../../../shared/music';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
+import { SHOP_BLURBS, SHOP_NAMES } from '../../../shared/trade';
 
 export const FILTER_LABELS: Record<InvFilter, string> = { all: 'All', weapon: 'Weapons', armor: 'Armor', consumable: 'Potions', quest: 'Quest', other: 'Other' };
 export const SORT_LABELS: Record<InvSort, string> = { manual: 'As packed', type: 'Type', rarity: 'Rarity', value: 'Value', weight: 'Weight', name: 'Name' };
@@ -36,6 +37,7 @@ export const SHORTCUTS: { keys: string[]; text: string }[] = [
   { keys: ['I'], text: 'Inventory' },
   { keys: ['J'], text: 'Journal' },
   { keys: ['M'], text: 'Map' },
+  { keys: ['T'], text: 'Trade, where there is a merchant' },
   { keys: ['Esc'], text: 'Close a window or cancel' },
   { keys: ['1', '4'], text: 'Switch hero or bookmark in an open window' },
   { keys: ['W', 'A', 'S', 'D'], text: 'Move in a fight' },
@@ -83,8 +85,12 @@ export const CLOSED_REASONS = { banned: 'This server does not let you in.', remo
 export const INN_MISC = { empty: 'Empty' } as const;
 
 /** Every label above, for the translation test. */
+/** What the trade window says about today's prices after haggling. */
+export const TRADE_MOODS = ['Prices are 10% worse today', 'Prices are 10% better today', 'Prices are 20% better today'] as const;
+
 export const ALL_LABELS: string[] = [
   ...Object.values(SETTINGS_TABS),
+  ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
   ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),

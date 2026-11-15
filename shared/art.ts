@@ -71,6 +71,11 @@ const EXTRA: Record<string, string> = {
   chain_mail: 'chainmail platemail armor', potion_healing: 'potion red', potion_greater_healing: 'potion flask',
   cloak_protection: 'cloak cape', ring_protection: 'ring', holy_symbol: 'holy cross amulet', spellbook: 'book tome',
   thieves_tools: 'lockpick lockpicks key tools', torch: 'torch',
+  battleaxe: 'axe', warhammer: 'hammer', greataxe: 'axe', scimitar: 'saber sabre sword', light_crossbow: 'crossbow', dagger_plus1: 'dagger knife magic',
+  hide_armor: 'fur armor', breastplate: 'cuirass armor', half_plate: 'platemail armor', splint: 'armor', plate: 'platemail armor',
+  studded_leather_plus1: 'armor magic', shield_plus1: 'shield magic', potion_superior_healing: 'potion', rope_hemp: 'rope', rations: 'food meat',
+  bedroll: 'bed blanket', tent: 'tent', lantern_hooded: 'lantern lamp', shovel: 'spade', grappling_hook: 'hook grapple', manacles: 'shackles chain',
+  mirror_steel: 'mirror', healers_kit: 'bandage medkit', antitoxin: 'vial potion', holy_water: 'water flask', lute: 'lute instrument',
 };
 
 function slots(): IconSlot[] {
@@ -114,6 +119,13 @@ export const GAME_ICON_PATHS: Record<string, string> = {
   chain_mail: 'willdabeast/chain-mail', shield: 'sbed/shield', potion_healing: 'delapouite/health-potion',
   potion_greater_healing: 'lorc/standing-potion', cloak_protection: 'lucasms/cloak', ring_protection: 'delapouite/ring',
   holy_symbol: 'lorc/holy-symbol', spellbook: 'delapouite/spell-book', thieves_tools: 'delapouite/lockpicks', torch: 'delapouite/torch',
+  battleaxe: 'lorc/battle-axe', warhammer: 'delapouite/warhammer', greataxe: 'lorc/battered-axe', scimitar: 'lorc/curvy-knife',
+  light_crossbow: 'carl-olsen/crossbow', dagger_plus1: 'lorc/sacrificial-dagger', hide_armor: 'lorc/layered-armor', breastplate: 'lorc/breastplate',
+  half_plate: 'delapouite/chest-armor', splint: 'lorc/lamellar', plate: 'lorc/plastron', studded_leather_plus1: 'lorc/armor-vest',
+  shield_plus1: 'lorc/magic-shield', potion_superior_healing: 'lorc/heart-bottle', rope_hemp: 'delapouite/rope-coil', rations: 'lorc/meat',
+  bedroll: 'delapouite/sleeping-bag', tent: 'delapouite/camping-tent', lantern_hooded: 'delapouite/old-lantern', shovel: 'lorc/spade',
+  grappling_hook: 'lorc/grapple', manacles: 'lorc/manacles', mirror_steel: 'lorc/mirror-mirror', healers_kit: 'delapouite/first-aid-kit',
+  antitoxin: 'lorc/bubbling-flask', holy_water: 'lorc/potion-ball', lute: 'lorc/lyre',
   bone: 'lorc/broken-bone', skull: 'sbed/death-skull', tooth: 'lorc/saber-tooth', claw: 'lorc/grasping-claws', feather: 'lorc/feather',
   hide: 'delapouite/animal-hide', egg: 'lorc/egg-clutch', shell: 'lorc/spiral-shell', key: 'lorc/key', lock: 'lorc/padlock',
   scroll: 'lorc/tied-scroll', letter: 'lorc/envelope', map: 'lorc/treasure-map', book: 'lorc/open-book', seal: 'lorc/wax-seal',

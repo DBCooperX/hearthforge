@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { HEX_MILES, TERRAIN, UNKNOWN, findRoute, formatHours, formatTime, sameHex, summarizeRoute, timeOfDay, type Hex, type TerrainCode } from '../../../shared/hex';
 import type { GameState, WorldView } from '../../../shared/types';
+import { SHOP_ICONS } from '../../../shared/trade';
 import type { Connection } from '../net';
 import { HexMap, KIND_ICON } from './HexMap';
 import { EntityName, useEntity } from './Story';
@@ -70,13 +71,14 @@ export function TravelMap({ world, state, conn, target, setTarget, local }: Trav
 interface PanelProps extends TravelProps {
   onExpand: () => void;
   onJournal: () => void;
+  onTrade: (shopId: string) => void;
 }
 
 /** Right-hand panel while exploring: where you are, who is here, the map and your quests. */
 export function WorldPanel(props: PanelProps) {
   const t = useT();
   const { lang } = useLang();
-  const { world, state, conn, onExpand, onJournal } = props;
+  const { world, state, conn, onExpand, onJournal, onTrade } = props;
   const place = world.locations.find((l) => l.id === world.placeId) ?? null;
   const parent = place?.parentId ? world.locations.find((l) => l.id === place.parentId) : null;
   const here = world.locations.filter((l) => sameHex(l, world.party) && l.id !== place?.id);
@@ -118,6 +120,19 @@ export function WorldPanel(props: PanelProps) {
               {here.map((l) => (
                 <button key={l.id} disabled={!idle} onClick={() => conn.send({ t: 'go', locationId: l.id })}>
                   {KIND_ICON[l.kind]} {l.parentId ? t('Enter {place}', { place: l.name }) : t('Back to {place}', { place: l.name })}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {state.shops.length > 0 && (
+          <section>
+            <h3>{t('Merchants')} <small className="muted">T</small></h3>
+            <div className="here-list">
+              {state.shops.map((sh) => (
+                <button key={sh.id} className="shop-btn" onClick={() => onTrade(sh.id)} title={t('Buy and sell')}>
+                  {SHOP_ICONS[sh.kind]} {sh.name}{sh.merchant && <small>{sh.merchant}</small>}
                 </button>
               ))}
             </div>

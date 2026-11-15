@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ABILITIES } from '../../shared/content';
 import { sameHex, type Hex } from '../../shared/hex';
 import type { Character } from '../../shared/types';
@@ -13,6 +13,7 @@ import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
 import { Journal } from './components/Journal';
+import { Trade } from './components/Trade';
 import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { reachable, tileAt } from './game/util';
@@ -30,7 +31,7 @@ import { Innkeeper } from './ui/Innkeeper';
 import { Kbd, Window } from './ui/Window';
 import { Wordmark } from './ui/Brand';
 
-type Overlay = 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
+type Overlay = 'trade' | 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
 
 const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
   { id: 'sheet', key: 'C', icon: 'character' },
@@ -55,6 +56,23 @@ export function App() {
     if (url.searchParams.has('innkeeper')) { url.searchParams.delete('innkeeper'); history.replaceState(null, '', url); }
   }, []);
   useMusic(musicContext(state));
+
+  /** The shop shown in the trade window. */
+  const [shopId, setShopId] = useState<string | null>(null);
+  const shops = state?.shops ?? [];
+  const shop = shops.find((s) => s.id === shopId) ?? shops[0] ?? null;
+  const openTrade = useCallback((id?: string) => { if (id) setShopId(id); setOverlay('trade'); }, []);
+  // When the Dungeon Master shows a merchant's wares, the window opens for everyone. Not on a reload, though.
+  const offerSeen = useRef<number | null>(null);
+  const offer = state ? state.tradeOffer : undefined;
+  useEffect(() => {
+    if (offer === undefined) { offerSeen.current = null; return; }
+    const seq = offer?.seq ?? 0;
+    if (offerSeen.current !== null && offer && seq !== offerSeen.current) openTrade(offer.shopId);
+    offerSeen.current = seq;
+  }, [offer?.seq, offer === undefined]);
+  // The window closes when the party walks away from the merchant or a fight breaks out.
+  useEffect(() => { if (!shops.length) setOverlay((o) => (o === 'trade' ? null : o)); }, [shops.length]);
 
   const [chatOpen, setChatOpen] = useState(false);
   /** The newest message from someone else that this player has had on screen. */
@@ -141,6 +159,7 @@ export function App() {
       if (!state || state.phase === 'lobby' || innkeeper || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       const toggles: Record<string, Overlay> = { i: 'inventory', c: 'sheet', m: 'map', j: 'journal' };
+      if (k === 't' && state.shops.length) { setOverlay((o) => (o === 'trade' ? null : 'trade')); e.preventDefault(); return; }
       if (toggles[k] && !(k === 'm' && combat)) { setOverlay((o) => (o === toggles[k] ? null : toggles[k])); e.preventDefault(); return; }
       if (k === 'escape') { if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else setTravelTarget(null); return; }
       if (overlay || !combat) return;
@@ -248,9 +267,10 @@ export function App() {
               )}
               <StoryFeed state={state} conn={conn} />
             </main>
-            <WorldPanel {...travel} onExpand={() => setOverlay('map')} onJournal={() => setOverlay('journal')} />
+            <WorldPanel {...travel} onExpand={() => setOverlay('map')} onJournal={() => setOverlay('journal')} onTrade={openTrade} />
           </>
         )}
+        {overlay === 'trade' && focus && shop && <Trade state={state} shop={shop} character={focus} mine={playable.includes(focus)} conn={conn} onSelect={setSelectedId} onShop={setShopId} onClose={() => setOverlay(null)} />}
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}

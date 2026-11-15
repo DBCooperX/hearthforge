@@ -25,7 +25,7 @@ const RIGHT: SlotId[] = ['amulet', 'cloak', 'offHand', 'boots'];
 
 const num = (n: number, lang: Lang) => n.toLocaleString(lang, { maximumFractionDigits: 1 });
 
-function kindLine(def: ItemDef, t: Translate): string {
+export function kindLine(def: ItemDef, t: Translate): string {
   const slot = slotForItem(def);
   const kind = def.weapon ? t(KIND[def.weapon.category])
     : def.armor ? t(KIND[def.armor.category])
@@ -40,7 +40,7 @@ function kindLine(def: ItemDef, t: Translate): string {
 interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean }
 
 /** Everything about one item: what it does for this hero, how it compares with what they wear, and its story. */
-function ItemDetails({ def, item, c, state, equipped, mine, pinned }: TipProps) {
+export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: TipProps) {
   const t = useT();
   const { lang } = useLang();
   const story = def.story;
