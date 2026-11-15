@@ -7,9 +7,9 @@ import { SIZE_TILES, lookKey, type Body, type Color, type MonsterLook } from '..
 
 export const TOKEN_PX = 32;
 
-type RGB = [number, number, number];
-const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+export type RGB = [number, number, number];
+export const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+export const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const BLACK: RGB = [0, 0, 0], WHITE: RGB = [255, 255, 255];
 const OUTLINE = hex('#17121c');
 
@@ -38,10 +38,10 @@ function mulberry(seed: number) {
   };
 }
 
-type P = [number, number];
+export type P = [number, number];
 
 /** A square pixel buffer with shapes given in unit coordinates (0..1, y down). */
-class Pix {
+export class Pix {
   readonly d: Uint8ClampedArray;
   /** The figure is shrunk towards the bottom centre for small creatures. */
   constructor(readonly S: number, private f: number) { this.d = new Uint8ClampedArray(S * S * 4); }
