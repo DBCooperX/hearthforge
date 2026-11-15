@@ -44,6 +44,8 @@ No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these 
 - Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm", "Volatile Reaction", "Faster Does It", "Prelude and Action", "Impact Moderato", "Killers", "Unholy Knight", "Crusade - Heavy Industry"
 - Boss fights: "Black Vortex", "Death and Axes", "Giant Wyrm", "Epic Unease", "The Complex", "Hall of the Mountain King", "Danse Macabre"
 
+Ambient sound loops are not bundled or downloaded by default. Loops you add yourself (`/data/music/ambient/`) or list in `tracks.json` are credited in the game by whatever title, artist and license you give them; crediting them is up to you.
+
 The game shows title, artist and license of the track that is playing. If you add your own tracks or a `tracks.json`, crediting them is up to you.
 
 ## Fonts

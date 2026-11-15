@@ -3,11 +3,13 @@
 // A track that cannot be fetched is skipped, and with no tracks at all the game is silent.
 // Audio files the owner copies into a context folder are played too.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
-import { MUSIC_CONTEXTS, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
+import { dirname, extname, join } from 'node:path';
+import { MUSIC_CONTEXTS, type MusicContext, type MusicLayer, type MusicManifest, type MusicTrack } from '../../shared/music';
 
 export interface TrackSource {
   context: MusicContext;
+  /** Defaults to music. Ambient files are kept in MUSIC_DIR/ambient/<context>. */
+  layer?: MusicLayer;
   title: string;
   artist: string;
   license: string;
@@ -28,7 +30,7 @@ const MAX_TRACK_BYTES = 40_000_000;
 const MACLEOD = 'Kevin MacLeod (incompetech.com)';
 const CC_BY = 'CC BY 4.0';
 const incompetech = (context: MusicContext, title: string): TrackSource => ({
-  context, title, artist: MACLEOD, license: CC_BY,
+  context, title, artist: MACLEOD, license: CC_BY, layer: 'music',
   url: `https://incompetech.com/music/royalty-free/mp3-royaltyfree/${encodeURIComponent(title)}.mp3`,
 });
 
@@ -58,7 +60,7 @@ const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').
 function fileFor(dir: string, t: TrackSource): string {
   let ext = '.mp3';
   try { const e = extname(new URL(t.url).pathname).toLowerCase(); if (AUDIO_TYPES[e]) ext = e; } catch { /* keep .mp3 */ }
-  return join(dir, t.context, `${slug(t.title)}${ext}`);
+  return join(dir, ...(t.layer === 'ambient' ? ['ambient'] : []), t.context, `${slug(t.title)}${ext}`);
 }
 
 /** The tracks to fetch: MUSIC_DIR/tracks.json when present and valid, else the built-in list. */
@@ -70,7 +72,7 @@ export function trackList(dir: string): TrackSource[] {
     if (!Array.isArray(raw)) throw new Error('expected an array');
     return raw.flatMap((r): TrackSource[] => {
       if (!r || typeof r !== 'object' || !isContext(r.context) || typeof r.title !== 'string' || typeof r.url !== 'string' || !/^https?:\/\//i.test(r.url)) return [];
-      return [{ context: r.context, title: r.title.slice(0, 120), artist: String(r.artist ?? '').slice(0, 120), license: String(r.license ?? '').slice(0, 60), url: r.url }];
+      return [{ context: r.context, layer: r.layer === 'ambient' ? 'ambient' : 'music', title: r.title.slice(0, 120), artist: String(r.artist ?? '').slice(0, 120), license: String(r.license ?? '').slice(0, 60), url: r.url }];
     });
   } catch (err) {
     console.warn(`[music] Ignoring ${custom}: ${err instanceof Error ? err.message : err}`);
@@ -103,7 +105,7 @@ export async function ensureMusic(dir: string, env: NodeJS.ProcessEnv, fetchFn: 
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytes.length < 10_000 || bytes.length > MAX_TRACK_BYTES) throw new Error(`unexpected size (${bytes.length} bytes)`);
         if (!looksLikeAudio(bytes, res.headers.get('content-type') ?? '')) throw new Error('not an audio file');
-        mkdirSync(join(dir, t.context), { recursive: true });
+        mkdirSync(dirname(file), { recursive: true });
         // Write under another name first, so a half-written file is never served.
         writeFileSync(`${file}.part`, bytes);
         renameSync(`${file}.part`, file);
@@ -128,21 +130,25 @@ export function musicManifest(dir: string, env: NodeJS.ProcessEnv): MusicManifes
   const tracks: MusicTrack[] = [];
   try {
     const known = new Map(trackList(dir).map((t) => [fileFor(dir, t), t]));
-    for (const context of MUSIC_CONTEXTS) {
-      const folder = join(dir, context);
-      if (!existsSync(folder)) continue;
-      for (const name of readdirSync(folder).sort()) {
-        const file = join(folder, name);
-        if (!AUDIO_TYPES[extname(name).toLowerCase()] || !statSync(file).isFile()) continue;
-        const credit = known.get(file);
-        tracks.push({
-          id: `${context}/${name}`,
-          context,
-          title: credit?.title ?? name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
-          artist: credit?.artist ?? '',
-          license: credit?.license ?? '',
-          src: `/music/${context}/${encodeURIComponent(name)}`,
-        });
+    for (const layer of ['music', 'ambient'] as const) {
+      for (const context of MUSIC_CONTEXTS) {
+        const prefix = layer === 'ambient' ? 'ambient/' : '';
+        const folder = join(dir, ...(layer === 'ambient' ? ['ambient'] : []), context);
+        if (!existsSync(folder)) continue;
+        for (const name of readdirSync(folder).sort()) {
+          const file = join(folder, name);
+          if (!AUDIO_TYPES[extname(name).toLowerCase()] || !statSync(file).isFile()) continue;
+          const credit = known.get(file);
+          tracks.push({
+            id: `${prefix}${context}/${name}`,
+            context,
+            layer,
+            title: credit?.title ?? name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+            artist: credit?.artist ?? '',
+            license: credit?.license ?? '',
+            src: `/music/${prefix}${context}/${encodeURIComponent(name)}`,
+          });
+        }
       }
     }
   } catch (err) {

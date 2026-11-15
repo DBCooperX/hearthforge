@@ -173,7 +173,16 @@ docker cp my-tavern-song.mp3 hearthforge:/data/music/tavern/
 [{ "context": "tavern", "title": "Song name", "artist": "Who made it", "license": "CC BY 4.0", "url": "https://example.org/song.mp3" }]
 ```
 
-Title, artist and license are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
+**Ambient sound** (crowd murmur, a crackling fire, wind, rain) plays as a quiet loop under the music and has its own volume slider next to the music one. It appears once the server has at least one loop. Nothing is downloaded for it, because the usual sources (Freesound, Sonniss) either need a login or do not allow passing the files on. Put loops, ideally seamless ones, in `/data/music/ambient/<scene>/`, with the same scene names as the music (`tavern`, `town`, `overworld`, `dungeon`). A scene without a loop is quiet, and fights keep the loop of the scene they started in:
+
+```bash
+docker compose exec hearthforge mkdir -p /data/music/ambient/tavern
+docker cp tavern-crowd.ogg hearthforge:/data/music/ambient/tavern/
+```
+
+Loops with a direct download link you have tested (for example CC0 ones) can go into `tracks.json` with `"layer": "ambient"`; they are then fetched like the music.
+
+Title, artist and license of the music and of the ambient loop are shown in the game when a player points at the music control, which is the attribution CC BY asks for. Browsers only allow sound after the first click or key press, so the music starts when a player first touches the page. If a context has no tracks, the nearest one is used instead: boss fights fall back to combat music, taverns to town music, the road to town music.
 
 ## Playing together
 

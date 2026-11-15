@@ -9,26 +9,29 @@ const FADE = 2.2;
 /** Fights cut in faster than a walk into town. */
 const FADE_FIGHT = 0.9;
 
-interface Settings { muted: boolean; volume: number }
+interface Settings { muted: boolean; volume: number; ambient: number }
 interface Voice { track: MusicTrack; context: MusicContext; el: HTMLAudioElement; gain: GainNode }
 export interface MusicSnapshot extends Settings {
   /** The server has music switched on. */
   enabled: boolean;
   /** At least one track is on the server. */
   available: boolean;
+  /** At least one ambient loop is on the server. */
+  ambientAvailable: boolean;
   pending: boolean;
   /** The browser has let us start playing (it needs a first click or key press). */
   unlocked: boolean;
   context: MusicContext;
   track: MusicTrack | null;
+  ambientTrack: MusicTrack | null;
 }
 
 function storedSettings(): Settings {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (v && typeof v.muted === 'boolean' && typeof v.volume === 'number') return { muted: v.muted, volume: Math.min(1, Math.max(0, v.volume)) };
+    if (v && typeof v.muted === 'boolean' && typeof v.volume === 'number') return { muted: v.muted, volume: Math.min(1, Math.max(0, v.volume)), ambient: typeof v.ambient === 'number' ? Math.min(1, Math.max(0, v.ambient)) : 0.5 };
   } catch { /* private window or old value */ }
-  return { muted: false, volume: 0.5 };
+  return { muted: false, volume: 0.5, ambient: 0.5 };
 }
 
 class MusicPlayer {
@@ -38,6 +41,8 @@ class MusicPlayer {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private voice: Voice | null = null;
+  private ambientMaster: GainNode | null = null;
+  private ambientVoice: Voice | null = null;
   /** Where each context's music was interrupted, so the tavern tune resumes after a fight. */
   private resume = new Map<MusicContext, { id: string; time: number }>();
   private lastPlayed = new Map<MusicContext, string>();
@@ -52,8 +57,8 @@ class MusicPlayer {
 
   private snapshot(): MusicSnapshot {
     return {
-      ...this.settings, enabled: this.manifest.enabled, available: this.manifest.tracks.length > 0, pending: this.manifest.pending,
-      unlocked: !!this.ctx && this.ctx.state === 'running', context: this.context, track: this.voice?.track ?? null,
+      ...this.settings, enabled: this.manifest.enabled, available: this.musicTracks().length > 0, ambientAvailable: this.ambientTracks().length > 0, pending: this.manifest.pending,
+      unlocked: !!this.ctx && this.ctx.state === 'running', context: this.context, track: this.voice?.track ?? null, ambientTrack: this.ambientVoice?.track ?? null,
     };
   }
   private emit() { this.snap = this.snapshot(); this.listeners.forEach((fn) => fn()); }
@@ -72,6 +77,9 @@ class MusicPlayer {
           this.master = this.ctx.createGain();
           this.master.gain.value = this.settings.muted ? 0 : this.settings.volume;
           this.master.connect(this.ctx.destination);
+          this.ambientMaster = this.ctx.createGain();
+          this.ambientMaster.gain.value = this.ambientLevel(this.settings);
+          this.ambientMaster.connect(this.ctx.destination);
           this.ctx.onstatechange = () => this.emit();
         } catch { this.ctx = null; return; }
       }
@@ -99,9 +107,12 @@ class MusicPlayer {
     this.emit();
   }
 
+  private ambientLevel(s: Settings) { return s.muted ? 0 : s.ambient; }
+
   setMuted(muted: boolean) { this.save({ ...this.settings, muted }); }
+  setAmbient(ambient: number) { this.save({ ...this.settings, ambient: Math.min(1, Math.max(0, ambient)) }); }
   /** Dragging the slider to zero mutes, and keeps the old volume for when the music is turned back on. */
-  setVolume(volume: number) { this.save(volume <= 0 ? { ...this.settings, muted: true } : { muted: false, volume: Math.min(1, volume) }); }
+  setVolume(volume: number) { this.save(volume <= 0 ? { ...this.settings, muted: true } : { ...this.settings, muted: false, volume: Math.min(1, volume) }); }
 
   private save(next: Settings) {
     this.settings = next;
@@ -111,13 +122,21 @@ class MusicPlayer {
       this.master.gain.cancelScheduledValues(now);
       this.master.gain.setTargetAtTime(next.muted ? 0 : next.volume, now, 0.08);
     }
+    if (this.ctx && this.ambientMaster) {
+      const now = this.ctx.currentTime;
+      this.ambientMaster.gain.cancelScheduledValues(now);
+      this.ambientMaster.gain.setTargetAtTime(this.ambientLevel(next), now, 0.08);
+    }
     this.sync();
     this.emit();
   }
 
+  private musicTracks() { return this.manifest.tracks.filter((t) => t.layer !== 'ambient'); }
+  private ambientTracks() { return this.manifest.tracks.filter((t) => t.layer === 'ambient'); }
+
   private candidates(context: MusicContext): MusicTrack[] {
     for (const c of [context, ...MUSIC_FALLBACK[context]]) {
-      const found = this.manifest.tracks.filter((t) => t.context === c);
+      const found = this.musicTracks().filter((t) => t.context === c);
       if (found.length) return found;
     }
     return [];
@@ -126,6 +145,7 @@ class MusicPlayer {
   /** Bring what is playing in line with the context, the track list and the mute setting. */
   private sync() {
     if (!this.ctx || !this.master || this.ctx.state !== 'running') return;
+    this.syncAmbient();
     const options = this.settings.muted ? [] : this.candidates(this.context);
     if (this.voice && this.voice.context === this.context && options.some((t) => t.id === this.voice!.track.id)) return;
     const fight = this.context === 'combat' || this.context === 'boss';
@@ -134,6 +154,52 @@ class MusicPlayer {
     const saved = this.resume.get(this.context);
     const resumed = !fight && saved ? options.find((t) => t.id === saved.id) : undefined;
     this.play(resumed ?? this.pick(options), resumed ? saved!.time : 0, fight ? FADE_FIGHT : FADE);
+  }
+
+  /** The ambient loop belongs to the scene. Fights keep the loop of the scene they started in. */
+  private syncAmbient() {
+    if (!this.ctx || !this.ambientMaster) return;
+    const off = this.settings.muted || this.settings.ambient <= 0;
+    const fight = this.context === 'combat' || this.context === 'boss';
+    if (fight && !off) return; // the scene's loop keeps running under the fight
+    const options = off ? [] : this.ambientTracks().filter((t) => t.context === this.context);
+    const current = this.ambientVoice;
+    if (current && options.some((t) => t.id === current.track.id)) return;
+    if (current) this.fadeAmbient(current);
+    if (!options.length) { this.ambientVoice = null; return; }
+    const ctx = this.ctx;
+    const track = options[Math.floor(Math.random() * options.length)];
+    const el = new Audio(track.src);
+    el.loop = true;
+    el.preload = 'auto';
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    try { ctx.createMediaElementSource(el).connect(gain).connect(this.ambientMaster); } catch { return; }
+    const voice: Voice = { track, context: this.context, el, gain };
+    this.ambientVoice = voice;
+    el.addEventListener('error', () => {
+      if (this.ambientVoice !== voice) return;
+      this.manifest = { ...this.manifest, tracks: this.manifest.tracks.filter((t) => t.id !== track.id) };
+      this.drop(voice);
+      this.ambientVoice = null;
+      this.syncAmbient();
+      this.emit();
+    });
+    el.play().then(() => {
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(1, now + FADE * 1.5);
+    }).catch(() => {});
+  }
+
+  private fadeAmbient(voice: Voice) {
+    this.ambientVoice = null;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.linearRampToValueAtTime(0, now + FADE);
+    setTimeout(() => this.drop(voice), FADE * 1000 + 100);
   }
 
   private pick(options: MusicTrack[]): MusicTrack {
@@ -203,6 +269,8 @@ export function useMusic(context: MusicContext) {
   useEffect(() => { music.setContext(context); }, [context]);
 }
 
+const credit = (t: MusicTrack) => `${t.title}${t.artist ? ` · ${t.artist}` : ''}${t.license ? ` · ${t.license}` : ''}`;
+
 /** Mute button and volume slider, with the current track's credit on hover. */
 export function MusicControl() {
   const t = useT();
@@ -213,8 +281,9 @@ export function MusicControl() {
   if (!m.available) status = m.pending ? t('The server is still fetching the music…') : t('No music on this server yet.');
   else if (silent) status = t('Music is off');
   else if (!m.unlocked) status = t('Music starts with your first click.');
-  else if (m.track) status = `${t('Now playing')}: ${m.track.title}${m.track.artist ? ` · ${m.track.artist}` : ''}${m.track.license ? ` · ${m.track.license}` : ''}`;
+  else if (m.track) status = `${t('Now playing')}: ${credit(m.track)}`;
   else status = t('No music for this scene.');
+  if (!silent && m.unlocked && m.ambientTrack) status += ` — ${t('Ambient sound')}: ${credit(m.ambientTrack)}`;
   return (
     <span className={`music ${silent || !m.available ? 'off' : ''}`} role="group" aria-label={t('Music')}>
       <button type="button" className="music-toggle" onClick={() => music.setMuted(!silent)} aria-pressed={!silent} title={silent ? t('Turn music on') : t('Turn music off')}>
@@ -230,6 +299,13 @@ export function MusicControl() {
         onChange={(e) => music.setVolume(Number(e.target.value) / 100)}
         aria-label={t('Music volume')} title={t('Music volume')}
       />
+      {m.ambientAvailable && (
+        <input
+          type="range" className="ambient-range" min={0} max={100} step={1} value={m.muted ? 0 : Math.round(m.ambient * 100)}
+          onChange={(e) => music.setAmbient(Number(e.target.value) / 100)}
+          aria-label={t('Ambient sound volume')} title={t('Ambient sound volume')}
+        />
+      )}
       <span className="music-now" role="status">{status}</span>
     </span>
   );
