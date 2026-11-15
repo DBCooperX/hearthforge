@@ -9,7 +9,7 @@ const FADE = 2.2;
 /** Fights cut in faster than a walk into town. */
 const FADE_FIGHT = 0.9;
 
-interface Settings { muted: boolean; volume: number; ambient: number }
+interface Settings { muted: boolean; volume: number; ambient: number; ambientMuted: boolean }
 interface Voice { track: MusicTrack; context: MusicContext; el: HTMLAudioElement; gain: GainNode }
 export interface MusicSnapshot extends Settings {
   /** The server has music switched on. */
@@ -29,9 +29,9 @@ export interface MusicSnapshot extends Settings {
 function storedSettings(): Settings {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (v && typeof v.muted === 'boolean' && typeof v.volume === 'number') return { muted: v.muted, volume: Math.min(1, Math.max(0, v.volume)), ambient: typeof v.ambient === 'number' ? Math.min(1, Math.max(0, v.ambient)) : 0.5 };
+    if (v && typeof v.muted === 'boolean' && typeof v.volume === 'number') return { muted: v.muted, volume: Math.min(1, Math.max(0, v.volume)), ambient: typeof v.ambient === 'number' ? Math.min(1, Math.max(0, v.ambient)) : 0.5, ambientMuted: v.ambientMuted === true };
   } catch { /* private window or old value */ }
-  return { muted: false, volume: 0.5, ambient: 0.5 };
+  return { muted: false, volume: 0.5, ambient: 0.5, ambientMuted: false };
 }
 
 class MusicPlayer {
@@ -107,10 +107,12 @@ class MusicPlayer {
     this.emit();
   }
 
-  private ambientLevel(s: Settings) { return s.muted ? 0 : s.ambient; }
+  private ambientLevel(s: Settings) { return s.ambientMuted ? 0 : s.ambient; }
 
   setMuted(muted: boolean) { this.save({ ...this.settings, muted }); }
-  setAmbient(ambient: number) { this.save({ ...this.settings, ambient: Math.min(1, Math.max(0, ambient)) }); }
+  setAmbientMuted(ambientMuted: boolean) { this.save({ ...this.settings, ambientMuted }); }
+  /** Like the music slider: zero mutes and keeps the old level for when the loops come back. */
+  setAmbient(ambient: number) { this.save(ambient <= 0 ? { ...this.settings, ambientMuted: true } : { ...this.settings, ambientMuted: false, ambient: Math.min(1, ambient) }); }
   /** Dragging the slider to zero mutes, and keeps the old volume for when the music is turned back on. */
   setVolume(volume: number) { this.save(volume <= 0 ? { ...this.settings, muted: true } : { ...this.settings, muted: false, volume: Math.min(1, volume) }); }
 
@@ -159,7 +161,7 @@ class MusicPlayer {
   /** The ambient loop belongs to the scene. Fights keep the loop of the scene they started in. */
   private syncAmbient() {
     if (!this.ctx || !this.ambientMaster) return;
-    const off = this.settings.muted || this.settings.ambient <= 0;
+    const off = this.settings.ambientMuted || this.settings.ambient <= 0;
     const fight = this.context === 'combat' || this.context === 'boss';
     if (fight && !off) return; // the scene's loop keeps running under the fight
     const options = off ? [] : this.ambientTracks().filter((t) => t.context === this.context);
@@ -283,7 +285,7 @@ export function MusicControl() {
   else if (!m.unlocked) status = t('Music starts with your first click.');
   else if (m.track) status = `${t('Now playing')}: ${credit(m.track)}`;
   else status = t('No music for this scene.');
-  if (!silent && m.unlocked && m.ambientTrack) status += ` — ${t('Ambient sound')}: ${credit(m.ambientTrack)}`;
+  if (!m.ambientMuted && m.unlocked && m.ambientTrack) status += ` — ${t('Ambient sound')}: ${credit(m.ambientTrack)}`;
   return (
     <span className={`music ${silent || !m.available ? 'off' : ''}`} role="group" aria-label={t('Music')}>
       <button type="button" className="music-toggle" onClick={() => music.setMuted(!silent)} aria-pressed={!silent} title={silent ? t('Turn music on') : t('Turn music off')}>
@@ -300,11 +302,19 @@ export function MusicControl() {
         aria-label={t('Music volume')} title={t('Music volume')}
       />
       {m.ambientAvailable && (
-        <input
-          type="range" className="ambient-range" min={0} max={100} step={1} value={m.muted ? 0 : Math.round(m.ambient * 100)}
-          onChange={(e) => music.setAmbient(Number(e.target.value) / 100)}
-          aria-label={t('Ambient sound volume')} title={t('Ambient sound volume')}
-        />
+        <>
+          <button type="button" className={`music-toggle ${m.ambientMuted ? 'off' : ''}`} onClick={() => music.setAmbientMuted(!m.ambientMuted)} aria-pressed={!m.ambientMuted} title={m.ambientMuted ? t('Turn ambient sound on') : t('Turn ambient sound off')}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              {m.ambientMuted && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+            </svg>
+          </button>
+          <input
+            type="range" className="ambient-range" min={0} max={100} step={1} value={m.ambientMuted ? 0 : Math.round(m.ambient * 100)}
+            onChange={(e) => music.setAmbient(Number(e.target.value) / 100)}
+            aria-label={t('Ambient sound volume')} title={t('Ambient sound volume')}
+          />
+        </>
       )}
       <span className="music-now" role="status">{status}</span>
     </span>

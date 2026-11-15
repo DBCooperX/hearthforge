@@ -764,6 +764,8 @@ export const DE: Record<string, string> = {
   'Turn music on': 'Musik einschalten',
   'Turn music off': 'Musik ausschalten',
   'Music volume': 'Lautstärke der Musik',
+  'Turn ambient sound on': 'Umgebungsgeräusche einschalten',
+  'Turn ambient sound off': 'Umgebungsgeräusche ausschalten',
   'Ambient sound volume': 'Lautstärke der Umgebungsgeräusche',
   'Ambient sound': 'Umgebungsgeräusch',
   'Music is off': 'Musik ist aus',
