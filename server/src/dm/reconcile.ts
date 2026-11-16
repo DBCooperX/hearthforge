@@ -8,6 +8,7 @@ import { SLOT_IDS } from '../../../shared/types';
 import type { Game } from '../game/engine';
 import type { PlayerLine } from './types';
 import { logEvent, secret } from '../game/timeline';
+import { currentZone } from '../game/zone';
 
 /** What the DM did during one reply, so the check does not repeat it. */
 export interface TurnRecord {
@@ -30,6 +31,7 @@ export interface Findings {
   lost?: unknown;
   equipped?: unknown;
   where?: unknown;
+  spot?: unknown;
   present?: unknown;
   events?: unknown;
   revealed?: unknown;
@@ -65,6 +67,8 @@ function stateFor(game: Game, turn: TurnRecord): string {
   lines.push(`Party gold: ${s.gold}.`);
   const stage = game.stage();
   lines.push(`Scene header now: ${stage.where}. With the heroes: ${stage.present.join(', ') || 'nobody'}.`);
+  const zone = currentZone(game);
+  if (zone) lines.push(`Spots on the zone map of this place: ${zone.spots.map((x) => `${x.name}${x.id === zone.at ? ' (party here)' : ''}`).join(', ')}.`);
   const met = s.memory.npcs.filter((n) => n.met).map((n) => n.name);
   if (met.length) lines.push(`People the party knows: ${met.join(', ')}.`);
   const dated = s.memory.timeline.filter((e) => e.by === 'story').slice(-12);
@@ -98,7 +102,7 @@ ${tools.length ? tools.map(callLine).join('\n') : '(nothing)'}
 Compare the reply with the game state. List only what the reply plainly says has already happened and the game does not show yet. Leave out anything the tools above already did, anything that is only planned, offered, suggested or thought about, and anything you are not sure of. Most replies need no change at all; then answer with {}.
 
 Answer with one JSON object and nothing else. Every field is optional:
-{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "where": "<where the scene now plays, a few words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"]}
+{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "where": "<where the scene now plays, a few words>", "spot": "<the spot of the place the party is at now, one or two words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"]}
 
 - place: only when the party went to one of the known places listed, and the game has it somewhere else. The server adds the travel time itself, so do not count the walk in minutes. A place that is not listed: leave place out and use where.
 - minutes: a long talk, a search, a meal, waiting, a rest. 0 or leave out for an ordinary exchange. At most ${MAX_MINUTES}.
@@ -108,7 +112,8 @@ Answer with one JSON object and nothing else. Every field is optional:
 - equipped: a hero drew, wielded, put on or switched to something from the backpack.
 - events: only a past event that someone in the reply tells of with a time ("in winter I sent two guards", "three days ago the barge sank") and that is not among the events already on the timeline. Turn a vague time into the closest number and unit ("in winter" in an autumn story: "8 months ago"). Not the scene's own action. At most 2.
 - revealed: a held-back secret that the reply plainly states or lets someone say. Not hints.
-- where and present: when the reply moved the scene to another room or spot, or people came or went. Name people as the reply does; use "none" when the heroes are alone. Leave both out when nothing changed.`;
+- where and present: when the reply moved the scene to another room or spot, or people came or went. Name people as the reply does; use "none" when the heroes are alone. Leave both out when nothing changed.
+- spot: when the party walked to another spot of this place (a building, the jetty, the reeds). Use the name from the zone map when it is listed, otherwise one or two words from the reply.`;
 }
 
 /** Pull the JSON object out of the model's answer. Returns null when there is none. */
@@ -192,8 +197,8 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
     }
   }
 
-  const where = text(f.where), present = text(f.present);
-  if ((where || present) && !used('set_stage')) tryIt('scene', () => game.setStage({ where, present }));
+  const where = text(f.where), present = text(f.present), spot = text(f.spot).slice(0, 40);
+  if ((where || present || spot) && !used('set_stage')) tryIt('scene', () => game.setStage({ where, present, spot }));
 
   if (!used('log_event')) {
     for (const e of list(f.events).slice(0, 2)) {

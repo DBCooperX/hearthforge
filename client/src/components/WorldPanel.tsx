@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { HEX_MILES, TERRAIN, UNKNOWN, findRoute, formatHours, formatTime, sameHex, summarizeRoute, timeOfDay, type Hex, type TerrainCode } from '../../../shared/hex';
 import type { GameState, WorldView } from '../../../shared/types';
 import { SHOP_ICONS } from '../../../shared/trade';
@@ -7,6 +7,7 @@ import { HexMap, KIND_ICON } from './HexMap';
 import { EntityName, useEntity } from './Story';
 import { useLang, useT } from '../i18n';
 import { Window } from '../ui/Window';
+import { ZoneMap } from './ZoneMap';
 
 function Named({ name }: { name: string }) {
   const entity = useEntity(name);
@@ -68,6 +69,36 @@ export function TravelMap({ world, state, conn, target, setTarget, local }: Trav
   );
 }
 
+/**
+ * The map of the place the party is in, with the region's hex map one tab away. In the wilderness,
+ * or in a place nobody has mapped yet, it is just the hex map.
+ */
+function Maps(props: TravelProps & { local?: boolean }) {
+  const t = useT();
+  const { world, state, conn } = props;
+  const place = world.locations.find((l) => l.id === world.placeId) ?? null;
+  const root = place?.parentId ? world.locations.find((l) => l.id === place.parentId) ?? place : place;
+  const zone = root?.zone ?? null;
+  // The choice holds while the party stays in this place; a new place opens on its own map.
+  const [pick, setPick] = useState<{ at: string | null; view: 'place' | 'region' }>({ at: null, view: 'place' });
+  const view = zone && !(pick.at === root!.id && pick.view === 'region') ? 'place' : 'region';
+  const idle = state.phase === 'explore' && !state.travelling && !state.dmBusy;
+  return (
+    <>
+      {zone && (
+        <div className="maptabs" role="tablist">
+          <button role="tab" aria-selected={view === 'place'} className={view === 'place' ? 'on' : ''} onClick={() => setPick({ at: root!.id, view: 'place' })}>{t('Place')}</button>
+          <button role="tab" aria-selected={view === 'region'} className={view === 'region' ? 'on' : ''} onClick={() => setPick({ at: root!.id, view: 'region' })}>{t('Region')}</button>
+        </div>
+      )}
+      {zone && view === 'place'
+        ? <ZoneMap zone={zone} placeId={world.placeId} big={!props.local}
+            onGo={idle ? (s) => conn.send({ t: 'go', locationId: s.placeId ?? root!.id }) : null} />
+        : <TravelMap {...props} />}
+    </>
+  );
+}
+
 interface PanelProps extends TravelProps {
   onExpand: () => void;
   onJournal: () => void;
@@ -106,7 +137,7 @@ export function WorldPanel(props: PanelProps) {
       <div className="wp-scroll">
         <section>
           <h3>{t('Map')} <button className="link" onClick={onExpand} title={t('Open the full map (m)')}>{t('expand')}</button></h3>
-          <TravelMap {...props} local />
+          <Maps {...props} local />
         </section>
 
         {(here.length > 0 || place?.dungeon) && (
@@ -177,7 +208,7 @@ export function MapOverlay(props: TravelProps & { onClose: () => void }) {
   return (
     <Window title={props.world.name.charAt(0).toUpperCase() + props.world.name.slice(1)} icon="map" hotkey="M" size="map" className="bigmap" onClose={props.onClose}
       subtitle={<>{formatTime(props.world.minutes, lang)} · {t('One hex is {n} miles', { n: HEX_MILES })}</>}>
-      <TravelMap {...props} />
+      <Maps {...props} />
     </Window>
   );
 }

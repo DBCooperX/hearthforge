@@ -27,6 +27,7 @@ export const itemRulesText = (id: string, max = 320) => { const r = ITEM_RULES[i
 export const spellRulesText = (id: string, max = 1400) => { const r = SPELL_RULES[id] ?? ''; return r.length > max ? `${r.slice(0, max)}…` : r; };
 import { trueTerrain, type SettingState } from '../game/world';
 import { describeTimeline } from '../game/timeline';
+import { describeZone } from '../game/zone';
 
 export const DM_SYSTEM_PROMPT = `You are the Dungeon Master of Hearthforge, a self-hosted Dungeons & Dragons 5th edition game played in a web browser by one or more players who share a party of heroes.
 
@@ -56,7 +57,7 @@ The players see the game next to your story: the map, the music of the place, th
 - The party rests: rest, with "short" for an hour or more and "long" for a night's sleep. The server restores hit points, mana and features by the rules and tells the players what came back, so do not narrate numbers.
 - A hero picks up, is handed, gives away, leaves behind or uses up something: give_item or give_story_item, or take_item. Coin that changes hands: change_gold.
 - A hero draws, wields, puts on or switches to something they carry: equip_item.
-- Someone joins or leaves the scene, or the heroes move to another room: set_stage, so the header and the side panel show who is really there.
+- Someone joins or leaves the scene, or the heroes move to another room or another spot of the place: set_stage, so the header, the side panel and the zone map show who is really there and where. Give the spot a short name the players can find again ("Zollhaus", "Steg", "Schilf"), and reuse it when they come back; name spots they hear of in "nearby".
 After each reply the server double-checks your narration against the game and fixes what it can, but that check is a safety net and it skips anything unclear. Your own tool calls are what keeps the game right.
 
 Time, causes and who knows what
@@ -355,6 +356,7 @@ export function describeWorld(game: Game): string {
   }
   const stage = game.stage();
   lines.push(`The scene now (shown to the players above your narration; change it with set_stage): ${stage.where}. With the heroes: ${stage.present.length ? stage.present.join(', ') : 'nobody else'}.`);
+  lines.push(...describeZone(game));
   const present = game.presentNpcs();
   if (present.length) {
     lines.push('People here:');

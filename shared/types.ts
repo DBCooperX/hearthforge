@@ -10,6 +10,7 @@ import type { ShopView } from './trade';
 import type { DmStyle } from './style';
 import type { LightKindId, LightLevel, LightSource, Senses } from './light';
 import type { FactionView, RumourView } from './reputation';
+import type { ZoneView } from './zone';
 import type { TrophyView } from './achievements';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
@@ -612,8 +613,11 @@ export interface Location {
   visited: boolean;
   origin: 'seed' | 'dm';
   visual: VisualBible;
-  /** Reserved for phase 2: a generated top-down zone map of this place. */
-  zone: null;
+  /**
+   * The map of this place: its spots, the paths between them and where the party stands. Only
+   * places that are not inside another one have it, once the party has been there.
+   */
+  zone: ZoneView | null;
   /** Sections of a dungeon: how many exist and how many the party has cleared. */
   dungeon?: { total: number; cleared: number; next: string | null };
 }

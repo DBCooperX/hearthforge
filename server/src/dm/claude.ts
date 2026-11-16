@@ -203,9 +203,11 @@ const STORY_TOOLS: Tool[] = [
     opener: str('Id of the hero who sneaked up to strike first, for example "pc2", when the players said so; empty otherwise. Needs that hero\'s own successful Stealth check. The server sets the hero beside the first enemy listed, gives them the first turn and makes the weapon attack from hiding at once, with Advantage and Sneak Attack where it applies. Narrate the strike as the result says.'),
   }),
   // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
-  looseTool('set_stage', 'Say where exactly the scene plays and who is in it besides the heroes. The players see it as a header above your scene ("Zollhaus, upper floor · morning · Hendrick"). Call it whenever the heroes step into another room or out of the door, or people join or leave them, in the same response as scene. Going to another place with move_to_place or by travel resets it by itself.', {
+  looseTool('set_stage', 'Say where exactly the scene plays and who is in it besides the heroes. The players see it as a header above your scene ("Zollhaus, upper floor · morning · Hendrick") and on the zone map of the place, which marks the spot the party stands at and the spots it knows of. Call it whenever the heroes step into another room or out of the door, go to another spot of the place, or people join or leave them, in the same response as scene. Going to another place with move_to_place or by travel resets it by itself.', {
     where: str('Where the heroes are now, a few words in the table language, for example "Zollhaus, upper floor" or "outside the mill, by the wheel". Empty string to keep the place.'),
     present: str('Everyone in the scene besides the heroes, by name or as the heroes would call them ("the toll keeper"), separated by commas. "none" when the heroes are alone. Empty string to leave it unchanged.'),
+    spot: str('The spot of the place the heroes are at, one or two words in the table language, as it should stand on the zone map: "Zollhaus", "Steg", "the reeds". Reuse a name from the zone map. Empty string when they stay where they are.'),
+    nearby: str('Other spots of this place the heroes now know of or can see, separated by commas, for example "Steg, Schilf". They go on the map as not yet visited. Usually empty.'),
   }),
   looseTool('note_clue', "Write a clue into the party's journal: something the heroes found out, saw or were told that helps answer an open question of the story. The journal groups the clues by question, so the players can always look up what they know. Call it in the same response as scene, once for each new clue.", {
     question: str('The open question this clue belongs to, as the heroes would ask it, in the table language, for example "Who wants the guild silver back?". Reuse the exact wording of a question listed under "Open questions" to add to it.'),
@@ -437,7 +439,7 @@ export class ClaudeDM implements DungeonMaster {
             game.dropBeats('arrive'); // the DM is already narrating this arrival
             return { now_at: game.place()?.name, people_here: game.presentNpcs().map((n) => `${n.name} (${n.role})`) };
           case 'set_stage':
-            return game.setStage({ where: String(i.where ?? ''), present: String(i.present ?? '') });
+            return game.setStage({ where: String(i.where ?? ''), present: String(i.present ?? ''), spot: String(i.spot ?? ''), nearby: String(i.nearby ?? '') });
           case 'note_clue':
             return game.noteClue({ question: String(i.question ?? ''), clue: String(i.clue ?? ''), source: String(i.source ?? ''), ...(truthy(i.solved) || i.solved === 'yes' ? { solved: true } : {}) });
           case 'advance_time':
