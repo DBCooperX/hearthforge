@@ -31,6 +31,10 @@ Kenney's page could not be read when this list was written; its CC0 license is t
 
 Without an icon pack, item icons are emoji rendered by the player's system font.
 
+## Sound effects
+
+No sound files are bundled. Unless `HEARTHFORGE_SFX=off`, the server downloads these packs by Kenney, all [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), from kenney.nl into its data folder (`/data/sfx`) when it starts: [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds). The bow, spell, healing, level-up and victory sounds are synthesised in the browser by `client/src/sfxSynth.ts`, original code with no recordings. `node scripts/check-sfx-links.mjs` checks that the packs' download links still work.
+
 ## Music
 
 No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime (they can be switched off, moved or removed in the Innkeeper's Assets page) from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):

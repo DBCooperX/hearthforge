@@ -22,6 +22,7 @@ import { inFootprint } from '../../shared/monsterLook';
 import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
+import { useSfx } from './sfx';
 import { playerId, useConnection } from './net';
 import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
@@ -58,6 +59,7 @@ export function App() {
     if (url.searchParams.has('innkeeper')) { url.searchParams.delete('innkeeper'); history.replaceState(null, '', url); }
   }, []);
   useMusic(musicContext(state));
+  useSfx(state);
 
   /** The shop shown in the trade window. */
   const [shopId, setShopId] = useState<string | null>(null);

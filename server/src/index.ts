@@ -10,6 +10,7 @@ import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
+import { ensureSfx, sfxFile, sfxManifest } from './sfx';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
@@ -47,6 +48,7 @@ const art = new ArtStore(ART_DIR, env);
 /** Set HEARTHFORGE_ART_UPLOADS=off to lock the art library against changes from the browser. */
 const ART_UPLOADS = (env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
 const MUSIC_DIR = env.MUSIC_DIR ?? join(DATA_DIR, 'music');
+const SFX_DIR = env.SFX_DIR ?? join(DATA_DIR, 'sfx');
 const TRUST_PROXY = (env.HEARTHFORGE_TRUST_PROXY ?? 'off').toLowerCase() === 'on';
 
 /** The address a request comes from. Behind a reverse proxy the owner trusts, the one it reports. */
@@ -343,6 +345,22 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
     return;
   }
+  if (url.pathname === '/api/sfx') {
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
+    res.end(JSON.stringify(sfxManifest(SFX_DIR, env)));
+    return;
+  }
+  if (url.pathname.startsWith('/sfx/')) {
+    const file = sfxFile(SFX_DIR, url.pathname);
+    if (!file) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not found');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'audio/ogg', 'cache-control': 'public, max-age=86400', 'content-length': statSync(file).size });
+    createReadStream(file).pipe(res);
+    return;
+  }
   if (url.pathname.startsWith('/music/')) {
     // Only MUSIC_DIR/<context>/<file> and MUSIC_DIR/ambient/<context>/<file> are ever served. Browsers ask for audio in byte ranges.
     const parts = url.pathname.slice(7).split('/').map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
@@ -457,6 +475,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
 });
 
 void art.start();
+void ensureSfx(SFX_DIR, env);
 void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
 admin.start();
 
