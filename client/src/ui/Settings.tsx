@@ -64,7 +64,7 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
         {tab === 'table' && (
           <>
             <div className="setting"><span>{t('Table')}</span><button type="button" onClick={onTable}>{t('Players and invites')}</button></div>
-            <div className="setting"><span>{t('Art packs')} <Info text={t('The packs in use on this server, with their credits.')} /></span><button type="button" onClick={onArt}>{t('Art & Assets')}</button></div>
+            <div className="setting"><span>{t('Art credits')} <Info text={t('Who made the art used on this server. Only the Innkeeper can change it.')} /></span><button type="button" onClick={onArt}>{t('Open')}</button></div>
             <div className="setting"><span>{t('Your account')} <Info text={t('Your stats, your heroes and your password.')} /></span><button type="button" onClick={onProfile}>{t('Open')}</button></div>
             {onInnkeeper && <div className="setting"><span>{t('Innkeeper')} <Info text={t('For whoever runs this server: tables, players, art packs, API key, updates and backups.')} /></span><button type="button" onClick={onInnkeeper}>{t('Open')}</button></div>}
             {onNewAdventure && <div className="setting"><span>{t('New adventure')} <Info text={t('Ends this story for everyone at the table and starts a fresh one.')} /></span><button type="button" className="danger" onClick={onNewAdventure}>{t('New adventure')}</button></div>}
