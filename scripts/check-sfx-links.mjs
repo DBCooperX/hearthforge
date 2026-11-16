@@ -11,6 +11,10 @@ for (const id of pages) {
     if (!link) {
       console.log('--- page starts with:', html.slice(0, 300).replace(/\s+/g, ' '));
       console.log('--- every link-like word:', [...new Set(html.match(/[^"'\s<>=]*(?:download|zip|media)[^"'\s<>]*/gi) ?? [])].slice(0, 15));
+      const show = (re, n = 500) => { const m = re.exec(html); if (m) console.log(`--- around ${re.source}:\n` + html.slice(Math.max(0, m.index - 150), m.index + n).replace(/\s+/g, ' ')); };
+      show(/data-download-id/);
+      show(/function\s+initiateDownload/, 1500);
+      show(/<script[^>]*src=[^>]*download/i, 300);
       throw new Error('no .zip link on the page');
     }
     const r = await fetch(link);
