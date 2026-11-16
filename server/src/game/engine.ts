@@ -260,6 +260,11 @@ export interface InternalState {
    * with the enemies caught unawares only on one of these. Missing in older saves.
    */
   sneaks?: Record<string, { total: number; at: number }>;
+  /**
+   * Set while the owner has the table in test mode. `snapshot` is the table as it was when the mode began (the
+   * JSON of this state without chat and without this field), so the campaign can go back to it.
+   */
+  testMode?: { since: number; snapshot: string };
   /** How the last fight ended, for the closing screen. Missing in older saves. */
   lastFight?: FightOutcome | null;
 }
@@ -5546,6 +5551,106 @@ export class Game {
 
   // ------------------------------------------------------------ public view
 
+  // ------------------------------------------------------------ test mode
+  // Moves only the host's test toolbox uses (see playtest.ts). They set the state directly and
+  // skip the rules that stop the Dungeon Master from doing the same, such as the XP clamp.
+
+  /** Raise a hero by whole levels, with everything a normal level-up brings. */
+  testLevel(characterId: string, levels = 1) {
+    const c = this.char(characterId);
+    if (c.dead) throw new GameError(this.t`${c.name} is dead`);
+    const from = c.level;
+    for (let i = 0; i < Math.max(1, Math.min(MAX_LEVEL, Math.round(levels) || 1)) && c.level < MAX_LEVEL; i++) {
+      c.xp = Math.max(c.xp, XP_THRESHOLDS[c.level]);
+      this.levelUp(c);
+    }
+    if (c.level === from) throw new GameError(this.t`${c.name} is already at the highest level`);
+    this.beats.push({ kind: 'level_up', heroes: [c.name] });
+    return c;
+  }
+
+  /** Set a hero's hit points. Zero knocks the hero out like a blow would. */
+  testHp(characterId: string, hp: number) {
+    const c = this.char(characterId);
+    if (c.dead) throw new GameError(this.t`${c.name} is dead`);
+    const target = Math.max(0, Math.min(c.maxHp, Math.round(hp)));
+    if (target <= 0) this.damageChar(c, c.hp);
+    else if (target < c.hp) c.hp = target;
+    else if (target > c.hp) { c.effects = (c.effects ?? []).filter((e) => !e.noHealing); this.healChar(c, target - c.hp); }
+    return c;
+  }
+
+  testRevive(characterId: string) {
+    const c = this.char(characterId);
+    c.dead = false;
+    c.hp = Math.max(1, c.maxHp);
+    c.conditions = c.conditions.filter((x) => x !== 'unconscious' && x !== 'stable' && x !== 'dead');
+    c.deathSaves = { successes: 0, failures: 0 };
+    this.log('system', this.t`${c.name} is back on their feet.`);
+    return c;
+  }
+
+  /** Put a condition on a hero, or lift it. Only the conditions the engine knows how to play. */
+  testCondition(characterId: string, condition: string, on: boolean) {
+    const c = this.char(characterId);
+    if (!(HERO_CONDITIONS as readonly string[]).includes(condition)) throw new GameError(`Unknown condition "${condition}"`);
+    if (on) {
+      if (!(c.effects ?? []).some((e) => e.condition === condition)) (c.effects ??= []).push({ condition, ends: 'none' });
+      this.syncConditions(c);
+    } else this.endEffects(c, (e) => e.condition === condition || e.also === condition, true);
+    return c;
+  }
+
+  /** Mana, class resources and abilities back to full; hit points stay. */
+  testRestore(characterId?: string) {
+    const heroes = characterId ? [this.char(characterId)] : this.s.characters.filter((c) => !c.dead);
+    for (const c of heroes) {
+      c.mana = c.maxMana;
+      c.hitDice = c.level;
+      c.spent = [];
+      c.uses = {};
+      c.inspired = undefined;
+      for (const it of [...c.bag, ...Object.values(c.equipment)]) if (it?.used) it.used = 0;
+    }
+    this.log('system', this.t`Mana and class resources are restored.`);
+  }
+
+  testGold(amount: number) {
+    const delta = Math.max(-1e6, Math.min(1e6, Math.round(amount) || 0));
+    this.s.gold = Math.max(0, this.s.gold + delta);
+    if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + '.');
+  }
+
+  /** Walk the party into a known place at once, and to a spot on its zone map. */
+  testJump(locationId: string, spot = '') {
+    this.needExplore();
+    const loc = this.location(locationId);
+    if (!loc) throw new GameError(this.t`You do not know that place`);
+    const w = this.world;
+    loc.discovered = true;
+    w.party = { q: loc.q, r: loc.r };
+    const i = loc.r * w.width + loc.q;
+    if (i >= 0 && i < w.explored.length) w.explored = w.explored.slice(0, i) + '1' + w.explored.slice(i + 1);
+    this.log('system', this.t`The party heads to ${loc.name}.`);
+    this.arriveAt(loc);
+    if (spot.trim()) enterSpot(this, spot.trim());
+    return loc;
+  }
+
+  /** Put every place of the region on the map. */
+  testReveal() {
+    const w = this.world;
+    for (const l of w.locations) l.discovered = true;
+    w.explored = '1'.repeat(w.width * w.height);
+    this.log('system', this.t`Every place of the region is now on the map.`);
+  }
+
+  /** What a test fight needs to catch the enemies unawares: a Stealth success from just now. */
+  testSneak(heroId: string) {
+    const c = this.char(heroId);
+    (this.s.sneaks ??= {})[c.id] = { total: 30, at: this.world.minutes };
+  }
+
   publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean; unanswered?: { logId: number; playerId: string }[] }): GameState {
     const s = this.s;
     const w = s.world;
@@ -5587,6 +5692,7 @@ export class Game {
       trophies: trophyViews(this),
       unanswered: dm.unanswered ?? [],
       lastFight: s.lastFight ?? null,
+      testMode: s.testMode ? { since: s.testMode.since } : null,
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),
         width: w.width,

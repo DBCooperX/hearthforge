@@ -5,7 +5,7 @@ import { reloadItemIcons } from './game/itemArt';
 import { music } from './music';
 import { sfx } from './sfx';
 import { CLOSED_REASONS } from './ui/labels';
-import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
+import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TestMonster, TypingWhere } from '../../shared/types';
 
 function makeId(bytes = 16): string {
   // crypto.randomUUID needs a secure context, and LAN installs are usually plain http.
@@ -80,6 +80,8 @@ export interface Connection {
   chat: ChatMessage[];
   /** Who is typing right now, by player id. */
   typing: Record<string, TypingWhere>;
+  /** The monsters the test toolbox can pick from. Empty until the host asks for them. */
+  testCatalog: TestMonster[];
   /** Why the last attempt to sit down was refused, in English. */
   joinError: string | null;
   /** True between asking for a seat and the server's answer. */
@@ -108,6 +110,7 @@ export function useConnection(): Connection {
   const [tables, setTables] = useState<TableSummary[] | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [typing, setTyping] = useState<Record<string, TypingWhere>>({});
+  const [testCatalog, setTestCatalog] = useState<TestMonster[]>([]);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; text: string; notice?: boolean }[]>([]);
@@ -182,6 +185,7 @@ export function useConnection(): Connection {
             setLinkedTable(msg.state.room);
             break;
           case 'tables': setTables(msg.tables); break;
+          case 'test_catalog': setTestCatalog(msg.monsters); break;
           case 'moved': listeners.current.forEach((fn) => fn(msg.id, msg.path)); break;
           case 'chat': setChat((c) => (msg.replace ? msg.messages : [...c, ...msg.messages].slice(-200))); break;
           case 'typing': {
@@ -265,7 +269,7 @@ export function useConnection(): Connection {
     return () => void listeners.current.delete(fn);
   }, []);
 
-  return { state, connected, tables, chat, typing, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast };
+  return { state, connected, tables, chat, typing, testCatalog, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast };
 }
 
 /**

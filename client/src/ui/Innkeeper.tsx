@@ -183,9 +183,18 @@ function Tables({ fail, say }: PaneProps) {
             <b>{tb.title}</b>
             <span className="inn-tag">{t(PHASE_LABELS[tb.phase] ?? tb.phase)}</span>
             {tb.paused && <span className="inn-tag is-warn">{t('Paused')}</span>}
+            {tb.testMode && <span className="inn-tag is-warn" title={t('The host has the test toolbox. Nothing counts until you keep it.')}>{t('Test mode')}</span>}
             {tb.code && <span className="inn-tag" title={t('Invite code')}>{tb.code}</span>}
             <span className="spacer" />
             <button type="button" onClick={() => void act({ table: tb.id, do: tb.paused ? 'resume' : 'pause' })}>{tb.paused ? t('Resume') : t('Pause')}</button>
+            {tb.testMode ? (
+              <>
+                <button type="button" title={t('End test mode and keep what the tests changed.')} onClick={() => { if (window.confirm(t('End test mode at "{title}" and keep everything the tests changed?', { title: tb.title }))) void act({ table: tb.id, do: 'test_keep' }); }}>{t('Keep changes')}</button>
+                <button type="button" title={t('End test mode and put the story back to how it was before.')} onClick={() => { if (window.confirm(t('End test mode at "{title}" and undo everything the tests changed? The story goes back to how it was when test mode began.', { title: tb.title }))) void act({ table: tb.id, do: 'test_discard' }); }}>{t('Undo changes')}</button>
+              </>
+            ) : (
+              <button type="button" title={t('Give the host a toolbox to start fights, level up, jump to places and more. The story can go back to how it was afterwards.')} onClick={() => { if (window.confirm(t('Switch test mode on at "{title}"? The table is saved as it is now, and the host gets a toolbox. When you end test mode you can keep the changes or go back.', { title: tb.title }))) void act({ table: tb.id, do: 'test_on' }); }}>{t('Test mode')}</button>
+            )}
             <button type="button" onClick={() => innDownload(`/table?id=${encodeURIComponent(tb.id)}`).catch(fail)}>{t('Download')}</button>
             <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the table "{title}" with its heroes and its story? This cannot be undone, except from a backup.', { title: tb.title }))) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }}>{t('Delete')}</button>
           </header>
