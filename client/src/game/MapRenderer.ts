@@ -16,7 +16,8 @@ import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
 import { heroSenses, lightLevels, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
-import { GROUND_SQUASH, clampFocus, project, unproject, type TiltCam } from './tilt';
+import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
+import tableUrl from '../assets/battle-table.webp';
 import { Effects, HEAL_COLOR, damageColor, isPhysical, type P3 } from './fx';
 
 export type BattleView = 'tilt' | 'flat';
@@ -249,6 +250,10 @@ export class MapRenderer {
   private tcam: TiltCam = { fx: 0, fy: 0, k: 3, cx: 0, cy: 0, dist: 18 * TILE };
   private tcamReady = false;
   private slab = new Graphics();
+  /** The tavern table the battle board lies on, with its rug, plates, candles and dice. */
+  private table: PerspectiveMesh | null = null;
+  private tableTex: Texture | null = null;
+  private tableCut = -1;
   private ground: PerspectiveMesh | null = null;
   private groundRT: RenderTexture | null = null;
   private rtRes = 0;
@@ -286,6 +291,12 @@ export class MapRenderer {
       this.shadeSprite.texture = vignette();
       this.standLayer.sortableChildren = true;
       this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.fx.layer, this.floatLayer);
+      const img = new Image();
+      img.onload = () => {
+        if (this.destroyed) return;
+        this.tableTex = Texture.from({ resource: img, autoGenerateMipmaps: true, scaleMode: 'linear' });
+      };
+      img.src = tableUrl;
     } else {
       this.app.stage.addChild(this.world, this.fx.layer, this.floatLayer);
     }
@@ -960,13 +971,15 @@ export class MapRenderer {
       this.app.stage.addChildAt(this.ground, this.app.stage.getChildIndex(this.slab) + 1);
     } else this.ground.setCorners(c0.x, c0.y, c1.x, c1.y, c2.x, c2.y, c3.x, c3.y);
 
-    // The map is a slab of earth or stone: its near edge shows a little thickness and casts a shadow.
-    const depth = TILE * 0.7;
+    // The map is a board lying on the tavern table: its near edge shows a little thickness and it casts a shadow.
+    const depth = TILE * 0.4;
+    this.drawTable(cam, mw, mh, depth, state);
     const d2 = project(cam, mw, mh, -depth), d3 = project(cam, 0, mh, -depth);
     const s = this.slab;
     s.clear();
-    const sh2 = project(cam, mw + TILE * 0.6, mh + TILE * 0.9, 0), sh3 = project(cam, -TILE * 0.2, mh + TILE * 0.9, 0);
-    s.poly([c3.x, c3.y, c2.x, c2.y, sh2.x, sh2.y, sh3.x, sh3.y]).fill({ color: 0x000000, alpha: 0.35 });
+    const off = (x: number, y: number) => project(cam, x + TILE * 0.55, y + TILE * 0.7, -depth);
+    const o0 = off(0, 0), o1 = off(mw, 0), o2 = off(mw, mh), o3 = off(0, mh);
+    s.poly([o0.x, o0.y, o1.x, o1.y, o2.x, o2.y, o3.x, o3.y]).fill({ color: 0x000000, alpha: 0.5 });
     s.poly([c3.x, c3.y, c2.x, c2.y, d2.x, d2.y, d3.x, d3.y]).fill(0x1d1814);
     s.poly([c3.x, c3.y, c2.x, c2.y, (c2.x * 2 + d2.x) / 3, (c2.y * 2 + d2.y) / 3, (c3.x * 2 + d3.x) / 3, (c3.y * 2 + d3.y) / 3]).fill(0x2c251f);
     s.moveTo(c3.x, c3.y).lineTo(c2.x, c2.y).stroke({ width: 1, color: 0x6b5a44, alpha: 0.6 });
@@ -1003,6 +1016,37 @@ export class MapRenderer {
       d.stand.fig.y += dt * 6 * (1 - f);
       return true;
     });
+  }
+
+  /**
+   * The tavern table around the board: the picture is laid flat under the board with the same
+   * perspective, so the board sits on the middle of the rug and the plates, candles and dice
+   * lie around it. Whatever would come too close to the camera is cut off.
+   */
+  private drawTable(cam: TiltCam, mw: number, mh: number, depth: number, state: GameState) {
+    const tex = this.tableTex;
+    if (!tex) return;
+    // The rug's inner field, as fractions of the picture: the board covers it, the rug's border shows around it.
+    const F = { x0: 0.235, x1: 0.78, y0: 0.225, y1: 0.79 };
+    const iw = tex.source.width, ih = tex.source.height;
+    const W = Math.max(mw / (F.x1 - F.x0), (mh * (iw / ih)) / (F.y1 - F.y0)) * 1.22, H = (W * ih) / iw;
+    const ox = mw / 2 - (W * (F.x0 + F.x1)) / 2, oy = mh / 2 - (H * (F.y0 + F.y1)) / 2;
+    const bottom = Math.min(oy + H, cam.fy + nearLimit(cam));
+    const cut = Math.round(Math.max(0.05, (bottom - oy) / H) * 100) / 100;
+    if (!this.table || cut !== this.tableCut) {
+      const frame = new Texture({ source: tex.source, frame: new Rectangle(0, 0, iw, Math.floor(ih * cut)) });
+      if (!this.table) {
+        this.table = new PerspectiveMesh({ texture: frame, verticesX: this.lite ? 10 : 18, verticesY: this.lite ? 10 : 18 });
+        this.app.stage.addChildAt(this.table, 0);
+      } else { const old = this.table.texture; this.table.texture = frame; old.destroy(false); }
+      this.tableCut = cut;
+    }
+    const yb = oy + H * cut;
+    const t0 = project(cam, ox, oy, -depth), t1 = project(cam, ox + W, oy, -depth), t2 = project(cam, ox + W, yb, -depth), t3 = project(cam, ox, yb, -depth);
+    this.table.setCorners(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y, t3.x, t3.y);
+    // A fight in the dark dims the candlelit table a little too.
+    const ambient = state.phase === 'combat' ? state.light?.ambient ?? 'bright' : 'bright';
+    this.table.tint = ambient === 'dark' ? 0x8a7f74 : ambient === 'dim' ? 0xc2b8ac : 0xffffff;
   }
 
   /** After a few seconds, a machine that cannot keep up gets the lighter version of the 2.5D view. */
