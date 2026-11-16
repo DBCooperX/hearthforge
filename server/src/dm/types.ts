@@ -42,6 +42,11 @@ export interface DungeonMaster {
    * words to a rolled region. Must leave names, places and rules untouched. Never throws.
    */
   prepare?(game: Game): Promise<void>;
+  /**
+   * After a reply has reached the players: bring the game in line with anything the reply narrated
+   * without the matching tool, such as walking to town or handing over a coin. Never throws.
+   */
+  reconcile?(game: Game, onUpdate: () => Promise<void>): Promise<void>;
   /** Background housekeeping, such as condensing old memory. Never throws. */
   maintain(game: Game): Promise<void>;
 }

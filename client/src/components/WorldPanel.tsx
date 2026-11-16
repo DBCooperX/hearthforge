@@ -82,7 +82,8 @@ export function WorldPanel(props: PanelProps) {
   const place = world.locations.find((l) => l.id === world.placeId) ?? null;
   const parent = place?.parentId ? world.locations.find((l) => l.id === place.parentId) : null;
   const here = world.locations.filter((l) => sameHex(l, world.party) && l.id !== place?.id);
-  const present = state.memory.npcs.filter((n) => n.locationId === world.placeId);
+  // The people in the current scene, as its header names them; people who left are gone from it.
+  const present = state.scene?.present ?? state.memory.npcs.filter((n) => n.locationId === world.placeId).map((n) => ({ name: n.name, npcId: n.id, role: n.role, disposition: n.disposition }));
   const quests = state.memory.quests.filter((q) => q.status === 'active');
   const terrain = TERRAIN[world.terrain[world.party.r * world.width + world.party.q] as TerrainCode]?.name ?? 'unknown';
   const idle = state.phase === 'explore' && !state.travelling && !state.dmBusy;
@@ -144,9 +145,9 @@ export function WorldPanel(props: PanelProps) {
           {present.length === 0 && <p className="muted small">{place ? t('Nobody you know by name.') : t('Just the party and the wind.')}</p>}
           <ul className="people">
             {present.map((n) => (
-              <li key={n.id}>
-                <span className={`disp ${n.disposition}`} title={t(n.disposition)} />
-                <div><Named name={n.name} /><small>{n.role}</small></div>
+              <li key={n.npcId ?? n.name}>
+                <span className={`disp ${n.disposition ?? 'unknown'}`} title={n.disposition ? t(n.disposition) : undefined} />
+                <div>{n.npcId ? <Named name={n.name} /> : <span>{n.name}</span>}{n.role && <small>{n.role}</small>}</div>
               </li>
             ))}
           </ul>
