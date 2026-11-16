@@ -44,7 +44,7 @@ const CELLS = [8, 16, 24, 32, 48, 64];
 
 const TILE_PACKS: Record<TilePack, Omit<PackInfo, 'installed' | 'active'>> = {
   generated: { id: 'generated', kind: 'tiles', name: 'Hearthforge pixel art', author: 'Hearthforge', license: 'CC0 1.0', url: '', source: 'builtin' },
-  kenney: { id: 'kenney', kind: 'tiles', name: 'Tiny Dungeon', author: 'Kenney', license: 'CC0 1.0', url: 'https://kenney.nl/assets/tiny-dungeon', source: 'download' },
+  kenney: { id: 'kenney', kind: 'tiles', name: 'Tiny Dungeon', author: 'Kenney', license: 'CC0 1.0', url: 'https://kenney.nl/assets/tiny-dungeon', source: 'upload' },
   '0x72': { id: '0x72', kind: 'tiles', name: 'DungeonTileset II', author: '0x72', license: 'CC0 1.0', url: 'https://0x72.itch.io/dungeontileset-ii', source: 'upload' },
 };
 
@@ -282,11 +282,7 @@ export class ArtStore {
     if (this.busy.has(id)) return;
     this.busy.add(id);
     try {
-      if (id === 'kenney') {
-        await ensureArt(this.dir, 'kenney', this.env);
-        if (!artManifest(this.dir, 'kenney')) throw new ArtError('download_failed');
-        this.state.tiles = 'kenney';
-      } else if (id === GAME_ICONS) {
+      if (id === GAME_ICONS) {
         const base = (this.env.HEARTHFORGE_GAME_ICONS_URL || GAME_ICONS_BASE).replace(/\/+$/, '');
         const paths = this.gameIconPaths();
         let ok = 0;

@@ -1,7 +1,7 @@
-// Tile packs (see artLibrary.ts for the library around them). With kenney or 0x72 the server fetches
-// the CC0 pack on start, unpacks it into ART_DIR and tells the client which image to use
-// for each sprite. Any sprite the pack cannot supply keeps its generated pixel art, and
-// if the download fails the whole game simply stays on the generated art.
+// Tile packs (see artLibrary.ts for the library around them). Neither kenney.nl nor itch.io allows automatic
+// downloads, so the owner gets the zip from the pack's page and drops it into the Innkeeper (or copies it into
+// ART_DIR). On start the server unpacks it and tells the client which image to use for each sprite. Any sprite
+// the pack cannot supply keeps its generated pixel art, and without a pack the game stays on the generated art.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { unzipSync } from 'fflate';
@@ -96,24 +96,19 @@ export async function ensureArt(artDir: string, mode: ArtMode, env: NodeJS.Proce
     let zip: Uint8Array;
     if (dropped) {
       zip = readFileSync(dropped);
-    } else if (mode === 'kenney') {
-      let url = env.HEARTHFORGE_KENNEY_URL;
-      if (!url) {
-        // The download link carries a content hash, so read it off the asset page.
-        const html = new TextDecoder().decode(await download(KENNEY_PAGE));
-        url = /https?:\/\/[^"'\s]+\.zip/i.exec(html)?.[0];
-        if (!url) throw new Error(`no download link found on ${KENNEY_PAGE}`);
-      }
-      zip = await download(url);
     } else {
-      const url = env.HEARTHFORGE_0X72_URL;
-      if (!url) throw new Error(`itch.io has no direct download link. Download the pack from ${OX72_PAGE} and copy the zip into ${artDir}, or set HEARTHFORGE_0X72_URL`);
+      // Only a link the owner chose on purpose; the server never scrapes the sites' pages or pretends to be a browser.
+      const url = mode === 'kenney' ? env.HEARTHFORGE_KENNEY_URL : env.HEARTHFORGE_0X72_URL;
+      if (!url) {
+        const page = mode === 'kenney' ? KENNEY_PAGE : OX72_PAGE;
+        throw new Error(`${new URL(page).hostname} does not allow automatic downloads. Download the pack from ${page} and drop the zip into the Innkeeper (Assets), or copy it into ${artDir}`);
+      }
       zip = await download(url);
     }
     unpack(zip, dest);
     console.log(`[art] Unpacked the ${mode} pack into ${dest}`);
   } catch (err) {
-    console.warn(`[art] Could not get the ${mode} art pack, using generated sprites: ${err instanceof Error ? err.message : err}`);
+    console.warn(`[art] The ${mode} art pack is not on the server, using generated sprites: ${err instanceof Error ? err.message : err}`);
   }
 }
 

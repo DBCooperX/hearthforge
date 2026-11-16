@@ -27,7 +27,7 @@ Recognised when uploaded, with the license as stated on the pack's page on 15 No
 - Matt Firth (cheekyinkling), "Shikashi's Fantasy Icons Pack": free to use and remix with credit to "Matt Firth (cheekyinkling)" and "game-icons.net"; the page names no license and says nothing about passing the files on: <https://cheekyinkling.itch.io/shikashis-fantasy-icons-pack>
 - Clockwork Raven, "Raven Fantasy Icons" (free version): may be used in projects but not distributed as a separate product; the author's comments and the page disagree on commercial use: <https://clockworkraven.itch.io/raven-fantasy-icons>
 
-Kenney's page could not be read when this list was written; its CC0 license is taken from Kenney's listing on itch.io. For any other pack you upload, crediting it is up to you: the window has fields for artist, license and link.
+Kenney does not allow automatic downloads, so the owner downloads the zip from the page and drops it under Innkeeper → Assets. Kenney's page could not be read when this list was written; its CC0 license is taken from Kenney's listing on itch.io. For any other pack you upload, crediting it is up to you: the window has fields for artist, license and link.
 
 Without an icon pack, item icons are emoji rendered by the player's system font.
 
