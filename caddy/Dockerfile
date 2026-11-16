@@ -4,7 +4,7 @@
 # Plain Caddy gets certificates from Let's Encrypt over ports 80/443, or makes its own local ones. For a domain
 # that is only reachable inside your network, Let's Encrypt has to check a DNS record instead, which needs a
 # Caddy with your DNS provider's plugin built in: set HEARTHFORGE_DNS_PROVIDER (cloudflare, duckdns, hetzner,
-# desec, porkbun, ...), and this file builds one from github.com/caddy-dns/<provider>.
+# digitalocean), and this file builds one from github.com/caddy-dns/<provider>.
 ARG CADDY_FLAVOUR=plain
 
 FROM caddy:2.10-builder AS dns-build

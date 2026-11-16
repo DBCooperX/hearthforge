@@ -100,6 +100,32 @@ export interface AdminStatus {
   firstPassword: boolean;
 }
 
+/** DNS providers whose Caddy plugin takes a single API token. */
+export const HTTPS_DNS_PROVIDERS = ['cloudflare', 'duckdns', 'hetzner', 'digitalocean'] as const;
+
+/** What the Innkeeper sends to set HTTPS up. A missing dnsToken keeps the one in .env. */
+export interface HttpsRequest { mode: 'on' | 'off'; domain?: string; local?: string; email?: string; dnsProvider?: string; dnsToken?: string }
+
+/** HTTPS as the updater last saw it in .env, and how Caddy is doing. */
+export interface HttpsStatus {
+  /** The updater runs, so HTTPS can be changed from here. */
+  connected: boolean;
+  /** The updater has reported at least once (an older updater does not know about HTTPS). */
+  known: boolean;
+  on: boolean;
+  state: 'idle' | 'working' | 'failed';
+  message: string;
+  domain: string;
+  local: string;
+  email: string;
+  dnsProvider: string;
+  /** A DNS token is set. The token itself never leaves .env. */
+  dnsToken: boolean;
+  /** Caddy's container state: running, exited, restarting, or none. */
+  caddy: string;
+  log: string[];
+}
+
 export type UpdaterState = 'idle' | 'checking' | 'building' | 'restarting' | 'failed';
 
 /** What the updater sidecar reports. All of it is absent when no updater runs. */

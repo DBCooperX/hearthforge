@@ -157,3 +157,32 @@ describe('narrator on the server', () => {
     expect(readFileSync(join(dir, 'voice.json'), 'utf8')).toContain('openai');
   });
 });
+
+describe('HTTPS from the Innkeeper', () => {
+  it('only passes values the updater will accept', async () => {
+    const { checkHttps } = await import('../src/admin/updater');
+    expect(checkHttps({ mode: 'on', domain: ' DnD.Example.ch ', local: '192.168.1.50, hearthforge.lan' })).toEqual({ mode: 'on', domain: 'dnd.example.ch', local: '192.168.1.50,hearthforge.lan', email: '', dnsProvider: '' });
+    expect(checkHttps({ mode: 'on', domain: 'a.ch', dnsProvider: 'cloudflare', dnsToken: 'abc_123-XYZ' })?.dnsToken).toBe('abc_123-XYZ');
+    expect(checkHttps({ mode: 'on', domain: 'a.ch;rm -rf /' })).toBeNull();
+    expect(checkHttps({ mode: 'on', local: '$(reboot)' })).toBeNull();
+    expect(checkHttps({ mode: 'on', domain: 'a.ch', dnsProvider: 'route53' })).toBeNull();
+    expect(checkHttps({ mode: 'on', domain: 'a.ch', dnsToken: 'x\nCOMPOSE_PROFILES=evil' })).toBeNull();
+    expect(checkHttps({ mode: 'on' })).toBeNull();
+    expect(checkHttps({ mode: 'off' })).toMatchObject({ mode: 'off' });
+  });
+
+  it('leaves the settings for the updater and reads back what it reports', async () => {
+    const { Updater } = await import('../src/admin/updater');
+    const dir = tmp();
+    const u = new Updater(dir, () => 1_000_000_000);
+    expect(u.requestHttps({ mode: 'on', local: '10.0.0.5' })).toBe('no_updater');
+    writeFileSync(join(dir, 'control', 'heartbeat'), String(1_000_000));
+    expect(u.requestHttps({ mode: 'on', domain: 'bad domain' })).toBe('bad_value');
+    expect(u.requestHttps({ mode: 'on', domain: 'dnd.example.ch', local: '10.0.0.5', dnsProvider: 'cloudflare', dnsToken: 'tok' })).toBe('ok');
+    expect(readFileSync(join(dir, 'control', 'request'), 'utf8')).toBe('https\n');
+    expect(readFileSync(join(dir, 'control', 'https.request'), 'utf8')).toBe('mode=on\ndomain=dnd.example.ch\nlocal=10.0.0.5\nemail=\ndnsProvider=cloudflare\ndnsToken=tok\n');
+    expect(u.requestHttps({ mode: 'off' })).toBe('busy');
+    writeFileSync(join(dir, 'control', 'https'), 'state=idle\nmessage=Caddy runs for dnd.example.ch.\non=1\ndomain=dnd.example.ch\nlocal=10.0.0.5\nemail=\ndnsProvider=cloudflare\ndnsToken=1\ncaddy=running\n');
+    expect(u.https()).toMatchObject({ connected: true, known: true, on: true, domain: 'dnd.example.ch', dnsToken: true, caddy: 'running', state: 'idle' });
+  });
+});

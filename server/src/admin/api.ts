@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { SETTINGS, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo } from '../../../shared/admin';
+import { SETTINGS, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo, type HttpsRequest } from '../../../shared/admin';
 import type { InternalState } from '../game/engine';
 import type { Room } from '../room';
 import type { Auth } from './auth';
@@ -171,6 +171,7 @@ export class AdminApi {
         case '/players': return { connections: ctx.connections(), bans: ctx.auth.bans };
         case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
+        case '/https': return ctx.updater.https();
         case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title ?? id);
         case '/logs': return { lines: ctx.logs.since(Number(url.searchParams.get('after')) || 0) };
         case '/backups': return { backups: this.backups() };
@@ -291,6 +292,15 @@ export class AdminApi {
           return;
         }
         throw new Refused(400, 'bad_request');
+      }
+      case '/https': {
+        const body = await this.json(req);
+        const answer = ctx.updater.requestHttps(body as unknown as HttpsRequest);
+        if (answer !== 'ok') throw new Refused(answer === 'bad_value' ? 400 : 409, answer);
+        // Behind Caddy every player would seem to come from Caddy's address; read the real one it passes on.
+        if (body.mode === 'on' && ctx.config.next('HEARTHFORGE_TRUST_PROXY') !== 'on') ctx.config.set({ HEARTHFORGE_TRUST_PROXY: 'on' });
+        console.log(`[innkeeper] HTTPS ${body.mode === 'off' ? 'switched off' : 'settings changed'}.`);
+        return ctx.updater.https();
       }
       case '/notice': {
         const body = await this.json(req);

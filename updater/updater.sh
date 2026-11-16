@@ -9,6 +9,8 @@
 #   check    fetch from GitHub and report how many changes are waiting
 #   update   fast-forward the checkout, build the new image, swap the container, and go
 #            back to the old version if the new one does not come up healthy
+#   https    take the HTTPS settings the Innkeeper left in control/https.request, check every
+#            value against a strict pattern, write them into .env and (re)start Caddy
 #
 # Nothing the server writes is ever executed. Progress is reported in plain files in the
 # control folder: status (key=value lines), incoming and recent (one commit per line),
@@ -153,6 +155,91 @@ update() {
   set_state failed "Version $new did not start, so the previous version was put back."
 }
 
+# ------------------------------------------------------------------------------------------ HTTPS
+# The Innkeeper sets HTTPS up in the game; Caddy is a container of its own and reads .env, so the
+# settings are written there. Every value is checked against a strict pattern first, and nothing
+# from the request is ever run: it only ends up as KEY=value lines in .env.
+ENV_FILE="$REPO/.env"
+HTTPS_STATE=idle
+HTTPS_MESSAGE="$(sed -n 's/^message=//p' "$CONTROL/https" 2>/dev/null | head -n 1)"
+
+env_get() { sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | tail -n 1; }
+
+# Replace or remove one KEY=value line. The file keeps its owner and permissions (it holds secrets).
+env_set() {
+  touch "$ENV_FILE"
+  grep -v "^$1=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+  if [ -n "$2" ]; then printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE.tmp"; fi
+  cat "$ENV_FILE.tmp" > "$ENV_FILE"
+  rm -f "$ENV_FILE.tmp"
+}
+
+caddy_id() { docker ps -aq --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=caddy" 2>/dev/null | head -n 1; }
+
+https_report() {
+  id="$(caddy_id)"
+  {
+    echo "state=$HTTPS_STATE"
+    echo "message=$(printf '%s' "$HTTPS_MESSAGE" | one_line)"
+    case "$(env_get COMPOSE_PROFILES)" in *https*) echo "on=1" ;; *) echo "on=0" ;; esac
+    echo "domain=$(env_get HEARTHFORGE_DOMAIN)"
+    echo "local=$(env_get HEARTHFORGE_LOCAL_HOSTS)"
+    echo "email=$(env_get HEARTHFORGE_ACME_EMAIL)"
+    echo "dnsProvider=$(env_get HEARTHFORGE_DNS_PROVIDER)"
+    if [ -n "$(env_get HEARTHFORGE_DNS_TOKEN)" ]; then echo "dnsToken=1"; else echo "dnsToken=0"; fi
+    if [ -n "$id" ]; then echo "caddy=$(docker inspect --format '{{ .State.Status }}' "$id" 2>/dev/null)"; else echo "caddy=none"; fi
+  } | put https
+  if [ -n "$id" ]; then docker logs --tail 40 "$id" 2>&1 | put https.log; fi
+}
+
+https_fail() { HTTPS_STATE=failed; HTTPS_MESSAGE="$1"; say "$1"; https_report; }
+
+# Value of KEY in the request, or nothing. "present KEY" tells an empty value from a missing one.
+req_get() { sed -n "s/^$1=//p" "$CONTROL/https.request" 2>/dev/null | head -n 1 | tr -d '\r'; }
+present() { grep -q "^$1=" "$CONTROL/https.request" 2>/dev/null; }
+matches() { [ "$(printf '%s' "$1" | wc -l)" -eq 0 ] && printf '%s\n' "$1" | grep -Eqx "$2"; }
+
+https_job() {
+  if [ ! -f "$CONTROL/https.request" ]; then https_fail "The HTTPS settings did not arrive."; return; fi
+  mode="$(req_get mode)"; domain="$(req_get domain)"; hosts="$(req_get local)"; email="$(req_get email)"
+  provider="$(req_get dnsProvider)"; token="$(req_get dnsToken)"; set_token=0
+  if present dnsToken; then set_token=1; fi
+  rm -f "$CONTROL/https.request"
+  case "$mode" in on|off) ;; *) https_fail "HTTPS: unknown request."; return ;; esac
+  matches "$domain" '([A-Za-z0-9-]+\.)+[A-Za-z]{2,}|' || { https_fail "HTTPS: the domain is not valid."; return; }
+  matches "$hosts" '[A-Za-z0-9.:,-]*' || { https_fail "HTTPS: the local addresses are not valid."; return; }
+  matches "$email" '([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})?' || { https_fail "HTTPS: the email address is not valid."; return; }
+  matches "$provider" '(cloudflare|duckdns|hetzner|digitalocean)?' || { https_fail "HTTPS: unknown DNS provider."; return; }
+  matches "$token" '[A-Za-z0-9._~+/=:-]*' || { https_fail "HTTPS: the DNS token has characters it cannot have."; return; }
+
+  HTTPS_STATE=working
+  if [ "$mode" = off ]; then
+    env_set COMPOSE_PROFILES ""
+    id="$(caddy_id)"
+    if [ -n "$id" ]; then docker rm -f "$id" >> "$LOG" 2>&1; fi
+    HTTPS_STATE=idle; HTTPS_MESSAGE="HTTPS is off."; say "$HTTPS_MESSAGE"; https_report
+    return
+  fi
+  if [ -z "$domain" ] && [ -z "$hosts" ]; then https_fail "HTTPS needs a domain or a local address."; return; fi
+  env_set COMPOSE_PROFILES https
+  env_set HEARTHFORGE_DOMAIN "$domain"
+  env_set HEARTHFORGE_LOCAL_HOSTS "$hosts"
+  env_set HEARTHFORGE_ACME_EMAIL "$email"
+  env_set HEARTHFORGE_DNS_PROVIDER "$provider"
+  if [ "$set_token" = 1 ]; then env_set HEARTHFORGE_DNS_TOKEN "$token"; fi
+  HTTPS_MESSAGE="Starting Caddy for ${domain:-$hosts}."; say "$HTTPS_MESSAGE"; https_report
+  # Built afresh only when the DNS plugin changed; otherwise compose reuses the image.
+  if compose --profile https up -d --build --no-deps caddy > "$CONTROL/https.build.log" 2>&1; then
+    sleep 5
+    HTTPS_STATE=idle; HTTPS_MESSAGE="Caddy runs for ${domain:-$hosts}."
+  else
+    tail -n 15 "$CONTROL/https.build.log" >> "$LOG"
+    HTTPS_STATE=failed; HTTPS_MESSAGE="Caddy could not be started. The HTTPS log says why."
+  fi
+  say "$HTTPS_MESSAGE"
+  https_report
+}
+
 # A sign of life the server can see even while a long build keeps this script busy.
 ( while true; do date +%s | put heartbeat; sleep 10; done ) &
 HEARTBEAT=$!
@@ -163,6 +250,7 @@ if [ -f "$LOG" ]; then tail -n 400 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; 
 rm -f "$CONTROL/request"
 say "Updater ready: project $PROJECT, branch $BRANCH."
 check
+https_report
 last_check="$(date +%s)"
 
 while true; do
@@ -172,11 +260,12 @@ while true; do
     case "$job" in
       check) check ;;
       update) update ;;
+      https) https_job ;;
       *) say "Ignored an unknown request." ;;
     esac
     last_check="$(date +%s)"
   elif [ $(( $(date +%s) - last_check )) -ge "$CHECK_EVERY" ]; then
-    check; last_check="$(date +%s)"
+    check; https_report; last_check="$(date +%s)"
   fi
   sleep 2
 done
