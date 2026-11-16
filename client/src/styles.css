@@ -283,6 +283,7 @@ ul.plain small { color: var(--muted); }
 .overlay { position: fixed; inset: 0; background: rgba(6, 6, 6, 0.72); display: grid; place-items: center; z-index: 10; padding: 12px; }
 
 .toasts { position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%); display: grid; gap: 6px; z-index: 20; pointer-events: none; }
+.toast.update { display: flex; gap: 12px; align-items: center; pointer-events: auto; }
 .toast { background: #3b1814; border: 1px solid #c0392b; padding: 8px 14px; border-radius: 8px; font-size: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
 
 @media (max-width: 1000px) {

@@ -56,6 +56,7 @@ import {
   type QuestStatus,
   type RollInfo,
   type SceneMeta,
+  type ScenePerson,
   type SlotId,
   type TableInfo,
 } from '../../../shared/types';
@@ -324,6 +325,8 @@ const DIRS: Pt[] = [
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
 ];
 const MAX_LOG = 400;
+/** How far the Dungeon Master may move the party by story alone; longer journeys go over the map. */
+const STORY_TRAVEL_HEXES = 4;
 const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [] });
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
@@ -959,6 +962,48 @@ export class Game {
     if (this.world.placeId === loc.id) return;
     this.log('system', this.t`The party heads to ${loc.name}.`);
     this.arriveAt(loc);
+  }
+
+  /**
+   * The story took the party somewhere: walking back to town, or on to the tavern there. Places in
+   * this hex are a step away; others are reached along a known route of at most a few hexes, with
+   * the time it takes and no ambush roll, because the Dungeon Master already told how the way went.
+   * Longer journeys stay on the map, where the players pick the route.
+   */
+  journeyTo(ref: string) {
+    this.needExplore();
+    const w = this.world;
+    const key = ref.trim().toLowerCase();
+    const loc = w.locations.find((l) => l.discovered && l.id.toLowerCase() === key)
+      ?? w.locations.find((l) => l.discovered && l.name.toLowerCase() === key);
+    if (!loc) throw new GameError(`No known place "${ref}". Known places: ${w.locations.filter((l) => l.discovered).map((l) => `${l.name} [${l.id}]`).join(', ')}.`);
+    if (w.placeId === loc.id) return { now_at: loc.name, moved: false };
+    if (sameHex(loc, w.party)) {
+      this.goTo(loc.id);
+      return { now_at: loc.name, moved: true, minutes: 0 };
+    }
+    const route = this.knownRoute(loc);
+    if (!route) throw new GameError(`The party knows no way to ${loc.name}.`);
+    if (route.length > STORY_TRAVEL_HEXES) throw new GameError(`${loc.name} is ${route.length * HEX_MILES} miles away. Tell the players to travel there on the map, which tracks the days on the road.`);
+    let minutes = 0;
+    const terrain: string[] = [];
+    for (const h of route) {
+      const code = trueTerrain(w, h);
+      minutes += hoursFor(code) * 60;
+      if (!terrain.includes(TERRAIN[code].name)) terrain.push(TERRAIN[code].name);
+      reveal(w, h, code === 'h' || code === 'm' ? 2 : 1);
+    }
+    for (const sh of Object.values(this.s.shops)) if (!sh.locationId) delete this.s.shops[sh.id];
+    w.party = { q: loc.q, r: loc.r };
+    w.placeId = null;
+    w.minutes += minutes;
+    const journey = this.journeyText({ to: loc, hexes: route.length, minutes, terrain });
+    // A tavern in a town: arrive in the town first, so the town counts as visited too.
+    const root = this.rootOf(loc);
+    if (root !== loc) this.settleIn(root);
+    this.settleIn(loc);
+    this.log('system', this.t`The party travels ${journey} and reaches ${loc.name}. ${formatTime(w.minutes, this.lang)}.`);
+    return { now_at: loc.name, moved: true, minutes };
   }
 
   private knownRoute(to: Hex): Hex[] | null {
@@ -4337,7 +4382,10 @@ export class Game {
   }
 
   invMove(playerId: string, characterId: string, from: InvLoc, to: InvLoc) {
-    const c = this.actor(playerId, characterId, false);
+    this.moveItem(this.actor(playerId, characterId, false), from, to);
+  }
+
+  private moveItem(c: Character, from: InvLoc, to: InvLoc) {
     if (!this.validLoc(from) || !this.validLoc(to)) throw new GameError(this.t`Bad inventory slot`);
     const item = this.getLoc(c, from);
     if (!item) throw new GameError(this.t`Nothing there`);
@@ -4373,6 +4421,26 @@ export class Game {
       c.equipment[drop] = null;
     }
     this.refresh(c);
+  }
+
+  /**
+   * The story has a hero draw, wield, put on or strap on something they carry. It goes into the slot
+   * it belongs in, through the same rules as dragging it there in the inventory. Returns what changed.
+   */
+  equipItem(characterId: string, ref: string) {
+    const c = this.char(characterId);
+    if (c.dead) throw new GameError(this.t`${c.name} is dead`);
+    const def = this.findItemDef(ref);
+    if (!def) throw new GameError(this.t`Unknown item "${ref}"`);
+    const slot = this.slotFor(def);
+    if (!slot) throw new GameError(`${def.name} is not something to wear or wield.`);
+    if (c.equipment[slot]?.defId === def.id) return { character: c.name, item: def.name, slot, changed: false };
+    const index = c.bag.findIndex((b) => b?.defId === def.id);
+    if (index < 0) throw new GameError(`${c.name} does not carry ${def.name}.`);
+    const before = c.equipment[slot] ? this.def(c.equipment[slot]!.defId).name : null;
+    this.moveItem(c, { type: 'bag', index }, { type: 'slot', slot });
+    this.log('system', before ? this.t`${c.name} puts away ${this.n(before)} and takes up ${this.n(def.name)}.` : this.t`${c.name} takes up ${this.n(def.name)}.`);
+    return { character: c.name, item: def.name, slot, changed: true, ...(before ? { put_away: before } : {}) };
   }
 
   give(playerId: string, characterId: string, from: InvLoc, toCharacterId: string) {
@@ -4449,40 +4517,8 @@ export class Game {
   shortRest() {
     this.needExplore();
     if (this.s.shortRestsLeft <= 0) throw new GameError(this.t`The party needs a long rest before another short one helps`);
-    this.s.shortRestsLeft--;
     this.advanceTime(60);
-    const parts: string[] = [];
-    for (const c of this.s.characters) {
-      if (c.dead) continue;
-      this.dropConcentration(c);
-      this.expireBuffs(c, 'short');
-      let healed = 0;
-      if (c.hitDice > 0 && c.hp < c.maxHp) {
-        c.hitDice--;
-        healed = this.healChar(c, Math.max(1, roll(`1d${CLASSES[c.classId].hitDie}`, this.rng).total + abilityMod(c.abilities.con)));
-      }
-      c.spent = [];
-      c.inspired = undefined;
-      // Class resources: some come back whole, some one use at a time.
-      for (const [id, used] of Object.entries(c.uses ?? {})) {
-        const def = RESOURCES[id];
-        if (!def || !used) continue;
-        if (def.rest === 'short' || (id === 'inspiration' && this.feat(c, 'font_of_inspiration'))) c.uses![id] = 0;
-        else if (def.shortGain) this.regain(c, id, def.shortGain);
-      }
-      if (c.uses) delete c.uses._relentless;
-      // A warlock's pact magic returns in full. Others recover a little, and once per long rest a caster's recovery feature adds more.
-      let back = c.classId === 'warlock' ? c.maxMana : 2;
-      if (this.left(c, 'recovery') > 0 && (c.mana < c.maxMana || this.feat(c, 'sorcerous_restoration'))) {
-        this.spendUse(c, 'recovery');
-        if (this.feat(c, 'sorcerous_restoration')) this.regain(c, 'sorcery', Math.floor(c.level / 2));
-        else back += c.level;
-      }
-      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, back) : 0;
-      c.mana += mana;
-      parts.push(this.t`${c.name} +${healed} HP` + (mana ? this.t`, +${mana} mana` : ''));
-    }
-    this.log('system', this.t`The party rests for an hour. ${parts.join('; ')}.`);
+    this.log('system', this.t`The party rests for an hour. ${this.recoverShort()}`);
   }
 
   /** Eight hours of sleep. Outside a safe place the camp may be attacked instead. */
@@ -4499,10 +4535,81 @@ export class Game {
       return;
     }
     this.advanceTime(8 * 60);
-    this.s.lastLongRest = w.minutes;
-    this.s.shortRestsLeft = 2;
+    this.log('system', this.t`The party sleeps for eight hours and wakes restored. ${formatTime(w.minutes, this.lang)}. ${this.recoverLong()}`);
+    this.beats.push({ kind: 'rest', long: true });
+  }
+
+  /**
+   * The story let the party rest: an hour or more is a short rest, eight hours a long one, as in
+   * the rules. The Dungeon Master already told how it went, so no ambush is rolled. `passed` is how
+   * much of the rest is already on the clock; only the remainder is added. A long rest too soon
+   * after the last one counts as a short rest, and with no short rest left nothing is restored.
+   */
+  storyRest(kind: 'short' | 'long', passed = 0) {
+    this.needExplore();
+    const w = this.world;
+    let long = kind === 'long';
+    if (long && w.minutes + Math.max(0, 8 * 60 - passed) - this.s.lastLongRest < 16 * 60) long = false;
+    if (!long && this.s.shortRestsLeft <= 0) {
+      return { rested: false, note: 'The party has had both its short rests since the last long rest; nothing is restored until it sleeps.' };
+    }
+    this.advanceTime(Math.max(0, (long ? 8 * 60 : 60) - Math.max(0, passed)));
+    const restored = long ? this.recoverLong() : this.recoverShort();
+    this.log('system', long ? this.t`Long rest. ${restored}` : this.t`Short rest. ${restored}`);
+    return { rested: true, kind: long ? 'long' : 'short', restored, ...(kind === 'long' && !long ? { note: 'Too soon after the last long rest, so it counts as a short rest.' } : {}) };
+  }
+
+  /** What a short rest brings back, as one line for the log: "Maeve: +9 HP, +2 mana; Brann: Second Wind". */
+  private recoverShort(): string {
+    this.s.shortRestsLeft--;
+    const parts: string[] = [];
     for (const c of this.s.characters) {
       if (c.dead) continue;
+      this.dropConcentration(c);
+      this.expireBuffs(c, 'short');
+      let healed = 0;
+      if (c.hitDice > 0 && c.hp < c.maxHp) {
+        c.hitDice--;
+        healed = this.healChar(c, Math.max(1, roll(`1d${CLASSES[c.classId].hitDie}`, this.rng).total + abilityMod(c.abilities.con)));
+      }
+      c.spent = [];
+      c.inspired = undefined;
+      // Class resources: some come back whole, some one use at a time.
+      const back: string[] = [];
+      for (const [id, used] of Object.entries(c.uses ?? {})) {
+        const def = RESOURCES[id];
+        if (!def || !used) continue;
+        if (def.rest === 'short' || (id === 'inspiration' && this.feat(c, 'font_of_inspiration'))) c.uses![id] = 0;
+        else if (def.shortGain) this.regain(c, id, def.shortGain);
+        else continue;
+        if (def.show) back.push(this.lang === 'de' ? def.de : def.name);
+      }
+      if (c.uses) delete c.uses._relentless;
+      // A warlock's pact magic returns in full. Others recover a little, and once per long rest a caster's recovery feature adds more.
+      let more = c.classId === 'warlock' ? c.maxMana : 2;
+      if (this.left(c, 'recovery') > 0 && (c.mana < c.maxMana || this.feat(c, 'sorcerous_restoration'))) {
+        this.spendUse(c, 'recovery');
+        if (this.feat(c, 'sorcerous_restoration')) this.regain(c, 'sorcery', Math.floor(c.level / 2));
+        else more += c.level;
+      }
+      const mana = c.maxMana ? Math.min(c.maxMana - c.mana, more) : 0;
+      c.mana += mana;
+      const line = this.restoredLine(c, healed, mana, back);
+      if (line) parts.push(line);
+    }
+    return parts.length ? this.t`Restored: ${parts.join('; ')}.` : this.t`Nobody needed it.`;
+  }
+
+  /** Everything back to full after a long rest, as one line for the log. */
+  private recoverLong(): string {
+    const w = this.world;
+    this.s.lastLongRest = w.minutes;
+    this.s.shortRestsLeft = 2;
+    const parts: string[] = [];
+    for (const c of this.s.characters) {
+      if (c.dead) continue;
+      const hp = c.maxHp - c.hp, mana = c.maxMana - c.mana;
+      const back = Object.entries(c.uses ?? {}).filter(([id, used]) => used && RESOURCES[id]?.show).map(([id]) => (this.lang === 'de' ? RESOURCES[id].de : RESOURCES[id].name));
       this.dropConcentration(c);
       this.expireBuffs(c, 'long');
       this.healChar(c, c.maxHp);
@@ -4515,9 +4622,15 @@ export class Game {
       c.conditions = c.conditions.filter((x) => x !== 'mage armor');
       for (const it of [...c.bag, ...Object.values(c.equipment)]) if (it?.used) it.used = 0;
       c.ac = this.computeAc(c);
+      const line = this.restoredLine(c, Math.max(0, hp), Math.max(0, mana), back);
+      if (line) parts.push(line);
     }
-    this.log('system', this.t`The party sleeps for eight hours and wakes restored. ${formatTime(w.minutes, this.lang)}.`);
-    this.beats.push({ kind: 'rest', long: true });
+    return parts.length ? this.t`Restored: ${parts.join('; ')}.` : this.t`Nobody needed it.`;
+  }
+
+  private restoredLine(c: Character, hp: number, mana: number, back: string[]): string | null {
+    const bits = [...(hp ? [this.t`+${hp} HP`] : []), ...(mana ? [this.t`+${mana} mana`] : []), ...back];
+    return bits.length ? `${c.name}: ${bits.join(', ')}` : null;
   }
 
   // ---------------------------------------------------------------- trading
@@ -4791,6 +4904,16 @@ export class Game {
     this.log('dm', scene.text.trim(), { scene: meta });
   }
 
+  /**
+   * After the story was brought in line with the game (the party moved, time passed, people left),
+   * the newest scene's header shows the corrected place, time and people.
+   */
+  restageLastScene() {
+    if (!this.s.world) return;
+    const last = [...this.s.log].reverse().find((l) => l.kind === 'dm' && l.scene);
+    if (last?.scene) Object.assign(last.scene, this.stage(), { time: timeOfDay(this.world.minutes) });
+  }
+
   /** A key for where the party stands, so a stage set in one place is not shown in another. */
   private stageKey() { const w = this.world; return w.placeId ?? `${w.party.q},${w.party.r}`; }
 
@@ -4807,6 +4930,33 @@ export class Game {
     return { where, present: this.presentNpcs().filter((n) => n.met).map((n) => n.name).slice(0, 6) };
   }
 
+  /** The scene header for the side panel: the people in it, matched to the people the party knows. */
+  sceneView(): { where: string; present: ScenePerson[] } {
+    const { where, present } = this.stage();
+    return { where, present: present.map((name) => {
+      const n = this.npcNamed(name);
+      return n ? { name: n.name, npcId: n.id, role: n.role, disposition: n.disposition } : { name };
+    }) };
+  }
+
+  /**
+   * A person the party has met, by the name the scene uses: the full name, or a part of it such as
+   * "Bram" for "Bram Riedel". Ambiguous short names match nobody, and so do descriptions like "the guard".
+   */
+  npcNamed(name: string): NpcState | null {
+    const key = name.trim().toLowerCase();
+    if (!key) return null;
+    const met = this.s.memory.npcs.filter((n) => n.met);
+    const exact = met.find((n) => n.name.toLowerCase() === key);
+    if (exact) return exact;
+    const words = (x: string) => x.toLowerCase().split(/[\s,.'"„“]+/).filter((w) => w.length > 2);
+    const asked = words(key);
+    const hits = met.filter((n) => { const own = words(n.name); return asked.length > 0 && asked.every((w) => own.includes(w)); });
+    if (hits.length === 1) return hits[0];
+    const here = hits.filter((n) => n.locationId && n.locationId === this.s.world?.placeId);
+    return here.length === 1 ? here[0] : null;
+  }
+
   /**
    * The Dungeon Master says where exactly the scene plays and who is in it. Plain strings:
    * an empty "where" keeps the place, "present" is a comma-separated list of names, or "none".
@@ -4818,6 +4968,9 @@ export class Game {
     const heroes = new Set(this.s.characters.map((c) => c.name.toLowerCase()));
     const present = !raw ? now.present : /^(none|nobody|niemand|keine?r?)$/i.test(raw) ? [] : [...new Set(raw.split(/[,;\n]+/).map((x) => x.trim().slice(0, 40)).filter((x) => x && !heroes.has(x.toLowerCase())))].slice(0, 8);
     this.s.stage = { at: this.stageKey(), where, present };
+    // People the party knows who are in the scene were last seen here, not where they were before.
+    const placeId = this.world.placeId;
+    if (placeId) for (const name of present) { const n = this.npcNamed(name); if (n) n.locationId = placeId; }
     return { where, present: present.length ? present : 'nobody but the party' };
   }
 
@@ -5259,6 +5412,7 @@ export class Game {
         deeds: s.memory.deeds,
         mysteries: s.memory.mysteries,
       },
+      scene: w && s.phase !== 'lobby' ? this.sceneView() : null,
       travelling: !!s.travel,
       dmBusy: dm.busy,
       dmMode: dm.mode,

@@ -14,6 +14,7 @@ import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, fightBu
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
+import { RECONCILE_SYSTEM, applyFindings, parseFindings, reconcilePrompt, type TurnRecord } from './reconcile';
 import type { UsageSample } from '../admin/usage';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -216,6 +217,17 @@ const STORY_TOOLS: Tool[] = [
   tool('advance_time', 'Let time pass for activities that take a while, such as a long conversation, a search or a meal.', {
     minutes: int('Minutes to advance, 1 to 720.'),
   }),
+  // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
+  looseTool('travel_to', "Take the party to a known place when the story walks them there: back to town, on to the mill, into the tavern of the town they reach. Works within a few hexes along a route they know; the server adds the time on the road and moves the map, the music and the side panel with them. For longer journeys, tell the players to travel on the map.", {
+    place: str('Id or exact name of the place, as listed in the state.'),
+  }),
+  looseTool('rest', 'The party rests in the story. An hour or more is a short rest (hit dice, some mana, short-rest features), a night of about eight hours a long rest (everything back). The server restores it by the rules and tells the players what came back. Call it whenever you narrate a rest; time already added this reply counts toward it.', {
+    kind: str('"short" or "long".'),
+  }),
+  looseTool('equip_item', 'A hero draws, wields, puts on or switches to something they carry. It moves into its slot, as if the player had dragged it there, so the battle map uses it.', {
+    character_id: str('Id of the hero.'),
+    item: str('Name or id of the item, as carried.'),
+  }),
   SCENE_TOOL,
 ];
 
@@ -238,6 +250,8 @@ export class ClaudeDM implements DungeonMaster {
   private client: Anthropic;
   private effort: Effort;
   private maintaining = false;
+  /** The latest reply at each table, waiting for its reconcile pass. */
+  private turns = new WeakMap<Game, TurnRecord>();
   /** Set once the API has refused the strict tool schemas as too large; tools are then sent without strict. */
   private strictOff = false;
 
@@ -335,9 +349,10 @@ export class ClaudeDM implements DungeonMaster {
   }
 
   /** Executes the DM's world-changing tools against the engine. */
-  private storyHandler(game: Game, onUpdate: () => Promise<void>) {
+  private storyHandler(game: Game, onUpdate: () => Promise<void>, record?: TurnRecord) {
     return async (name: string, raw: unknown): Promise<unknown> => {
-      const i = raw as Record<string, any>;
+      const i = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+      record?.calls.push({ name, input: i });
       const result = ((): unknown => {
         switch (name) {
           case 'skill_check':
@@ -411,6 +426,18 @@ export class ClaudeDM implements DungeonMaster {
           case 'advance_time':
             game.advanceTime(Math.max(1, Math.min(720, Number(i.minutes) || 0)));
             return { ok: true };
+          case 'travel_to': {
+            const r = game.journeyTo(String(i.place ?? ''));
+            game.dropBeats('arrive'); // the DM is already narrating this arrival
+            return { ...r, people_here: game.presentNpcs().map((n) => `${n.name} (${n.role})`) };
+          }
+          case 'rest': {
+            const kind = String(i.kind ?? '').toLowerCase();
+            if (kind !== 'short' && kind !== 'long') throw new Error('kind must be "short" or "long"');
+            return game.storyRest(kind, record ? game.world.minutes - record.startMinutes : 0);
+          }
+          case 'equip_item':
+            return game.equipItem(String(i.character_id ?? ''), String(i.item ?? ''));
           default:
             throw new Error(`Unknown tool ${name}`);
         }
@@ -495,10 +522,14 @@ export class ClaudeDM implements DungeonMaster {
       ? `${one ? `In the middle of the fight, ${who} says to you: ${JSON.stringify(one.text)}` : `In the middle of the fight, several players speak to you:\n${lines}`}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
       : `${one ? `The player ${one.player}${playerHeroes(game, one.player)} says or does this: ${JSON.stringify(one.text)}` : together}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. ${one ? 'Their message is' : 'Their messages are'} already shown to everyone, so open with how the world answers ${one ? 'it' : 'them'} instead of repeating ${one ? 'it' : 'them'}.`;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
+    this.turns.delete(game);
+    const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
-      const out = await this.converse(game, 'reply', tierForReply(game), prompt, tools, this.storyHandler(game, onUpdate));
-      return this.finish(game, out);
+      const out = await this.converse(game, 'reply', tierForReply(game), prompt, tools, this.storyHandler(game, onUpdate, record ?? undefined));
+      const scene = this.finish(game, out);
+      if (record && scene) this.turns.set(game, { ...record, narration: scene.text });
+      return scene;
     } catch (err) {
       this.report(err);
       return { title: 'A pause at the table', mood: 'calm', text: 'The Dungeon Master is lost in thought for a moment. Try again shortly.', actions: [] };
@@ -555,6 +586,29 @@ Answer with one JSON object and nothing else, in this shape:
     } catch (err) {
       if (err instanceof SyntaxError) console.warn('[dm] The world flavour came back malformed; keeping the rolled descriptions.');
       else this.report(err);
+    }
+  }
+
+  /**
+   * The safety net behind the tools: the cheapest model reads the reply that just reached the players
+   * next to the game state, and the server applies what the story says happened but the game missed.
+   */
+  async reconcile(game: Game, onUpdate: () => Promise<void>): Promise<void> {
+    const turn = this.turns.get(game);
+    this.turns.delete(game);
+    if (!turn || game.s.phase !== 'explore' || game.s.travel || !game.s.world) return;
+    const s = game.s;
+    try {
+      const out = await this.converse(game, 'reconcile', 'background', reconcilePrompt(game, turn), [], async () => null, RECONCILE_SYSTEM);
+      // A new adventure, a fight or a journey may have begun while the model was reading.
+      if (game.s !== s || s.phase !== 'explore' || s.travel) return;
+      const found = parseFindings(out.text);
+      if (!found) { if (out.text) console.warn('[dm] reconcile: the answer was not JSON; nothing changed.'); return; }
+      const r = applyFindings(game, found, turn);
+      if (r.applied.length || r.skipped.length) console.log(`[dm] reconcile: applied ${r.applied.join('; ') || 'nothing'}${r.skipped.length ? `; skipped ${r.skipped.join('; ')}` : ''}`);
+      if (r.applied.length) await onUpdate();
+    } catch (err) {
+      this.report(err);
     }
   }
 

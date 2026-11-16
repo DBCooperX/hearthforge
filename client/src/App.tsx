@@ -334,9 +334,16 @@ export function App() {
 
 function Toasts({ conn }: { conn: ReturnType<typeof useConnection> }) {
   const t = useT();
+  const update = conn.updateReady && (
+    <div className="toast update" role="alert">
+      {t('Update ready')}
+      <button className="primary" onClick={conn.reload}>{t('Reload')}</button>
+    </div>
+  );
   // Messages about the table itself arrive in English; the game's own are already in the story language.
   return (
     <div className="toasts">
+      {update}
       {conn.toasts.map((x) => <div key={x.id} className={x.notice ? 'toast notice' : 'toast'} role={x.notice ? 'alert' : undefined}>{x.notice && <b>{t('The innkeeper says')}</b>}{t(x.text)}</div>)}
     </div>
   );
