@@ -116,4 +116,4 @@ export function heroGear(armor?: GearItem | null, mainHand?: GearItem | null, of
 }
 
 export interface HeroArt extends Who { look: HeroLook; gear: HeroGear }
-export const heroArtKey = (a: HeroArt) => [a.speciesId, a.gender, a.classId, ...Object.values(a.look), ...Object.values(a.gear)].join('|');
+export const heroArtKey = (a: HeroArt) => [a.speciesId, a.gender, a.classId, a.name ?? '', ...Object.values(a.look), ...Object.values(a.gear)].join('|');
