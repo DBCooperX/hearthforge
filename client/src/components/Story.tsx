@@ -10,6 +10,7 @@ import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
 import { useT, type Translate } from '../i18n';
 import { tr } from '../../../shared/i18n';
+import { parseOoc } from '../../../shared/ooc';
 import { classLabel } from '../game/util';
 import { Icon } from '../ui/icons';
 
@@ -232,6 +233,15 @@ function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean
       );
     case 'chat':
       return <p className="said"><b>{entry.speaker}</b>{entry.text}{takeBack && <button type="button" className="takeback" onClick={takeBack}>↩ {t('Take back')}</button>}</p>;
+    case 'ask':
+      return <p className="said ask"><b>{entry.speaker}<i>{t('to the Dungeon Master')}</i></b>{entry.text}</p>;
+    case 'note':
+      return (
+        <aside className={`dm-note ${animate ? 'enter' : ''}`}>
+          <b>{t('Dungeon Master')}<i>{t('Table talk, answering {name}', { name: entry.speaker ?? '' })}</i></b>
+          {entry.text.split(/\n{2,}/).map((p, i) => <p key={i}><RichText text={p} /></p>)}
+        </aside>
+      );
     case 'roll':
       return entry.roll ? <DiceRoll roll={entry.roll} animate={animate} /> : <p className="line roll"><RichText text={entry.text} /></p>;
     case 'levelup':
@@ -277,7 +287,9 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [last?.id, state.dmBusy]);
 
   const signal = useTypingSignal(conn, 'story');
-  const say = useCallback((line: string) => { if (line.trim()) conn.send({ t: 'say', text: line.trim() }); }, [conn]);
+  const [ooc, setOoc] = useState(false);
+  const say = useCallback((line: string, question = false) => { if (line.trim()) conn.send({ t: 'say', text: line.trim(), ...(question ? { ooc: true } : {}) }); }, [conn]);
+  const asking = ooc || parseOoc(text) !== null;
   const exploring = state.phase === 'explore';
   // Suggestions belong to the newest scene. Each player keeps them until they have answered it themselves.
   const me = state.players.find((p) => p.id === playerId)?.name;
@@ -304,10 +316,11 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
         </div>
       )}
       <form
-        className="composer"
-        onSubmit={(e) => { e.preventDefault(); say(text); setText(''); signal(''); }}
+        className={asking ? 'composer ooc' : 'composer'}
+        onSubmit={(e) => { e.preventDefault(); say(text, ooc); setText(''); setOoc(false); signal(''); }}
       >
-        <input value={text} onChange={(e) => { setText(e.target.value); signal(e.target.value); }} maxLength={500} placeholder={exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
+        <input value={text} onChange={(e) => { setText(e.target.value); signal(e.target.value); }} maxLength={500} placeholder={asking ? t('Ask the Dungeon Master out of character…') : exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
+        <button type="button" className="ooc-toggle" aria-pressed={asking} disabled={!ooc && parseOoc(text) !== null} title={t('Out-of-character question: answered as a note, the story does not move on')} onClick={() => setOoc(!ooc)}>{t('Ask the DM')}</button>
         <button className="primary" disabled={!text.trim()}>{t('Send')}</button>
       </form>
     </section>

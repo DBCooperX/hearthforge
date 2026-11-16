@@ -458,6 +458,8 @@ export function transcript(game: Game, max = 28): string {
     .map((l) => {
       if (l.kind === 'dm') return `DM${l.scene ? ` [${l.scene.title}]` : ''}: ${l.text}`;
       if (l.kind === 'chat') return `${l.speaker ?? 'Player'} (player): ${l.text}`;
+      if (l.kind === 'ask') return `${l.speaker ?? 'Player'} (out-of-character question to the DM): ${l.text}`;
+      if (l.kind === 'note') return `DM (out-of-character answer): ${l.text}`;
       return `(${l.text})`;
     })
     .join('\n');

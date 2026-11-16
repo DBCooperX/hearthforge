@@ -18,6 +18,7 @@ import './table.css';
 import './ui.css';
 import './forge.css';
 import './compact.css';
+import './ooc.css';
 import './hotbar.css';
 import './ui/prefs';
 

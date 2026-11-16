@@ -1,0 +1,13 @@
+/* Out-of-character questions to the Dungeon Master: a grey table-talk note, never a story card. */
+.said.ask { background: #25262a; border: 1px dashed #5a5d66; box-shadow: none; font-style: normal; font-family: var(--font-body); font-size: 14.5px; }
+.said.ask b { color: #a9adb8; }
+.said.ask b i { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; opacity: 0.8; }
+.dm-note { align-self: stretch; margin: 0 auto; max-width: 92%; padding: 8px 14px; background: #2a2c31; border: 1px solid #4a4d55; border-left: 3px solid #8a8f9c; border-radius: 4px 10px 10px 4px; color: #d4d6dc; font-family: var(--font-body); font-size: 14.5px; line-height: 1.45; }
+.dm-note > b { display: block; margin-bottom: 2px; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #a9adb8; font-weight: 600; }
+.dm-note > b i { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; opacity: 0.8; }
+.dm-note p { margin: 0 0 4px; } .dm-note p:last-child { margin: 0; }
+.composer .ooc-toggle { flex: none; padding: 0 10px; font-size: 13px; border-radius: 10px; background: transparent; border: 1px solid #5a5d66; color: #a9adb8; cursor: pointer; white-space: nowrap; }
+.composer .ooc-toggle:hover { border-color: #a9adb8; filter: none; }
+.composer .ooc-toggle[aria-pressed='true'] { background: #3a3d45; border-color: #b9bdc9; color: #f0f1f5; }
+.composer.ooc input { border-color: #8a8f9c; background: #25262a; }
+.story.compact .composer .ooc-toggle { padding: 0 8px; font-size: 12px; }

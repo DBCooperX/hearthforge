@@ -442,7 +442,8 @@ export interface ReactionPrompt {
   until: number;
 }
 
-export type LogKind = 'dm' | 'system' | 'roll' | 'chat' | 'levelup';
+/** 'ask' is an out-of-character question to the DM, 'note' the DM's plain answer to it. */
+export type LogKind = 'dm' | 'system' | 'roll' | 'chat' | 'levelup' | 'ask' | 'note';
 
 export const MOODS = ['calm', 'warm', 'tense', 'danger', 'mystery', 'wonder', 'somber', 'triumph'] as const;
 export type Mood = (typeof MOODS)[number];
@@ -767,7 +768,7 @@ export type ClientMessage =
   | { t: 'set_language'; lang: Lang }
   | { t: 'set_start'; start: Partial<StartOptions> }
   | { t: 'set_style'; style: Partial<DmStyle> }
-  | { t: 'say'; text: string }
+  | { t: 'say'; text: string; /** An out-of-character question to the Dungeon Master. */ ooc?: boolean }
   | { t: 'unsay' }
   | { t: 'reset' };
 
