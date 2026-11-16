@@ -37,8 +37,8 @@ export function seeded(seed: number) {
 }
 
 /** What a surface is made of. The engraving pass draws each one its own way. */
-export type Material = 'plain' | 'metal' | 'fur' | 'scales' | 'chain' | 'wood' | 'cloth' | 'leather' | 'bone' | 'hair';
-const MATERIALS: Material[] = ['plain', 'plain', 'metal', 'fur', 'scales', 'chain', 'wood', 'cloth', 'leather', 'bone', 'hair'];
+export type Material = 'plain' | 'metal' | 'fur' | 'scales' | 'chain' | 'wood' | 'cloth' | 'leather' | 'bone' | 'hair' | 'skin';
+const MATERIALS: Material[] = ['plain', 'plain', 'metal', 'fur', 'scales', 'chain', 'wood', 'cloth', 'leather', 'bone', 'hair', 'skin'];
 const matId = (m: Material) => Math.max(1, MATERIALS.indexOf(m));
 
 type Path = (ctx: CanvasRenderingContext2D) => void;
@@ -88,25 +88,28 @@ export class Ink {
   readonly px: number;
   /** The material of the shapes drawn next. */
   mat: Material = 'plain';
+  /** A steady tremble for curved outlines, so they read as drawn by hand rather than by a ruler. */
+  private shake = seeded(7);
+  private jitter = (p: P[]): P[] => p.map(([x, y]) => [x + (this.shake() - 0.5) * this.line * 0.7, y + (this.shake() - 0.5) * this.line * 0.7]);
 
   /**
    * S: side in pixels. f: the figure is shrunk towards the bottom centre for small creatures.
    * weight: how heavy the ink lines and hatching are against the picture, for pictures shown
    * smaller (heavier, so lines survive) or larger (lighter) than one pixel per pixel.
    */
-  constructor(readonly S: number, private f: number, readonly weight = 1) {
+  constructor(readonly S: number, private f: number, readonly weight = 1, private view: { x: number; y: number; size: number } = { x: 0, y: 0, size: 1 }) {
     this.c = canvas(S);
     this.ctx = this.c.getContext('2d', { willReadFrequently: true })!;
     this.mc = canvas(S);
     this.mctx = this.mc.getContext('2d', { willReadFrequently: true })!;
-    this.u = S * f;
-    this.px = S / 32;
+    this.u = (S * f) / view.size;
+    this.px = S / 32 / view.size;
     this.line = Math.max(0.8, (S / 64) * weight);
     for (const x of [this.ctx, this.mctx]) { x.lineJoin = 'round'; x.lineCap = 'round'; }
   }
 
-  tx = (x: number) => (0.5 + (x - 0.5) * this.f) * this.S;
-  ty = (y: number) => (0.97 - (0.97 - y) * this.f) * this.S;
+  tx = (x: number) => ((0.5 + (x - 0.5) * this.f - this.view.x) / this.view.size) * this.S;
+  ty = (y: number) => ((0.97 - (0.97 - y) * this.f - this.view.y) / this.view.size) * this.S;
   private pt = (p: P): P => [this.tx(p[0]), this.ty(p[1])];
 
   /** The pixels, for passes that read or write them directly. */
@@ -152,7 +155,12 @@ export class Ink {
     const ctx = this.draw();
     ctx.beginPath();
     path(ctx);
-    if (inked) { ctx.strokeStyle = css(INK, 0.92); ctx.lineWidth = this.line * 2; ctx.stroke(); }
+    if (inked) {
+      // Like a pen: a thin line on the lit top-left, a heavier one on the shadow side.
+      ctx.strokeStyle = css(INK, 0.92); ctx.lineWidth = this.line * 1.6; ctx.stroke();
+      ctx.save(); ctx.translate(this.line * 0.55, this.line * 0.7); ctx.beginPath(); path(ctx); ctx.lineWidth = this.line * 2.1; ctx.stroke(); ctx.restore();
+      ctx.beginPath(); path(ctx);
+    }
     ctx.fillStyle = fill;
     ctx.fill();
     this.markFill(path);
@@ -218,7 +226,7 @@ export class Ink {
    * `light` turns the shading: 0 for the usual top-left light, 1 to light it from the left only.
    */
   blob(pts: P[], c: RGB, inked = true, tension = 1) {
-    const p = pts.map(this.pt);
+    const p = this.jitter(pts.map(this.pt));
     const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
     const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
     const ctx = this.draw();
@@ -250,7 +258,7 @@ export class Ink {
       return [a[0] + (dx / l) * hw, a[1] + (dy / l) * hw];
     };
     const outline = [cap(0, -1), ...left, cap(n - 1, 1), ...right.reverse()];
-    const p = outline.map(this.pt);
+    const p = this.jitter(outline.map(this.pt));
     const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
     const x0 = Math.min(...xs), y0 = Math.min(...ys), wd = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
     // Light falls across the limb: perpendicular to its overall direction.
@@ -409,7 +417,8 @@ export class Ink {
       if (x > 0 && y < S - 1) v = Math.min(v, dist[i + S - 1] + 1.414);
       dist[i] = v;
     }
-    const D = Math.max(3, this.u * 0.07);
+    // The rim that rounds off: never wider than a small part of the picture, or narrow shapes get a ridge down the middle.
+    const D = Math.max(3, Math.min(this.u * 0.07, S * 0.045));
     const height = (i: number) => { const t = Math.min(1, dist[i] / D); return Math.sqrt(1 - (1 - t) * (1 - t)); };
     const Lx = -0.55, Ly = -0.62, Lz = 0.56;
 
@@ -441,7 +450,10 @@ export class Ink {
       }
       // Hatching in the shadows, cross-hatching in the deepest ones.
       const l2 = (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11) / 255;
-      if (!glowing && hatch > 0 && m !== 'metal' && m !== 'chain') {
+      if (!glowing && hatch > 0 && m === 'skin') {
+        // Faces and hands keep clean: hatching only in the deepest shadow, and lightly.
+        if (l2 < 0.2 && (x + y) % P === 0) c = mix(c, INK, 0.18 * hatch);
+      } else if (!glowing && hatch > 0 && m !== 'metal' && m !== 'chain') {
         const wob = rnd() < 0.08 ? 1 : 0;
         if (l2 < 0.42 && (x + y + wob) % P === 0) c = mix(c, INK, 0.38 * hatch * (1 - l2 / 0.42) + 0.08);
         if (l2 < 0.26 && (x - y + S * 4 + wob) % P === 0) c = mix(c, INK, 0.4 * hatch);
@@ -478,7 +490,7 @@ export class Ink {
         const cx = (ix + 0.2 + hash2(ix, iy) * 0.6) * cw, cy = iy * ch - off + ch / 2;
         const dx = x - cx - (y - cy) * slant;
         if (Math.abs(y - cy) < ch * 0.42) {
-          if (Math.abs(dx) < 0.6) return shade(c, 0.32);
+          if (Math.abs(dx) < 0.6) return shade(c, m === 'hair' ? 0.16 : 0.32);
           if (dx > 0.6 && dx < 1.6) return lit(c, 0.07);
         }
         return c;
@@ -517,18 +529,23 @@ export class Ink {
     const S = this.S, d = this.d, a0 = new Uint8Array(S * S);
     for (let i = 0; i < S * S; i++) a0[i] = d[i * 4 + 3];
     const R = Math.max(1.2, this.line * 0.8 * width);
-    const r = Math.ceil(R);
+    const r = Math.ceil(R * 1.4);
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       const i = y * S + x;
       if (a0[i] >= 250) continue;
-      let best = Infinity;
+      let best = Infinity, bx = 0, by = 0;
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         const X = x + dx, Y = y + dy;
         if (X < 0 || Y < 0 || X >= S || Y >= S || a0[Y * S + X] < 128) continue;
-        best = Math.min(best, dx * dx + dy * dy);
+        const q = dx * dx + dy * dy;
+        if (q < best) { best = q; bx = dx; by = dy; }
       }
       if (best === Infinity) continue;
-      const cover = Math.max(0, Math.min(1, R + 0.5 - Math.sqrt(best)));
+      // The line swells on the shadow side (outward normal pointing down and right) and wavers a little.
+      const dist = Math.sqrt(best) || 1;
+      const side = 0.5 + 0.5 * ((-bx * 0.6 - by * 0.8) / dist);
+      const Rl = R * (0.62 + 0.72 * side + 0.12 * Math.sin(x * 0.11 + y * 0.07) * Math.sin(y * 0.05 - x * 0.03));
+      const cover = Math.max(0, Math.min(1, Rl + 0.5 - Math.sqrt(best)));
       if (cover <= 0) continue;
       // Ink goes under what is already there, so soft edges blend into it.
       const own = a0[i] / 255, inkA = (cover * alpha) / 255;
