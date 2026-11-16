@@ -1,0 +1,51 @@
+/* Zone maps: an inked sketch of the place the party is in. */
+.zonemap { border: 1px solid #4f4943; border-radius: 8px; overflow: hidden; background: #cdb98f; box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5); }
+.zonemap svg { display: block; width: 100%; height: auto; font-family: 'Alegreya', serif; }
+.zonemap.big svg { max-height: calc(100vh - 330px); }
+.zonemap .hexmap-hint { background: #14110e; }
+
+.zd-ground { fill: #d8c7a0; }
+.zonemap.t-s .zd-ground { fill: #c9c39d; }
+.zonemap.t-f .zd-ground { fill: #c8c596; }
+.zonemap.t-h .zd-ground, .zonemap.t-m .zd-ground { fill: #d4c29a; }
+.zd-shore { fill: #9fb5b8; stroke: #5d6e6e; stroke-width: 0.35; }
+.zd-ink, .zd-hatch { fill: none; stroke: #6b5536; stroke-width: 0.3; stroke-linecap: round; }
+.zd-hatch { stroke-width: 0.2; opacity: 0.7; }
+.zd-pool { fill: #a3b5a9; stroke: #66796e; stroke-width: 0.3; }
+.zd-tree { fill: #9aa676; stroke: #5b5a36; stroke-width: 0.3; }
+.zd-peak { fill: #c3b08a; stroke: #6b5536; stroke-width: 0.35; stroke-linejoin: round; }
+.zd-field { fill: rgba(150, 156, 90, 0.25); stroke: #8d7b55; stroke-width: 0.2; }
+.zd-house { fill: #b8a17a; stroke: #6b5536; stroke-width: 0.3; }
+.zd-rock { fill: #574b40; opacity: 0.55; }
+.zd-path { fill: none; stroke: #7a5c3a; stroke-width: 1.1; stroke-linecap: round; opacity: 0.85; }
+.zd-path.unknown { stroke-dasharray: 1.6 1.4; opacity: 0.6; }
+.zd-fog { fill: #2a231c; opacity: 0.42; pointer-events: none; }
+
+/* Underground: dark rock, rooms cut out of it, tunnels between them. */
+.zonemap.under { background: #1d1915; }
+.zonemap.under .zd-ground { fill: #3a322a; }
+.zonemap.under .zd-path { stroke: #cdb98f; stroke-width: 3.2; opacity: 1; stroke-linecap: square; }
+.zonemap.under .zd-path.unknown { stroke-dasharray: none; opacity: 0.45; }
+.zd-room { fill: #d8c7a0; stroke: #1d1915; stroke-width: 0.5; }
+.zd-room.unknown { opacity: 0.45; }
+.zonemap.under .zd-fog { fill: #0d0b09; opacity: 0.8; }
+
+.zspot { cursor: default; }
+.zspot.go { cursor: pointer; }
+.zspot-disc { fill: #f3e7c8; stroke: #4a3a26; stroke-width: 0.45; }
+.zspot:not(.visited) .zspot-disc { fill: #e3d6b4; stroke-dasharray: 1 0.7; opacity: 0.85; }
+.zspot.go:hover .zspot-disc { stroke: #b07a1e; stroke-width: 0.8; }
+.zspot-icon { font-size: 4.3px; text-anchor: middle; }
+.zspot:not(.visited):not(.here) .zspot-icon { font-size: 4px; font-weight: 700; fill: #6b5536; }
+.zspot-name { font-size: 3.3px; font-weight: 700; text-anchor: middle; fill: #2d2216; paint-order: stroke; stroke: #efe3c4; stroke-width: 0.9; stroke-linejoin: round; }
+.zspot:not(.visited) .zspot-name { font-style: italic; font-weight: 400; fill: #5b4a35; }
+.zspot-badge { font-size: 3.2px; fill: #2f6b2f; font-weight: 700; }
+.zspot-flag { font-size: 4px; }
+.zspot-ring { fill: none; stroke: #b3261e; stroke-width: 0.7; animation: zspot-pulse 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes zspot-pulse { 0%, 100% { opacity: 0.95; transform: scale(1); } 50% { opacity: 0.35; transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .zspot-ring { animation: none; } }
+
+.maptabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.maptabs button { flex: 1; padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+.maptabs button.on { border-color: var(--gold, #c9a227); color: var(--gold, #c9a227); }
+.win.bigmap .maptabs { max-width: 320px; }

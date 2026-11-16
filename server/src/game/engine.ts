@@ -79,6 +79,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
+import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
 import { LIGHT_ITEMS, NO_SENSES, SPECIES_DARKVISION, ambientLight, canSee, isLightLevel, lightGrid, placeFixedLights, type LightKindId, type LightLevel, type LightSource, type Senses } from '../../../shared/light';
@@ -976,7 +977,14 @@ export class Game {
     loc.discovered = true;
     for (const n of this.s.memory.npcs) if (n.locationId === loc.id) n.met = true;
     if (first) logEvent(this, { what: `The party came to ${loc.name} for the first time.`, by: 'party' });
+    enterPlace(this, loc);
     return first;
+  }
+
+  /** The story already walked the party into this place in its hex (the tavern, or back out into the village). */
+  enterQuietly(loc: LocationState) {
+    if (!sameHex(loc, this.world.party)) return;
+    this.settleIn(loc);
   }
 
   private arriveAt(loc: LocationState, journey?: string) {
@@ -5125,9 +5133,16 @@ export class Game {
    * The Dungeon Master says where exactly the scene plays and who is in it. Plain strings:
    * an empty "where" keeps the place, "present" is a comma-separated list of names, or "none".
    */
-  setStage(input: { where?: string; present?: string }) {
+  setStage(input: { where?: string; present?: string; spot?: string; nearby?: string }) {
+    // The zone map follows the scene: the spot named, or one the header names. It may step the party into or out of the tavern.
+    const spot = (input.spot ?? '').trim();
+    const zone = spot || (input.nearby ?? '').trim() ? enterSpot(this, spot, input.nearby ?? '') : null;
+    if (!spot && input.where) followHeader(this, input.where);
     const now = this.stage();
-    const where = (input.where ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || now.where;
+    const root = zoneRoot(this, this.place());
+    const named = spot && zone && 'spot' in zone && !now.where.toLowerCase().includes(zone.spot.toLowerCase())
+      ? (root && zone.spot !== root.name ? `${zone.spot}, ${root.name}` : zone.spot) : '';
+    const where = (input.where ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || named || now.where;
     const raw = (input.present ?? '').trim();
     const heroes = new Set(this.s.characters.map((c) => c.name.toLowerCase()));
     const present = !raw ? now.present : /^(none|nobody|niemand|keine?r?)$/i.test(raw) ? [] : [...new Set(raw.split(/[,;\n]+/).map((x) => x.trim().slice(0, 40)).filter((x) => x && !heroes.has(x.toLowerCase())))].slice(0, 8);
@@ -5135,7 +5150,7 @@ export class Game {
     // People the party knows who are in the scene were last seen here, not where they were before.
     const placeId = this.world.placeId;
     if (placeId) for (const name of present) { const n = this.npcNamed(name); if (n) n.locationId = placeId; }
-    return { where, present: present.length ? present : 'nobody but the party' };
+    return { where, present: present.length ? present : 'nobody but the party', ...(zone ? { zone_map: zone } : {}) };
   }
 
   /**
@@ -5579,8 +5594,8 @@ export class Game {
         terrain: maskedTerrain(w),
         party: w.party,
         minutes: w.minutes,
-        locations: w.locations.filter((l) => l.discovered).map((l): Location => ({
-          id: l.id, name: l.name, kind: l.kind, q: l.q, r: l.r, parentId: l.parentId, description: l.description, visited: l.visited, origin: l.origin, visual: l.visual, zone: null,
+        locations: (currentZone(this), w.locations).filter((l) => l.discovered).map((l): Location => ({
+          id: l.id, name: l.name, kind: l.kind, q: l.q, r: l.r, parentId: l.parentId, description: l.description, visited: l.visited, origin: l.origin, visual: l.visual, zone: !l.parentId ? l.zone ?? null : null,
           ...(l.stages ? { dungeon: { total: l.stages.length, cleared: l.cleared ?? 0, next: l.stages[l.cleared ?? 0]?.name ?? null } } : {}),
         })),
         placeId: w.placeId,
