@@ -208,7 +208,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
       if (k === 'escape') { if (risky) setRisky(null); else if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else setTravelTarget(null); return; }
       if (overlay || !combat) return;
       const dirs: Record<string, [number, number]> = { w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] };
-      if (dirs[k] && actor) {
+      if (dirs[k] && actor && !e.shiftKey) {
         e.preventDefault();
         const nx = actor.x + dirs[k][0], ny = actor.y + dirs[k][1];
         const occupied = state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, nx, ny));

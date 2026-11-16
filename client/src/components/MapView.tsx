@@ -6,6 +6,7 @@ import { heroStatuses, monsterStatuses, type TokenStatus } from '../game/statuse
 import { Hint } from '../ui/Hint';
 import { Glyph } from '../ui/Glyph';
 import { MapRenderer, type BattleView, type TokenHover, type ViewOptions } from '../game/MapRenderer';
+import { getPrefs, usePrefs } from '../ui/prefs';
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, clampZoom } from '../game/tilt';
 import { useEntityHover } from './Story';
 import { heroSenses } from '../game/util';
@@ -32,6 +33,7 @@ function storedZoom(): number {
 function remember(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* not remembered, still applied */ }
 }
+const edgeScrollNow = () => getPrefs().edgeScroll;
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export function MapView({ state, view, onTile, onMoved }: Props) {
@@ -56,6 +58,7 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     r.onTile = (x, y) => click.current(x, y);
     r.onHoverMonster = setToken;
     r.update(now.state, now.view);
+    r.setEdgeScroll(edgeScrollNow());
     void r.init(host.current!);
     const off = onMoved((id, path) => r.queuePath(id, path));
     return () => {
@@ -89,6 +92,39 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     return () => el.removeEventListener('wheel', wheel);
   }, []);
   const pickMode = (m: BattleView) => { setMode(m); remember(VIEW_KEY, m); };
+
+  // Looking around: edge scrolling (a setting), and Shift with the arrow keys or WASD.
+  const { edgeScroll } = usePrefs();
+  useEffect(() => { renderer.current?.setEdgeScroll(edgeScroll); }, [edgeScroll, mode]);
+  useEffect(() => {
+    const held = new Set<string>();
+    const DIRS: Record<string, [number, number]> = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] };
+    const push = () => {
+      let x = 0, y = 0;
+      for (const k of held) { x += DIRS[k][0]; y += DIRS[k][1]; }
+      renderer.current?.setKeyPan(Math.sign(x), Math.sign(y));
+    };
+    const down = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return;
+      const k = e.key.toLowerCase();
+      if (!e.shiftKey || !DIRS[k] || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault();
+      held.add(k);
+      push();
+    };
+    const up = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'shift') held.clear();
+      else held.delete(k);
+      push();
+    };
+    const blur = () => { held.clear(); push(); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+  }, []);
 
   // Pointing at a monster shows its card, anchored to its token.
   const hovered = token ? state.monsters.find((m) => m.id === token.id && m.alive) : undefined;
@@ -159,6 +195,7 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
           <button type="button" className={mode === 'flat' ? 'on' : ''} aria-pressed={mode === 'flat'} onClick={() => pickMode('flat')} title={t('Flat view from above: lighter for older computers')}>{t('Flat')}</button>
         </span>
         <span className="map-zoom" role="group">
+          <button type="button" onClick={() => renderer.current?.recenter()} title={t('Back to whoever is acting')} aria-label={t('Back to whoever is acting')}>⌖</button>
           <button type="button" onClick={() => setZoom((z) => clampZoom(z / 1.2))} disabled={zoom <= ZOOM_MIN} title={t('Zoom out (mouse wheel)')} aria-label={t('Zoom out')}>−</button>
           <button type="button" onClick={() => setZoom(ZOOM_DEFAULT)} className="zoom-level" title={t('Reset zoom')}>{Math.round(zoom * 100)}%</button>
           <button type="button" onClick={() => setZoom((z) => clampZoom(z * 1.2))} disabled={zoom >= ZOOM_MAX} title={t('Zoom in (mouse wheel)')} aria-label={t('Zoom in')}>+</button>

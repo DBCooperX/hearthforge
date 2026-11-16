@@ -1990,4 +1990,8 @@ export const DE: Record<string, string> = {
   'Zoom out': 'Herauszoomen',
   'Zoom in': 'Hineinzoomen',
   'Reset zoom': 'Zoom zurücksetzen',
+  'Edge scrolling in fights': 'Randscrollen im Kampf',
+  'When the battle map is zoomed in, pointing at its edge moves the view that way. Dragging the map and Shift with the arrow keys work too.': 'Ist die Kampfkarte herangezoomt, verschiebt sich die Ansicht, wenn du mit der Maus an ihren Rand fährst. Ziehen mit der Maus und Shift mit den Pfeiltasten gehen auch.',
+  'Look around the battle map (or drag it, or point at its edge)': 'Auf der Kampfkarte umschauen (oder sie ziehen oder an den Rand fahren)',
+  'Back to whoever is acting': 'Zurück zu dem, der am Zug ist',
 };
