@@ -438,6 +438,11 @@ export function heroCanvas(a: HeroArt): HTMLCanvasElement {
   return c;
 }
 
+/** The whole hero standing, on a transparent background: the miniature in the 2.5D battle view. */
+export function heroStanding(a: HeroArt): HTMLCanvasElement {
+  return figure(a, 256, 1).c;
+}
+
 const urls = new Map<string, string>();
 const cached = (k: string, make: () => string) => { let u = urls.get(k); if (!u) { u = make(); urls.set(k, u); } return u; };
 

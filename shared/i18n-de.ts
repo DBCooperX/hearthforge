@@ -1981,4 +1981,13 @@ export const DE: Record<string, string> = {
   'This invite link is not valid any more. Ask the innkeeper for a new one.': 'Dieser Einladungslink gilt nicht mehr. Bitte den Wirt um einen neuen.',
   'That account does not exist any more.': 'Dieses Konto gibt es nicht mehr.',
   'That did not work.': 'Das hat nicht geklappt.',
+  'Battle view': 'Kampfansicht',
+  'Tilted view with standing miniatures, light and spell effects': 'Schräge Ansicht mit stehenden Miniaturen, Licht und Zaubereffekten',
+  'Flat view from above: lighter for older computers': 'Flache Ansicht von oben: schont ältere Computer',
+  'Flat': 'Flach',
+  'Zoom out (mouse wheel)': 'Herauszoomen (Mausrad)',
+  'Zoom in (mouse wheel)': 'Hineinzoomen (Mausrad)',
+  'Zoom out': 'Herauszoomen',
+  'Zoom in': 'Hineinzoomen',
+  'Reset zoom': 'Zoom zurücksetzen',
 };

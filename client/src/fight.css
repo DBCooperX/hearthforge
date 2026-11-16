@@ -71,3 +71,17 @@
 @media (prefers-reduced-motion: reduce) {
   .surprise-banner, .fight-end, .fight-end-card, .fight-end-stats > div, .stage.fight-over.leaving { animation-duration: 0.01s !important; animation-delay: 0s !important; }
 }
+
+/* Battle view switch (2.5D or flat) and zoom, top right of the battle map. */
+.map-controls { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; gap: 6px; }
+.map-controls > span { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: rgba(12, 10, 14, 0.78); }
+.map-controls button {
+  min-width: 30px; height: 28px; padding: 0 9px; border: 0; border-radius: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-head); font-size: 12px; letter-spacing: 0.04em; cursor: pointer;
+}
+.map-controls button + button { border-left: 1px solid var(--line); }
+.map-controls button:hover:not(:disabled) { color: var(--gold); background: rgba(212, 168, 87, 0.08); }
+.map-controls button.on { color: #1b140c; background: linear-gradient(#e2bf72, #b98e45); }
+.map-controls button:disabled { opacity: 0.4; cursor: default; }
+.map-controls .zoom-level { min-width: 48px; font-variant-numeric: tabular-nums; }
+.map-zoom button:not(.zoom-level) { font-size: 16px; line-height: 1; }

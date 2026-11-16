@@ -5,7 +5,8 @@ import { useLang, useT } from '../i18n';
 import { heroStatuses, monsterStatuses, type TokenStatus } from '../game/statuses';
 import { Hint } from '../ui/Hint';
 import { Glyph } from '../ui/Glyph';
-import { MapRenderer, type TokenHover, type ViewOptions } from '../game/MapRenderer';
+import { MapRenderer, type BattleView, type TokenHover, type ViewOptions } from '../game/MapRenderer';
+import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, clampZoom } from '../game/tilt';
 import { useEntityHover } from './Story';
 import { heroSenses } from '../game/util';
 import type { MoveListener } from '../net';
@@ -17,6 +18,22 @@ interface Props {
   onMoved: (fn: MoveListener) => () => void;
 }
 
+const VIEW_KEY = 'hearthforge.battleView';
+const ZOOM_KEY = 'hearthforge.battleZoom';
+
+function storedView(): BattleView {
+  try { if (localStorage.getItem(VIEW_KEY) === 'flat') return 'flat'; } catch { /* private window */ }
+  return 'tilt';
+}
+function storedZoom(): number {
+  try { const z = Number(localStorage.getItem(ZOOM_KEY)); if (z) return clampZoom(z); } catch { /* private window */ }
+  return ZOOM_DEFAULT;
+}
+function remember(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* not remembered, still applied */ }
+}
+const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
 export function MapView({ state, view, onTile, onMoved }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<MapRenderer | null>(null);
@@ -25,24 +42,53 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
   const { entities, hover } = useEntityHover();
   const click = useRef(onTile);
   click.current = onTile;
+  const t = useT();
+  // The battle view (2.5D or flat) and the zoom are each player's own, remembered in the browser.
+  const [mode, setMode] = useState<BattleView>(storedView);
+  const [zoom, setZoom] = useState<number>(storedZoom);
+  const latest = useRef({ state, view, zoom, miss: t('Miss') });
+  latest.current = { state, view, zoom, miss: t('Miss') };
 
   useEffect(() => {
-    const r = new MapRenderer();
+    const now = latest.current;
+    const r = new MapRenderer({ view: mode, zoom: now.zoom, reducedMotion: reducedMotion(), labels: { miss: now.miss } });
     renderer.current = r;
     r.onTile = (x, y) => click.current(x, y);
     r.onHoverMonster = setToken;
+    r.update(now.state, now.view);
     void r.init(host.current!);
     const off = onMoved((id, path) => r.queuePath(id, path));
     return () => {
       off();
       r.destroy();
       renderer.current = null;
+      setToken(null);
     };
-  }, [onMoved]);
+  }, [onMoved, mode]);
 
   useEffect(() => {
     renderer.current?.update(state, view);
   }, [state, view]);
+
+  useEffect(() => {
+    renderer.current?.setZoom(zoom);
+    const id = setTimeout(() => remember(ZOOM_KEY, String(zoom)), 400);
+    return () => clearTimeout(id);
+  }, [zoom]);
+
+  // The mouse wheel over the map zooms it.
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('.map-legend, .map-controls, .token-statuses')) return;
+      e.preventDefault();
+      setZoom((z) => clampZoom(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  }, []);
+  const pickMode = (m: BattleView) => { setMode(m); remember(VIEW_KEY, m); };
 
   // Pointing at a monster shows its card, anchored to its token.
   const hovered = token ? state.monsters.find((m) => m.id === token.id && m.alive) : undefined;
@@ -72,7 +118,6 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const t = useT();
   const { lang } = useLang();
   const statuses: { id: string; list: TokenStatus[] }[] = state.phase === 'combat' ? [
     ...state.characters.filter((c) => !c.dead).map((c) => ({ id: c.id, list: heroStatuses(c, state, t, lang) })),
@@ -108,6 +153,17 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
         ))}
       </div>
       {token && <div ref={anchor} className="token-anchor" style={{ left: token.left, top: token.top, width: token.size, height: token.size }} />}
+      <div className="map-controls" role="toolbar" aria-label={t('Battle view')}>
+        <span className="map-mode" role="group">
+          <button type="button" className={mode === 'tilt' ? 'on' : ''} aria-pressed={mode === 'tilt'} onClick={() => pickMode('tilt')} title={t('Tilted view with standing miniatures, light and spell effects')}>2.5D</button>
+          <button type="button" className={mode === 'flat' ? 'on' : ''} aria-pressed={mode === 'flat'} onClick={() => pickMode('flat')} title={t('Flat view from above: lighter for older computers')}>{t('Flat')}</button>
+        </span>
+        <span className="map-zoom" role="group">
+          <button type="button" onClick={() => setZoom((z) => clampZoom(z / 1.2))} disabled={zoom <= ZOOM_MIN} title={t('Zoom out (mouse wheel)')} aria-label={t('Zoom out')}>−</button>
+          <button type="button" onClick={() => setZoom(ZOOM_DEFAULT)} className="zoom-level" title={t('Reset zoom')}>{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom((z) => clampZoom(z * 1.2))} disabled={zoom >= ZOOM_MAX} title={t('Zoom in (mouse wheel)')} aria-label={t('Zoom in')}>+</button>
+        </span>
+      </div>
       <div className="map-legend">
         <strong>{names[state.map.biome] ?? names.dungeon}</strong>
         {slow && <span>{t('Mud, brush, rubble and shallow water cost double movement.')}</span>}
