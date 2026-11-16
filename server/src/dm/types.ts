@@ -20,6 +20,8 @@ export interface Scene {
 export interface PlayerLine {
   player: string;
   text: string;
+  /** A hint from the host in test mode, not something a player said: never shown in the story. */
+  director?: boolean;
 }
 
 export interface DungeonMaster {

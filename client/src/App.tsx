@@ -32,8 +32,9 @@ import { ArtWindow } from './ui/ArtWindow';
 import { Innkeeper } from './ui/Innkeeper';
 import { Kbd, Window } from './ui/Window';
 import { Wordmark } from './ui/Brand';
+import { TestBadge, TestToolbox } from './components/TestToolbox';
 
-type Overlay = 'trade' | 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
+type Overlay = 'test' | 'trade' | 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'settings' | 'art' | null;
 
 const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
   { id: 'sheet', key: 'C', icon: 'character' },
@@ -253,6 +254,7 @@ export function App() {
               ))}
             </button>
           )}
+          <TestBadge state={state} onClick={() => setOverlay((o) => (o === 'test' ? null : 'test'))} />
           <span className="spacer" />
           {state.table.maxPlayers > 1 && (
             <button className={unread ? 'link chat-toggle unread' : 'link chat-toggle'} onClick={() => setChatOpen((o) => !o)} title={t('Talk to the other players, out of character')}>
@@ -319,6 +321,7 @@ export function App() {
             <WorldPanel {...travel} onExpand={() => setOverlay('map')} onJournal={() => setOverlay('journal')} onTrade={openTrade} />
           </>
         )}
+        {overlay === 'test' && state.testMode && <TestToolbox state={state} conn={conn} host={state.hostId === playerId} onClose={() => setOverlay(null)} />}
         {overlay === 'trade' && focus && shop && <Trade state={state} shop={shop} character={focus} mine={playable.includes(focus)} conn={conn} onSelect={setSelectedId} onShop={setShopId} onClose={() => setOverlay(null)} />}
         {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')}

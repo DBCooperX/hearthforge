@@ -1,0 +1,31 @@
+/* Test mode: the badge in the top bar and the host's toolbox. */
+.test-badge {
+  padding: 2px 12px; border-radius: 10px; border: 1px solid #b9742f; background: rgba(238, 143, 60, 0.16);
+  color: #ffc98a; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  animation: test-pulse 2.8s ease-in-out infinite;
+}
+.test-badge:hover { background: rgba(238, 143, 60, 0.28); }
+@keyframes test-pulse { 50% { box-shadow: 0 0 10px rgba(245, 138, 46, 0.45); } }
+@media (prefers-reduced-motion: reduce) { .test-badge { animation: none; } }
+
+.test-box .test-note { margin: 0 0 10px; padding: 6px 10px; border: 1px solid #b9742f; border-radius: 6px; background: rgba(238, 143, 60, 0.1); }
+.test-pane { display: grid; gap: 10px; align-content: start; }
+.test-pane fieldset { margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); border-radius: 6px; display: grid; gap: 8px; }
+.test-pane legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
+.test-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+.test-row label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.test-row input[type='number'] { width: 90px; }
+.test-row input[type='search'], .test-row input[list] { min-width: 150px; }
+.test-modes { display: flex; gap: 6px; }
+.test-modes button.on, .test-conds button.on, .test-row button.on { background: var(--brass); color: #2a1608; }
+.test-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 190px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.test-list li { display: block; }
+.test-list li > button { width: 100%; display: flex; justify-content: space-between; gap: 12px; text-align: left; border: 0; border-radius: 0; background: transparent; padding: 4px 10px; }
+.test-list li > button:hover { background: rgba(245, 138, 46, 0.14); }
+.test-list li.muted { padding: 6px 10px; }
+.test-picked { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: center; }
+.test-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 12px; }
+.test-chip button { width: 24px; height: 24px; padding: 0; line-height: 1; border-radius: 12px; }
+.test-conds { display: flex; flex-wrap: wrap; gap: 6px; }
+.test-actions { display: flex; align-items: center; gap: 12px; }
+.test-pane textarea { width: 100%; resize: vertical; }

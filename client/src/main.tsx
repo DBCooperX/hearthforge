@@ -22,6 +22,7 @@ import './ooc.css';
 import './hotbar.css';
 import './fight.css';
 import './zone.css';
+import './test.css';
 import './art.css';
 import './ui/prefs';
 
