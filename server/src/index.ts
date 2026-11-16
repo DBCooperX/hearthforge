@@ -20,6 +20,8 @@ import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
 import type { AdminConnection } from '../../shared/admin';
 import { AdminApi } from './admin/api';
 import { Auth } from './admin/auth';
+import { Accounts } from './accounts';
+import { accountApi } from './accountApi';
 import { Config } from './admin/config';
 import { testKey } from './admin/keytest';
 import { Logs } from './admin/logs';
@@ -40,7 +42,9 @@ logs.capture();
 // What the owner set in the Innkeeper lies over the environment the container was started with.
 const config = new Config(DATA_DIR, process.env);
 const env = config.env;
-const auth = new Auth(DATA_DIR, env);
+// The accounts first: on the first start with accounts they take over the owner password in innkeeper.json.
+const accounts = new Accounts(DATA_DIR, env);
+const auth = new Auth(DATA_DIR);
 const usage = new Usage(DATA_DIR);
 const updater = new Updater(DATA_DIR);
 const ART_DIR = env.ART_DIR ?? join(DATA_DIR, 'art');
@@ -82,7 +86,7 @@ const lobby = new Set<WebSocket>();
 /** The table each connection sits at. */
 const seated = new Map<WebSocket, Room>();
 /** Every open connection, for the Innkeeper's list of who is here. */
-const conns = new Map<WebSocket, { id: number; ip: string; since: number; agent: string }>();
+const conns = new Map<WebSocket, { id: number; ip: string; since: number; agent: string; account?: string; accountId?: string }>();
 let connSeq = 0;
 
 const num = (raw: string | undefined, fallback: number) => (raw !== undefined && raw !== '' && Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : fallback);
@@ -118,6 +122,7 @@ const hooks: RoomHooks = {
   closed: (room) => { rooms.delete(room.name); pushTables(); },
   newCode,
   paused: (room) => auth.paused(room.name),
+  stats: (playerId, delta, heroes) => accounts.credit(playerId, delta, heroes),
 };
 
 const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
@@ -131,7 +136,7 @@ function defaultStyle() {
   return cleanStyle({ tone: env.HEARTHFORGE_DM_TONE, rules: env.HEARTHFORGE_DM_RULES || undefined, rating: env.HEARTHFORGE_DM_RATING }, DEFAULT_STYLE);
 }
 
-function createTable(msg: Extract<ClientMessage, { t: 'create_table' }>, ws: WebSocket, playerId: string, token: string): Room {
+function createTable(msg: Extract<ClientMessage, { t: 'create_table' }> & { name: string }, ws: WebSocket, playerId: string, token: string): Room {
   const title = String(msg.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
   if (!title) throw new JoinError(JOIN_ERRORS.titleNeeded);
   const base = tableId(title.replace(/\s+/g, '-')) || 'table';
@@ -165,7 +170,7 @@ function findTable(msg: Extract<ClientMessage, { t: 'join' }>): Room {
 }
 
 function connections(): AdminConnection[] {
-  return [...conns].map(([ws, c]) => {
+  return [...conns].map(([ws, { accountId: _id, ...c }]) => {
     const room = seated.get(ws);
     const playerId = room?.playerOf(ws) ?? '';
     return {
@@ -182,6 +187,7 @@ function connections(): AdminConnection[] {
 function restart() {
   for (const room of rooms.values()) room.saveNow();
   usage.flush();
+  accounts.flush();
   store.close();
   // Docker's restart policy starts the container again; the settings are read afresh on the way up.
   process.exit(0);
@@ -194,6 +200,7 @@ const admin = new AdminApi({
   env,
   config,
   auth,
+  accounts,
   usage,
   logs,
   updater,
@@ -352,6 +359,10 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, dm: dm.mode, model: dm.model, models: claude?.models ?? null, rooms: rooms.size }));
     return;
   }
+  if (url.pathname.startsWith('/api/account/')) {
+    void accountApi({ accounts, rooms, ipOf, tablesChanged: pushTables }, req, res, url);
+    return;
+  }
   if (url.pathname.startsWith('/api/admin/')) {
     void admin.handle(req, res, url);
     return;
@@ -483,22 +494,30 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
     if (msg.t === 'lobby') {
+      // Who is in the lobby shows in the Innkeeper's list of connections.
+      const who = accounts.account(msg.session);
+      const conn = conns.get(ws);
+      if (who && conn) { conn.account = who.username; conn.accountId = who.id; }
       seated.get(ws)?.leave(ws);
       seated.delete(ws);
       lobby.add(ws);
       return send(tableList());
     }
     if (msg.t === 'join' || msg.t === 'create_table') {
-      const playerId = String(msg.playerId ?? '').slice(0, 64);
-      const token = String(msg.token ?? '').slice(0, 128);
-      if (!playerId || token.length < 16) return;
       try {
+        // A seat belongs to an account: whoever is signed in to it sits on it, from any device.
+        const account = accounts.account(msg.session);
+        if (!account) throw new JoinError(JOIN_ERRORS.signIn);
+        const conn = conns.get(ws);
+        if (conn) { conn.account = account.username; conn.accountId = account.id; }
+        const playerId = account.id;
+        const token = `account:${account.id}`;
         const before = seated.get(ws);
         let room: Room;
-        if (msg.t === 'create_table') room = createTable(msg, ws, playerId, token);
+        if (msg.t === 'create_table') room = createTable({ ...msg, name: account.username }, ws, playerId, token);
         else {
           room = findTable(msg);
-          room.join(ws, playerId, token, String(msg.name ?? ''), msg.code);
+          room.join(ws, playerId, token, account.username, msg.code);
         }
         if (before && before !== room) before.leave(ws);
         seated.set(ws, room);
@@ -521,6 +540,11 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   ws.on('error', gone);
 });
 
+// A deleted account is sent away at once, from every table and device.
+accounts.onDeleted = (id) => {
+  for (const [ws, c] of conns) if (c.accountId === id) ws.close(4403, 'removed');
+};
+
 void art.start();
 importDroppedSfx(SFX_DIR, env);
 void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
@@ -535,13 +559,14 @@ server.listen(PORT, () => {
   else if (claude.models.storyOnKey) console.log(`Dungeon Master: Claude. Every story turn: ${claude.models.key} (HEARTHFORGE_DM_STORY_ON_KEY). Combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
   else console.log(`Dungeon Master: Claude. Key moments: ${claude.models.key}. Narration and combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
   if (!admin.enabled) console.log('Innkeeper: switched off (HEARTHFORGE_ADMIN).');
-  else if (auth.firstPasswordNote) console.log(`Innkeeper: no password was set, so one was made up. It is "${auth.firstPasswordNote.password}" (also in ${auth.firstPasswordNote.file}). Sign in and choose your own.`);
-  else console.log(`Innkeeper: ready${auth.usesFirstPassword ? ', with the password from HEARTHFORGE_ADMIN_PASSWORD. Sign in and choose your own' : ''}.`);
+  else if (accounts.firstPasswordNote) console.log(`Innkeeper: no password was set, so one was made up. Sign in as "${accounts.firstPasswordNote.username}" with "${accounts.firstPasswordNote.password}" (also in ${accounts.firstPasswordNote.file}) and choose your own.`);
+  else console.log(`Innkeeper: ready${accounts.firstPasswordPending ? '. Sign in as "innkeeper" with the password from HEARTHFORGE_ADMIN_PASSWORD and choose your own' : ''}.`);
 });
 
 function shutdown() {
   for (const room of rooms.values()) room.saveNow();
   usage.flush();
+  accounts.flush();
   store.close();
   process.exit(0);
 }

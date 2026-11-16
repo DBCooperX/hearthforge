@@ -10,7 +10,8 @@ import type { WebSocket } from 'ws';
 import type { AdminConnection, AdminOverview, AdminTable, SettingValue } from '../../shared/admin';
 import type { ServerMessage } from '../../shared/types';
 import { AdminApi, NOTICES, type AdminContext } from '../src/admin/api';
-import { Auth, AuthError } from '../src/admin/auth';
+import { Auth } from '../src/admin/auth';
+import { Accounts } from '../src/accounts';
 import { Config, ConfigError, mask } from '../src/admin/config';
 import { Logs } from '../src/admin/logs';
 import { Updater } from '../src/admin/updater';
@@ -21,65 +22,6 @@ import type { InternalState } from '../src/game/engine';
 import { PAUSED_MESSAGE, Room } from '../src/room';
 
 const dir = () => mkdtempSync(join(tmpdir(), 'hf-admin-'));
-
-describe('innkeeper password', () => {
-  it('starts with the password from the environment and then only takes the owner\'s own', () => {
-    const d = dir();
-    const auth = new Auth(d, { HEARTHFORGE_ADMIN_PASSWORD: 'from-installer' });
-    expect(auth.usesFirstPassword).toBe(true);
-    expect(auth.firstPasswordNote).toBeNull();
-    expect(() => auth.login('nope', '10.0.0.1')).toThrow(AuthError);
-    const token = auth.login('from-installer', '10.0.0.1');
-    expect(auth.valid(token)).toBe(true);
-    expect(() => auth.changePassword('from-installer', 'short', token, '10.0.0.1')).toThrow('weak_password');
-    auth.changePassword('from-installer', 'my own secret', token, '10.0.0.1');
-    expect(auth.usesFirstPassword).toBe(false);
-    // The file holds hashes only, and survives a restart; the installer's password no longer works.
-    const file = readFileSync(join(d, 'innkeeper.json'), 'utf8');
-    expect(file).not.toContain('my own secret');
-    expect(file).not.toContain(token);
-    const again = new Auth(d, { HEARTHFORGE_ADMIN_PASSWORD: 'from-installer' });
-    expect(again.valid(token)).toBe(true);
-    expect(() => again.login('from-installer', '10.0.0.2')).toThrow('wrong_password');
-    expect(again.valid(again.login('my own secret', '10.0.0.2'))).toBe(true);
-  });
-
-  it('makes up a first password when none was set, and forgets it once it is replaced', () => {
-    const d = dir();
-    const auth = new Auth(d, {});
-    const note = auth.firstPasswordNote!;
-    expect(note.password.length).toBeGreaterThanOrEqual(12);
-    expect(readFileSync(note.file, 'utf8').trim()).toBe(note.password);
-    // The same one after a restart, so the log line of the first start stays true.
-    expect(new Auth(d, {}).firstPasswordNote!.password).toBe(note.password);
-    const token = auth.login(note.password, 'ip');
-    auth.changePassword(note.password, 'something better', token, 'ip');
-    expect(existsSync(note.file)).toBe(false);
-  });
-
-  it('locks an address out after five wrong passwords, for five minutes', () => {
-    let now = 1_000_000;
-    const auth = new Auth(dir(), { HEARTHFORGE_ADMIN_PASSWORD: 'right' }, () => now);
-    for (let i = 0; i < 5; i++) expect(() => auth.login('wrong', '1.1.1.1')).toThrow('wrong_password');
-    expect(() => auth.login('right', '1.1.1.1')).toThrow('too_many');
-    expect(auth.valid(auth.login('right', '2.2.2.2'))).toBe(true); // someone else is not locked out
-    now += 5 * 60 * 1000 + 1;
-    expect(auth.valid(auth.login('right', '1.1.1.1'))).toBe(true);
-  });
-
-  it('ends sessions after a week and on sign-out', () => {
-    let now = 0;
-    const auth = new Auth(dir(), { HEARTHFORGE_ADMIN_PASSWORD: 'right' }, () => now);
-    const a = auth.login('right', 'ip'), b = auth.login('right', 'ip');
-    auth.logout(a);
-    expect(auth.valid(a)).toBe(false);
-    expect(auth.valid(b)).toBe(true);
-    now += 8 * 24 * 3600 * 1000;
-    expect(auth.valid(b)).toBe(false);
-    expect(auth.valid('')).toBe(false);
-    expect(auth.valid(undefined)).toBe(false);
-  });
-});
 
 describe('innkeeper settings', () => {
   it('lays saved settings over the environment at the next start', () => {
@@ -196,11 +138,12 @@ async function rig(env: NodeJS.ProcessEnv = { HEARTHFORGE_ADMIN_PASSWORD: 'open 
   const store = new MemoryStore();
   const rooms = new Map<string, Room>();
   const config = new Config(dataDir, env);
-  const auth = new Auth(dataDir, config.env);
+  const auth = new Auth(dataDir);
+  const accounts = new Accounts(dataDir, config.env);
   const openRoom = (id: string): Room => new Room(id, new ScriptedDM(), store as unknown as Store, {}, { closed: (r) => void rooms.delete(r.name), paused: (r) => auth.paused(r.name) });
   const out = { notices: [] as string[], restarts: 0, closed: [] as unknown[] };
   const ctx: AdminContext = {
-    dataDir, version: '0.1.0', startedAt: Date.now() - 5000, env: config.env, config, auth,
+    dataDir, version: '0.1.0', startedAt: Date.now() - 5000, env: config.env, config, auth, accounts,
     usage: new Usage(dataDir), logs: new Logs(), updater: new Updater(dataDir),
     store, rooms, openRoom, tablesChanged: () => {},
     connections: (): AdminConnection[] => [{ id: 7, ip: '192.168.1.20', since: Date.now() - 60000, agent: 'Firefox/130', table: '', tableTitle: '', name: '', playerId: '', host: false }],
@@ -217,14 +160,14 @@ async function rig(env: NodeJS.ProcessEnv = { HEARTHFORGE_ADMIN_PASSWORD: 'open 
   servers.push(server);
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/admin`;
   const r: Rig = { url, ctx, rooms, store, session: '', server, dataDir, ...out, get notices() { return out.notices; }, get restarts() { return out.restarts; }, get closed() { return out.closed; } };
-  if (api.enabled) r.session = (await call(r, '/login', { password: 'open sesame' })).body.session;
+  if (api.enabled) r.session = accounts.login('innkeeper', 'open sesame', false, '127.0.0.1').session;
   return r;
 }
 
 async function call(r: Rig, path: string, body?: unknown, session = r.session) {
   const res = await fetch(r.url + path, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: { 'x-innkeeper-session': session, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    headers: { 'x-hearthforge-session': session, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
   });
   const text = await res.text();
@@ -254,13 +197,16 @@ describe('innkeeper API', () => {
       expect((await call(r, path, { do: 'restart', values: {} }, '')).body, path).toEqual({ error: 'signed_out' });
     }
     expect(r.restarts).toBe(0);
-    expect((await call(r, '/login', { password: 'wrong' }, '')).body).toEqual({ error: 'wrong_password' });
+    // A player's account is turned away too.
+    const player = r.ctx.accounts.create('Mira', 'player');
+    const mira = r.ctx.accounts.login('Mira', player.password, false, '1.2.3.4').session;
+    expect((await call(r, '/overview', undefined, mira)).body).toEqual({ error: 'not_innkeeper' });
   });
 
   it('can be switched off altogether', async () => {
     const r = await rig({ HEARTHFORGE_ADMIN: 'off', HEARTHFORGE_ADMIN_PASSWORD: 'open sesame' });
     expect((await call(r, '/status')).body).toEqual({ enabled: false, firstPassword: false });
-    expect((await call(r, '/login', { password: 'open sesame' })).status).toBe(403);
+    expect((await call(r, '/overview')).status).toBe(403);
   });
 
   it('shows the server at a glance', async () => {
@@ -406,8 +352,8 @@ describe('innkeeper API', () => {
 
   it('changes the password and signs the other browsers out', async () => {
     const r = await rig();
-    const other = (await call(r, '/login', { password: 'open sesame' })).body.session;
-    expect((await call(r, '/password', { current: 'nope', next: 'a better one' })).body).toEqual({ error: 'wrong_password' });
+    const other = r.ctx.accounts.login('innkeeper', 'open sesame', true, '127.0.0.1').session;
+    expect((await call(r, '/password', { current: 'nope', next: 'a better one' })).body).toEqual({ error: 'wrong_login' });
     expect((await call(r, '/password', { current: 'open sesame', next: 'a better one' })).status).toBe(200);
     expect((await call(r, '/overview')).status).toBe(200);
     expect((await call(r, '/overview', undefined, other)).status).toBe(401);

@@ -9,6 +9,8 @@ import { monsterCatalog, playtest } from './game/playtest';
 import { newSeed } from '../../shared/start';
 import { tagged } from '../../shared/i18n';
 import { parseOoc } from '../../shared/ooc';
+import type { PlayStats } from '../../shared/accounts';
+import type { HeroRef } from './accounts';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -49,7 +51,12 @@ export interface RoomHooks {
   newCode?(): string;
   /** True while the Innkeeper has paused the table. */
   paused?(room: Room): boolean;
+  /** Something for a player's account stats: added to the account once, and to each hero named. */
+  stats?(playerId: string, delta: Partial<PlayStats>, heroes: HeroRef[]): void;
 }
+
+/** Sitting down again after this long away counts as a new session. */
+export const SESSION_GAP_MS = 30 * 60 * 1000;
 
 /** Sent in English and translated by the browser, like the reasons a seat is refused. */
 export const PAUSED_MESSAGE = 'The innkeeper has paused this table.';
@@ -81,6 +88,13 @@ export class Room {
   private answerSeq = 0;
   /** Settles the reaction prompt that a monster's turn is waiting on: true strikes. */
   private reactionWaiter: ((take: boolean) => void) | null = null;
+  /** Since when each player has been at the table without a break, for their play time. */
+  private seatedSince = new Map<string, number>();
+  /** When each player last got up, so a quick reload is not a new session. */
+  private leftAt = new Map<string, number>();
+  /** The party's gold when the stats last looked, so gold taken in can be credited. */
+  private lastGold: number;
+  private lastPhase: string;
 
   constructor(
     readonly name: string,
@@ -97,6 +111,72 @@ export class Room {
     for (const p of this.game.s.players) p.connected = false;
     // Every table has a world seed to show and share, also the ones saved before seeds existed.
     if (!this.game.s.table.start.seed) this.game.s.table.start.seed = newSeed();
+    this.lastGold = this.game.s.gold;
+    this.lastPhase = this.game.s.phase;
+    this.game.tally = (heroId, what) => {
+      const c = this.game.s.characters.find((x) => x.id === heroId);
+      // What happens in test mode is the host trying things out, not the campaign.
+      if (c && !this.game.s.testMode) this.hooks.stats?.(c.ownerId, { [what]: 1 }, [this.heroRef(c)]);
+    };
+  }
+
+  private heroRef(c: { id: string; name: string; classId: string; level: number }): HeroRef {
+    return { table: this.name, tableTitle: this.game.s.table.title, id: c.id, name: c.name, classId: c.classId, level: c.level };
+  }
+
+  private heroesOf(playerId: string): HeroRef[] {
+    return this.game.s.characters.filter((c) => c.ownerId === playerId).map((c) => this.heroRef(c));
+  }
+
+  /** A player arrives at the table or goes, for their sessions and play time. */
+  private presence(playerId: string, here: boolean) {
+    const now = Date.now();
+    if (here) {
+      if (this.seatedSince.has(playerId)) return;
+      this.seatedSince.set(playerId, now);
+      const left = this.leftAt.get(playerId);
+      if (left === undefined || now - left > SESSION_GAP_MS) this.hooks.stats?.(playerId, { sessions: 1 }, this.heroesOf(playerId));
+      return;
+    }
+    const since = this.seatedSince.get(playerId);
+    if (since === undefined) return;
+    this.seatedSince.delete(playerId);
+    this.leftAt.set(playerId, now);
+    if (now > since) this.hooks.stats?.(playerId, { playMs: now - since }, this.heroesOf(playerId));
+  }
+
+  /** Book the play time so far, so a restart loses none of it. */
+  private bookPlayTime() {
+    const now = Date.now();
+    for (const [id, since] of this.seatedSince) {
+      if (now > since) this.hooks.stats?.(id, { playMs: now - since }, this.heroesOf(id));
+      this.seatedSince.set(id, now);
+    }
+  }
+
+  /** Gold the party took in since the last look goes to every hero in it, and once to each of their players. */
+  private creditGold() {
+    const s = this.game.s;
+    const gained = s.gold - this.lastGold;
+    const wasLobby = this.lastPhase === 'lobby';
+    this.lastGold = s.gold;
+    this.lastPhase = s.phase;
+    // The purse the heroes start with is not earned.
+    if (gained <= 0 || s.testMode || wasLobby) return;
+    for (const owner of new Set(s.characters.map((c) => c.ownerId))) this.hooks.stats?.(owner, { gold: gained }, this.heroesOf(owner));
+  }
+
+  /**
+   * Hand a seat to an account: a seat taken in a browser before accounts becomes the account's.
+   * Connections still sitting on the old seat are sent back to the list of tables.
+   */
+  reassign(from: string, to: string, name?: string): boolean {
+    if (this.closed || !this.game.player(from)) return false;
+    this.detach(from, 'left');
+    if (!this.game.reassignPlayer(from, to, name)) return false;
+    this.flush();
+    this.saveNow();
+    return true;
   }
 
   get empty() { return this.sockets.size === 0; }
@@ -121,6 +201,7 @@ export class Room {
   join(ws: WebSocket, playerId: string, token: string, name: string, code?: string) {
     this.game.seat(playerId, hashToken(token), name, code);
     this.sockets.set(ws, playerId);
+    this.presence(playerId, true);
     this.send(ws, { t: 'chat', messages: this.game.chatFor(playerId), replace: true });
     for (const [id, t] of this.typing) if (id !== playerId && Date.now() - t.at < TYPING_MS) this.send(ws, { t: 'typing', playerId: id, where: t.where });
     this.watchHost();
@@ -138,6 +219,7 @@ export class Room {
     if (!id) return;
     this.sockets.delete(ws);
     if (![...this.sockets.values()].includes(id)) {
+      this.presence(id, false);
       this.game.setConnected(id, false);
       this.setTyping(id, null);
       // Nobody waits for a player who has gone: their hero strikes.
@@ -174,6 +256,7 @@ export class Room {
       this.send(ws, { t: 'left', reason });
       this.hooks.detached?.(ws, this);
     }
+    this.presence(playerId, false);
     this.setTyping(playerId, null);
     this.pending = this.pending.filter((l) => l.playerId !== playerId);
   }
@@ -256,6 +339,7 @@ export class Room {
     if (this.closed) return;
     const moves = this.game.takeMoves();
     this.game.checkTrophies();
+    this.creditGold();
     const state: ServerMessage = {
       t: 'state',
       state: this.game.publicState({ busy: this.dmBusy > 0, mode: this.dm.mode, model: this.dm.model, gathering: this.gathering, unanswered: this.pending.filter((l) => !l.director).map((l) => ({ logId: l.logId, playerId: l.playerId })) }),
@@ -283,6 +367,7 @@ export class Room {
 
   saveNow() {
     if (this.closed) return;
+    this.bookPlayTime();
     try {
       this.store.save(this.name, this.game.s);
     } catch (err) {

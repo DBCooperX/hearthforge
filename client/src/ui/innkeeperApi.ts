@@ -1,17 +1,9 @@
-// Talking to the Innkeeper's side of the server. The session token is kept in this browser
-// and sent with every request; without one the server answers "signed out".
-const KEY = 'hearthforge.innkeeper';
-/** For browsers that refuse localStorage: the session of this tab. */
-let memory = '';
+// Talking to the Innkeeper's side of the server. It goes with the session of the account this
+// browser is signed in to; the server lets it in when that account has the Innkeeper role.
+import { SESSION_HEADER, accountSession } from '../account';
 
-export function innkeeperSession(): string {
-  try { return localStorage.getItem(KEY) ?? memory; } catch { return memory; }
-}
-
-export function setInnkeeperSession(token: string) {
-  try { if (token) localStorage.setItem(KEY, token); else localStorage.removeItem(KEY); } catch { /* lasts until the tab closes */ }
-  memory = token;
-}
+export const innkeeperSession = accountSession;
+export const INNKEEPER_HEADER = SESSION_HEADER;
 
 
 export class InnError extends Error {
@@ -21,7 +13,7 @@ export class InnError extends Error {
 interface Options { method?: 'GET' | 'POST'; body?: unknown; raw?: BodyInit }
 
 async function request(path: string, o: Options = {}): Promise<Response> {
-  const headers: Record<string, string> = { 'x-innkeeper-session': innkeeperSession() };
+  const headers: Record<string, string> = { [SESSION_HEADER]: innkeeperSession() };
   if (o.body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {

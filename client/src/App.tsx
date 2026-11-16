@@ -25,6 +25,10 @@ import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
 import { useSfx } from './sfx';
 import { playerId, useConnection } from './net';
+import { useAccount, type AccountState } from './account';
+import type { Profile } from '../../shared/accounts';
+import { SignInScreen } from './components/SignIn';
+import { ProfileWindow } from './ui/Profile';
 import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
 import { Settings } from './ui/Settings';
@@ -43,9 +47,22 @@ const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
   { id: 'map', key: 'M', icon: 'map' },
 ];
 
+/** Nothing but the door until the browser is signed in to an account. */
 export function App() {
+  const acct = useAccount();
+  if (acct.profile === undefined) return <div className="splash tavern" />;
+  if (!acct.profile) return <SignInScreen onSession={acct.signIn} />;
+  return <Game acct={acct} profile={acct.profile} />;
+}
+
+function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   const t = useT();
   const conn = useConnection();
+  const [showProfile, setShowProfile] = useState(false);
+  // Seats this browser had before accounts were moved to the account: say so once.
+  useEffect(() => {
+    for (const c of acct.claimed) conn.toast(t('Your seat at "{table}" now belongs to your account.', { table: c.title }), true);
+  }, [acct.claimed]);
   const { state, send } = conn;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
@@ -223,8 +240,12 @@ export function App() {
     return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction };
   }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky]);
 
-  const inn = innkeeper && <Innkeeper onClose={closeInnkeeper} />;
-  if (!state) return <><LobbyScreen conn={conn} onInnkeeper={() => setInnkeeper(true)} />{inn}<Toasts conn={conn} /></>;
+  const inn = <>
+    {innkeeper && <Innkeeper account={profile.account} onClose={closeInnkeeper} />}
+    {showProfile && <ProfileWindow profile={profile} onClose={() => setShowProfile(false)} onChanged={() => void acct.refresh()} />}
+  </>;
+  const me = { account: profile.account, onProfile: () => setShowProfile(true), onSignOut: acct.signOut };
+  if (!state) return <><LobbyScreen conn={conn} me={me} onInnkeeper={() => setInnkeeper(true)} />{inn}<Toasts conn={conn} /></>;
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} />{inn}<Toasts conn={conn} /></>;
 
   let hint: string;
@@ -328,7 +349,8 @@ export function App() {
           onCast={focus.ownerId === playerId ? (abilityId, targetId, level) => send({ t: 'ability', characterId: focus.id, abilityId, ...(targetId ? { targetId } : {}), ...(level ? { level } : {}) }) : undefined} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}
         {overlay === 'journal' && <Journal state={state} onClose={() => setOverlay(null)} onShowMap={combat ? undefined : (hex) => { setTravelTarget(sameHex(hex, state.world!.party) ? null : hex); setOverlay('map'); }} />}
-        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={() => { setOverlay(null); setInnkeeper(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined}><StyleSetup bare state={state} conn={conn} /></Settings>}
+        {overlay === 'settings' && <Settings onClose={() => setOverlay(null)} onTable={() => setOverlay('table')} onArt={() => setOverlay('art')} onInnkeeper={profile.account.role === 'innkeeper' ? () => { setOverlay(null); setInnkeeper(true); } : undefined}
+          onProfile={() => { setOverlay(null); setShowProfile(true); }} onNewAdventure={state.hostId === playerId ? newAdventure : undefined}><StyleSetup bare state={state} conn={conn} /></Settings>}
         {overlay === 'art' && <ArtWindow onClose={() => setOverlay('settings')} />}
         {overlay === 'table' && (
           <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>

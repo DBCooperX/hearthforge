@@ -5,11 +5,11 @@ import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { SFX_ERRORS, type SfxLibrary as Library } from '../../../shared/sfx';
 import { useT } from '../i18n';
 import { sfx as effects } from '../sfx';
-import { innkeeperSession } from './innkeeperApi';
+import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { sfx } from './sound';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, 'x-innkeeper-session': innkeeperSession() } });
+  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, [INNKEEPER_HEADER]: innkeeperSession() } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(String(body?.error ?? 'failed'));
   return body as T;

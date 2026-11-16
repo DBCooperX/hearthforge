@@ -80,6 +80,12 @@ export const ADMIN_ERRORS = {
   too_big: 'This file is too large.',
   disabled: 'The Innkeeper is switched off on this server.',
   not_found: 'That is no longer there.',
+  not_innkeeper: 'Your account is not an innkeeper. Ask whoever runs this server.',
+  wrong_login: 'That name or password is not right.',
+  bad_name: 'A name needs 3 to 24 letters, digits, spaces, dots, dashes or underscores.',
+  name_taken: 'That name is already taken.',
+  last_innkeeper: 'The server needs at least one innkeeper.',
+  not_yourself: 'You cannot do that to your own account.',
 } as const;
 export type AdminError = keyof typeof ADMIN_ERRORS;
 
@@ -166,6 +172,8 @@ export interface AdminConnection {
   name: string;
   playerId: string;
   host: boolean;
+  /** The account signed in on this connection, once it sat down or opened a table. */
+  account?: string;
 }
 
 export interface AdminBan { ip: string; note: string; at: number }

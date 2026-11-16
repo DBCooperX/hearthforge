@@ -70,6 +70,7 @@ finish() {
   echo "                The owner's panel: tables, players, art packs, settings, API key,"
   echo "                updates, restart, logs and backups. No terminal needed from here on."
   if [ -n "$ADMIN_PASSWORD_NEW" ]; then
+    echo "    Account:    innkeeper"
     echo "    Password:   $ADMIN_PASSWORD_NEW"
     echo "                Sign in with it once and choose your own. It is not shown again."
   fi

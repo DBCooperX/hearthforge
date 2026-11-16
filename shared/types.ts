@@ -800,10 +800,10 @@ export type TestAction =
 export interface TestMonster { id: string; name: string; cr: string; kind: string }
 
 export type ClientMessage =
-  | { t: 'lobby' }
+  | { t: 'lobby'; session?: string }
   | { t: 'test'; do: TestAction }
-  | { t: 'join'; room: string; playerId: string; token: string; name: string; code?: string }
-  | { t: 'create_table'; playerId: string; token: string; name: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
+  | { t: 'join'; room: string; session: string; code?: string }
+  | { t: 'create_table'; session: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
   | { t: 'leave_table' }
   | { t: 'close_table' }
   | { t: 'ready'; ready: boolean }
@@ -878,6 +878,7 @@ export const JOIN_ERRORS = {
   noCode: 'No table uses that invite code.',
   seatTaken: 'That seat belongs to another player.',
   titleNeeded: 'Give the table a name.',
+  signIn: 'You are signed out. Sign in again.',
 } as const;
 
 export function abilityMod(score: number): number {

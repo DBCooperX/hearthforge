@@ -770,6 +770,31 @@ export class Game {
     return this.s.chat.filter((m) => !m.to || m.to === playerId || m.from === playerId);
   }
 
+  /**
+   * Hand a seat to another player id: a seat from before accounts becomes the seat of an account.
+   * When that account already sits here, the old seat's heroes join it and the old seat goes.
+   * Returns false when there is no such seat.
+   */
+  reassignPlayer(from: string, to: string, name?: string): boolean {
+    const s = this.s;
+    const old = this.player(from);
+    if (!old || from === to) return false;
+    const already = this.player(to);
+    if (already) s.players = s.players.filter((p) => p.id !== from);
+    else { old.id = to; if (name) old.name = cleanName(name) || old.name; }
+    // The old secret goes with the old id: the new owner proves the seat their own way when they sit down.
+    delete s.seats[from];
+    if (s.hostId === from) s.hostId = to;
+    s.ready = [...new Set(s.ready.map((x) => (x === from ? to : x)))];
+    if (s.rolled[from]) { s.rolled[to] ??= s.rolled[from]; delete s.rolled[from]; }
+    for (const c of s.characters) if (c.ownerId === from) c.ownerId = to;
+    for (const m of s.chat) {
+      if (m.from === from) m.from = to;
+      if (m.to === from) m.to = to;
+    }
+    return true;
+  }
+
   setConnected(id: string, connected: boolean) {
     const p = this.s.players.find((p) => p.id === id);
     if (p) p.connected = connected;
@@ -1514,6 +1539,7 @@ export class Game {
     if (c.deathSaves.failures >= 3) {
       c.dead = true;
       c.conditions = ['dead'];
+      this.tally?.(c.id, 'deaths');
       this.log('roll', this.t`${c.name} rolls ${r} on a death save and dies.`);
     } else if (c.deathSaves.successes >= 3) {
       c.conditions.push('stable');
@@ -1912,7 +1938,12 @@ export class Game {
     }
     m.hp = hp;
     if (dealt > 0 && m.hp > 0) this.liftMonster(m, (e) => !!e.onHurt);
-    if (m.hp === 0 && m.alive) { m.alive = false; m.conditions = []; m.effects = []; note += ` ${this.t`${m.name} is slain!`}`; this.fallen.push(m.id); }
+    if (m.hp === 0 && m.alive) {
+      m.alive = false; m.conditions = []; m.effects = []; note += ` ${this.t`${m.name} is slain!`}`; this.fallen.push(m.id);
+      // The kill goes to the hero whose turn it is: on their turn the blow is nearly always theirs.
+      const turn = this.s.combat?.order[this.s.combat.turnIndex];
+      if (turn && this.s.characters.some((c) => c.id === turn.id)) this.tally?.(turn.id, 'kills');
+    }
     return { dealt, note };
   }
 
@@ -2066,6 +2097,7 @@ export class Game {
     if (!hits() && this.feat(c, 'stroke_of_luck') && this.left(c, 'stroke_of_luck') > 0) { this.spendUse(c, 'stroke_of_luck'); forced = true; luck += ` ${this.t`Stroke of Luck turns the miss into a hit.`}`; }
     // A hit from next to a paralysed or sleeping creature is a critical hit.
     const crit = r.value >= critAt || (dist <= 5 && (this.mHas(m, 'paralyzed') || this.mHas(m, 'asleep')));
+    if (crit && hits()) this.tally?.(c.id, 'crits');
     const label = beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`an unarmed strike`;
     const head = (opts.reaction ? this.t`Opportunity attack! ` : '') + this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
@@ -2475,6 +2507,7 @@ export class Game {
           }
           const total = r.value + toHit;
           const crit = r.value === 20;
+          if (crit) this.tally?.(c.id, 'crits');
           const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(toHit)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
           const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
             ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: toHit, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
@@ -2863,6 +2896,8 @@ export class Game {
 
   /** Ask players about opportunity attacks. Off for scripted play and tests: every hero then follows its setting, with "ask" striking. */
   interactiveReactions = false;
+  /** Told when a hero lands a killing blow, scores a critical hit or dies, for the players' account stats. */
+  tally?: (heroId: string, what: 'kills' | 'crits' | 'deaths') => void;
   /** How long a reaction prompt waits for its player. */
   reactionWaitMs = 20000;
   /** The monster turn that stopped for a reaction prompt. */

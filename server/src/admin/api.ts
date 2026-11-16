@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { SETTINGS, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo } from '../../../shared/admin';
 import type { InternalState } from '../game/engine';
 import type { Room } from '../room';
-import { AuthError, type Auth } from './auth';
+import type { Auth } from './auth';
+import { AccountsError, type Accounts } from '../accounts';
+import { SESSION_HEADER, legacySeats } from '../accountApi';
+import { ROLES, type Role } from '../../../shared/accounts';
 import { ConfigError, type Config } from './config';
 import type { Logs } from './logs';
 import type { Updater } from './updater';
@@ -41,6 +44,7 @@ export interface AdminContext {
   env: NodeJS.ProcessEnv;
   config: Config;
   auth: Auth;
+  accounts: Accounts;
   usage: Usage;
   logs: Logs;
   updater: Updater;
@@ -94,9 +98,9 @@ export class AdminApi {
     this.enabled = (ctx.env.HEARTHFORGE_ADMIN ?? 'on').toLowerCase() !== 'off';
   }
 
-  /** True when the request carries a live Innkeeper session. */
+  /** True when the request carries the live session of an account with the Innkeeper role. */
   authorised(req: IncomingMessage): boolean {
-    return this.enabled && this.ctx.auth.valid(req.headers['x-innkeeper-session']);
+    return this.enabled && this.ctx.accounts.isInnkeeper(req.headers[SESSION_HEADER]);
   }
 
   /** Housekeeping that runs while the server is up: a backup a day, and updates when the owner asked for them. */
@@ -132,7 +136,7 @@ export class AdminApi {
       send(200, out ?? { ok: true });
     } catch (err) {
       if (err instanceof Refused) { req.resume(); return send(err.status, { error: err.code }); }
-      if (err instanceof AuthError) return send(err.code === 'too_many' ? 429 : err.code === 'weak_password' ? 400 : 401, { error: err.code });
+      if (err instanceof AccountsError) return send(err.code === 'too_many' ? 429 : err.code === 'signed_out' ? 401 : 400, { error: err.code });
       if (err instanceof ConfigError) return send(400, { error: 'bad_value', key: err.message });
       if (err instanceof SyntaxError) return send(400, { error: 'bad_request' });
       console.error('[innkeeper]', err);
@@ -152,29 +156,20 @@ export class AdminApi {
     const get = req.method === 'GET', post = req.method === 'POST';
     if (!get && !post) throw new Refused(405, 'bad_request');
 
-    if (get && path === '/status') return { enabled: this.enabled, firstPassword: this.enabled && ctx.auth.usesFirstPassword } satisfies AdminStatus;
+    if (get && path === '/status') return { enabled: this.enabled, firstPassword: this.enabled && ctx.accounts.firstPasswordPending } satisfies AdminStatus;
     if (!this.enabled) throw new Refused(403, 'disabled');
-    if (post && path === '/login') {
-      const body = await this.json(req);
-      const ip = ctx.ipOf(req);
-      try {
-        const session = ctx.auth.login(String(body.password ?? ''), ip);
-        console.log(`[innkeeper] Signed in from ${ip}.`);
-        return { session, firstPassword: ctx.auth.usesFirstPassword };
-      } catch (err) {
-        if (err instanceof AuthError) console.warn(`[innkeeper] Refused sign-in from ${ip} (${err.code}).`);
-        throw err;
-      }
-    }
 
-    const token = String(req.headers['x-innkeeper-session'] ?? '');
-    if (!ctx.auth.valid(token)) throw new Refused(401, 'signed_out');
+    const token = String(req.headers[SESSION_HEADER] ?? '');
+    const me = ctx.accounts.account(token);
+    if (!me) throw new Refused(401, 'signed_out');
+    if (me.role !== 'innkeeper') throw new Refused(403, 'not_innkeeper');
 
     if (get) {
       switch (path) {
         case '/overview': return this.overview();
         case '/tables': return this.tables();
         case '/players': return { connections: ctx.connections(), bans: ctx.auth.bans };
+        case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
         case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title ?? id);
         case '/logs': return { lines: ctx.logs.since(Number(url.searchParams.get('after')) || 0) };
@@ -196,12 +191,51 @@ export class AdminApi {
     }
 
     switch (path) {
-      case '/logout': ctx.auth.logout(token); return;
       case '/password': {
         const body = await this.json(req);
-        ctx.auth.changePassword(String(body.current ?? ''), body.next, token, ctx.ipOf(req));
-        console.log('[innkeeper] The password was changed.');
+        ctx.accounts.changePassword(token, String(body.current ?? ''), body.next, ctx.ipOf(req));
+        console.log(`[innkeeper] ${me.username} changed their password.`);
         return;
+      }
+      case '/accounts': {
+        const body = await this.json(req);
+        const { accounts } = ctx;
+        const role: Role = ROLES.includes(body.role) ? body.role : 'player';
+        const id = String(body.id ?? '');
+        const name = () => accounts.get(id)?.username ?? id;
+        let extra: Record<string, unknown> = {};
+        switch (body.do) {
+          case 'create': {
+            const made = accounts.create(body.username, role);
+            console.log(`[innkeeper] ${me.username} made the account ${made.account.username} (${role}).`);
+            extra = { password: made.password, account: made.account };
+            break;
+          }
+          case 'invite': {
+            const inv = accounts.invite(role, String(body.note ?? ''));
+            console.log(`[innkeeper] ${me.username} made an invite link (${role}).`);
+            extra = { invite: inv };
+            break;
+          }
+          case 'revoke': accounts.revoke(String(body.code ?? '')); break;
+          case 'role': accounts.setRole(id, role, me.id); console.log(`[innkeeper] ${name()} is now ${role === 'innkeeper' ? 'an innkeeper' : 'a player'}.`); break;
+          case 'rename': accounts.rename(id, body.username); break;
+          case 'reset': extra = { password: accounts.reset(id, me.id) }; console.log(`[innkeeper] The password of ${name()} was reset.`); break;
+          case 'delete': { const who = name(); accounts.remove(id, me.id); console.log(`[innkeeper] The account ${who} was deleted.`); break; }
+          case 'assign': {
+            const target = accounts.get(id);
+            const room = ctx.rooms.get(String(body.table ?? ''));
+            if (!target) throw new AccountsError('not_found');
+            if (!room) throw new Refused(404, 'not_found');
+            const from = String(body.playerId ?? '');
+            if (from.startsWith('acc_') || !room.reassign(from, target.id, target.username)) throw new Refused(404, 'not_found');
+            console.log(`[innkeeper] A seat at "${room.game.s.table.title}" now belongs to ${target.username}.`);
+            ctx.tablesChanged();
+            break;
+          }
+          default: throw new Refused(400, 'bad_request');
+        }
+        return { ...this.accountList(), ...extra };
       }
       case '/tables': {
         const body = await this.json(req);
@@ -318,6 +352,11 @@ export class AdminApi {
     };
   }
 
+  private accountList() {
+    const { accounts, rooms } = this.ctx;
+    return { accounts: accounts.list(), invites: accounts.invites(), legacy: legacySeats(rooms) };
+  }
+
   private tables(): { tables: AdminTable[] } {
     const { ctx } = this;
     const saved = new Map((ctx.store.info?.() ?? []).map((i) => [i.room, i]));
@@ -397,7 +436,7 @@ export class AdminApi {
       createdAt: new Date(this.now()).toISOString(),
       app: ctx.version,
       tables,
-      ...(only ? {} : { settings: ctx.config.exportable(), ...ctx.auth.exportable() }),
+      ...(only ? {} : { settings: ctx.config.exportable(), ...ctx.auth.exportable(), accounts: ctx.accounts.exportable() }),
     };
   }
 
@@ -434,7 +473,7 @@ export class AdminApi {
   /** Put the tables of a backup back. Tables that are not in it stay as they are. */
   private restore(data: unknown, withSettings: boolean) {
     const { ctx } = this;
-    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown };
+    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown; accounts?: unknown };
     if (!d || typeof d !== 'object' || d.format !== BACKUP_FORMAT || !d.tables || typeof d.tables !== 'object') throw new Refused(400, 'bad_backup');
     const entries = Object.entries(d.tables as Record<string, InternalState>);
     for (const [id, s] of entries) {
@@ -451,6 +490,8 @@ export class AdminApi {
     if (withSettings) {
       ctx.config.restore(d.settings);
       if (Array.isArray(d.bans)) for (const b of d.bans) if (b && typeof b.ip === 'string') ctx.auth.ban(b.ip, String(b.note ?? ''));
+      const added = ctx.accounts.restore(d.accounts);
+      if (added) console.log(`[innkeeper] ${added} account${added === 1 ? '' : 's'} came back from the backup. Reset their passwords to let them in.`);
     }
     ctx.tablesChanged();
     console.log(`[innkeeper] Restored ${entries.length} table${entries.length === 1 ? '' : 's'} from a backup.`);
