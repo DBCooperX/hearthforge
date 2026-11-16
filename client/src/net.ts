@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from '../../shared/i18n';
 import { buildOf, isStale, mayAutoReload } from '../../shared/update';
+import { reloadItemIcons } from './game/itemArt';
+import { music } from './music';
+import { sfx } from './sfx';
 import { CLOSED_REASONS } from './ui/labels';
 import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
 
@@ -139,6 +142,15 @@ export function useConnection(): Connection {
     let closed = false;
     let retry = 500;
     let timer: ReturnType<typeof setTimeout>;
+    // A new client build and new map tiles both need a fresh page: it happens by itself when that costs the player nothing.
+    const reloadOrAsk = () => {
+      let last = 0;
+      try { last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch { /* no memory */ }
+      if (mayAutoReload({ seated: !!session.current, hasDraft: hasDraft(), lastReload: last, now: Date.now() })) {
+        try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch { /* no memory */ }
+        location.reload();
+      } else setUpdateReady(true);
+    };
     const connect = () => {
       const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
       ws.current = sock;
@@ -154,14 +166,14 @@ export function useConnection(): Connection {
         const msg = JSON.parse(ev.data) as ServerMessage;
         switch (msg.t) {
           case 'hello':
-            if (isStale(ownBuild, msg.build)) {
-              let last = 0;
-              try { last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch { /* no memory */ }
-              if (mayAutoReload({ seated: !!session.current, hasDraft: hasDraft(), lastReload: last, now: Date.now() })) {
-                try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch { /* no memory */ }
-                location.reload();
-              } else setUpdateReady(true);
-            }
+            if (isStale(ownBuild, msg.build)) reloadOrAsk();
+            break;
+          case 'assets':
+            // The owner picks art, music and effects for the whole server; every open tab follows without asking the player.
+            if (msg.icons) void reloadItemIcons();
+            if (msg.music) void music.refresh();
+            if (msg.sfx) void sfx.refresh();
+            if (msg.tiles) reloadOrAsk();
             break;
           case 'state':
             setState(msg.state);
