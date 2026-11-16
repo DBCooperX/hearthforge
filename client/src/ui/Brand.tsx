@@ -4,6 +4,10 @@ import { useMemo } from 'react';
 import emblemUrl from '../assets/emblem.webp';
 import logoUrl from '../assets/logo.webp';
 import markUrl from '../assets/mark.webp';
+import tavernUrl from '../assets/tavern.webp';
+import tavernJpg from '../assets/tavern.jpg';
+import tavernPhoneUrl from '../assets/tavern-phone.webp';
+import tavernPhoneJpg from '../assets/tavern-phone.jpg';
 
 export function Logo() {
   return <img className="brand-logo" src={logoUrl} alt="Hearthforge" width={1200} height={768} draggable={false} />;
@@ -35,6 +39,23 @@ export function Embers({ count = 22 }: { count?: number }) {
       {sparks.map((s, i) => (
         <i key={i} style={{ left: s.left, width: s.size, height: s.size, animationDelay: s.delay, animationDuration: s.time, ['--drift' as string]: s.drift }} />
       ))}
+    </div>
+  );
+}
+
+/** The tavern table behind the lobby, the table room and the character creator. A dark, blurred ground with a slow drift and
+ *  candle flicker; `deep` pushes it further back so that what sits on top of it stands out. A narrow, tall screen gets a crop
+ *  centred on the party. WebP first, JPEG for browsers that cannot read it. */
+export function Backdrop({ deep = false }: { deep?: boolean }) {
+  return (
+    <div className={deep ? 'tavern-bg deep' : 'tavern-bg'} aria-hidden="true">
+      <picture>
+        <source media="(max-aspect-ratio: 4/5)" type="image/webp" srcSet={tavernPhoneUrl} />
+        <source media="(max-aspect-ratio: 4/5)" srcSet={tavernPhoneJpg} />
+        <source type="image/webp" srcSet={tavernUrl} />
+        <img src={tavernJpg} alt="" width={1920} height={1072} decoding="async" draggable={false} />
+      </picture>
+      <span className="tavern-glow" />
     </div>
   );
 }
