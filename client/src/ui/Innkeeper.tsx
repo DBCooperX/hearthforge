@@ -134,6 +134,7 @@ function Overview({ fail, say, go, firstPassword }: PaneProps & { go: (tab: Tab)
       <section>
         <h3>{t('Dungeon Master')}</h3>
         <p>{o.dm.mode === 'claude' ? t('Claude, with these models: {models}', { models }) : t('Scripted (no API key)')}</p>
+        {o.dm.mode === 'claude' && o.dm.storyOnKey && !o.dm.forced && <p>{t('Every story turn: {model}', { model: o.dm.key ?? '' })}</p>}
       </section>
       <section>
         <h3>{t('Announcement')}</h3>

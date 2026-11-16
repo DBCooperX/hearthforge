@@ -11,6 +11,11 @@ export interface ModelConfig {
   key: string;
   /** Set when one model is forced for everything. */
   forced: string | null;
+  /**
+   * Every story turn (narration and replies) runs on the key-moment model, not only turning points.
+   * Background work and monster turns keep their own models. For comparing dialogue quality.
+   */
+  storyOnKey?: boolean;
 }
 
 export const DEFAULT_MODELS = { background: 'claude-haiku-5-5', standard: 'claude-sonnet-5-5', key: 'claude-opus-5-5' } as const;
@@ -22,7 +27,13 @@ export function resolveModels(env: NodeJS.ProcessEnv): ModelConfig {
     standard: forced ?? (env.HEARTHFORGE_DM_MODEL_STANDARD?.trim() || DEFAULT_MODELS.standard),
     key: forced ?? (env.HEARTHFORGE_DM_MODEL_KEY?.trim() || DEFAULT_MODELS.key),
     forced,
+    storyOnKey: env.HEARTHFORGE_DM_STORY_ON_KEY?.trim() === 'on',
   };
+}
+
+/** The tier a story turn runs on, after the Innkeeper's "every story turn on the key model" switch. */
+export function storyTier(models: ModelConfig, tier: Tier): Tier {
+  return models.storyOnKey ? 'key' : tier;
 }
 
 const KEY_BEATS: Beat['kind'][] = ['start', 'level_up', 'defeat', 'rescued'];

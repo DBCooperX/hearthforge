@@ -146,6 +146,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_DM_MODEL_STANDARD` | `claude-sonnet-5-5` | Everyday narration, conversation and monster turns. |
 | `HEARTHFORGE_DM_MODEL_KEY` | `claude-opus-5-5` | Key moments: opening scene, major arrivals, boss fights, level-ups, defeats, turning points. |
 | `HEARTHFORGE_DM_FORCE_MODEL` | empty | A model id that replaces the automatic choice. |
+| `HEARTHFORGE_DM_STORY_ON_KEY` | `off` | `on` runs every story turn outside fights on the key-moment model, for comparing dialogue quality. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. |
 | `HEARTHFORGE_ART` | `generated` | Tile pack for a fresh server: `generated`, `kenney` or `0x72`. A choice made in the game wins. |
 | `HEARTHFORGE_ART_UPLOADS` | `on` | `off` locks the art library against changes from the browser. |

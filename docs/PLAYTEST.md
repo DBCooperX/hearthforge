@@ -26,6 +26,13 @@ These features pass their automated tests and the scripted fallback, but have **
 - [ ] Leave a room or let people walk off: "Who is here" lists only the people the scene header names.
 - [ ] The Innkeeper log shows `[dm] reconcile:` lines; check that nothing was applied twice or guessed.
 
+## Story timing
+- [ ] Ask a townsperson about the region's trouble and when it began, then ask someone else a day later: both give the same time ("vor drei Tagen"), and it fits what you have seen.
+- [ ] Ask about something the person could not have seen: they say who told them, or that they do not know.
+- [ ] Nobody turns up "just today" without a reason the story gives.
+- [ ] A big revelation does not come out in the first conversation. Ask the Dungeon Master out of character "what are you holding back?": it should refuse kindly.
+- [ ] Switch on "Every story turn on the key-moment model" in the Innkeeper for one session and compare the dialogue; the log shows `tier=key` for every `reply`.
+
 ## Reputation and merchants
 - [ ] Help or wrong a faction and see the standing change in the journal; rumours turn up in conversation; **undo** takes a deed back.
 - [ ] Open a shop through the DM (curio shop, road peddler) and buy, sell and haggle.

@@ -26,6 +26,7 @@ export const itemRulesText = (id: string, max = 320) => { const r = ITEM_RULES[i
 /** The SRD rules text of a spell, for the Dungeon Master to narrate it by. */
 export const spellRulesText = (id: string, max = 1400) => { const r = SPELL_RULES[id] ?? ''; return r.length > max ? `${r.slice(0, max)}…` : r; };
 import { trueTerrain, type SettingState } from '../game/world';
+import { describeTimeline } from '../game/timeline';
 
 export const DM_SYSTEM_PROMPT = `You are the Dungeon Master of Hearthforge, a self-hosted Dungeons & Dragons 5th edition game played in a web browser by one or more players who share a party of heroes.
 
@@ -56,6 +57,14 @@ The players see the game next to your story: the map, the music of the place, th
 - A hero draws, wields, puts on or switches to something they carry: equip_item.
 - Someone joins or leaves the scene, or the heroes move to another room: set_stage, so the header and the side panel show who is really there.
 After each reply the server double-checks your narration against the game and fixes what it can, but that check is a safety net and it skips anything unclear. Your own tool calls are what keeps the game right.
+
+Time, causes and who knows what
+The world runs on the clock in the state, and the timeline under it says when things happened. Make the story's timing believable:
+- Every past event someone mentions gets a definite time that fits what the party has seen. If the trouble showed itself three days ago, the mayor cannot have sent guards to the mill "in winter". When a person first tells of something in the past (a disappearance, a theft, a quarrel, when the trouble began), call log_event with "when" as a number and a unit ("3 days ago", "2 weeks ago"), and let them say it the same way ("three days ago", "the night before last"). From then on that date is fixed: everyone who mentions the event agrees with it, and you count from it.
+- No coincidence of timing without a cause. Things do not happen just as the heroes arrive or ask (a survivor stumbling back today, a letter arriving this hour) unless something made them happen then: someone saw the heroes, sent for them, or acts on a schedule the timeline shows. When an event lies weeks back, the trail is cold and people have had time to talk, search and give up; when it was yesterday, it is fresh news and everybody is still talking about it.
+- People know only what they could know: what they saw themselves, what someone told them, and what is common talk in their place (the rumours listed for it). Someone who was not there does not know the details unless the timeline or their notes say who told them, and then they tell it as hearsay ("Griet says…"). Nobody knows what happened behind closed doors elsewhere, or anything that happened after they last saw it. The "Known by" of an event says who knows it; when someone learns of it in the story, pass them in known_by again.
+- For things planned ahead (a barge expected in two days, a meeting at sunset), log_event with "in 2 days" or "tonight". When the clock reaches one, it shows as due: let it happen, or say why it did not.
+- Big truths come out in their own time. When you settle a truth the players should uncover later (who is behind the trouble, what lies under the mill, a traitor's name), hold it with secret, saying after what it may come out and, if timing matters, not before when. Until then nobody in the scene states it and no clue gives it away; at most one small sign of it per scene. When the condition is met and you let it out, call secret with action "reveal" in that same response. The server refuses a reveal before its earliest time.
 
 Writing scenes
 - End every turn by calling the scene tool. It is the only way your narration reaches the players.
@@ -301,7 +310,7 @@ export function describeWorld(game: Game): string {
   const terrain = TERRAIN[trueTerrain(w, w.party)].name;
   const setting = settingOf(game);
   lines.push(`Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}`);
-  lines.push(`Time: ${formatTime(w.minutes)} (${timeOfDay(w.minutes)}).`);
+  lines.push(`Time: ${formatTime(w.minutes)} (${timeOfDay(w.minutes)}).`, ...describeTimeline(game));
   const top = w.locations.find((l) => !l.parentId && l.q === w.party.q && l.r === w.party.r);
   if (place) {
     const parent = place.parentId ? game.location(place.parentId) : null;
@@ -377,7 +386,7 @@ export function describeWorld(game: Game): string {
   }
   if (mem.deeds.length) lines.push('Deeds the party is known for:', ...mem.deeds.slice(-12).map((d) => `- Day ${d.day}: ${d.text}`));
   if (mem.chronicle) lines.push(`The story so far: ${mem.chronicle}`);
-  if (mem.journal.length) lines.push('Your recent journal:', ...mem.journal.slice(-30).map((j) => `- Day ${j.day}: ${j.text}`));
+  if (mem.journal.length) lines.push('Your recent journal:', ...mem.journal.slice(-30).map((j) => `- ${j.at !== undefined ? formatTime(j.at) : `Day ${j.day}`}: ${j.text}`));
   return lines.join('\n');
 }
 

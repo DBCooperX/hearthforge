@@ -110,7 +110,7 @@ describe('Claude Dungeon Master', () => {
     expect(requests[0].model).toBe('std-model');
     expect(requests[0].tools.map((t: any) => t.name)).toContain('start_combat');
     expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false)).toBe(true);
-    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['change_standing', 'equip_item', 'find_monsters', 'give_story_item', 'note_clue', 'open_shop', 'rest', 'rumour', 'set_stage', 'start_combat', 'take_item', 'travel_to', 'update_story_item']);
+    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['change_standing', 'equip_item', 'find_monsters', 'give_story_item', 'log_event', 'note_clue', 'open_shop', 'rest', 'rumour', 'secret', 'set_stage', 'start_combat', 'take_item', 'travel_to', 'update_story_item']);
     expect(requests[0].messages[0].content).toMatch(/Emberfall[\s\S]*Silence the Warren[\s\S]*I buy a round/);
     const results = requests[1].messages[2].content;
     expect(results.map((r: any) => !!r.is_error)).toEqual([false, false, false, true, false, false, false]);
@@ -156,9 +156,9 @@ describe('Claude Dungeon Master', () => {
     expect(tierForBeats([{ kind: 'travel_end', journey: '', reason: 'arrived' }])).toBe('background');
     expect(tierForBeats([{ kind: 'combat_start', monsters: ['Wolf'], boss: false, context: '' }])).toBe('standard');
 
-    expect(resolveModels({})).toEqual({ background: 'claude-haiku-5-5', standard: 'claude-sonnet-5-5', key: 'claude-opus-5-5', forced: null });
+    expect(resolveModels({})).toEqual({ background: 'claude-haiku-5-5', standard: 'claude-sonnet-5-5', key: 'claude-opus-5-5', forced: null, storyOnKey: false });
     expect(resolveModels({ HEARTHFORGE_DM_MODEL_KEY: 'claude-fable-5-2', HEARTHFORGE_DM_MODEL_BACKGROUND: 'x' })).toMatchObject({ background: 'x', standard: 'claude-sonnet-5-5', key: 'claude-fable-5-2' });
-    expect(resolveModels({ HEARTHFORGE_DM_FORCE_MODEL: 'claude-opus-5-5', HEARTHFORGE_DM_MODEL_KEY: 'y' })).toEqual({ background: 'claude-opus-5-5', standard: 'claude-opus-5-5', key: 'claude-opus-5-5', forced: 'claude-opus-5-5' });
+    expect(resolveModels({ HEARTHFORGE_DM_FORCE_MODEL: 'claude-opus-5-5', HEARTHFORGE_DM_MODEL_KEY: 'y' })).toEqual({ background: 'claude-opus-5-5', standard: 'claude-opus-5-5', key: 'claude-opus-5-5', forced: 'claude-opus-5-5', storyOnKey: false });
 
     const g = newGame();
     const { dm, requests } = stubbed(() => ({ stop_reason: 'tool_use', content: [sceneCall()] }));
