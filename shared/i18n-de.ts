@@ -611,6 +611,8 @@ export const DE: Record<string, string> = {
   'Abandon this adventure and return to the party screen?': 'Dieses Abenteuer abbrechen und zur Gruppenauswahl zurückkehren?',
   'Table': 'Tisch',
   'Connected': 'Verbunden',
+  'Update ready': 'Update bereit',
+  'Reload': 'Neu laden',
   'Reconnecting…': 'Verbindung wird wiederhergestellt…',
   'Character sheet (c)': 'Charakterbogen (c)',
   'Character': 'Charakter',

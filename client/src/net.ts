@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from '../../shared/i18n';
+import { buildOf, isStale, mayAutoReload } from '../../shared/update';
 import { CLOSED_REASONS } from './ui/labels';
 import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
 
@@ -56,6 +57,14 @@ export function inviteLink(room: string, code: string | null): string {
   return url.toString();
 }
 
+/** The build this tab runs, read from its own entry script. Empty under the dev server. */
+const ownBuild = typeof document === 'undefined' ? '' : buildOf(document.documentElement.outerHTML);
+const RELOAD_KEY = 'hearthforge.reloaded';
+
+function hasDraft(): boolean {
+  return [...document.querySelectorAll('textarea, input[type="text"], input:not([type])')].some((el) => (el as HTMLInputElement).value.trim() !== '');
+}
+
 export type MoveListener = (id: string, path: { x: number; y: number }[]) => void;
 export interface NewTable { title: string; language: Lang; maxPlayers: number; locked: boolean }
 
@@ -72,6 +81,10 @@ export interface Connection {
   joinError: string | null;
   /** True between asking for a seat and the server's answer. */
   joining: boolean;
+  /** True when the server has been updated and this tab still runs the old client. */
+  updateReady: boolean;
+  /** Load the new client. Your seat comes back by itself, because the token and table are remembered. */
+  reload: () => void;
   /** Short messages at the edge of the screen. A notice comes from the owner of the server and stays longer. */
   toasts: { id: number; text: string; notice?: boolean }[];
   send: (msg: ClientMessage) => void;
@@ -88,6 +101,7 @@ type Session = { room: string; name: string; code?: string };
 export function useConnection(): Connection {
   const [state, setState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
   const [tables, setTables] = useState<TableSummary[] | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [typing, setTyping] = useState<Record<string, TypingWhere>>({});
@@ -139,6 +153,16 @@ export function useConnection(): Connection {
       sock.onmessage = (ev) => {
         const msg = JSON.parse(ev.data) as ServerMessage;
         switch (msg.t) {
+          case 'hello':
+            if (isStale(ownBuild, msg.build)) {
+              let last = 0;
+              try { last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch { /* no memory */ }
+              if (mayAutoReload({ seated: !!session.current, hasDraft: hasDraft(), lastReload: last, now: Date.now() })) {
+                try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch { /* no memory */ }
+                location.reload();
+              } else setUpdateReady(true);
+            }
+            break;
           case 'state':
             setState(msg.state);
             setJoining(false);
@@ -220,6 +244,8 @@ export function useConnection(): Connection {
     if (room && session.current?.room !== room) session.current = { room, name: savedName() };
   }, [room]);
 
+  const reload = useCallback(() => location.reload(), []);
+
   const leave = useCallback(() => raw({ t: 'leave_table' }), [raw]);
 
   const onMoved = useCallback((fn: MoveListener) => {
@@ -227,7 +253,7 @@ export function useConnection(): Connection {
     return () => void listeners.current.delete(fn);
   }, []);
 
-  return { state, connected, tables, chat, typing, joinError, joining, toasts, send: raw, join, create, leave, onMoved, toast };
+  return { state, connected, tables, chat, typing, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast };
 }
 
 /**
