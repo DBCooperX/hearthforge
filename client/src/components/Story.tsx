@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
-import { monsterUrl } from '../game/monsterArt';
+import { monsterUrl, monsterVariant } from '../game/monsterArt';
 import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
 import { playerId, useTypingSignal, type Connection } from '../net';
@@ -68,7 +68,7 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
       if (m.senses?.darkvision) facts.push(t('Darkvision {n} ft', { n: m.senses.darkvision }));
       if (m.senses?.blindsight) facts.push(t('Blindsight {n} ft', { n: m.senses.blindsight }));
       if (m.light) facts.push(t('Carries a light'));
-      out.push({ name: m.name, kind: 'monster', icon: '👹', image: monsterUrl(m.look), subtitle: `${sizes[m.look.size]} · ${kinds[m.kind]}`, description: m.description, facts });
+      out.push({ name: m.name, kind: 'monster', icon: '👹', image: monsterUrl(m.look, monsterVariant(m.id)), subtitle: `${sizes[m.look.size]} · ${kinds[m.kind]}`, description: m.description, facts });
     }
   }
   // Story items first: where a name is shared, the DM's own creation is the one the story means.

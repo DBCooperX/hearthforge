@@ -5,7 +5,7 @@ import type { GameState } from '../../../shared/types';
 import { TILE, packSprites, spriteCanvas } from './sprites';
 import { tileWalkable } from '../../../shared/battlemap';
 import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
-import { monsterCanvas } from './monsterArt';
+import { monsterCanvas, monsterVariant } from './monsterArt';
 import { artOfCharacter, heroCanvas } from './heroArt';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
@@ -80,11 +80,11 @@ function heroTex(art: HeroArt): Texture {
 }
 
 const monsterTextures = new Map<string, Texture>();
-function monsterTex(look: MonsterLook): Texture {
-  const k = lookKey(look);
+function monsterTex(look: MonsterLook, variant: number): Texture {
+  const k = `${lookKey(look)}#${variant}`;
   let t = monsterTextures.get(k);
   if (!t) {
-    t = smoothTexture(monsterCanvas(look));
+    t = smoothTexture(monsterCanvas(look, variant));
     monsterTextures.set(k, t);
   }
   return t;
@@ -246,7 +246,7 @@ export class MapRenderer {
     }
     for (const m of state.monsters) {
       if (!m.alive) continue;
-      const e = place(m.id, 'monster', m.name, !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look), m.x, m.y, m.hp, m.maxHp, m.tiles);
+      const e = place(m.id, 'monster', m.name, !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look, monsterVariant(m.id)), m.x, m.y, m.hp, m.maxHp, m.tiles);
       e.root.zIndex = 1;
       // In the dark, a monster nobody in the party can see is only a shape.
       const unseen = this.opts.unseenIds.has(m.id);
