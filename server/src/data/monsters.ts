@@ -154,6 +154,9 @@ export interface MonsterDef {
   climb?: number;
   burrow?: number;
   dexMod: number;
+  /** Passive Perception and Stealth bonus (SRD). Missing on hand-written entries: 10 + Wisdom and Dexterity. */
+  perception?: number;
+  stealth?: number;
   saves: Partial<Record<AbilityKey, number>>;
   attacks: MonsterAttack[];
   specials?: MonsterSpecial[];
@@ -725,7 +728,7 @@ interface SrdMonster {
   id: string; name: string; type: string; size: string; swarm?: boolean; cr: string; xp: number; ac: number; hp: number; speed: number;
   fly?: number; swim?: number; climb?: number; burrow?: number; abilities: number[]; saves?: Record<string, number>; pb: number;
   resist?: string[]; immune?: string[]; vulnerable?: string[]; conditionImmune?: string[];
-  darkvision?: number; blindsight?: number; truesight?: number; tremorsense?: number; languages?: string;
+  darkvision?: number; blindsight?: number; truesight?: number; tremorsense?: number; languages?: string; perception?: number; stealth?: number;
   attacks?: MonsterAttack[]; specials?: MonsterSpecial[]; multi?: Multiattack; spells?: { id: string; name: string; perDay?: number }[]; spellDc?: number; spellHit?: number;
   legendary?: { uses: number; options: LegendaryOption[] }; flags?: MonsterFlags; traits?: { name: string; slot?: string; text: string }[]; look: MonsterLook; gold?: string;
 }
@@ -759,6 +762,7 @@ function fromSrd(m: SrdMonster, legacy?: Legacy): MonsterDef {
     look: legacy?.look ?? m.look, ac: m.ac, hp: m.hp, speed: m.speed,
     ...(m.fly ? { fly: m.fly } : {}), ...(m.swim ? { swim: m.swim } : {}), ...(m.climb ? { climb: m.climb } : {}), ...(m.burrow ? { burrow: m.burrow } : {}),
     dexMod: mod(m.abilities[1]), saves, attacks, specials,
+    perception: m.perception ?? 10 + mod(m.abilities[4]), stealth: m.stealth ?? mod(m.abilities[1]),
     ...(m.multi ? { multi: m.multi } : {}), ...(m.legendary ? { legendary: m.legendary } : {}),
     traits, flags: m.flags ?? {}, ...(m.swarm ? { swarm: true } : {}),
     ...(m.vulnerable ? { vulnerable: m.vulnerable } : {}), ...(m.resist ? { resist: m.resist } : {}), ...(m.immune ? { immune: m.immune } : {}), ...(m.conditionImmune ? { conditionImmune: m.conditionImmune } : {}),
@@ -785,6 +789,11 @@ export const MONSTERS: Record<string, MonsterDef> = (() => {
 })();
 
 /** Challenge rating as a number: "1/4" is 0.25. */
+/** Passive Perception, for noticing heroes who sneak up. */
+export const passivePerception = (d: MonsterDef) => d.perception ?? 10 + (d.saves.wis ?? 0);
+/** Stealth bonus, for creeping up on heroes. */
+export const stealthBonus = (d: MonsterDef) => d.stealth ?? d.dexMod;
+
 export function crValue(cr: string): number {
   const [a, b] = cr.split('/').map(Number);
   return b ? a / b : a;

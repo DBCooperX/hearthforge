@@ -1,0 +1,73 @@
+/* The moments that frame a fight: the surprise banner over a fresh battle map, the
+   initiative marks, and the victory or defeat screen before the story takes over. Loaded last. */
+
+/* ---------- initiative marks ---------- */
+.init .init-mark { margin-right: 4px; font-size: 11px; }
+.init .init-mark.surprised {
+  margin: 0 0 0 5px; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%;
+  background: #c0392b; color: #fff; font-weight: 800; font-size: 10px; line-height: 1; vertical-align: 1px;
+}
+.init.surprised { border-style: dashed; }
+.init.ambush { border-color: #b98cf0; box-shadow: 0 0 6px rgba(185, 140, 240, 0.45); }
+
+/* ---------- "Surprise!" / "Ambush!" ---------- */
+.surprise-banner {
+  position: absolute; left: 50%; top: 64px; transform: translateX(-50%); z-index: 30; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 30px 12px; min-width: 300px; width: max-content; max-width: min(720px, 90%);
+  background: linear-gradient(90deg, transparent, rgba(12, 10, 9, 0.92) 16%, rgba(12, 10, 9, 0.92) 84%, transparent);
+  text-align: center; animation: surprise-in 2.6s ease-out both;
+}
+.surprise-banner b { font-family: var(--font-head); font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; background: var(--brass); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.8)); }
+.surprise-banner.party b { background: linear-gradient(#ffb3a7, #e0533f 55%, #8d1f12); -webkit-background-clip: text; background-clip: text; }
+.surprise-banner span { font-size: 14px; color: #e8dccb; }
+@keyframes surprise-in {
+  0% { opacity: 0; transform: translateX(-50%) scale(1.25); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------- the closing screen ---------- */
+.stage.fight-over .map { filter: saturate(0.6) brightness(0.72); transition: filter 1.2s ease; }
+.stage.fight-over.leaving { animation: fight-fade 0.7s ease-in forwards; }
+@keyframes fight-fade { to { opacity: 0; filter: blur(3px); } }
+
+.fight-end {
+  position: absolute; inset: 0; z-index: 40; display: grid; place-items: center;
+  background: radial-gradient(ellipse at center, rgba(10, 8, 7, 0.35), rgba(10, 8, 7, 0.82));
+  animation: fight-end-in 0.5s ease-out both; cursor: pointer;
+}
+.fight-end-card {
+  cursor: default; position: relative; width: min(520px, calc(100% - 32px)); padding: 22px 30px 20px; text-align: center;
+  background: var(--iron); border: 1px solid #4a423a; border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 220, 170, 0.06);
+  animation: fight-card-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
+}
+.fight-end-rule { height: 14px; margin: -6px auto 6px; width: 168px; background: var(--runes) center / contain no-repeat; opacity: 0.7; }
+.fight-end h2 {
+  margin: 0; font-family: var(--font-head); font-size: 46px; letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.1;
+  background: var(--brass); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px var(--ember-glow));
+}
+.fight-end.defeat h2, .fight-end.rescued h2 { background: linear-gradient(#e7ddd2, #9d9389 55%, #5a514a); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 10px rgba(160, 30, 20, 0.5)); }
+.fight-end-sub { margin: 4px 0 14px; color: #cfc4b5; font-family: var(--font-story); font-size: 16px; }
+.fight-end-stats { margin: 0 0 16px; display: grid; gap: 6px; text-align: left; }
+.fight-end-stats > div { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 5px 10px; background: rgba(0, 0, 0, 0.25); border-radius: 3px; animation: fight-row-in 0.4s ease-out both; }
+.fight-end-stats > div:nth-child(1) { animation-delay: 0.45s; }
+.fight-end-stats > div:nth-child(2) { animation-delay: 0.6s; }
+.fight-end-stats > div:nth-child(3) { animation-delay: 0.75s; }
+.fight-end-stats > div:nth-child(4) { animation-delay: 0.9s; }
+.fight-end-stats > div:nth-child(5) { animation-delay: 1.05s; }
+.fight-end-stats > div:nth-child(6) { animation-delay: 1.2s; }
+.fight-end-stats dt { color: #9d9389; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; align-self: center; }
+.fight-end-stats dd { margin: 0; color: #efe6d8; font-size: 14.5px; }
+.fight-end-stats dd.coin { color: #ffd98a; }
+.fight-end-stats dd.lost { color: #e0806f; }
+.fight-end-stats .up dd { color: #8fe08f; font-weight: 700; }
+.fight-end-stats .rounds { opacity: 0.7; }
+@keyframes fight-end-in { from { opacity: 0; } }
+@keyframes fight-card-in { from { opacity: 0; transform: translateY(14px) scale(0.92); } }
+@keyframes fight-row-in { from { opacity: 0; transform: translateX(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .surprise-banner, .fight-end, .fight-end-card, .fight-end-stats > div, .stage.fight-over.leaving { animation-duration: 0.01s !important; animation-delay: 0s !important; }
+}

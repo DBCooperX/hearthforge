@@ -37,8 +37,11 @@ export function TurnBar({ state }: { state: GameState }) {
           const c = state.characters.find((x) => x.id === o.id);
           const out = m ? !m.alive : c ? c.dead || c.hp <= 0 : true;
           return (
-            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out'].filter(Boolean).join(' ')} title={`${t('Initiative')} ${o.initiative}`}>
+            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
+              title={[o.ambush ? t('Struck first, from hiding') : `${t('Initiative')} ${o.initiative}`, o.surprised ? t('Caught unawares: rolled initiative with Disadvantage') : ''].filter(Boolean).join(' · ')}>
+              {o.ambush && <span className="init-mark" aria-hidden>🗡</span>}
               {name(o.id)}
+              {o.surprised && <span className="init-mark surprised" aria-label={t('Caught unawares')}>!</span>}
             </span>
           );
         })}

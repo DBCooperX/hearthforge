@@ -9,6 +9,7 @@ import { StyleSetup } from './components/StyleSetup';
 import { ChatPanel, lastForeignChat } from './components/Chat';
 import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
+import { FightEndBanner, SurpriseBanner, useFightEnd } from './components/FightEnd';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
@@ -91,6 +92,7 @@ export function App() {
     [state],
   );
   const combat = state?.phase === 'combat' ? state.combat : null;
+  const [fightEnd, endFight] = useFightEnd(state);
   const activeId = combat?.order[combat.turnIndex]?.id ?? null;
   const turnChar = playable.find((c) => c.id === activeId) ?? null;
   const selected = state?.characters.find((c) => c.id === selectedId) ?? null;
@@ -283,8 +285,19 @@ export function App() {
             <main className="stage">
               <TurnBar state={state} />
               <MapView state={state} view={view} onTile={onTile} onMoved={conn.onMoved} />
+              <SurpriseBanner state={state} />
               <ReactionPrompt state={state} playable={playable} conn={conn} />
               <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
+            </main>
+            <StoryFeed state={state} conn={conn} compact />
+          </>
+        ) : fightEnd ? (
+          <>
+            {/* The battle map stays a moment after the last blow, under the victory or defeat screen. */}
+            <main className={fightEnd.leaving ? 'stage fight-over leaving' : 'stage fight-over'}>
+              <TurnBar state={fightEnd.frozen} />
+              <MapView state={fightEnd.frozen} view={view} onTile={() => {}} onMoved={conn.onMoved} />
+              <FightEndBanner end={fightEnd} onContinue={endFight} />
             </main>
             <StoryFeed state={state} conn={conn} compact />
           </>

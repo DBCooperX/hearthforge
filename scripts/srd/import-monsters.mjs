@@ -280,6 +280,10 @@ function convert(m, stats) {
     if (v.length) out[k] = v;
   }
   for (const k of ['darkvision', 'blindsight', 'truesight', 'tremorsense']) if (m.senses?.[k]) out[k] = feet(m.senses[k]);
+  // Passive Perception and the Stealth bonus decide who is surprised when a fight starts.
+  if (m.senses?.passive_perception) out.perception = m.senses.passive_perception;
+  const stealth = (m.proficiencies ?? []).find((p) => p.proficiency.index === 'skill-stealth');
+  if (stealth) out.stealth = stealth.value;
   if (m.languages && !/^(None|—|-)?$/.test(m.languages)) out.languages = clean(m.languages);
 
   const attacks = [], specials = [], traits = [], spells = [];
