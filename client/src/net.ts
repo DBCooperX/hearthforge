@@ -5,7 +5,8 @@ import { reloadItemIcons } from './game/itemArt';
 import { music } from './music';
 import { sfx } from './sfx';
 import { CLOSED_REASONS } from './ui/labels';
-import type { ChatMessage, ClientMessage, GameState, ServerMessage, TableSummary, TestMonster, TypingWhere } from '../../shared/types';
+import { accountSession, signedOut } from './account';
+import { JOIN_ERRORS, type ChatMessage, type ClientMessage, type GameState, type ServerMessage, type TableSummary, type TestMonster, type TypingWhere } from '../../shared/types';
 
 function makeId(bytes = 16): string {
   // crypto.randomUUID needs a secure context, and LAN installs are usually plain http.
@@ -14,22 +15,27 @@ function makeId(bytes = 16): string {
   return [...buf].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function stored(key: string, make: () => string): string {
+/**
+ * Public: everyone at the table sees it next to your name and your heroes. It is the id of the
+ * account this browser is signed in to, set once the server has said who that is. Until then it
+ * is a throwaway that matches nobody.
+ */
+export let playerId = `guest-${makeId(8)}`;
+export function setPlayerId(id: string) { playerId = id; }
+
+/**
+ * Before accounts, each browser had its own id and a secret token that proved its seats. They are
+ * only read now, once, so the seats can move to the account.
+ */
+export function legacyIdentity(): { playerId: string; token: string } | null {
   try {
-    const v = localStorage.getItem(key);
-    if (v) return v;
-    const fresh = make();
-    localStorage.setItem(key, fresh);
-    return fresh;
+    const id = localStorage.getItem('hearthforge.playerId');
+    const secret = localStorage.getItem('hearthforge.token');
+    return id && secret ? { playerId: id, token: secret } : null;
   } catch {
-    return make();
+    return null;
   }
 }
-
-/** Public: everyone at the table sees it next to your name and your heroes. */
-export const playerId = stored('hearthforge.playerId', makeId);
-/** Secret: proves to the server that a seat is yours, so only this browser can take it back. */
-export const token = stored('hearthforge.token', () => makeId(32));
 
 const NAME_KEY = 'hearthforge.name';
 export function savedName(): string {
@@ -138,7 +144,7 @@ export function useConnection(): Connection {
     setTyping({});
     setJoining(false);
     setLinkedTable(null);
-    raw({ t: 'lobby' });
+    raw({ t: 'lobby', session: accountSession() });
   }, [raw]);
 
   useEffect(() => {
@@ -162,8 +168,8 @@ export function useConnection(): Connection {
         setConnected(true);
         const s = session.current;
         // After a dropped connection the token gets the seat back; nobody else can take it meanwhile.
-        if (s) sock.send(JSON.stringify({ t: 'join', room: s.room, name: s.name, code: s.code, playerId, token }));
-        else sock.send(JSON.stringify({ t: 'lobby' }));
+        if (s) sock.send(JSON.stringify({ t: 'join', room: s.room, code: s.code, session: accountSession() } satisfies ClientMessage));
+        else sock.send(JSON.stringify({ t: 'lobby', session: accountSession() } satisfies ClientMessage));
       };
       sock.onmessage = (ev) => {
         const msg = JSON.parse(ev.data) as ServerMessage;
@@ -205,7 +211,8 @@ export function useConnection(): Connection {
             break;
           case 'notice': toast(msg.text, true); break;
           case 'error':
-            if (msg.join) { toLobby(); setJoinError(msg.message); }
+            if (msg.join && msg.message === JOIN_ERRORS.signIn) { toLobby(); signedOut(); }
+            else if (msg.join) { toLobby(); setJoinError(msg.message); }
             else toast(msg.message);
             break;
         }
@@ -239,7 +246,7 @@ export function useConnection(): Connection {
       session.current = { room, name, code };
       setJoinError(null);
       setJoining(true);
-      raw({ t: 'join', room, name, code, playerId, token });
+      raw({ t: 'join', room, code, session: accountSession() });
     },
     [raw],
   );
@@ -249,7 +256,7 @@ export function useConnection(): Connection {
       saveName(name);
       setJoinError(null);
       setJoining(true);
-      raw({ t: 'create_table', name, playerId, token, ...table });
+      raw({ t: 'create_table', session: accountSession(), ...table });
     },
     [raw],
   );

@@ -1,6 +1,6 @@
 // The Innkeeper: the panel of whoever owns this server. Tables, players, art packs, settings and
 // API key, updates and restarts, costs, the log and backups, so that nothing needs a terminal.
-// It is reached from the list of tables and from Settings, and asks for the owner's password.
+// It is reached from the list of tables and from Settings, by accounts with the Innkeeper role.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ADMIN_ERRORS, MODEL_SUGGESTIONS, SETTINGS, SETTING_GROUPS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
@@ -13,7 +13,10 @@ import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
 import { Icon, type IconName } from './icons';
-import { inn, innDownload, innkeeperSession, InnError, setInnkeeperSession } from './innkeeperApi';
+import { inn, innDownload, InnError } from './innkeeperApi';
+import { signedOut } from '../account';
+import type { AccountRow, AccountView, InviteView, LegacySeat, Role } from '../../../shared/accounts';
+import { playTime } from './Profile';
 import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
 import { SfxLibrary } from './SfxLibrary';
@@ -68,42 +71,6 @@ function Note({ kind = 'info', children }: { kind?: 'info' | 'warn' | 'bad' | 'g
 
 function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return <div className="inn-stat"><small>{label}</small><b>{value}</b>{sub && <span>{sub}</span>}</div>;
-}
-
-// ---------------------------------------------------------------------------- signing in
-
-function SignIn({ status, onSession }: { status: AdminStatus | null; onSession: (token: string) => void }) {
-  const t = useT();
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const { session } = await inn<{ session: string }>('/login', { body: { password } });
-      onSession(session);
-    } catch (err) {
-      setError(errorText(t, err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (status && !status.enabled) return <div className="inn-signin"><p>{t(ADMIN_ERRORS.disabled)}</p></div>;
-  return (
-    <form className="inn-signin" onSubmit={submit}>
-      <Emblem />
-      <h2>{t('The Innkeeper')}</h2>
-      <p className="muted">{t('This is the panel of whoever runs this server. Players do not need it.')}</p>
-      <label>{t('Password')}
-        <input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </label>
-      {error && <p className="inn-error" role="alert">{error}</p>}
-      <button type="submit" className="primary" disabled={busy || !password}>{t('Sign in')}</button>
-      {status?.firstPassword && <p className="muted small">{t('First time here? The installer printed the password when it finished. Without the installer, the server wrote it into its log and into the file innkeeper-first-password.txt in its data folder.')}</p>}
-    </form>
-  );
 }
 
 // ---------------------------------------------------------------------------- overview
@@ -222,6 +189,133 @@ function Tables({ fail, say }: PaneProps) {
 
 // ---------------------------------------------------------------------------- players
 
+interface AccountData { accounts: AccountRow[]; invites: InviteView[]; legacy: LegacySeat[]; password?: string; account?: AccountView; invite?: InviteView }
+
+const inviteUrl = (code: string) => `${location.origin}${location.pathname}?invite=${encodeURIComponent(code)}`;
+
+function copy(text: string, say: (s: string) => void, t: Translate) {
+  void navigator.clipboard?.writeText(text).then(() => say(t('Copied.')), () => {});
+}
+
+/** Accounts, invite links, and the seats from before accounts that still need an owner. */
+function AccountsPane({ fail, say, me }: PaneProps & { me: string }) {
+  const t = useT();
+  const { lang } = useLang();
+  const [data, set] = usePoll<AccountData>('/accounts', 10000, fail);
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<Role>('player');
+  /** A password or link the server made up, shown once. */
+  const [shown, setShown] = useState<{ kind: 'password' | 'invite'; who: string; value: string } | null>(null);
+  const [assign, setAssign] = useState<Record<string, string>>({});
+  const act = async (body: Record<string, unknown>) => {
+    try { const next = await inn<AccountData>('/accounts', { body }); set(next); return next; } catch (err) { fail(err); return null; }
+  };
+  if (!data) return <p className="muted">{t('Loading…')}</p>;
+  const create = async (e: FormEvent) => {
+    e.preventDefault();
+    const out = await act({ do: 'create', username: name, role });
+    if (out?.password && out.account) { setShown({ kind: 'password', who: out.account.username, value: out.password }); setName(''); }
+  };
+  const invite = async (r: Role) => {
+    const out = await act({ do: 'invite', role: r });
+    if (out?.invite) setShown({ kind: 'invite', who: '', value: inviteUrl(out.invite.code) });
+  };
+  return (
+    <div className="inn-stack inn-accounts">
+      <section>
+        <h3>{t('Accounts')}</h3>
+        {shown && (
+          <div className="inn-note is-good">
+            <span>{shown.kind === 'password'
+              ? t('The password for {name}. Give it to them; it is shown only now. They choose their own after signing in.', { name: shown.who })
+              : t('The invite link. It works once, for 7 days.')}</span>
+            <span className="inn-secret"><code>{shown.value}</code><button type="button" onClick={() => copy(shown.value, say, t)}>{t('Copy')}</button><button type="button" className="link" onClick={() => setShown(null)}>{t('Done')}</button></span>
+          </div>
+        )}
+        <table className="inn-table">
+          <thead><tr><th>{t('Name')}</th><th>{t('Role')}</th><th>{t('Last seen')}</th><th className="num">{t('Heroes')}</th><th className="num">{t('Play time')}</th><th /></tr></thead>
+          <tbody>
+            {data.accounts.map((a) => (
+              <tr key={a.id}>
+                <td><b>{a.username}</b>{a.id === me && <i className="inn-host">{t('you')}</i>}{!a.hasPassword && <span className="muted small"> · {t('needs a new password')}</span>}</td>
+                <td>
+                  <select value={a.role} disabled={a.id === me} onChange={(e) => void act({ do: 'role', id: a.id, role: e.target.value }).then((ok) => ok && say(t('The role was changed.')))}>
+                    <option value="player">{t('Player')}</option>
+                    <option value="innkeeper">{t('Innkeeper')}</option>
+                  </select>
+                </td>
+                <td>{a.lastSeen ? new Date(a.lastSeen).toLocaleDateString(lang) : <span className="muted">{t('Never')}</span>}</td>
+                <td className="num">{a.heroes}</td>
+                <td className="num">{playTime(t, a.stats.playMs)}</td>
+                <td className="inn-actions">
+                  {a.id !== me && <>
+                    <button type="button" onClick={() => { if (window.confirm(t('Give {name} a new password? They are signed out everywhere.', { name: a.username }))) void act({ do: 'reset', id: a.id }).then((out) => out?.password && setShown({ kind: 'password', who: a.username, value: out.password })); }}>{t('New password')}</button>
+                    <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the account {name}? Their heroes stay at the tables, but nobody can sign in as them any more.', { name: a.username }))) void act({ do: 'delete', id: a.id }).then((ok) => ok && say(t('The account was deleted.'))); }}>{t('Delete')}</button>
+                  </>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <form className="inn-new-account" onSubmit={create}>
+          <label>{t('New account')}<input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder={t('Name')} /></label>
+          <select value={role} onChange={(e) => setRole(e.target.value as Role)} aria-label={t('Role')}>
+            <option value="player">{t('Player')}</option>
+            <option value="innkeeper">{t('Innkeeper')}</option>
+          </select>
+          <button type="submit" disabled={name.trim().length < 3}>{t('Create')}</button>
+          <span className="spacer" />
+          <button type="button" onClick={() => void invite('player')}>{t('Invite link for a player')}</button>
+        </form>
+        <p className="muted small">{t('Make the account yourself and pass on the password, or send an invite link and they choose name and password. An innkeeper may open this panel.')}</p>
+      </section>
+      {data.invites.length > 0 && (
+        <section>
+          <h3>{t('Open invite links')}</h3>
+          <ul className="inn-list">
+            {data.invites.map((i) => (
+              <li key={i.code}>
+                <span>{i.role === 'innkeeper' ? t('Innkeeper') : t('Player')}</span>
+                <span className="muted">{t('until {when}', { when: new Date(i.expiresAt).toLocaleDateString(lang) })}</span>
+                <span className="spacer" />
+                <button type="button" onClick={() => copy(inviteUrl(i.code), say, t)}>{t('Copy link')}</button>
+                <button type="button" className="link danger" onClick={() => void act({ do: 'revoke', code: i.code })}>{t('Withdraw')}</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {data.legacy.length > 0 && (
+        <section>
+          <h3>{t('Seats from before accounts')}</h3>
+          <p className="muted small">{t('These seats were taken in a browser, before there were accounts. They move to an account by themselves when that player signs in from the same browser. Or hand one to an account here.')}</p>
+          <table className="inn-table">
+            <thead><tr><th>{t('Name at the table')}</th><th>{t('Table')}</th><th>{t('Heroes')}</th><th /></tr></thead>
+            <tbody>
+              {data.legacy.map((l) => {
+                const k = `${l.table}/${l.playerId}`;
+                const pick = assign[k] ?? data.accounts.find((a) => a.username.toLocaleLowerCase() === l.name.toLocaleLowerCase())?.id ?? '';
+                return (
+                  <tr key={k}>
+                    <td>{l.name}</td><td>{l.tableTitle}</td><td>{l.heroes.join(', ') || <span className="muted">{t('none')}</span>}</td>
+                    <td className="inn-actions">
+                      <select value={pick} onChange={(e) => setAssign({ ...assign, [k]: e.target.value })} aria-label={t('Account')}>
+                        <option value="">{t('Choose an account')}</option>
+                        {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.username}</option>)}
+                      </select>
+                      <button type="button" disabled={!pick} onClick={() => void act({ do: 'assign', table: l.table, playerId: l.playerId, id: pick }).then((ok) => ok && say(t('The seat now belongs to the account.')))}>{t('Hand over')}</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function PlayersPane({ fail, say }: PaneProps) {
   const t = useT();
   const [data, set] = usePoll<{ connections: AdminConnection[]; bans: AdminBan[] }>('/players', 4000, fail);
@@ -235,13 +329,14 @@ function PlayersPane({ fail, say }: PaneProps) {
   const system = (agent: string) => (/Windows|Android|iPhone|iPad|Mac OS X|Linux/.exec(agent)?.[0] ?? '').replace('Mac OS X', 'macOS');
   return (
     <div className="inn-stack">
+      <h3>{t('Who is connected')}</h3>
       {data.connections.length === 0 ? <p className="muted">{t('Nobody is connected.')}</p> : (
         <table className="inn-table">
-          <thead><tr><th>{t('Player')}</th><th>{t('Table')}</th><th>{t('Address')}</th><th>{t('Connected for')}</th><th>{t('Browser')}</th><th /></tr></thead>
+          <thead><tr><th>{t('Account')}</th><th>{t('Table')}</th><th>{t('Address')}</th><th>{t('Connected for')}</th><th>{t('Browser')}</th><th /></tr></thead>
           <tbody>
             {data.connections.map((c) => (
               <tr key={c.id}>
-                <td>{c.name || <span className="muted">{t('Not seated')}</span>}{c.host && <i className="inn-host">{t('host')}</i>}</td>
+                <td>{c.account || c.name || <span className="muted">{t('Not signed in yet')}</span>}{c.host && <i className="inn-host">{t('host')}</i>}</td>
                 <td>{c.tableTitle || <span className="muted">{t('List of tables')}</span>}</td>
                 <td className="mono">{c.ip}</td>
                 <td>{span(t, now - c.since)}</td>
@@ -255,7 +350,7 @@ function PlayersPane({ fail, say }: PaneProps) {
           </tbody>
         </table>
       )}
-      <p className="muted small">{t('Players have no accounts: a seat belongs to a browser. Banning works by address, so it also stops everyone else behind the same router. Your own address cannot be banned.')}</p>
+      <p className="muted small">{t('Banning works by address, so it also stops everyone else behind the same router. Your own address cannot be banned. To keep one person out, delete their account instead.')}</p>
       {data.bans.length > 0 && (
         <section>
           <h3>{t('Banned addresses')}</h3>
@@ -591,16 +686,15 @@ function BackupsPane({ fail, say }: PaneProps) {
 
 // ---------------------------------------------------------------------------- the window
 
-export function Innkeeper({ onClose }: { onClose: () => void }) {
+export function Innkeeper({ account, onClose }: { account: AccountView; onClose: () => void }) {
   const t = useT();
-  const [session, setSession] = useState(innkeeperSession);
   const [status, setStatus] = useState<AdminStatus | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   const loadStatus = useCallback(() => { inn<AdminStatus>('/status').then(setStatus).catch(() => setStatus(null)); }, []);
-  useEffect(loadStatus, [loadStatus, session]);
+  useEffect(loadStatus, [loadStatus]);
 
   const show = useCallback((text: string, bad: boolean) => {
     setMessage({ text, bad });
@@ -609,7 +703,7 @@ export function Innkeeper({ onClose }: { onClose: () => void }) {
   }, []);
   const say = useCallback((text: string) => show(text, false), [show]);
   const fail = useCallback((err: unknown) => {
-    if (err instanceof InnError && err.code === 'signed_out') { setInnkeeperSession(''); setSession(''); return; }
+    if (err instanceof InnError && err.code === 'signed_out') { signedOut(); return; }
     show(errorText(t, err), true);
   }, [show, t]);
 
@@ -620,14 +714,14 @@ export function Innkeeper({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const signOut = () => { void inn('/logout', { method: 'POST' }).catch(() => {}); setInnkeeperSession(''); setSession(''); };
   const pane: PaneProps = useMemo(() => ({ fail, say }), [fail, say]);
   const first = !!status?.firstPassword;
 
   return (
     <Window title={t('Innkeeper')} icon="innkeeper" size="large" className="innkeeper" onClose={onClose}
-      subtitle={session ? <button type="button" className="link" onClick={signOut}>{t('Sign out')}</button> : undefined}>
-      {!session ? <SignIn status={status} onSession={(s) => { setInnkeeperSession(s); setSession(s); sfx('open'); }} /> : (
+      subtitle={<span className="muted">{account.username}</span>}>
+      {status && !status.enabled ? <div className="inn-signin"><p>{t(ADMIN_ERRORS.disabled)}</p></div>
+        : account.role !== 'innkeeper' ? <div className="inn-signin"><Emblem /><p>{t(ADMIN_ERRORS.not_innkeeper)}</p></div> : (
         <div className="inn">
           <nav className="inn-nav" aria-label={t('Innkeeper')}>
             {(Object.keys(INN_TABS) as Tab[]).map((id) => (
@@ -640,7 +734,7 @@ export function Innkeeper({ onClose }: { onClose: () => void }) {
             {message && <div className={message.bad ? 'inn-flash is-bad' : 'inn-flash'} role="status">{message.text}</div>}
             {tab === 'overview' && <Overview {...pane} go={setTab} firstPassword={first} />}
             {tab === 'tables' && <Tables {...pane} />}
-            {tab === 'players' && <PlayersPane {...pane} />}
+            {tab === 'players' && <><AccountsPane {...pane} me={account.id} /><PlayersPane {...pane} /></>}
             {tab === 'assets' && <AssetsPane />}
             {tab === 'settings' && <SettingsPane {...pane} go={setTab} />}
             {tab === 'server' && <ServerPane {...pane} firstPassword={first} onPassword={loadStatus} />}

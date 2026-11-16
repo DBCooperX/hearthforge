@@ -6,13 +6,13 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { MUSIC_CONTEXTS, SOUND_SOURCES, type MusicContext, type MusicItem, type MusicLayer, type MusicLibrary } from '../../../shared/music';
 import { useT } from '../i18n';
 import { music } from '../music';
-import { innkeeperSession } from './innkeeperApi';
+import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { ACCESS_LABELS as ACCESS, MUSIC_ERRORS, SCENE_LABELS as SCENES } from './labels';
 import { sfx } from './sound';
 
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, 'x-innkeeper-session': innkeeperSession() } });
+  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, [INNKEEPER_HEADER]: innkeeperSession() } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(String(body?.error ?? 'failed'));
   return body as T;

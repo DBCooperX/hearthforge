@@ -8,7 +8,8 @@ import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type S
 import { Creator } from './Creator';
 import { StyleSetup } from './StyleSetup';
 import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
-import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
+import { inviteLink, linkedTable, playerId, type Connection } from '../net';
+import type { AccountView } from '../../../shared/accounts';
 import { ChatPanel } from './Chat';
 import { Backdrop, Embers, Logo } from '../ui/Brand';
 import { LangSwitch, useLang, useT } from '../i18n';
@@ -20,11 +21,14 @@ import { MusicControl } from '../music';
 import { classLabel, heroTitle } from '../game/util';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
-export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeeper: () => void }) {
+export interface Me { account: AccountView; onProfile: () => void; onSignOut: () => void }
+
+export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; me: Me; onInnkeeper: () => void }) {
   const t = useT();
   const { lang } = useLang();
   const link = useMemo(linkedTable, []);
-  const [name, setName] = useState(savedName);
+  // At a table you are your account's name.
+  const name = who.account.username;
   /** The locked table whose invite code is being asked for. */
   const [asking, setAsking] = useState<string | null>(null);
   const [code, setCode] = useState(link.code);
@@ -61,7 +65,7 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
       <Backdrop />
       <Embers />
       <div className="splash-tools"><MusicControl /></div>
-      <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>
+      {who.account.role === 'innkeeper' && <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>}
       <div className="panel lobby">
         <header className="join">
           <h1><Logo /></h1>
@@ -69,10 +73,15 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
           <div className="join-lang"><LangSwitch /></div>
           <p className="tagline">{t('Dungeons & Dragons at your own hearth, with an AI Dungeon Master.')}</p>
         </header>
-        <label className="lobby-name">
-          <span>{t('Your name')} <Info text={t('This is how the others see you. Each name can sit at a table only once, and this browser keeps your seat and your heroes for you.')} /></span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder={t('Adventurer')} autoFocus={!me} />
-        </label>
+        <div className="account-bar">
+          <span>{t('Signed in as')} <b>{name}</b></span>
+          {who.account.role === 'innkeeper' && <span className="role">{t('Innkeeper')}</span>}
+          <Info text={t('Your seats and heroes belong to your account, so you can pick them up on any device.')} />
+          <span className="spacer" />
+          <button type="button" className="link" onClick={who.onProfile}>{t('Your account')}</button>
+          <button type="button" className="link" onClick={who.onSignOut}>{t('Sign out')}</button>
+        </div>
+        {who.account.mustChange && <p className="notice">{t('You are still using a password you did not choose.')} <button type="button" className="link" onClick={who.onProfile}>{t('Choose your own')}</button></p>}
         {conn.joinError && <p className="notice error" role="alert">{t(conn.joinError)}</p>}
         {!conn.connected && <p className="notice">{t('Connecting…')}</p>}
 

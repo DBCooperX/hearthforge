@@ -5,13 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { CATALOG, ICON_SLOTS, type ArtLibrary, type ArtRef, type PackIcon, type PackInfo } from '../../../shared/art';
 import { reloadItemIcons, useItemArt } from '../game/itemArt';
 import { useT } from '../i18n';
-import { innkeeperSession } from './innkeeperApi';
+import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { ART_ERRORS } from './labels';
 import { sfx } from './sound';
 import { Window } from './Window';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, 'x-innkeeper-session': innkeeperSession() } });
+  const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, [INNKEEPER_HEADER]: innkeeperSession() } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(String(body?.error ?? 'failed'));
   return body as T;

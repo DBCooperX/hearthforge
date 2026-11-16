@@ -1,0 +1,20 @@
+/* Signing in, the account bar in the lobby, the profile and the accounts in the Innkeeper. */
+.sign-in { width: min(400px, 100%); }
+.sign-in label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.sign-in label.check input { margin: 0; }
+.sign-in .warn { color: #f0a070; }
+.sign-in button.primary { font-size: 16px; padding: 10px; }
+
+.account-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 14.5px; color: var(--muted); }
+.account-bar b { color: var(--text); font-family: var(--font-head); letter-spacing: 0.03em; }
+.account-bar .spacer { flex: 1; }
+.account-bar .role { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; }
+
+.profile-body { gap: 18px; padding: 16px 22px 22px; overflow-y: auto; }
+.profile-body .inn-table td b { color: var(--text); }
+
+.inn-secret { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.inn-secret code { font-size: 15px; padding: 4px 8px; background: rgba(0, 0, 0, 0.35); border-radius: 4px; user-select: all; word-break: break-all; }
+.inn-accounts select { padding: 3px 6px; }
+.inn-new-account { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.inn-new-account label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
