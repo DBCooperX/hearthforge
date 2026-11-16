@@ -66,7 +66,7 @@ The Hearthforge logo (`docs/hearthforge-logo.jpg`) was made by the project's own
 
 The tavern table picture behind the lobby, the table room and the character creator (`client/src/assets/tavern*.webp` and `.jpg`, resized from the owner's original) is also the project's owner's own image.
 
-The candlelit tavern table under the 2.5D battle board (`client/src/assets/battle-table.webp`, resized with faded edges from the owner's original) is the project's owner's own image as well, and so is the tavern room standing behind that table (`client/src/assets/battle-room.webp`, cropped, softened and faded from the owner's original).
+The candlelit tavern table under the 2.5D battle board (`client/src/assets/battle-table.webp`, resized with faded edges from the owner's original) is the project's owner's own image as well.
 
 ## Fonts
 

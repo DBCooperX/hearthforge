@@ -18,7 +18,6 @@ import { heroSenses, lightLevels, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
 import tableUrl from '../assets/battle-table.webp';
-import roomUrl from '../assets/battle-room.webp';
 import { Effects, HEAL_COLOR, damageColor, isPhysical, type P3 } from './fx';
 
 export type BattleView = 'tilt' | 'flat';
@@ -255,8 +254,6 @@ export class MapRenderer {
   private table: PerspectiveMesh | null = null;
   private tableTex: Texture | null = null;
   private tableCut = -1;
-  /** The tavern room behind the table, standing upright: soft, dim, and drifting a little as the camera pans. */
-  private room = new Sprite(Texture.EMPTY);
   private ground: PerspectiveMesh | null = null;
   private groundRT: RenderTexture | null = null;
   private rtRes = 0;
@@ -304,21 +301,13 @@ export class MapRenderer {
       this.entLayer.visible = false;
       this.shadeSprite.texture = vignette();
       this.standLayer.sortableChildren = true;
-      this.room.visible = false;
-      this.app.stage.addChild(this.room, this.slab, this.standLayer, this.shadeSprite, this.fx.layer, this.floatLayer);
+      this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.fx.layer, this.floatLayer);
       const img = new Image();
       img.onload = () => {
         if (this.destroyed) return;
         this.tableTex = Texture.from({ resource: img, autoGenerateMipmaps: true, scaleMode: 'linear' });
       };
       img.src = tableUrl;
-      const roomImg = new Image();
-      roomImg.onload = () => {
-        if (this.destroyed) return;
-        this.room.texture = Texture.from({ resource: roomImg, autoGenerateMipmaps: true, scaleMode: 'linear' });
-        this.room.visible = true;
-      };
-      roomImg.src = roomUrl;
     } else {
       this.app.stage.addChild(this.world, this.fx.layer, this.floatLayer);
     }
@@ -1144,7 +1133,7 @@ export class MapRenderer {
       const frame = new Texture({ source: tex.source, frame: new Rectangle(0, 0, iw, Math.floor(ih * cut)) });
       if (!this.table) {
         this.table = new PerspectiveMesh({ texture: frame, verticesX: this.lite ? 10 : 18, verticesY: this.lite ? 10 : 18 });
-        this.app.stage.addChildAt(this.table, this.app.stage.getChildIndex(this.room) + 1);
+        this.app.stage.addChildAt(this.table, 0);
       } else { const old = this.table.texture; this.table.texture = frame; old.destroy(false); }
       this.tableCut = cut;
     }
@@ -1155,22 +1144,6 @@ export class MapRenderer {
     const ambient = state.phase === 'combat' ? state.light?.ambient ?? 'bright' : 'bright';
     this.table.tint = ambient === 'dark' ? 0x8a7f74 : ambient === 'dim' ? 0xc2b8ac : 0xffffff;
 
-    // The room stands behind the table's far edge; its floor fades out where the table begins.
-    const room = this.room;
-    if (room.visible) {
-      const sw = this.app.screen.width;
-      const aspect = room.texture.width / Math.max(1, room.texture.height);
-      const horizon = Math.min(t0.y, t1.y);
-      let w = sw * 1.14, h = w / aspect;
-      const bottom = horizon + h * 0.2;
-      if (bottom > h) { h = bottom; w = h * aspect; }
-      const slack = (w - sw) / 2;
-      const drift = Math.max(-slack, Math.min(slack, (cam.fx - mw / 2) * cam.k * 0.06));
-      room.width = w;
-      room.height = h;
-      room.position.set(sw / 2 - w / 2 - drift, bottom - h);
-      room.tint = ambient === 'dark' ? 0x5c544e : ambient === 'dim' ? 0x7f766e : 0xa09489;
-    }
   }
 
   /** After a few seconds, a machine that cannot keep up gets the lighter version of the 2.5D view. */
