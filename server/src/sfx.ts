@@ -9,7 +9,12 @@ import { SFX_PACKS, type SfxManifest } from '../../shared/sfx';
 export const sfxEnabled = (env: NodeJS.ProcessEnv) => (env.HEARTHFORGE_SFX ?? 'on').toLowerCase() !== 'off';
 let fetching = false;
 
-const PAGE_ZIP = /https?:\/\/[^"'\s<>]+\.zip/i;
+/** The link may be absolute or relative to the page, and escaped (&amp; or \\/ in embedded JSON). */
+export function zipLink(html: string, page: string): string | null {
+  const m = /["'=(]([^"'\s<>()=]*\.zip)(?=["'\s<>)?#]|$)/i.exec(html.replace(/\\\//g, '/').replace(/&amp;/g, '&'));
+  if (!m) return null;
+  try { return new URL(m[1], page).href; } catch { return null; }
+}
 
 async function download(url: string, fetchFn: typeof fetch): Promise<Uint8Array> {
   const res = await fetchFn(url, { signal: AbortSignal.timeout(120_000), headers: { 'user-agent': 'hearthforge-sfx-fetch' } });
@@ -42,7 +47,7 @@ export async function ensureSfx(dir: string, env: NodeJS.ProcessEnv, fetchFn: ty
       if (existsSync(dest) && readdirSync(dest).some((f) => f.endsWith('.ogg'))) continue;
       try {
         const page = new TextDecoder().decode(await download(pack.page, fetchFn));
-        const link = PAGE_ZIP.exec(page)?.[0];
+        const link = zipLink(page, pack.page);
         if (!link) throw new Error(`no download link found on ${pack.page}`);
         const n = unpackSfx(await download(link, fetchFn), dest);
         if (!n) throw new Error('the zip held no .ogg files');

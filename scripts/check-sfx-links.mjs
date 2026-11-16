@@ -6,8 +6,13 @@ for (const id of pages) {
   const page = `https://kenney.nl/assets/${id}`;
   try {
     const html = await (await fetch(page)).text();
-    const link = /https?:\/\/[^"'\s<>]+\.zip/i.exec(html)?.[0];
-    if (!link) throw new Error('no .zip link on the page');
+    const m = /["'=(]([^"'\s<>()=]*\.zip)(?=["'\s<>)?#]|$)/i.exec(html.replace(/\\\//g, '/').replace(/&amp;/g, '&'));
+    const link = m && new URL(m[1], page).href;
+    if (!link) {
+      console.log('--- page starts with:', html.slice(0, 300).replace(/\s+/g, ' '));
+      console.log('--- every link-like word:', [...new Set(html.match(/[^"'\s<>=]*(?:download|zip|media)[^"'\s<>]*/gi) ?? [])].slice(0, 15));
+      throw new Error('no .zip link on the page');
+    }
     const r = await fetch(link);
     const b = new Uint8Array(await r.arrayBuffer());
     const ok = r.ok && b[0] === 0x50 && b[1] === 0x4b && b.length > 100000;

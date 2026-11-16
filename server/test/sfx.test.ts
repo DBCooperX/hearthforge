@@ -18,10 +18,11 @@ describe('sound effect packs', () => {
     const fetched: string[] = [];
     const fake = (async (url: string) => {
       fetched.push(url);
-      return url.endsWith('.zip') ? new Response(zip) : new Response('<a href="https://kenney.nl/media/pack-abc123/kenney.zip">Download</a>');
+      return url.endsWith('.zip') ? new Response(zip) : new Response('<a class="x" href="/media/pages/assets/pack-abc123/kenney.zip">Download</a>');
     }) as unknown as typeof fetch;
     await ensureSfx(dir, {}, fake);
     expect(fetched.filter((u) => u.endsWith('.zip'))).toHaveLength(3);
+    expect(fetched).toContain('https://kenney.nl/media/pages/assets/pack-abc123/kenney.zip');
     const m = sfxManifest(dir, {});
     expect(m.enabled).toBe(true);
     expect(m.files.map((f) => f.name)).toContain('impactMetal_heavy_000.ogg');
