@@ -75,6 +75,7 @@ import { RESTOCK_DAYS, MAX_SHOPS, SHELVES, rollStock, shopKindOf } from '../data
 import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type Mood as HaggleMood, type ShopKind, type ShopStock, type ShopView } from '../../../shared/trade';
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
+import { logEvent } from './timeline';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
 import { LIGHT_ITEMS, NO_SENSES, SPECIES_DARKVISION, ambientLight, canSee, isLightLevel, lightGrid, placeFixedLights, type LightKindId, type LightLevel, type LightSource, type Senses } from '../../../shared/light';
@@ -327,7 +328,7 @@ const DIRS: Pt[] = [
 const MAX_LOG = 400;
 /** How far the Dungeon Master may move the party by story alone; longer journeys go over the map. */
 const STORY_TRAVEL_HEXES = 4;
-const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [] });
+const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [], timeline: [], secrets: [] });
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
 export class Game {
@@ -359,6 +360,8 @@ export class Game {
     // Saves from before reputation, rumours and trophies.
     this.s.memory.rumours ??= [];
     this.s.memory.mysteries ??= []; // saves from before clue tracking
+    this.s.memory.timeline ??= []; // saves from before the timeline
+    this.s.memory.secrets ??= [];
     this.s.achievements ??= [];
     this.s.stats = { ...emptyStats(), ...this.s.stats };
     this.s.factions ??= this.s.world ? makeFactions(this.s.setting?.seed ?? 'HEARTH', this.lang, !this.s.setting || this.s.setting.region === 'classic') : [];
@@ -945,6 +948,7 @@ export class Game {
     loc.visited = true;
     loc.discovered = true;
     for (const n of this.s.memory.npcs) if (n.locationId === loc.id) n.met = true;
+    if (first) logEvent(this, { what: `The party came to ${loc.name} for the first time.`, by: 'party' });
     return first;
   }
 
@@ -5011,7 +5015,7 @@ export class Game {
     const clean = text.trim().slice(0, 300);
     if (!clean) return;
     const j = this.s.memory.journal;
-    j.push({ day: this.day(), text: clean });
+    j.push({ day: this.day(), text: clean, at: this.world.minutes });
     if (j.length > 120) j.splice(0, j.length - 120);
   }
 
@@ -5106,6 +5110,7 @@ export class Game {
       q = { id: this.uniqueId('quest', title, (id) => mem.quests.some((x) => x.id === id)), title, status: 'active', summary: '', notes: [] };
       mem.quests.push(q);
       this.log('system', this.t`New quest: ${q.title}.`);
+      if (this.s.world) logEvent(this, { what: `The party took on the quest "${q.title}".`, by: 'party' });
     }
     if (input.summary?.trim()) q.summary = input.summary.trim().slice(0, 400);
     if (input.note?.trim()) { q.notes.push(input.note.trim().slice(0, 200)); if (q.notes.length > 12) q.notes.shift(); }
@@ -5113,6 +5118,7 @@ export class Game {
       const was = q.status;
       q.status = input.status;
       this.log('system', this.t`Quest ${this.n(q.status)}: ${q.title}.`);
+      if (this.s.world) logEvent(this, { what: `The party ${q.status} the quest "${q.title}".`, by: 'party' });
       if (was === 'active' && q.status === 'completed') {
         if (q.rewardGold) { this.s.gold += q.rewardGold; this.log('system', this.t`Reward: ${q.rewardGold} gp.`); }
         if (q.rewardXp) this.grantXp(q.rewardXp, this.t`completing "${q.title}"`);

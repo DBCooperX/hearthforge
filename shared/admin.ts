@@ -28,6 +28,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'HEARTHFORGE_DM_MODEL_STANDARD', group: 'dm', kind: 'model', fallback: 'claude-sonnet-5-5', label: 'Model for normal turns', help: 'Everyday narration, conversation and monster turns.' },
   { key: 'HEARTHFORGE_DM_MODEL_KEY', group: 'dm', kind: 'model', fallback: 'claude-opus-5-5', label: 'Model for key moments', help: 'The opening scene, boss fights, level-ups, defeats and turning points.' },
   { key: 'HEARTHFORGE_DM_FORCE_MODEL', group: 'dm', kind: 'model', fallback: '', label: 'One model for everything', help: 'Leave empty to let the server pick a model per moment.' },
+  { key: 'HEARTHFORGE_DM_STORY_ON_KEY', group: 'dm', kind: 'choice', fallback: 'off', choices: ['off', 'on'], label: 'Every story turn on the key-moment model', help: 'For a comparison session: all narration and replies outside fights use the model for key moments (Opus 5.5 unless you changed it), not only turning points. Background work and monster turns stay as they are. Costs noticeably more.' },
   { key: 'HEARTHFORGE_DM_EFFORT', group: 'dm', kind: 'choice', fallback: 'low', choices: ['low', 'medium', 'high', 'xhigh', 'max'], label: 'How hard the Dungeon Master thinks', help: 'Higher is slower and costs more.' },
   { key: 'HEARTHFORGE_DM_TONE', group: 'dm', kind: 'choice', fallback: 'heroic', choices: ['heroic', 'grim', 'comedic', 'cozy', 'mysterious'], label: 'Default tone of the story', help: 'What new tables start with. The host can change it in the table room.' },
   { key: 'HEARTHFORGE_DM_RULES', group: 'dm', kind: 'number', fallback: '3', min: 1, max: 5, label: 'Default rules strictness', help: '1 coaches newcomers, 3 is balanced, 5 is unforgiving. New tables start here; the host can change it.' },
@@ -118,7 +119,7 @@ export interface AdminOverview {
   node: string;
   memoryMb: number;
   docker: boolean;
-  dm: { mode: 'claude' | 'scripted'; background: string | null; standard: string | null; key: string | null; forced: string | null };
+  dm: { mode: 'claude' | 'scripted'; background: string | null; standard: string | null; key: string | null; forced: string | null; storyOnKey?: boolean };
   tables: number;
   playing: number;
   connections: number;

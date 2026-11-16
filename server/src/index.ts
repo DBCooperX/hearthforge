@@ -207,7 +207,7 @@ const admin = new AdminApi({
     const payload = JSON.stringify({ t: 'notice', text } satisfies ServerMessage);
     for (const ws of conns.keys()) if (ws.readyState === ws.OPEN) ws.send(payload);
   },
-  dm: { mode: dm.mode, background: claude?.models.background ?? null, standard: claude?.models.standard ?? null, key: claude?.models.key ?? null, forced: claude?.models.forced ?? null },
+  dm: { mode: dm.mode, background: claude?.models.background ?? null, standard: claude?.models.standard ?? null, key: claude?.models.key ?? null, forced: claude?.models.forced ?? null, storyOnKey: !!claude?.models.storyOnKey },
   ipOf,
   restart,
   testKey,
@@ -466,6 +466,7 @@ server.listen(PORT, () => {
   console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
+  else if (claude.models.storyOnKey) console.log(`Dungeon Master: Claude. Every story turn: ${claude.models.key} (HEARTHFORGE_DM_STORY_ON_KEY). Combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
   else console.log(`Dungeon Master: Claude. Key moments: ${claude.models.key}. Narration and combat: ${claude.models.standard}. Background: ${claude.models.background}.`);
   if (!admin.enabled) console.log('Innkeeper: switched off (HEARTHFORGE_ADMIN).');
   else if (auth.firstPasswordNote) console.log(`Innkeeper: no password was set, so one was made up. It is "${auth.firstPasswordNote.password}" (also in ${auth.firstPasswordNote.file}). Sign in and choose your own.`);

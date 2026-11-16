@@ -11,11 +11,12 @@ import { MONSTERS } from '../data/monsters';
 import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
 import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
 import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, fightBudget, genderRoster, transcript } from './context';
-import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
+import { resolveModels, storyTier, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
 import { RECONCILE_SYSTEM, applyFindings, parseFindings, reconcilePrompt, type TurnRecord } from './reconcile';
 import type { UsageSample } from '../admin/usage';
+import { logEvent, secret } from '../game/timeline';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -228,6 +229,18 @@ const STORY_TOOLS: Tool[] = [
     character_id: str('Id of the hero.'),
     item: str('Name or id of the item, as carried.'),
   }),
+  looseTool('log_event', "Pin something to the timeline the moment the story mentions it: an event before the adventure that someone tells of (when the trouble began, who went missing when), something that just happened in the scene, or something planned ahead. The date is fixed from then on, and an event already listed keeps the date it was given. Returns the fixed date.", {
+    what: str('What happened, as one plain sentence in the table language, for example "Mayor Garn sent two toll guards to watch the mill at night; one came back and would not speak, the other never returned."'),
+    when: str('"now", or a number and a unit before or after now: "3 days ago", "2 weeks ago", "4 months ago", "in 2 days". Also "yesterday", "this morning", "last night", "tonight", "tomorrow" or "day 3 14:00". Never vague words like "in winter" or "long ago": pick the number that fits what the party has seen.'),
+    where: str('Where it happened, a few words, or an empty string.'),
+    known_by: str('Who knows about it: the people who saw it or were told, comma separated, or "common talk" when the whole place knows. Empty string if only the party knows.'),
+  }),
+  looseTool('secret', 'Hold back a truth the players should only learn later, or mark that it has come out. While it is held it is listed for you each turn with its condition. A reveal before its earliest time is refused.', {
+    action: str('"hold" to hold a truth back (or change its condition), "reveal" when your narration lets it out.'),
+    text: str('The truth itself, one sentence in the table language, for example "Bram Riedel pays the goblins in guild silver." For reveal, its id from the list or its exact text.'),
+    after: str('For hold: what must happen first, in plain words, for example "the party has found the ledger in the mill cellar". Empty string otherwise.'),
+    not_before: str('For hold, when timing matters: the earliest moment, as "in 2 days", "tomorrow", "tonight" or "day 4". Empty string for no limit.'),
+  }),
   SCENE_TOOL,
 ];
 
@@ -438,6 +451,10 @@ export class ClaudeDM implements DungeonMaster {
           }
           case 'equip_item':
             return game.equipItem(String(i.character_id ?? ''), String(i.item ?? ''));
+          case 'log_event':
+            return logEvent(game, { what: String(i.what ?? ''), when: String(i.when ?? ''), where: String(i.where ?? ''), knownBy: String(i.known_by ?? '') });
+          case 'secret':
+            return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:
             throw new Error(`Unknown tool ${name}`);
         }
@@ -475,7 +492,7 @@ export class ClaudeDM implements DungeonMaster {
     if (!beats.length) return null;
     const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nNarrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`;
     try {
-      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, tierForBeats(beats), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
+      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
     } catch (err) {
       this.report(err);
@@ -526,7 +543,7 @@ export class ClaudeDM implements DungeonMaster {
     const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {
       const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
-      const out = await this.converse(game, 'reply', tierForReply(game), prompt, tools, this.storyHandler(game, onUpdate, record ?? undefined));
+      const out = await this.converse(game, 'reply', inCombat ? tierForReply(game) : storyTier(this.models, tierForReply(game)), prompt, tools, this.storyHandler(game, onUpdate, record ?? undefined));
       const scene = this.finish(game, out);
       if (record && scene) this.turns.set(game, { ...record, narration: scene.text });
       return scene;

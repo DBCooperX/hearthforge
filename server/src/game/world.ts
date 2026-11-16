@@ -10,6 +10,8 @@ import type { Lang } from '../../../shared/i18n';
 import type { Rng } from './dice';
 import { classicRegion, openingFor, premiseTheme, randomRegion, resolvePremise } from './region';
 
+import type { SecretState, TimelineEvent } from './timeline';
+
 export interface LocationState extends Omit<Location, 'dungeon'> {
   /** The party knows this place exists and where it is. */
   discovered: boolean;
@@ -63,13 +65,17 @@ export interface MemoryState {
   quests: QuestState[];
   deeds: Deed[];
   /** One-line notes the DM leaves itself after each exchange, newest last. */
-  journal: { day: number; text: string }[];
+  journal: { day: number; text: string; /** World minutes; missing in older saves. */ at?: number }[];
   /** Older journal entries, condensed into a running summary. */
   chronicle: string;
   /** What people are saying, newest last. Missing in saves from before rumours. */
   rumours: RumourState[];
   /** The story's open questions and the clues found for each. Missing in saves from before clue tracking. */
   mysteries: Mystery[];
+  /** What happened when, oldest first. Missing in saves from before the timeline. */
+  timeline: TimelineEvent[];
+  /** Revelations held back until their condition is met. Missing in saves from before the timeline. */
+  secrets: SecretState[];
 }
 
 /** Where and how this table's story is set. Saved with the game; tables from before start options have none. */
@@ -299,6 +305,8 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
     chronicle: '',
     rumours: [],
     mysteries: [],
+    timeline: [],
+    secrets: [],
   };
   const lair = region.locations.find((l) => l.questId);
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';

@@ -9,7 +9,10 @@
 - **Status icons over the tokens.** Hunter's Mark, Hex, Bless, concentration and conditions show above each token on the battle map, with turns left and how they end on hover.
 - **Story and game stay in step.** When the story walks the party back to town, lets it rest, or has a hero pocket, leave behind or draw something, the game follows: map, music, clock, inventory and gear. The Dungeon Master has tools for story travel, rests and gear, and a quick background check after each reply catches what it narrated without them. Resting an hour or more is a short rest, a night's sleep a long rest, and a note says what came back. "Who is here" lists the people the scene header names.
 
+- **Believable timing.** The Dungeon Master keeps a timeline on the world clock: when something from the past first comes up ("three weeks ago the mayor sent two guards to the mill"), it gets a fixed date and keeps it, along with who knows about it. The DM is told to avoid timing coincidences without a cause, to let people know only what they saw or were told, and to hold big revelations back until their condition is met; a revelation can also carry an earliest time, and the server refuses it before then. Planned events (a barge due in two days) show as due once the clock reaches them. The background check after each reply dates anything the DM told without the tool.
+
 ### Server
+- **Every story turn on Opus, for a comparison.** A new Innkeeper switch, "Every story turn on the key-moment model" (`HEARTHFORGE_DM_STORY_ON_KEY`), runs all narration and replies outside fights on the key-moment model (Opus 5.5 by default) instead of only turning points. Background work and monster turns stay on their own models.
 - **Browsers pick up updates.** The server tells every browser which client build it serves. A tab that is still on the old build reloads itself when nobody sits at a table and nothing is typed, and otherwise shows an "Update ready" button. Seats and names survive the reload. A missing script or style file now answers 404 instead of the page, so an old tab can no longer load the wrong thing.
 
 ## 0.9.0 (15 November 2026): first playtest release
