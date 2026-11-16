@@ -13,7 +13,7 @@ import { CLASS_FEATURES, OPTIONS, optionLine, featureLine, CLASS_IDS } from './c
 import { EFFECT_LINES, FEATS, SPECIES, STYLES, effectLine } from './rules';
 import { SKILLS } from './content';
 
-export type GlyphKind = 'spell' | 'skill' | 'feat' | 'feature' | 'class' | 'ability' | 'school';
+export type GlyphKind = 'spell' | 'skill' | 'feat' | 'feature' | 'class' | 'ability' | 'school' | 'condition' | 'action';
 
 type Table = Record<string, string>;
 
@@ -216,7 +216,23 @@ const SPELL: Table = {
 };
 
 
-const TABLES: Record<GlyphKind, Table> = { ability: ABILITY, class: CLASS, school: SCHOOL, skill: SKILL, feat: FEAT, feature: FEATURE, spell: SPELL };
+/** Conditions and marks, for the status icons above the tokens on the battle map. */
+const CONDITION: Table = {
+  blinded: 'delapouite/blindfold', charmed: 'lorc/charm', deafened: 'delapouite/sound-off', frightened: 'lorc/screaming',
+  grappled: 'delapouite/hand-grip', incapacitated: 'delapouite/knocked-out-stars', paralyzed: 'lorc/brain-freeze', petrified: 'delapouite/stone-bust',
+  poisoned: 'lorc/poison-bottle', prone: 'lorc/heavy-fall', restrained: 'lorc/manacles', stunned: 'delapouite/knocked-out-stars', asleep: 'lorc/sleepy',
+  turned: 'lorc/ghost', rattled: 'lorc/despair', banished: 'lorc/portal', slowed: 'lorc/snail', outlined: 'lorc/sun-radiations',
+  baned: 'lorc/crown-of-thorns', confused: 'lorc/back-forth', cursed: 'lorc/cursed-star', weakened: 'lorc/broken-shield', guided: 'lorc/beams-aura',
+  marked: 'lorc/archery-target', concentration: 'lorc/concentration-orb', dodging: 'lorc/dodging', reckless: 'lorc/pierced-heart',
+};
+
+/** The common actions of the combat hotbar. */
+const ACTION: Table = {
+  attack: 'lorc/crossed-swords', disengage: 'lorc/run', escape: 'lorc/fist', light: 'delapouite/torch', potion: 'lorc/drink-me',
+  spellbook: 'delapouite/spell-book', end_turn: 'lorc/hourglass', opportunity: 'lorc/shield-reflect',
+};
+
+const TABLES: Record<GlyphKind, Table> = { ability: ABILITY, class: CLASS, school: SCHOOL, skill: SKILL, feat: FEAT, feature: FEATURE, spell: SPELL, condition: CONDITION, action: ACTION };
 
 /** Slot key ("spell:fire_bolt") to the path of its icon in github.com/game-icons/icons ("lorc/fire-ray"). */
 export const GLYPH_PATHS: Record<string, string> = Object.fromEntries(

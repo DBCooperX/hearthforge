@@ -4,6 +4,8 @@
 
 ### Playing
 - **A story you can follow.** Every scene card names where it plays, the time of day and who is there. The Dungeon Master stages each scene and tags every speaker, explains what the heroes would plainly know, adds at most one new mystery per scene, and lets people answer what they are asked instead of pushing hooks. Clues the party finds are filed in a new Clues tab of the journal, grouped by open question.
+- **A cleaner combat hotbar.** Square slots framed by what they spend (green action, orange bonus action, purple reaction), with the turn's action, bonus action, reaction, movement and mana shown above. Drag spells and features from the spellbook or the character sheet onto the bar, drag them off or right-click to clear a slot; the layout is kept per hero. Every greyed-out button says why on hover, and reaction spells such as Shield are marked as casting themselves.
+- **Status icons over the tokens.** Hunter's Mark, Hex, Bless, concentration and conditions show above each token on the battle map, with turns left and how they end on hover.
 
 ## 0.9.0 (15 November 2026): first playtest release
 

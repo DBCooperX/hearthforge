@@ -3,6 +3,7 @@ import { ItemIcon } from '../ui/ItemIcon';
 import { Fragment, useState } from 'react';
 import { SLOT_COST, maxSpellLevelFor } from '../../../shared/classes';
 import { castLevel, upcastable } from '../../../shared/spells';
+import { HOTBAR_DRAG, abilityRef } from '../game/hotbar';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { castingAbility, weaponAttack } from '../../../shared/build';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityDef, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
@@ -190,7 +191,8 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                   <Fragment key={a.id}>
                   {a.spellLevel && a.kind !== 'feature' && a.spellLevel !== (actions[i - 1]?.kind === 'feature' ? undefined : actions[i - 1]?.spellLevel) ? <li className="spell-group">{t('Spell level {n}', { n: a.spellLevel })}</li> : null}
                   <li>
-                    <span className="act-icon"><AbilityGlyph def={a} /></span>
+                    <span className={mine ? 'act-icon draggable' : 'act-icon'} draggable={mine} title={mine ? t('Drag onto the hotbar. Right-click a slot to clear it.') : undefined}
+                      onDragStart={(e) => e.dataTransfer.setData(HOTBAR_DRAG, JSON.stringify({ ref: abilityRef(a.id) }))}><AbilityGlyph def={a} /></span>
                     <div>
                       <b>{t(a.name)}{a.cost > 0 && <span className="cost" title={t('Mana (spell points)')}>{a.cost}</span>}{a.oncePerRest && <span className={c.spent.includes(a.id) ? 'use spent' : 'use'}>{c.spent.includes(a.id) ? t('Used') : t('Ready')}</span>}</b>
                       <span><Rich text={t(a.description)} /></span>
