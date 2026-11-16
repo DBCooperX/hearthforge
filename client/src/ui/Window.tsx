@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { CLASS_INFO } from '../../../shared/content';
 import type { Character, GameState } from '../../../shared/types';
-import { artOfCharacter, heroUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { classLabel } from '../game/util';
 import { useT } from '../i18n';
 import { Icon, type IconName } from './icons';
@@ -109,7 +109,7 @@ export function HeroTabs({ state, selectedId, onSelect, onDropOn, dropping }: He
             onDragOver={(e) => { if (dropping && c.id !== selectedId) e.preventDefault(); }}
             onDrop={(e) => { e.preventDefault(); if (c.id !== selectedId) onDropOn?.(c); }}
           >
-            <span className="hero-tab-face"><img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" /></span>
+            <span className="hero-tab-face"><img className="hero-art" src={heroPortraitUrl(artOfCharacter(c, state.items))} alt="" /></span>
             <span className="hero-tab-text">
               <b>{c.name}</b>
               <small>{classLabel(c, t)} {c.level}</small>

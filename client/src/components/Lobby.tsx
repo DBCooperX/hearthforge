@@ -7,7 +7,7 @@ import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/ty
 import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
 import { StyleSetup } from './StyleSetup';
-import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
+import { artOfCharacter, artOfDraft, heroPortraitUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, type Connection } from '../net';
 import type { AccountView } from '../../../shared/accounts';
 import { ChatPanel } from './Chat';
@@ -405,7 +405,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
                   if (!c) return <li key={i} className="slot empty" aria-label={t('Free place in the party')}>＋</li>;
                   return (
                     <li key={c.id} className="slot">
-                      <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+                      <img className="hero-art" src={heroPortraitUrl(artOfCharacter(c, state.items))} alt="" />
                       <span className="slot-text">
                         <b>{c.name}</b>
                         <small>{heroTitle(c, t)}</small>
@@ -431,7 +431,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
                   return (
                     <button type="button" key={p.id} className={['hero-tile', picked === p.id && 'on', taken && 'taken'].filter(Boolean).join(' ')} aria-pressed={picked === p.id}
                       onClick={() => setPicked(picked === p.id ? null : p.id)}>
-                      <img className="pixel" src={heroUrl(artOfDraft(p.spec)!)} alt="" />
+                      <img className="hero-art" src={heroPortraitUrl(artOfDraft(p.spec)!)} alt="" />
                       <b style={{ color: CLASS_INFO[p.spec.classId].color }}>{p.spec.name}</b>
                       <small>{taken ? `✓ ${t('In the party')}` : classLabel({ className: CLASSES[p.spec.classId].name, gender: p.spec.gender }, t)}</small>
                     </button>
@@ -495,7 +495,7 @@ function PremadeDetail({ premade: p, taken, full, onClose, onAdd, onCustomize }:
   const spells = sheet.abilityIds.filter((id) => ABILITIES[id]?.spellLevel !== undefined || ABILITIES[id]?.oncePerRest);
   return (
     <div className="hero-detail">
-      <img className="pixel" src={heroUrl(artOfDraft(spec)!)} alt="" />
+      <img className="hero-art" src={heroPortraitUrl(artOfDraft(spec)!)} alt="" />
       <div className="hero-detail-text">
         <h3>{spec.name} <small>{title} · {t(BACKGROUNDS[spec.backgroundId].name)}</small></h3>
         <p className="bio"><b>{loc(p.tagline, lang)}.</b> {loc(p.bio, lang)}</p>

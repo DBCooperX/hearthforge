@@ -121,7 +121,7 @@ export function LevelUp({ character: c, items, conn, onClose }: Props) {
       <div className="panel creator levelup">
         <span className="win-corner tl" /><span className="win-corner tr" /><span className="win-corner bl" /><span className="win-corner br" />
         <header className="creator-head">
-          <img className="pixel" src={heroUrl(artOfCharacter(c, items))} alt="" />
+          <img className="hero-art" src={heroUrl(artOfCharacter(c, items))} alt="" />
           <h1>{t('{name} reaches level {level}', { name: c.name, level: choice.level })}</h1>
           <span className="spacer" />
           <CloseButton onClose={onClose} label={t('Decide later')} />

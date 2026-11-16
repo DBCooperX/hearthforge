@@ -1,0 +1,26 @@
+/* Ink-drawn heroes and monsters: painted at high resolution and scaled smoothly.
+   Portraits and tokens bring their own round brass or iron frame, so the boxes
+   around them step back. */
+.hero-art { image-rendering: auto; }
+
+.portrait { border: none; border-radius: 50%; background: none; box-shadow: none; }
+.portrait img.hero-art { width: 58px; height: 58px; border-radius: 50%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7)); }
+.card.active .portrait img.hero-art { filter: drop-shadow(0 0 6px rgba(255, 190, 90, 0.75)); }
+
+.hero-tab-face { border: none; background: none; box-shadow: none; }
+.hero-tab-face img.hero-art { width: 38px; height: 38px; border-radius: 50%; }
+
+.slot img.hero-art { width: 44px; height: 44px; border-radius: 50%; }
+.hero-detail img.hero-art { width: 84px; height: 84px; border-radius: 50%; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)); }
+
+.hovercard.hero .hc-portrait, .hovercard.monster .hc-portrait { width: 52px; height: 52px; background: none; border: none; }
+.hc-portrait img.hero-art { width: 52px; height: 52px; border-radius: 50%; }
+
+/* Whole figures (sheet, inventory, creator, level-up) stand on a faint pool of firelight. */
+img.hero-art:not(.portrait img):not(.slot img):not(.hero-detail img):not(.hc-portrait img):not(.hero-tab-face img):not(.cs-portrait img):not(.look-portrait) {
+  background: radial-gradient(ellipse 48% 12% at 50% 94%, rgba(0, 0, 0, 0.45), transparent 70%);
+}
+.look-portrait.hero-art { width: 96px; height: 96px; border: none; border-radius: 50%; background: none; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6)); }
+
+.cs-portrait { border: none; background: none; }
+.cs-portrait img.hero-art { width: 148px; height: 148px; border-radius: 50%; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6)); }
