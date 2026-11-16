@@ -57,6 +57,9 @@ const SHAPES: Record<Body, Shape> = {
   aberration: { head: [0.5, 0.45], r: 0.13, neck: [0.5, 0.3], wing: [0.5, 0.45] },
   construct: { head: [0.5, 0.27], r: 0.1, neck: [0.5, 0.4], wing: [0.5, 0.46], hand: [0.76, 0.72] },
   ghost: { head: [0.5, 0.3], r: 0.15, neck: [0.5, 0.44], wing: [0.5, 0.48], hand: [0.84, 0.6] },
+  bear: { head: [0.18, 0.46], r: 0.12, side: true, neck: [0.3, 0.5], wing: [0.56, 0.44], tail: [[0.88, 0.5], [0.93, 0.48], [0.95, 0.45]] },
+  owlbear: { head: [0.2, 0.33], r: 0.13, neck: [0.3, 0.45], wing: [0.56, 0.44], tail: [[0.88, 0.5], [0.93, 0.48], [0.95, 0.45]] },
+  spider: { head: [0.5, 0.66], r: 0.08, neck: [0.5, 0.56], wing: [0.5, 0.4] },
 };
 
 function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
@@ -72,10 +75,10 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
   // Two goblins in one fight should not be twins: the variant shifts bulk, tone, horns, jaw and a scar.
   const vr = mulberry(variant * 7919 + 13);
   const v = variant ? { bulk: [1, 0.9, 1.12, 1.04][variant & 3], horn: 0.8 + vr() * 0.45, jaw: 0.88 + vr() * 0.26, wing: 0.92 + vr() * 0.12, scar: variant & 1 ? 1 : 0, strap: variant === 2 } : { bulk: 1, horn: 1, jaw: 1, wing: 1, scar: 0, strap: false };
-  const bodyMat: Material = body === 'beast' || body === 'rodent' ? 'fur' : body === 'dragon' || body === 'serpent' ? 'scales' : body === 'construct' ? 'metal' : body === 'plant' ? 'wood' : look.mutation === 'skeletal' ? 'bone' : 'plain';
+  const bodyMat: Material = body === 'beast' || body === 'rodent' || body === 'bear' || body === 'owlbear' || body === 'spider' ? 'fur' : body === 'dragon' || body === 'serpent' ? 'scales' : body === 'construct' ? 'metal' : body === 'plant' ? 'wood' : look.mutation === 'skeletal' ? 'bone' : 'plain';
   // Ready to strike: a melee weapon is lifted over the shoulder, everything else is held at the side.
   const raised = !!look.weapon && (look.weapon === 'club' || look.weapon === 'sword' || look.weapon === 'axe');
-  const hand: P = body === 'humanoid' ? (raised ? [0.78, 0.38] : sh.hand!) : body === 'giant' ? (raised ? [0.84, 0.32] : sh.hand!) : sh.hand ?? [0.5, 0.5];
+  const hand: P = body === 'humanoid' ? (raised ? [0.78, 0.38] : look.mutation === 'rotting' && !look.weapon ? [0.77, 0.47] : sh.hand!) : body === 'giant' ? (raised ? [0.84, 0.32] : sh.hand!) : sh.hand ?? [0.5, 0.5];
 
   // Head positions: one in place, two side by side, three with the middle one raised.
   // Creatures seen from the side grow their extra heads up and back, so no snout leaves the picture.
@@ -122,6 +125,31 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
   const W = v.bulk, X = (x: number) => 0.5 + (x - 0.5) * W; // wider or narrower about the middle
   switch (body) {
     case 'humanoid': {
+      const bones = look.mutation === 'skeletal', rot = look.mutation === 'rotting';
+      const offHand: P = rot ? [0.23, 0.47] : [0.22, 0.6];
+      // Undead hands are claws: long bony fingers spread to grab.
+      const claw = (p: P, sd: number) => { g.mat = bones ? 'bone' : bodyMat; for (let i = 0; i < 4; i++) g.limb([p, [p[0] + sd * (0.01 + i * 0.012) - sd * 0.02, p[1] - 0.045 + i * 0.012], [p[0] + sd * (0.02 + i * 0.016) - sd * 0.03, p[1] - 0.07 + i * 0.02]], [0.014, 0.01, 0.003], bones ? BONE : base); };
+      if (bones) {
+        // A skeleton: bone legs with knobbed joints, a ribcage over darkness, a spine and a pelvis.
+        g.mat = 'bone';
+        for (const sd of [-1, 1]) {
+          const hip: P = [0.5 + sd * 0.06, 0.63], kn: P = [0.5 + sd * 0.1, 0.77], ft: P = [0.5 + sd * 0.12 - (sd < 0 ? 0.03 : -0.02), 0.92];
+          g.limb([hip, kn], [0.032, 0.026], BONE); g.limb([kn, ft], [0.026, 0.02], BONE);
+          g.ell(kn[0], kn[1], 0.024, 0.02, BONE);
+          g.blob([[ft[0] - 0.04, 0.915], [ft[0] + 0.02, 0.91], [ft[0] + 0.025, 0.95], [ft[0] - 0.05, 0.955]], BONE, true, 0.6);
+        }
+        g.blob([[0.42, 0.58], [0.58, 0.58], [0.6, 0.64], [0.5, 0.67], [0.4, 0.64]], BONE, true, 0.7); // pelvis
+        g.mat = 'plain'; g.blob([[X(0.36), 0.42], [0.5, 0.4], [X(0.64), 0.42], [X(0.6), 0.56], [0.5, 0.59], [X(0.4), 0.56]], hex('#241c22'), false, 0.9);
+        g.mat = 'bone';
+        g.limb([[0.5, 0.4], [0.5, 0.5], [0.5, 0.6]], [0.022, 0.02, 0.018], BONE); // spine
+        for (let i = 0; i < 4; i++) for (const sd of [-1, 1]) g.limb([[0.5 + sd * 0.012, 0.425 + i * 0.035], [X(0.5 + sd * 0.11), 0.415 + i * 0.036], [X(0.5 + sd * (0.12 - i * 0.01)), 0.445 + i * 0.036]], [0.014, 0.013, 0.008], BONE);
+        g.limb([[X(0.36), 0.42], [X(0.5), 0.405], [X(0.64), 0.42]], [0.016, 0.018, 0.016], BONE); // collarbones
+        g.limb([[X(0.37), 0.43], [X(0.29), 0.53], offHand], [0.028, 0.024, 0.02], BONE); g.ell(X(0.29), 0.53, 0.02, 0.018, BONE);
+        claw(offHand, -1);
+        g.limb([[X(0.63), 0.43], [X(0.73), 0.47], hand], [0.028, 0.024, 0.02], BONE); g.ell(X(0.73), 0.47, 0.02, 0.018, BONE);
+        g.ell(hand[0], hand[1], 0.025, 0.025, BONE);
+        break;
+      }
       // Striding legs, a torso narrowing to the waist; the weapon arm is raised to strike, the other reaches forward.
       for (const sd of [-1, 1]) {
         const foot: P = [0.5 + sd * 0.13 * W - (sd < 0 ? 0.04 : -0.02), 0.915];
@@ -132,18 +160,23 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
       }
       g.mat = bodyMat;
       if (look.arms === 4) for (const sd of [-1, 1]) g.limb([[X(0.5 + sd * 0.14), 0.5], [0.5 + sd * 0.27 * W, 0.42], [0.5 + sd * 0.32 * W, 0.32]], [0.06, 0.05, 0.04], base);
-      g.limb([[X(0.36), 0.44], [X(0.28), 0.54], [0.22, 0.6]], [0.075, 0.06, 0.05], base);
-      g.ell(0.215, 0.61, 0.035, 0.035, base);
+      g.limb([[X(0.36), 0.44], [X(0.28), rot ? 0.47 : 0.54], offHand], [0.075, 0.06, 0.05], base);
+      if (rot) claw(offHand, -1); else g.ell(offHand[0] - 0.005, offHand[1] + 0.01, 0.035, 0.035, base);
       g.mat = look.armor ? tunicMat : 'cloth';
       g.blob([[X(0.33), 0.41], [0.5, 0.385], [X(0.67), 0.41], [X(0.64), 0.52], [X(0.61), 0.65], [X(0.39), 0.65], [X(0.36), 0.52]], tunic, true, 0.8);
-      g.mat = 'leather'; g.blob([[X(0.38), 0.61], [X(0.62), 0.61], [X(0.62), 0.66], [X(0.38), 0.66]], mix(tunic, BLACK, 0.45), true, 0.4);
+      if (rot) {
+        // Rags: a torn hem, a rent showing the ribs beneath.
+        for (let i = 0; i < 5; i++) g.tri([X(0.39 + i * 0.045), 0.645], [X(0.43 + i * 0.045), 0.645], [X(0.41 + i * 0.045), 0.7 + (i % 2) * 0.03], tunic);
+        g.mat = 'plain'; g.blob([[X(0.53), 0.45], [X(0.6), 0.46], [X(0.59), 0.55], [X(0.53), 0.54]], hex('#3a2024'), false, 0.6);
+        g.mat = 'bone'; for (let i = 0; i < 3; i++) g.fineCurve([[X(0.535), 0.47 + i * 0.025], [X(0.565), 0.465 + i * 0.025], [X(0.59), 0.475 + i * 0.025]], 0.008, BONE);
+      } else { g.mat = 'leather'; g.blob([[X(0.38), 0.61], [X(0.62), 0.61], [X(0.62), 0.66], [X(0.38), 0.66]], mix(tunic, BLACK, 0.45), true, 0.4); }
       if (look.armor === 'plate') { g.mat = 'metal'; g.blob([[X(0.28), 0.44], [X(0.33), 0.39], [X(0.41), 0.41], [X(0.38), 0.47]], mix(STEEL, WHITE, 0.15)); g.blob([[X(0.72), 0.44], [X(0.67), 0.39], [X(0.59), 0.41], [X(0.62), 0.47]], STEEL); g.fineCurve([[0.5, 0.42], [0.505, 0.5], [0.5, 0.6]], 0.005, mix(STEEL, BLACK, 0.4)); }
       else if (look.armor === 'leather') for (const y of [0.48, 0.54]) g.fineCurve([[X(0.37), y], [0.5, y + 0.01], [X(0.63), y]], 0.005, mix(tunic, BLACK, 0.4), 0.7);
       else { g.mat = bodyMat; g.blob([[0.43, 0.4], [0.57, 0.4], [0.5, 0.47]], mix(base, BLACK, 0.1), true, 0.5); } // bare throat in a ragged collar
       if (v.strap) { g.mat = 'leather'; g.seg([X(0.36), 0.42], [X(0.62), 0.62], 0.025, mix(LEATHER, BLACK, 0.3)); g.mat = 'metal'; g.ell(X(0.45), 0.49, 0.018, 0.018, hex('#b08a3a')); }
       g.mat = bodyMat;
-      g.limb([[X(0.64), 0.44], [X(0.74), 0.47], hand], [0.075, 0.06, 0.05], base);
-      g.ell(hand[0], hand[1], 0.035, 0.035, base);
+      g.limb([[X(0.64), 0.44], [X(0.74), rot ? 0.46 : 0.47], hand], [0.075, 0.06, 0.05], base);
+      if (rot && !look.weapon) claw(hand, 1); else g.ell(hand[0], hand[1], 0.035, 0.035, base);
       break;
     }
     case 'giant': {
@@ -185,6 +218,52 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
       g.mat = bodyMat;
       for (let i = 0; i < 6; i++) g.fineCurve([[X(0.4 + i * 0.075), 0.47], [X(0.42 + i * 0.075), 0.5], [X(0.42 + i * 0.075), 0.54]], 0.006, dark, 0.7); // ruff along the back
       if (look.armor) { g.mat = tunicMat; g.blob([[X(0.44), 0.44], [X(0.74), 0.45], [X(0.72), 0.6], [X(0.46), 0.6]], tunic, true, 0.6); }
+      break;
+    }
+    case 'bear': case 'owlbear': {
+      // A heavy body with a hump over the shoulders, short thick legs; it rears forward with one forepaw raised, claws out.
+      const legs: [P, P, P, boolean][] = [
+        [[0.38, 0.62], [0.37, 0.78], [0.35, 0.93], true], [[0.74, 0.6], [0.79, 0.77], [0.73, 0.93], true],
+        [[0.34, 0.6], [0.25, 0.68], [0.17, 0.66], false], [[0.79, 0.62], [0.83, 0.79], [0.78, 0.93], false],
+      ];
+      g.mat = 'fur';
+      const leg = ([hp, kn, ft, far]: [P, P, P, boolean]) => {
+        g.mat = 'fur';
+        g.limb([hp, kn, ft], [hp[0] > 0.5 ? 0.17 : 0.15, 0.11, 0.09], far ? dark : base);
+        g.blob([[ft[0] - 0.065, ft[1] - 0.02], [ft[0] + 0.035, ft[1] - 0.03], [ft[0] + 0.04, ft[1] + 0.02], [ft[0] - 0.07, ft[1] + 0.022]], far ? deep : dark, true, 0.6);
+        g.mat = 'bone';
+        if (!far) for (let i = 0; i < 4; i++) g.limb([[ft[0] - 0.05, ft[1] - 0.02 + i * 0.014], [ft[0] - 0.085, ft[1] - 0.005 + i * 0.018]], [0.014, 0.003], BONE);
+      };
+      legs.filter((l) => l[3]).forEach(leg);
+      g.mat = 'fur';
+      g.blob([[0.24, 0.56], [0.3, 0.38], [0.44, 0.29], [0.57, 0.33], [0.73, 0.37], [0.86, 0.45], [0.9, 0.6], [0.84, 0.71], [0.6, 0.73], [0.38, 0.74], [0.26, 0.68]].map(([x, y]) => [X(x), y] as P), base, true, 0.9);
+      g.blob([[X(0.36), 0.64], [X(0.6), 0.64], [X(0.56), 0.71], [X(0.4), 0.72]], light, false, 0.8);
+      for (let i = 0; i < 7; i++) g.fineCurve([[X(0.36 + i * 0.075), 0.35 + Math.abs(i - 1.5) * 0.008], [X(0.38 + i * 0.075), 0.39], [X(0.37 + i * 0.075), 0.43]], 0.007, dark, 0.65); // the shaggy line of the back
+      if (body === 'owlbear') {
+        // A ruff of feathers where the bear's neck meets the owl's head.
+        g.mat = 'hair';
+        g.blob([[0.16, 0.36], [0.3, 0.26], [0.44, 0.34], [0.46, 0.5], [0.36, 0.6], [0.22, 0.56]], mix(base, WHITE, 0.25), true, 0.8);
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) g.fineCurve([[0.22 + j * 0.07, 0.38 + i * 0.06], [0.25 + j * 0.07, 0.41 + i * 0.06], [0.28 + j * 0.07, 0.38 + i * 0.06]], 0.006, dark, 0.6);
+      }
+      legs.filter((l) => !l[3]).forEach(leg);
+      break;
+    }
+    case 'spider': {
+      // Seen from the front and above: a swollen abdomen behind, eight jointed legs, the head low with fangs.
+      g.mat = 'fur';
+      g.blob([[0.5, 0.12], [0.7, 0.2], [0.74, 0.36], [0.62, 0.48], [0.38, 0.48], [0.26, 0.36], [0.3, 0.2]], base, true, 1);
+      g.mat = 'plain';
+      g.blob([[0.5, 0.2], [0.55, 0.27], [0.51, 0.31], [0.56, 0.38], [0.5, 0.44], [0.44, 0.38], [0.49, 0.31], [0.45, 0.27]], hex('#9a2a20'), false, 0.7); // the mark on its back
+      g.mat = 'fur';
+      for (const far of [true, false]) for (let i = 0; i < 4; i++) for (const sd of [-1, 1]) {
+        if ((i % 2 === 0) !== far) continue;
+        const root: P = [0.5 + sd * 0.07, 0.5 + i * 0.025];
+        const knee: P = [0.5 + sd * (0.25 + i * 0.025), 0.3 + i * 0.07 - (i === 0 ? 0.04 : 0)];
+        const foot: P = [0.5 + sd * (0.4 + (i === 0 ? -0.04 : i * 0.015)), 0.62 + i * 0.1];
+        g.limb([root, knee, foot], [0.05, 0.04, 0.012], far ? dark : base);
+        g.ell(knee[0], knee[1], 0.025, 0.022, far ? deep : dark);
+      }
+      g.blob([[0.38, 0.5], [0.5, 0.44], [0.62, 0.5], [0.6, 0.62], [0.4, 0.62]], base, true, 0.9);
       break;
     }
     case 'rodent':
@@ -315,6 +394,47 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
         g.fineCurve([[x - r * 0.9, y + r * 0.2], [x - r * 0.35, y + r * 0.25]], r * 0.06, dark, 0.7);
         break;
       }
+      case 'bear': {
+        // A broad skull, small round ears, a short pale muzzle and a roaring mouth.
+        g.mat = 'fur';
+        for (const [ex, c] of [[0.55, dark], [0.15, base]] as [number, RGB][]) { g.ell(x + r * ex, y - r * 0.8, r * 0.28, r * 0.26, c); g.mat = 'plain'; g.ell(x + r * ex, y - r * 0.78, r * 0.13, r * 0.12, deep, false); g.mat = 'fur'; }
+        g.blob([[x - r * 1.25, y + r * 0.55], [x - r * 0.4, y + r * 0.5], [x + r * 0.1, y + r * 0.85], [x - r * 0.4, y + r * 1.1], [x - r * 1.15, y + r * 0.9]], dark, true, 0.7); // lower jaw
+        g.mat = 'plain'; g.blob([[x - r * 1.2, y + r * 0.5], [x - r * 0.35, y + r * 0.48], [x - r * 0.45, y + r * 0.88], [x - r * 1.1, y + r * 0.82]], hex('#5a1e1e'), false, 0.7);
+        g.mat = 'bone'; for (const fx of [1.08, 0.55]) { g.tri([x - r * fx, y + r * 0.48], [x - r * (fx - 0.14), y + r * 0.48], [x - r * (fx - 0.06), y + r * 0.75], BONE, false); g.tri([x - r * (fx - 0.1), y + r * 0.88], [x - r * (fx + 0.04), y + r * 0.88], [x - r * (fx - 0.03), y + r * 0.66], BONE, false); }
+        g.mat = 'fur';
+        g.blob([[x - r * 0.9, y + r * 0.1], [x - r * 0.5, y - r * 0.8], [x + r * 0.6, y - r * 0.85], [x + r * 1.05, y + r * 0.0], [x + r * 0.7, y + r * 0.8], [x - r * 0.3, y + r * 0.6]], base, true, 0.9);
+        g.blob([[x - r * 0.4, y - r * 0.3], [x - r * 1.3, y + r * 0.0], [x - r * 1.42, y + r * 0.3], [x - r * 1.25, y + r * 0.52], [x - r * 0.35, y + r * 0.5]], mix(base, hex('#c8a878'), 0.4), true, 0.8);
+        g.mat = 'plain'; g.blob([[x - r * 1.45, y + r * 0.05], [x - r * 1.22, y - r * 0.02], [x - r * 1.18, y + r * 0.2], [x - r * 1.42, y + r * 0.24]], deep, true, 0.6); // nose
+        g.fineCurve([[x - r * 1.1, y - r * 0.12], [x - r * 0.8, y - r * 0.35], [x - r * 0.5, y - r * 0.42]], r * 0.07, dark, 0.7);
+        break;
+      }
+      case 'owlbear': {
+        // An owl's head on a bear: ear tufts, a pale heart-shaped face, round staring eyes and a hooked beak.
+        g.mat = 'hair';
+        for (const sd of [-1, 1]) g.blob([[x + sd * r * 0.45, y - r * 0.7], [x + sd * r * 0.85, y - r * 0.75], [x + sd * r * 1.0, y - r * 1.45]], dark, true, 0.4);
+        g.ell(x, y, r * 1.05, r * 0.98, base);
+        g.mat = 'plain';
+        for (const sd of [-1, 1]) g.blob([[x, y - r * 0.55], [x + sd * r * 0.45, y - r * 0.68], [x + sd * r * 0.85, y - r * 0.15], [x + sd * r * 0.55, y + r * 0.55], [x, y + r * 0.7]], mix(base, hex('#e8d8b8'), 0.55), false, 0.85);
+        for (const sd of [-1, 1]) { g.ell(x + sd * r * 0.4, y - r * 0.08, r * 0.27, r * 0.27, hex('#f0e6c8')); g.ell(x + sd * r * 0.4, y - r * 0.08, r * 0.2, r * 0.2, hex('#d89a2a'), false); }
+        g.mat = 'bone';
+        g.blob([[x - r * 0.16, y + r * 0.1], [x + r * 0.16, y + r * 0.1], [x + r * 0.1, y + r * 0.45], [x, y + r * 0.65], [x - r * 0.06, y + r * 0.45]], hex('#4a4038'), true, 0.6);
+        g.mat = 'plain';
+        for (const sd of [-1, 1]) {
+          g.flat(x + sd * r * 0.4, y - r * 0.08, r * 0.09, r * 0.09, OUTLINE);
+          g.flat(x + sd * r * 0.37, y - r * 0.12, r * 0.03, r * 0.03, hex('#f0e6c8'));
+          g.fineCurve([[x + sd * r * 0.12, y - r * 0.28], [x + sd * r * 0.4, y - r * 0.4], [x + sd * r * 0.72, y - r * 0.45]], r * 0.09, OUTLINE); // a fierce brow
+        }
+        break;
+      }
+      case 'spider': {
+        // Eight eyes in two rows, and a pair of curved fangs.
+        g.mat = 'fur';
+        g.blob([[x - r, y - r * 0.4], [x, y - r * 0.85], [x + r, y - r * 0.4], [x + r * 0.8, y + r * 0.6], [x - r * 0.8, y + r * 0.6]], base, true, 0.9);
+        g.mat = 'bone';
+        for (const sd of [-1, 1]) g.limb([[x + sd * r * 0.35, y + r * 0.4], [x + sd * r * 0.5, y + r * 1.0], [x + sd * r * 0.2, y + r * 1.45]], [r * 0.38, r * 0.28, r * 0.05], mix(BONE, BLACK, 0.4));
+        for (const [ex, ey] of [[-0.18, -0.15], [0.18, -0.15], [-0.48, -0.3], [0.48, -0.3], [-0.3, -0.48], [0.3, -0.48], [-0.6, 0.0], [0.6, 0.0]]) eyes.push({ p: [x + r * ex, y + r * ey] });
+        break;
+      }
       case 'rodent':
         g.mat = 'plain'; g.ell(x + r * 0.45, y - r * 0.85, r * 0.5, r * 0.5, base); g.ell(x + r * 0.45, y - r * 0.85, r * 0.28, r * 0.28, hex('#c89a90'), false);
         g.mat = bodyMat; g.blob([[x + r, y], [x + r * 0.3, y - r * 0.85], [x - r * 0.6, y - r * 0.5], [x - r * 1.7, y + r * 0.35], [x - r * 0.6, y + r * 0.75], [x + r * 0.4, y + r * 0.8]], base, true, 0.8);
@@ -399,7 +519,7 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
       g.mat = 'bone';
       for (const sd of [-1, 1]) g.limb([[x + sd * r * 0.5, y - r * 0.6], [x + sd * hr * 1.05, y - hr * 0.85], [x + sd * hr * 1.3, y - hr * 1.4], [x + sd * hr * 1.05, y - hr * 1.9]], [r * 0.3, r * 0.24, r * 0.15, r * 0.02], mix(BONE, BLACK, 0.15));
     }
-    if (body === 'aberration') return;
+    if (body === 'aberration' || body === 'owlbear' || body === 'spider') return;
     if (body === 'insect') { for (const [ex, ey] of [[-0.5, -0.2], [0.5, -0.2], [-0.2, 0.25], [0.2, 0.25]]) eyes.push({ p: [x + r * ex, y + r * ey] }); }
     else if (sh.side) eyes.push({ p: [x - r * (body === 'rodent' ? 0.25 : body === 'serpent' ? 0.6 : 0.3), y - r * 0.2], brow: body === 'rodent' ? 0 : 2 });
     else { const ey = body === 'plant' ? y + r * 0.1 : y + r * 0.05; const angry = body === 'humanoid' || body === 'giant' ? 1 : 0; eyes.push({ p: [x - r * 0.38, ey], brow: -angry }, { p: [x + r * 0.38, ey], brow: angry }); }
@@ -488,7 +608,7 @@ function draw(look: MonsterLook, variant: number): HTMLCanvasElement {
         for (let j = 0; j < s; j++) for (let i = 0; i < s + (rnd() < 0.5 ? 1 : 0); i++) if (g.alpha(px + i, py + j)) g.set(px + i, py + j, mix(c, [g.d[((py + j) * S + px + i) * 4], g.d[((py + j) * S + px + i) * 4 + 1], g.d[((py + j) * S + px + i) * 4 + 2]], 0.25));
       }
     }
-    if (look.mutation === 'skeletal' && (body === 'humanoid' || body === 'giant')) {
+    if (look.mutation === 'skeletal' && body === 'giant') {
       // Bare ribs and limbs: bone over a dark hollow.
       const wide = body === 'giant' ? 0.2 : 0.14;
       g.box(0.5 - wide, 0.42, 0.5 + wide, 0.62, hex('#2a2430'));

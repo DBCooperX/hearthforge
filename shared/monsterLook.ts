@@ -4,7 +4,7 @@
 // "three-headed ogre" shows three heads. Looks never change the rules: the
 // statistics always come from the catalogue entry the monster is built on.
 
-export const BODIES = ['humanoid', 'giant', 'beast', 'rodent', 'insect', 'serpent', 'dragon', 'bird', 'ooze', 'elemental', 'plant', 'aberration', 'construct', 'ghost'] as const;
+export const BODIES = ['humanoid', 'giant', 'beast', 'rodent', 'insect', 'serpent', 'dragon', 'bird', 'ooze', 'elemental', 'plant', 'aberration', 'construct', 'ghost', 'bear', 'spider', 'owlbear'] as const;
 export type Body = (typeof BODIES)[number];
 
 export const SIZES = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'] as const;

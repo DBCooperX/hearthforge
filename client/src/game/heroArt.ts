@@ -42,8 +42,8 @@ const SPELL: Partial<Record<ClassId, string>> = { wizard: '#6fc3ff', sorcerer: '
 const hashStr = (s: string) => [...s].reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 17) >>> 0;
 
 /** The hero alone on a transparent background, S pixels square, and where the head is (in parts of the picture). */
-function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; head: P; r: number; top: number; knee: number } {
-  const g = new Ink(S, 1, weight);
+type View = { x: number; y: number; size: number };
+function draw(a: HeroArt, S: number, weight: number, view?: (head: { r: number; hy: number }) => View): { c: HTMLCanvasElement; head: P; r: number; top: number; knee: number } {
   const b = BUILD[a.speciesId] ?? BUILD.human;
   const { look, gear } = a;
   // Small differences that stay with the hero: the jaw, the nose, the brows, a scar, freckles, a little height.
@@ -64,6 +64,8 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
   const limb = Math.max(0.045, wide * 0.4);
   const k = b.tall / 0.84; // weapon lengths follow the hero's height
   const L = (x: number) => 0.5 - x, R = (x: number) => 0.5 + x;
+  // A portrait paints only the head and shoulders, at full resolution, instead of cropping a small full figure.
+  const g = new Ink(S, 1, weight, view?.({ r, hy }));
 
   const skin = hex(SKINS[look.skin] ?? SKINS.fair), skinD = mix(skin, BLACK, 0.3);
   const hair = hex(HAIR_COLORS[look.hairColor] ?? HAIR_COLORS.brown), hairD = mix(hair, BLACK, 0.35);
@@ -76,7 +78,7 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
   const torsoD = mix(torso, BLACK, 0.3);
   const legs = heavy ? mix(STEEL, BLACK, 0.15) : mix(LEATHER, BLACK, 0.3);
   const boot = mix(LEATHER, BLACK, 0.55);
-  const skinMat = scaly ? 'scales' : 'plain';
+  const skinMat = scaly ? 'scales' : 'skin';
 
   // --- where the hands go, by stance
   let handL: P = [L(wide + 0.045), hip + 0.015], handR: P = [R(wide + 0.05), hip];
@@ -125,6 +127,23 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
     }
   }
 
+  // --- hands: a fist closed round a grip (fingers across the shaft, thumb on top), or an open palm holding a spell
+  const handC = heavy ? STEEL : skin, handD = mix(handC, BLACK, 0.45);
+  const fist = (hd: P, d: P) => {
+    const a = limb * 0.42, b = limb * 0.55, nn: P = [-d[1], d[0]];
+    const q = (t: number, sd: number): P => [hd[0] + d[0] * t + nn[0] * sd, hd[1] + 0.004 + d[1] * t + nn[1] * sd];
+    g.mat = heavy ? 'metal' : skinMat;
+    g.blob([q(-a, -b), q(a, -b * 0.95), q(a * 1.1, b * 0.85), q(0, b * 1.05), q(-a * 1.1, b * 0.85)], handC, true, 0.7);
+    for (const t of [-0.55, 0, 0.55]) g.fine(q(t * a, -b * 0.15), q(t * a * 1.05, b * 0.8), 0.0035, handD, 0.75); // the fingers
+    g.ell(...q(a * 0.75, -b * 0.75), limb * 0.2, limb * 0.17, handC); // thumb
+  };
+  const openHand = (hd: P) => {
+    g.mat = heavy ? 'metal' : skinMat;
+    for (let i = 0; i < 4; i++) g.limb([[hd[0] + (i - 1.5) * limb * 0.2, hd[1] - limb * 0.15], [hd[0] + (i - 1.5) * limb * 0.3, hd[1] - limb * (0.62 + (i === 1 || i === 2 ? 0.12 : 0))]], [limb * 0.2, limb * 0.15], handC);
+    g.ell(hd[0], hd[1], limb * 0.45, limb * 0.4, handC);
+    g.limb([[hd[0] + limb * 0.3, hd[1]], [hd[0] + limb * 0.62, hd[1] - limb * 0.3]], [limb * 0.2, limb * 0.15], handC); // thumb
+  };
+
   // --- the off-hand arm behind the torso when it reaches across
   const shL: P = [L(wide * 0.9), sy + 0.035], shR: P = [R(wide * 0.9), sy + 0.035];
   const sleeve = heavy ? torsoD : robe ? clothD : bare ? skin : medium ? clothD : torsoD;
@@ -136,8 +155,8 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
     if (robe) { g.mat = 'cloth'; g.blob([[hd[0] - limb * 0.7, hd[1] - 0.045], [hd[0] + limb * 0.7, hd[1] - 0.045], [hd[0] + limb * 0.8, hd[1] - 0.005], [hd[0] - limb * 0.8, hd[1] - 0.005]], clothD); }
     else if (heavy) { g.mat = 'metal'; g.ell(el[0], el[1], limb * 0.5, limb * 0.45, STEEL); g.blob([[hd[0] - limb * 0.6, hd[1] - 0.05], [hd[0] + limb * 0.6, hd[1] - 0.05], [hd[0] + limb * 0.65, hd[1] - 0.01], [hd[0] - limb * 0.65, hd[1] - 0.01]], STEEL); }
     else { g.mat = 'leather'; g.blob([[hd[0] - limb * 0.55, hd[1] - 0.05], [hd[0] + limb * 0.55, hd[1] - 0.05], [hd[0] + limb * 0.6, hd[1] - 0.012], [hd[0] - limb * 0.6, hd[1] - 0.012]], mix(LEATHER, BLACK, 0.3)); }
-    g.mat = skinMat;
-    g.ell(hd[0], hd[1] + 0.005, limb * 0.52, limb * 0.56, heavy ? STEEL : skin);
+    if (hd === handL && stance === 'caster' && !gear.shield) openHand(hd);
+    else fist(hd, hd === handR ? dir : [0, 1]);
   };
   const leftAcross = stance === 'guard' && gear.shield;
   
@@ -242,12 +261,15 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
     g.mat = 'metal'; g.ell(cx, cy - syy * 0.25, 0.022 * k, 0.022 * k, GOLD);
   }
   if (!(stance === 'guard' && (gear.weapon === 'greatsword' || gear.weapon === 'axe'))) drawWeapon();
+  // The fingers close over the grip, in front of the weapon.
+  if (gear.weapon && gear.weapon !== 'none') fist(handR, dir);
   // A spell held ready in the off hand.
   if (stance === 'caster' && spell && !gear.shield) g.glow(handL[0], handL[1] - 0.025, spell, 3.2);
 
   // --- neck and head
   g.mat = skinMat;
-  g.limb([[0.5, hy + r * 0.5], [0.5, sy + 0.01]], [r * 0.8, r * 0.95], skinD);
+  g.limb([[0.5, hy + r * 0.5], [0.5, sy - 0.002]], [r * 0.82, r * 1.1], skinD);
+  g.mat = 'plain'; g.soft(0.5, hy + r * 1.12, r * 0.42, r * 0.16, mix(skin, BLACK, 0.55), 0.55); g.mat = skinMat; // the jaw's shadow on the neck
   const turn = r * 0.1; // faces are turned a little to the right, three-quarter
   const earY = hy + r * 0.05;
   const ear = (dir: 1 | -1, len: number, lift: number) => g.blob([[0.5 + dir * r * 0.78, earY - r * 0.2], [0.5 + dir * (r * 0.9 + len * k * 0.7), earY - lift * k * 0.6], [0.5 + dir * (r * 0.9 + len * k), earY - lift * k], [0.5 + dir * r * 0.92, earY + r * 0.25], [0.5 + dir * r * 0.78, earY + r * 0.25]], skin, true, 0.5);
@@ -294,6 +316,8 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
   if (!scaly) {
     const iris = a.speciesId === 'tiefling' ? hex('#ff9a2e') : a.speciesId === 'orc' ? hex('#5a1c14') : a.speciesId === 'elf' ? hex('#3a5a4a') : hex('#3a2a1e');
     const ey = hy + r * 0.04, ex = r * 0.33;
+    // The mood of the class: guards and brutes frown, skirmishers raise one brow and smirk, casters and bards are calm or smiling.
+    const mood = stance === 'guard' || stance === 'brute' ? 'grim' : stance === 'skirmisher' ? 'sly' : 'calm';
     for (const s of [-1, 1]) {
       const far = s > 0, x = 0.5 + turn + s * ex * (far ? 0.88 : 1), es = v.eye * (far ? 0.85 : 1);
       g.soft(x, ey - r * 0.02, r * 0.24 * es, r * 0.14, mix(skin, BLACK, 0.4), 0.45); // the socket's shadow
@@ -301,14 +325,24 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
       if (a.speciesId === 'tiefling') g.glow(x, ey, iris, 0.5);
       else { g.flat(x + r * 0.02, ey, r * 0.05 * v.eye, r * 0.05 * v.eye, iris); g.flat(x + r * 0.005, ey - r * 0.015, r * 0.014, r * 0.014, mix(WHITE, iris, 0.2)); }
       g.fineCurve([[x - r * 0.14 * es, ey - r * 0.01], [x, ey - r * 0.06], [x + r * 0.14 * es, ey - r * 0.03]], F(0.04), OUTLINE); // upper lid
-      g.fineCurve([[0.5 + turn + s * r * 0.12, ey - r * 0.2], [0.5 + turn + s * r * 0.34, ey - r * (female ? 0.29 : 0.25)], [0.5 + turn + s * r * 0.56 * (far ? 0.9 : 1), ey - r * (female ? 0.24 : 0.2)]], F((female ? 0.045 : 0.075) * v.brow), hairD); // brow
+      g.fineCurve([[x - r * 0.12 * es, ey + r * 0.045], [x + r * 0.1 * es, ey + r * 0.035]], F(0.022), mix(skin, BLACK, 0.45), 0.6); // lower lid
+      const inner = mood === 'grim' ? 0.13 : mood === 'sly' && far ? 0.27 : 0.2, peak = mood === 'grim' ? 0.22 : mood === 'sly' && far ? 0.34 : female ? 0.29 : 0.25;
+      g.fineCurve([[0.5 + turn + s * r * 0.12, ey - r * inner], [0.5 + turn + s * r * 0.34, ey - r * peak], [0.5 + turn + s * r * 0.56 * (far ? 0.9 : 1), ey - r * (female ? 0.24 : 0.2)]], F((female ? 0.045 : 0.075) * v.brow), hairD); // brow
+      if (mood === 'grim' && !female) g.fineCurve([[0.5 + turn + s * r * 0.08, ey - r * 0.17], [0.5 + turn + s * r * 0.05, ey - r * 0.27]], F(0.025), mix(skin, BLACK, 0.4), 0.55); // furrow
     }
     const nl = v.nose;
     g.fineCurve([[0.5 + turn + r * 0.03, ey + r * 0.02], [0.5 + turn + r * 0.1, ey + nl * r * 0.7], [0.5 + turn + r * 0.13, ey + nl * r]], F(0.035), skinD);
     g.fineCurve([[0.5 + turn + r * 0.13, ey + nl * r], [0.5 + turn + r * 0.04, ey + nl * r + r * 0.06], [0.5 + turn - r * 0.06, ey + nl * r + r * 0.02]], F(0.03), skinD);
     g.soft(0.5 + turn + r * 0.03, ey + nl * r + r * 0.07, r * 0.12, r * 0.045, mix(skin, BLACK, 0.45), 0.55); // under the nose
-    const my = hy + r * 0.64, smile = (v.mouth - 0.5) * r * 0.08;
-    g.fineCurve([[0.5 + turn - r * 0.2, my + smile * 0.5], [0.5 + turn, my + r * 0.015], [0.5 + turn + r * 0.18, my - smile]], F(0.045), mix(skinD, hex('#6a2a2a'), 0.35));
+    const my = hy + r * 0.64, smile = ((v.mouth - 0.5) * 0.04 + (mood === 'calm' ? 0.05 : mood === 'grim' ? -0.035 : 0)) * r;
+    const lipC = mix(skinD, hex('#6a2a2a'), 0.35);
+    if (stance === 'brute') {
+      // Teeth bared in a battle grin.
+      g.blob([[0.5 + turn - r * 0.2, my - r * 0.01], [0.5 + turn + r * 0.18, my - r * 0.02], [0.5 + turn + r * 0.13, my + r * 0.07], [0.5 + turn - r * 0.15, my + r * 0.07]], hex('#e8e0cc'), true, 0.6);
+      g.fine([0.5 + turn - r * 0.17, my + r * 0.03], [0.5 + turn + r * 0.15, my + r * 0.025], F(0.02), mix(skin, BLACK, 0.5), 0.6);
+    } else if (mood === 'sly') g.fineCurve([[0.5 + turn - r * 0.19, my + r * 0.01], [0.5 + turn, my + r * 0.015], [0.5 + turn + r * 0.19, my - r * 0.05]], F(0.045), lipC);
+    else g.fineCurve([[0.5 + turn - r * 0.2, my - smile * 0.6], [0.5 + turn, my + r * 0.015 + Math.max(0, smile) * 0.4], [0.5 + turn + r * 0.18, my - smile]], F(0.045), lipC);
+    if (!female && (mood === 'grim' || v.jaw > 1.02)) for (const sd of [-1, 1]) g.fineCurve([[0.5 + turn + sd * r * 0.2, ey + nl * r + r * 0.02], [0.5 + turn + sd * r * 0.27, my - r * 0.02]], F(0.025), mix(skin, BLACK, 0.35), 0.45); // lines from nose to mouth
     g.soft(0.5 + turn, my + r * 0.1, r * 0.13, r * 0.045, mix(skin, hex('#7a3a30'), 0.35), 0.5); // lower lip
     g.soft(L(r * 0.42) + turn, hy + r * 0.38, r * 0.2, r * 0.14, hex('#b05a48'), 0.12); // a little warmth on the cheeks
     if (v.freckles > 0.7 && (look.skin === 'fair' || look.skin === 'porcelain' || look.skin === 'tan')) {
@@ -337,11 +371,27 @@ function draw(a: HeroArt, S: number, weight: number): { c: HTMLCanvasElement; he
   // --- hair on top
   if (!scaly && look.hair !== 'bald') {
     g.mat = 'hair';
-    g.blob([[L(r * 1.0), hy + r * 0.1], [L(r * 1.04), hy - r * 0.5], [L(r * 0.6), hy - r * 1.05], [R(r * 0.3), hy - r * 1.14], [R(r * 0.88), hy - r * 0.8], [R(r * 1.04), hy - r * 0.2], [R(r * 0.96), hy + r * 0.1], [R(r * 0.75), hy - r * 0.38], [0.5 + turn, hy - r * 0.5], [L(r * 0.3), hy - r * 0.42], [L(r * 0.8), hy - r * 0.32]], hair, true, 0.8);
+    g.mat = 'plain'; g.soft(0.5 + turn, hy - r * 0.3, r * 0.75, r * 0.14, mix(skin, BLACK, 0.5), 0.4); g.mat = 'hair'; // the hair's shadow on the brow
+    // A crown of hair with a side parting: it hugs the temples, and a lock sweeps across the brow.
+    const part = 0.5 + turn + r * 0.28;
+    g.blob([[L(r * 0.96), hy + r * 0.22], [L(r * 1.06), hy - r * 0.45], [L(r * 0.66), hy - r * 1.04], [R(r * 0.25), hy - r * 1.16], [R(r * 0.86), hy - r * 0.84], [R(r * 1.05), hy - r * 0.25], [R(r * 0.95), hy + r * 0.2], [R(r * 0.82), hy - r * 0.2], [R(r * 0.62), hy - r * 0.42], [part, hy - r * 0.62], [0.5 + turn - r * 0.15, hy - r * 0.5], [L(r * 0.4), hy - r * 0.36], [L(r * 0.78), hy - r * 0.15]], hair, true, 0.85);
+    // A lock sweeps from the parting across the brow to the temple, so the hairline is not one smooth edge.
+    if (look.hair !== 'topknot') {
+      g.limb([[part, hy - r * 0.66], [0.5 + turn - r * 0.05, hy - r * 0.52], [L(r * 0.45), hy - r * 0.34], [L(r * 0.78), hy - r * 0.08]], [r * 0.34, r * 0.3, r * 0.2, r * 0.05], hair);
+      g.limb([[part + r * 0.05, hy - r * 0.66], [R(r * 0.68), hy - r * 0.42], [R(r * 0.82), hy - r * 0.1]], [r * 0.26, r * 0.18, r * 0.04], hair);
+    }
+    // Strands flowing away from the parting, and a sheen where the light catches the crown.
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4, ex2 = L(r * (0.9 - t * 0.5)), ey2 = hy - r * (0.2 + t * 0.25);
+      g.fineCurve([[part - r * 0.04 * i, hy - r * (0.75 + t * 0.2)], [(part + ex2) / 2, hy - r * (0.85 - t * 0.1)], [ex2, ey2]], F(0.03), hairD, 0.55);
+    }
+    g.fineCurve([[part + r * 0.05, hy - r * 0.72], [R(r * 0.7), hy - r * 0.6], [R(r * 0.9), hy - r * 0.2]], F(0.03), hairD, 0.55);
+    g.fineCurve([[L(r * 0.5), hy - r * 0.92], [0.5 - r * 0.05, hy - r * 1.02], [R(r * 0.1), hy - r * 1.02]], F(0.06), mix(hair, WHITE, 0.3), 0.45);
     if (look.hair === 'long') for (const s of [-1, 1]) g.blob([[0.5 + s * r * 0.82, hy - r * 0.35], [0.5 + s * r * 1.02, hy - r * 0.2], [0.5 + s * r * 1.08, sy + r * 0.5], [0.5 + s * r * 0.98, sy + r * 0.85], [0.5 + s * r * 0.84, sy + r * 0.3], [0.5 + s * r * 0.86, hy + r * 0.4]], hair, true, 0.7);
     if (look.hair === 'braid') { g.limb([[R(r * 0.9), hy], [R(r * 1.2), sy], [R(r * 1.1), sy + r * 1.4]], [r * 0.4, r * 0.36, r * 0.22], hair); g.mat = 'metal'; g.dot(R(r * 1.1), sy + r * 1.5, GOLD, 1.4); g.mat = 'hair'; }
     if (look.hair === 'topknot') { g.ell(0.5, hy - r * 1.25, r * 0.38, r * 0.34, hair); g.mat = 'metal'; g.box(L(r * 0.18), hy - r * 1.02, R(r * 0.18), hy - r * 0.92, GOLD); }
-    if (look.hair === 'wild') for (let i = -2; i <= 2; i++) g.limb([[0.5 + i * r * 0.42, hy - r * 0.7], [0.5 + i * r * 0.56, hy - r * (1.15 - Math.abs(i) * 0.1)], [0.5 + i * r * 0.62 + r * 0.1, hy - r * (1.55 - Math.abs(i) * 0.15)]], [r * 0.36, r * 0.22, r * 0.04], hair);
+    // Tousled locks curling every which way, not spikes.
+    if (look.hair === 'wild') for (let i = -2; i <= 2; i++) { const bend = (i % 2 ? 1 : -1) * r * 0.22; g.limb([[0.5 + i * r * 0.38, hy - r * 0.75], [0.5 + i * r * 0.5 + bend * 0.4, hy - r * (1.08 - Math.abs(i) * 0.08)], [0.5 + i * r * 0.55 + bend, hy - r * (1.3 - Math.abs(i) * 0.12)], [0.5 + i * r * 0.5 + bend * 1.5, hy - r * (1.22 - Math.abs(i) * 0.12)]], [r * 0.42, r * 0.34, r * 0.2, r * 0.05], hair); }
   }
 
   // --- engraving and the heavy outer line
@@ -356,6 +406,20 @@ function figure(a: HeroArt, S: number, weight = 1) {
   let f = figures.get(k);
   if (!f) { f = draw(a, S, weight); figures.set(k, f); }
   return f;
+}
+
+/** The head and shoulders alone, painted at full size: the crop is chosen before drawing, not after. */
+function bust(a: HeroArt): HTMLCanvasElement {
+  const k = `bust|${heroArtKey(a)}`;
+  let f = figures.get(k);
+  if (!f) {
+    f = draw(a, 512, 0.55, ({ r, hy }) => {
+      const half = Math.max(0.16, r * 2.05);
+      return { x: 0.5 - half, y: Math.max(0, hy - half * 0.82), size: half * 2 };
+    });
+    figures.set(k, f);
+  }
+  return f.c;
 }
 
 const canvases = new Map<string, HTMLCanvasElement>();
@@ -385,10 +449,7 @@ export function heroUrl(a: HeroArt): string {
 /** Head and shoulders in a round brass frame: for the party panel, the lobby and hero tabs. */
 export function heroPortraitUrl(a: HeroArt, size = 160): string {
   return cached(`bust|${size}|${heroArtKey(a)}`, () => {
-    const f = figure(a, 512, 0.32);
-    const half = Math.max(0.16, f.r * 2.05);
-    const y = Math.max(0, Math.min(1 - half * 2, f.head[1] - half * 0.82));
-    return framed(f.c, size, 'hero', { x: 0.5 - half, y, size: half * 2 }).toDataURL();
+    return framed(bust(a), size, 'hero', { x: 0, y: 0, size: 1 }).toDataURL();
   });
 }
 
