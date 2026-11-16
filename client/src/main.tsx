@@ -19,6 +19,7 @@ import './ui.css';
 import './forge.css';
 import './compact.css';
 import './ooc.css';
+import './hotbar.css';
 import './ui/prefs';
 
 // Art packs are optional; never wait long for them.

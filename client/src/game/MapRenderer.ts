@@ -308,6 +308,14 @@ export class MapRenderer {
     }
   }
 
+  /** Where a token is drawn right now, in pixels from the map's top left; null when it is not on the map. */
+  tokenRect(id: string): { left: number; top: number; size: number } | null {
+    const e = this.ents.get(id);
+    if (!e || !this.ready || e.root.destroyed) return null;
+    const unit = TILE * this.scale;
+    return { left: this.world.x + e.x * unit, top: this.world.y + e.y * unit, size: e.size * unit };
+  }
+
   /** Tells the page which monster the pointer is over, so it can show its card. */
   private reportHover() {
     const h = this.hover;

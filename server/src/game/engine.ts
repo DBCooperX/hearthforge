@@ -5364,7 +5364,9 @@ export class Game {
       characters: s.characters,
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
-        ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions, sprite: MONSTERS[m.defId].sprite,
+        ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions,
+        effects: (m.effects ?? []).map(({ condition, turns, save, untilHero, onHurt, by, spell }) => ({ condition, turns, save, untilHero, onHurt, by, spell })),
+        sprite: MONSTERS[m.defId].sprite,
         tiles: this.tilesOf(m), look: m.look ?? MONSTERS[m.defId].look, restyled: !!m.look && lookKey(m.look) !== lookKey(MONSTERS[m.defId].look),
         kind: MONSTERS[m.defId].type, description: m.description ?? this.n(MONSTERS[m.defId].description),
         senses: this.monsterSenses(m), light: m.light ?? null, reach: this.monsterReach(m),

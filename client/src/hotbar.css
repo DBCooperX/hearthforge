@@ -1,0 +1,145 @@
+/* The combat hotbar: square slots framed in the colour of what they spend, the turn's economy
+   above them, the spellbook as a drawer that opens over the map. Loaded last. */
+
+:root {
+  --cost-action: #5fbf63;
+  --cost-bonus: #f0a03c;
+  --cost-reaction: #b98cf0;
+  --cost-free: #8fa3b8;
+  --cost-move: #e8c45a;
+}
+
+.actionbar.hotbar {
+  container-type: inline-size;
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 12px 10px;
+  --hb: clamp(34px, calc((100cqw - 200px) / 13.6), 50px);
+}
+
+/* ---------- the turn's economy ---------- */
+.hb-top { display: flex; align-items: center; gap: 14px; min-height: 24px; flex-wrap: wrap; }
+.hb-top .hint { font-size: 13px; color: var(--muted); margin-left: auto; text-align: right; }
+.economy { display: flex; align-items: center; gap: 12px; font-size: 12.5px; letter-spacing: 0.02em; color: #d8cfc2; }
+.economy .eco { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: default; }
+.economy .eco i { width: 12px; height: 12px; display: inline-block; flex: none; }
+.economy .eco b { color: var(--cost-action); font-size: 12px; }
+.eco.action i { border-radius: 50%; background: var(--cost-action); box-shadow: 0 0 6px color-mix(in srgb, var(--cost-action) 70%, transparent); }
+.eco.bonus i { background: var(--cost-bonus); clip-path: polygon(50% 0, 100% 100%, 0 100%); filter: drop-shadow(0 0 4px var(--cost-bonus)); }
+.eco.reaction i { background: var(--cost-reaction); transform: rotate(45deg) scale(0.82); border-radius: 2px; box-shadow: 0 0 6px color-mix(in srgb, var(--cost-reaction) 70%, transparent); }
+.eco.mana i { background: #5aa0e8; transform: rotate(45deg) scale(0.7); }
+.economy .eco.spent { color: #6f6860; }
+.economy .eco.spent i { background: transparent; box-shadow: inset 0 0 0 1.5px #5e5750; filter: none; }
+.eco.bonus.spent i { background: #5e5750; clip-path: polygon(50% 0, 100% 100%, 0 100%, 0 100%, 18% 88%, 82% 88%, 50% 24%, 18% 88%, 0 100%); }
+.eco.move .track { width: 70px; height: 6px; border-radius: 3px; background: #0d0c0b; box-shadow: inset 0 0 0 1px #3d3833; overflow: hidden; }
+.eco.move .track span { display: block; height: 100%; background: linear-gradient(90deg, #b8902e, var(--cost-move)); transition: width 0.25s; }
+.economy.waiting { opacity: 0.55; }
+
+/* ---------- layout: common actions | hotbar | end turn ---------- */
+.hb-main { display: flex; align-items: stretch; gap: 10px; }
+.hb-common, .hb-slots {
+  display: grid; grid-template-rows: repeat(2, var(--hb)); grid-auto-flow: column; grid-auto-columns: var(--hb); gap: 4px;
+  padding: 5px; border-radius: 8px;
+  background: linear-gradient(#141210, #0f0e0d); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 0 1px #3a3530, 0 1px 0 1px rgba(255, 220, 180, 0.04);
+}
+.hb-slots { grid-auto-flow: row; grid-template-columns: repeat(10, var(--hb)); grid-template-rows: repeat(2, var(--hb)); }
+.hb-end { display: flex; flex-direction: column; gap: 4px; margin-left: auto; justify-content: space-between; }
+.hb-end .oa-mode { font-size: 12px; padding: 3px 8px; }
+
+/* ---------- a slot ---------- */
+.hb-slot {
+  --c: var(--cost-free);
+  position: relative; width: var(--hb); height: var(--hb); padding: 0; display: grid; place-items: center;
+  border-radius: 6px; border: 1px solid color-mix(in srgb, var(--c) 55%, #2a2622);
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--c) 14%, #2a2622), #191715 75%);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--c) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: #e8dcc8; cursor: pointer;
+}
+.hb-slot.cost-action { --c: var(--cost-action); }
+.hb-slot.cost-bonus { --c: var(--cost-bonus); }
+.hb-slot.cost-reaction { --c: var(--cost-reaction); }
+.hb-slot.cost-free { --c: var(--cost-free); }
+.hb-slot .hb-icon { display: grid; place-items: center; width: 72%; height: 72%; font-size: calc(var(--hb) * 0.48); line-height: 1; }
+.hb-slot .hb-icon .item-art.glyph { width: 100%; height: 100%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8)); }
+.hb-slot:hover:not(.off) { border-color: var(--c); filter: brightness(1.18); box-shadow: inset 0 -3px 0 var(--c), 0 0 10px color-mix(in srgb, var(--c) 45%, transparent); }
+.hb-slot:active:not(.off) { transform: translateY(1px); }
+.hb-slot.on { border-color: #ffd9a0; box-shadow: inset 0 -3px 0 var(--c), 0 0 0 1px #ffb15c, 0 0 14px rgba(255, 150, 60, 0.6); }
+.hb-slot.off { cursor: help; filter: none; }
+.hb-slot.off .hb-icon { filter: grayscale(1) brightness(0.5); }
+.hb-slot.off { box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--c) 30%, transparent); border-color: #2f2b27; }
+.hb-slot.auto .hb-icon { filter: grayscale(0.35) brightness(0.8); }
+.hb-slot.auto.off .hb-icon { filter: grayscale(1) brightness(0.45); }
+.hb-slot .hk { position: absolute; top: 1px; left: 3px; font-style: normal; font-size: 9.5px; color: #8d8478; text-shadow: 0 1px 1px #000; }
+.hb-slot .hb-mana, .hb-slot .hb-uses {
+  position: absolute; bottom: 4px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px;
+  font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+.hb-slot .hb-mana { left: 2px; background: #1d4f86; color: #d9ecff; }
+.hb-slot .hb-uses { right: 2px; background: #3d342b; color: #f1e2c8; }
+.hb-slot .hb-auto { position: absolute; top: 1px; right: 2px; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cost-reaction); text-shadow: 0 1px 1px #000; }
+.hb-slot.empty { cursor: default; border: 1px dashed #2e2a26; background: #121110; box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.7); }
+.hotbar.dragging .hb-slot.empty { border-color: #8a6a3c; background: #1c1712; }
+.hb-slot[draggable='true'] { cursor: grab; }
+.hb-slot.off[draggable='true'] { cursor: grab; }
+.hb-slot.small { --hb: 40px; }
+.hb-slot.marked::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 4px var(--ember); }
+
+/* ---------- end turn ---------- */
+.hb-endturn {
+  flex: 1; min-width: 86px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 10px;
+  font-family: var(--font-head); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  background: linear-gradient(#5a4018, #3a2a0e); border: 1px solid #c8913e; border-radius: 8px; color: #ffe2b0;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 180, 0.2), 0 0 12px rgba(245, 138, 46, 0.25);
+}
+.hb-endturn .item-art.glyph { width: 22px; height: 22px; }
+.hb-endturn[aria-disabled='true'] { filter: grayscale(0.8) brightness(0.6); box-shadow: none; cursor: default; }
+
+/* ---------- tooltip lines ---------- */
+.hint-tip .hb-tip-cost { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+.hint-tip .hb-tip-cost.cost-action { color: #2f7d32; }
+.hint-tip .hb-tip-cost.cost-bonus { color: #b05a00; }
+.hint-tip .hb-tip-cost.cost-reaction { color: #6a3fa8; }
+.hint-tip .hb-tip-cost.cost-free { color: #4f6273; }
+.hint-tip em.info-line { color: #4b2d7a; font-style: normal; }
+.hint-tip em.warn-line.soft { color: #8a5a10; font-weight: 600; }
+
+/* ---------- the spellbook drawer ---------- */
+.hb-book {
+  position: absolute; left: 12px; right: 12px; bottom: calc(100% + 6px); z-index: 20;
+  max-height: min(46vh, 380px); display: flex; flex-direction: column;
+  background: var(--iron); border: 1px solid #5c534a; border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+}
+.hb-book-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid #3a3530; font-size: 13px; }
+.hb-book-head b { font-family: var(--font-head); letter-spacing: 0.08em; color: #f1d7a8; }
+.hb-book-head .muted { font-size: 12px; }
+.hb-castat { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--muted); font-size: 12px; }
+.hb-castat .chip { padding: 1px 7px; font-size: 12px; min-width: 24px; }
+.hb-castat .chip.on { border-color: var(--gold); color: var(--gold); }
+.hb-book-head .close { padding: 1px 7px; }
+.hb-book-head .hb-castat + .close { margin-left: 0; }
+.hb-book-head .muted + .close { margin-left: auto; }
+.hb-book-body { overflow-y: auto; padding: 8px 12px 10px; display: grid; gap: 8px; }
+.hb-book-group { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: start; }
+.hb-book-label { font-size: 12px; color: var(--muted); padding-top: 12px; }
+.hb-book-slots { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------- status icons over the tokens ---------- */
+.token-statuses { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.token-status { position: absolute; left: 0; top: 0; display: flex; gap: 2px; pointer-events: none; will-change: transform; }
+.status-icon {
+  --s: #c9a86a;
+  position: relative; width: 20px; height: 20px; display: grid; place-items: center; pointer-events: auto; cursor: help;
+  border-radius: 50%; background: #121010; border: 1.5px solid var(--s); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 5px color-mix(in srgb, var(--s) 50%, transparent);
+  font-size: 11px; line-height: 1;
+}
+.status-icon .item-art.glyph { width: 14px; height: 14px; }
+.status-icon.good { --s: #7fd17f; }
+.status-icon.bad { --s: #ec6b5a; }
+.status-icon.mark { --s: #ffb04a; }
+.status-icon.focus { --s: #7fb6ff; }
+.status-icon b {
+  position: absolute; right: -5px; bottom: -4px; min-width: 12px; height: 12px; padding: 0 2px; border-radius: 6px;
+  background: #000; color: #fff; font-size: 9px; line-height: 12px; text-align: center; box-shadow: 0 0 0 1px var(--s);
+}
+.status-more { pointer-events: auto; cursor: help; font-size: 10px; color: #f1e2c8; background: rgba(0, 0, 0, 0.75); border-radius: 8px; padding: 2px 5px; align-self: center; }
+.act-icon.draggable { cursor: grab; }

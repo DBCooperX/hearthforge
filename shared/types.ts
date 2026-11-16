@@ -279,6 +279,8 @@ export interface MonsterView {
   ac: number;
   alive: boolean;
   conditions: string[];
+  /** How each condition heroes put on it ends, for the status icons over its token. Missing in old clients: none. */
+  effects?: MonsterEffectView[];
   /** Art pack sprite name. The drawn token comes from `look`. */
   sprite: string;
   /** Squares along one side of the space it occupies; (x, y) is the top-left one. */
@@ -380,6 +382,22 @@ export interface AbilityDef {
   step?: number;
   /** Creature types it works on. */
   only?: string[];
+}
+
+/** One condition on a monster, as players see it: what it is and how it ends. */
+export interface MonsterEffectView {
+  condition: string;
+  /** Its own turns it still lasts. */
+  turns?: number;
+  /** The save it repeats at the end of each of its turns. */
+  save?: { ability: AbilityKey; dc: number };
+  /** Ends when this hero's next turn begins. */
+  untilHero?: string;
+  /** Ends when it takes damage. */
+  onHurt?: boolean;
+  /** The hero whose spell holds it, and the spell. */
+  by?: string;
+  spell?: string;
 }
 
 export interface Combatant {
