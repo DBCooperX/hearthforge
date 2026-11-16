@@ -10,7 +10,7 @@ import { StyleSetup } from './StyleSetup';
 import { artOfCharacter, artOfDraft, heroUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, savedName, type Connection } from '../net';
 import { ChatPanel } from './Chat';
-import { Embers, Logo } from '../ui/Brand';
+import { Backdrop, Embers, Logo } from '../ui/Brand';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
 import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
@@ -57,7 +57,8 @@ export function LobbyScreen({ conn, onInnkeeper }: { conn: Connection; onInnkeep
   };
 
   return (
-    <div className="splash">
+    <div className="splash tavern">
+      <Backdrop />
       <Embers />
       <div className="splash-tools"><MusicControl /></div>
       <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>
@@ -376,7 +377,8 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
   };
   const close = () => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) conn.send({ t: 'close_table' }); };
   return (
-    <div className="splash">
+    <div className="splash tavern">
+      <Backdrop />
       <Embers count={14} />
       <div className="splash-tools"><MusicControl /><LangSwitch /></div>
       <div className={shared ? 'panel setup with-side' : 'panel setup'}>

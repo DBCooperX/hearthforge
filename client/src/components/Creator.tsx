@@ -18,6 +18,7 @@ import { artOfDraft, heroUrl } from '../game/heroArt';
 import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { CloseButton } from '../ui/Window';
+import { Backdrop } from '../ui/Brand';
 import { Hint, Info } from '../ui/Hint';
 import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
@@ -668,6 +669,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
 
   return (
     <div className="overlay creator-overlay">
+      <Backdrop deep />
       <div className="panel creator">
         <span className="win-corner tl" /><span className="win-corner tr" /><span className="win-corner bl" /><span className="win-corner br" />
         <header className="creator-head">

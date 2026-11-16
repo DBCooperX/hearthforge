@@ -64,6 +64,8 @@ The game shows title, artist and license of the track that is playing. For track
 
 The Hearthforge logo (`docs/hearthforge-logo.jpg`) was made by the project's owner. The lobby logo, the emblem, the top bar mark and the browser icon are cut from it.
 
+The tavern table picture behind the lobby, the table room and the character creator (`client/src/assets/tavern*.webp` and `.jpg`, resized from the owner's original) is also the project's owner's own image.
+
 ## Fonts
 
 Bundled through [Fontsource](https://fontsource.org), all under the [SIL Open Font License 1.1](https://openfontlicense.org): Alegreya and Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica), and Cinzel (Natanael Gama).
