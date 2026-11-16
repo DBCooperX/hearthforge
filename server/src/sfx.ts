@@ -10,6 +10,11 @@ export const sfxEnabled = (env: NodeJS.ProcessEnv) => (env.HEARTHFORGE_SFX ?? 'o
 let fetching = false;
 
 /** The link may be absolute or relative to the page, and escaped (&amp; or \\/ in embedded JSON). */
+/** Kenney's Download button asks /download-link/<hex of "assets/<pack>"> for a fresh signed address; the page names the id. */
+export function downloadId(html: string): string | null {
+  return /data-download-id=["']([0-9a-f]+)["']/i.exec(html)?.[1] ?? null;
+}
+
 export function zipLink(html: string, page: string): string | null {
   const m = /["'=(]([^"'\s<>()=]*\.zip)(?=["'\s<>)?#]|$)/i.exec(html.replace(/\\\//g, '/').replace(/&amp;/g, '&'));
   if (!m) return null;
@@ -47,7 +52,13 @@ export async function ensureSfx(dir: string, env: NodeJS.ProcessEnv, fetchFn: ty
       if (existsSync(dest) && readdirSync(dest).some((f) => f.endsWith('.ogg'))) continue;
       try {
         const page = new TextDecoder().decode(await download(pack.page, fetchFn));
-        const link = zipLink(page, pack.page);
+        const id = downloadId(page);
+        let link: string | null = null;
+        if (id) {
+          const data = JSON.parse(new TextDecoder().decode(await download(`https://kenney.nl/download-link/${id}`, fetchFn))) as { url?: unknown };
+          if (typeof data.url === 'string') link = new URL(data.url, pack.page).href;
+        }
+        link ??= zipLink(page, pack.page);
         if (!link) throw new Error(`no download link found on ${pack.page}`);
         const n = unpackSfx(await download(link, fetchFn), dest);
         if (!n) throw new Error('the zip held no .ogg files');
