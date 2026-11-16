@@ -158,6 +158,8 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
   const edit = lib?.canEdit ?? false;
   const packEditing = lib?.packs.find((p) => p.id === editing);
   const row = (p: PackInfo) => {
+    // Players only see the credits of what is installed; everything else is the owner's business.
+    if (!edit && !p.installed) return null;
     const key = `${p.kind}:${p.id}`;
     const name = p.source === 'builtin' ? t(p.id === 'emoji' ? 'Emoji (built in)' : 'Hearthforge pixel art (built in)') : p.name;
     return (
@@ -166,11 +168,11 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
           <b>{name}</b>
           <Credit p={p} />
           {p.kind === 'icons' && p.installed && p.source !== 'builtin' && <small>{t('{n} of {m} items have a picture', { n: p.matched ?? 0, m: lib!.slots })}</small>}
-          {!p.installed && p.source === 'upload' && <small>{t(p.url.includes('kenney.nl') ? 'Kenney does not allow automatic downloads: open the pack\'s page, download the zip there and drop it here.' : 'This site does not allow automatic downloads: get the zip there, then drop it here.')}</small>}
-          {!p.installed && p.source === 'download' && p.url && <small>{t('Downloads straight from {site}.', { site: new URL(p.url).hostname })}</small>}
+          {edit && !p.installed && p.source === 'upload' && <small>{t(p.url.includes('kenney.nl') ? 'Kenney does not allow automatic downloads: open the pack\'s page, download the zip there and drop it here.' : 'This site does not allow automatic downloads: get the zip there, then drop it here.')}</small>}
+          {edit && !p.installed && p.source === 'download' && p.url && <small>{t('Downloads straight from {site}.', { site: new URL(p.url).hostname })}</small>}
         </div>
         <span className="art-pack-actions">
-          {!p.installed && p.source === 'upload' && p.url && <a href={p.url} target="_blank" rel="noreferrer noopener">{t(p.url.includes('kenney.nl') ? 'Download from Kenney' : 'Get it here')}</a>}
+          {edit && !p.installed && p.source === 'upload' && p.url && <a href={p.url} target="_blank" rel="noreferrer noopener">{t(p.url.includes('kenney.nl') ? 'Download from Kenney' : 'Get it here')}</a>}
           {p.active && <span className="art-inuse">{t('In use')}</span>}
           {edit && !p.active && p.installed && <button type="button" disabled={!!busy} onClick={() => void run(key, () => act({ do: 'use', kind: p.kind, pack: p.id }), p.kind === 'tiles')}>{t('Use')}</button>}
           {edit && !p.installed && p.source === 'download' && <button type="button" disabled={!!busy} onClick={() => void run(key, () => act({ do: 'install', pack: p.id }), p.kind === 'tiles')}>{busy === key ? t('Downloading…') : t('Download and use')}</button>}
@@ -188,7 +190,7 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
         : packEditing ? <Assign key={packEditing.id} pack={packEditing} onBack={() => setEditing(null)} onLibrary={setLib} />
         : (
           <div className="settings-body" onDragOver={(e) => { if (edit) { e.preventDefault(); setOver(true); } }} onDragLeave={() => setOver(false)} onDrop={drop}>
-            {!edit && <p className="art-note">{t(lib.uploads ? 'Art packs are changed in the Innkeeper, by the owner of this server.' : 'Changing art packs is switched off on this server.')}</p>}
+            {!edit && <p className="art-note">{t('The art of this server and its credits. Only the Innkeeper can change it.')}</p>}
             {edit && (
               <div className={over ? 'art-drop over' : 'art-drop'}>
                 <b>{busy === 'upload' ? t('Unpacking…') : t('Drop the zip of an art pack here')}</b>
@@ -207,7 +209,7 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
               <h3>{t('Map tiles')}</h3>
               <ul className="art-packs">{lib.packs.filter((p) => p.kind === 'tiles').map(row)}</ul>
             </section>
-            {more.length > 0 && (
+            {edit && more.length > 0 && (
               <section>
                 <h3>{t('More free packs')}</h3>
                 <p className="muted small">{t('Item icon packs. Once added, their pictures replace the emoji for items, skills and spells in the inventory, character sheet and hotbar. Pictures are matched by file name, and Assign icons fixes the rest. These sites want a login or do not allow automatic downloads: get the zip there and drop it above. Mind the credit each artist asks for.')}</p>
@@ -221,5 +223,5 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
     </>
   );
   if (embedded) return <div className={packEditing ? 'art-window art-embedded large' : 'art-window art-embedded'}>{body}</div>;
-  return <Window title={t('Art & Assets')} icon="settings" size={packEditing ? 'large' : 'medium'} className="art-window" onClose={onClose ?? (() => {})}>{body}</Window>;
+  return <Window title={t(edit ? 'Art & Assets' : 'Art credits')} icon="settings" size={packEditing ? 'large' : 'medium'} className="art-window" onClose={onClose ?? (() => {})}>{body}</Window>;
 }
