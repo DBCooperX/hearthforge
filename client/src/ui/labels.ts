@@ -49,6 +49,7 @@ export const SHORTCUTS: { keys: string[]; text: string }[] = [
   { keys: ['Esc'], text: 'Close a window or cancel' },
   { keys: ['1', '4'], text: 'Switch hero or bookmark in an open window' },
   { keys: ['W', 'A', 'S', 'D'], text: 'Move in a fight' },
+  { keys: ['Shift', '←↑→↓'], text: 'Look around the battle map (or drag it, or point at its edge)' },
   { keys: ['1', '9'], text: 'Use an action in a fight' },
   { keys: ['Space'], text: 'End your turn' },
 ];

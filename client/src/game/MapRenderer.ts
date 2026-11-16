@@ -268,6 +268,17 @@ export class MapRenderer {
   private zoom: number;
   private readonly reduced: boolean;
   private readonly labels: { miss: string };
+  // Looking around: the player's own offset from where the camera would look, in map pixels.
+  // Pushed by the pointer at the map's edge, by dragging, and by Shift and the arrow keys; it
+  // returns to the action when the next creature's turn starts.
+  private pan = { x: 0, y: 0 };
+  private panTurn: string | null = null;
+  private edgeScroll = true;
+  private pointer: { x: number; y: number } | null = null;
+  private edgeWait = 0;
+  private drag: { x: number; y: number; moved: boolean } | null = null;
+  private dragged = false;
+  private keys = { x: 0, y: 0 };
   onTile: (x: number, y: number) => void = () => {};
   onHoverMonster: (hover: TokenHover | null) => void = () => {};
   private hoverId: string | null = null;
@@ -304,7 +315,12 @@ export class MapRenderer {
     this.app.stage.hitArea = this.app.screen;
     this.app.stage.on('pointermove', (e) => { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); });
     this.app.stage.on('pointerleave', () => { this.hover = null; this.reportHover(); });
-    this.app.stage.on('pointertap', (e) => { const t = this.pick(e.global.x, e.global.y); if (t) this.onTile(t.x, t.y); });
+    this.app.stage.on('pointertap', (e) => {
+      if (this.dragged) { this.dragged = false; return; }
+      const t = this.pick(e.global.x, e.global.y);
+      if (t) this.onTile(t.x, t.y);
+    });
+    this.listenForPanning(this.app.canvas);
     this.app.ticker.add((ticker) => this.tick(Math.min(0.1, ticker.deltaMS / 1000)));
     this.ready = true;
     if (this.state) this.sync();
@@ -906,15 +922,91 @@ export class MapRenderer {
     return { x: toward(cx, best.x, halfW), y: toward(cy, best.y, halfH) };
   }
 
+  /** Edge scrolling on or off (a setting of the player's). */
+  setEdgeScroll(on: boolean) { this.edgeScroll = on; if (!on) this.edgeWait = 0; }
+
+  /** Which way the keys push the camera: -1, 0 or 1 on each axis. */
+  setKeyPan(x: number, y: number) { this.keys = { x, y }; }
+
+  /** Back to whoever is acting. */
+  recenter() { this.pan = { x: 0, y: 0 }; }
+
+  private listenForPanning(canvas: HTMLCanvasElement) {
+    const at = (e: PointerEvent) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    canvas.addEventListener('pointermove', (e) => {
+      const p = at(e);
+      this.pointer = e.pointerType === 'mouse' ? p : null;
+      const d = this.drag;
+      if (!d) return;
+      const dx = p.x - d.x, dy = p.y - d.y;
+      if (!d.moved && Math.hypot(dx, dy) < 6) return;
+      d.moved = true;
+      this.dragged = true;
+      d.x = p.x; d.y = p.y;
+      canvas.style.cursor = 'grabbing';
+      this.panBy(-dx, -dy, true);
+    });
+    canvas.addEventListener('pointerleave', () => { this.pointer = null; this.edgeWait = 0; });
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.button !== 1) return;
+      const p = at(e);
+      this.drag = { ...p, moved: false };
+      this.dragged = false;
+      if (e.button === 1) e.preventDefault();
+    });
+    const end = () => {
+      this.drag = null;
+      canvas.style.cursor = '';
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+  }
+
+  /** Move the view by a distance in screen pixels; `now` skips the camera's easing (for dragging). */
+  private panBy(sx: number, sy: number, now: boolean) {
+    if (this.tilt) {
+      const k = this.tcam.k;
+      const dx = sx / k, dy = sy / (k * GROUND_SQUASH);
+      this.pan.x += dx; this.pan.y += dy;
+      if (now) { this.tcam.fx += dx; this.tcam.fy += dy; }
+    } else {
+      this.pan.x += sx / this.scale; this.pan.y += sy / this.scale;
+      if (now) { this.cam.x -= sx; this.cam.y -= sy; }
+    }
+  }
+
+  /** The pointer near an edge of the map, or Shift and the arrow keys, push the view that way. */
+  private looseLook(dt: number) {
+    const active = this.opts.activeId;
+    if (active !== this.panTurn) { this.panTurn = active; this.pan = { x: 0, y: 0 }; }
+    let vx = this.keys.x, vy = this.keys.y;
+    const p = this.pointer;
+    if (this.edgeScroll && p && !this.drag) {
+      const w = this.app.screen.width, h = this.app.screen.height, E = Math.min(48, w * 0.06);
+      const ex = p.x < E ? -(1 - p.x / E) : p.x > w - E ? 1 - (w - p.x) / E : 0;
+      const ey = p.y < E ? -(1 - p.y / E) : p.y > h - E ? 1 - (h - p.y) / E : 0;
+      // A short wait, so crossing the edge on the way to the hotbar does not move anything.
+      if (ex || ey) this.edgeWait += dt; else this.edgeWait = 0;
+      if (this.edgeWait > 0.2) { vx += ex * 1.2; vy += ey * 1.2; }
+    }
+    if (vx || vy) this.panBy(vx * 700 * dt, vy * 700 * dt, this.reduced);
+  }
+
   private tickFlat(dt: number, state: GameState) {
     // Camera follows whoever is acting, or the selected hero.
     const sw = this.app.screen.width, sh = this.app.screen.height;
     const focus = this.focusPoint(sw / (2 * TILE * this.scale), sh / (2 * TILE * this.scale));
     const mw = state.map.width * TILE * this.scale, mh = state.map.height * TILE * this.scale;
-    let tx = focus ? sw / 2 - focus.x * TILE * this.scale : this.cam.x;
-    let ty = focus ? sh / 2 - focus.y * TILE * this.scale : this.cam.y;
+    this.looseLook(dt);
+    const fx = focus ? focus.x * TILE : (sw / 2 - this.cam.x) / this.scale - this.pan.x;
+    const fy = focus ? focus.y * TILE : (sh / 2 - this.cam.y) / this.scale - this.pan.y;
+    let tx = sw / 2 - (fx + this.pan.x) * this.scale;
+    let ty = sh / 2 - (fy + this.pan.y) * this.scale;
     tx = mw <= sw ? (sw - mw) / 2 : Math.min(0, Math.max(sw - mw, tx));
     ty = mh <= sh ? (sh - mh) / 2 : Math.min(0, Math.max(sh - mh, ty));
+    // The look-around offset never runs past the map's edges.
+    this.pan.x = (sw / 2 - tx) / this.scale - fx;
+    this.pan.y = (sh / 2 - ty) / this.scale - fy;
     if (!this.cam.ready) { this.cam = { x: tx, y: ty, ready: true }; }
     const k = this.reduced ? 1 : Math.min(1, dt * 6);
     this.cam.x += (tx - this.cam.x) * k;
@@ -933,8 +1025,12 @@ export class MapRenderer {
     cam.cx = sw / 2;
     cam.cy = sh * 0.5;
     const focus = this.focusPoint(sw / (2 * TILE * cam.k), (sh * 0.85) / (2 * TILE * cam.k * GROUND_SQUASH));
-    const want = focus ? { fx: focus.x * TILE, fy: focus.y * TILE } : { fx: cam.fx || mw / 2, fy: cam.fy || mh / 2 };
-    const goal = clampFocus(want.fx, want.fy, cam.k, sw, sh, mw, mh, TILE * 0.8);
+    this.looseLook(dt);
+    const want = focus ? { fx: focus.x * TILE, fy: focus.y * TILE } : { fx: (cam.fx || mw / 2) - this.pan.x, fy: (cam.fy || mh / 2) - this.pan.y };
+    const goal = clampFocus(want.fx + this.pan.x, want.fy + this.pan.y, cam.k, sw, sh, mw, mh, TILE * 0.8);
+    // The look-around offset never runs past the map's edges.
+    this.pan.x = goal.fx - want.fx;
+    this.pan.y = goal.fy - want.fy;
     if (!this.tcamReady) { cam.fx = goal.fx; cam.fy = goal.fy; this.tcamReady = true; }
     const k = this.reduced ? 1 : Math.min(1, dt * 5);
     cam.fx += (goal.fx - cam.fx) * k;
@@ -1047,6 +1143,7 @@ export class MapRenderer {
     // A fight in the dark dims the candlelit table a little too.
     const ambient = state.phase === 'combat' ? state.light?.ambient ?? 'bright' : 'bright';
     this.table.tint = ambient === 'dark' ? 0x8a7f74 : ambient === 'dim' ? 0xc2b8ac : 0xffffff;
+
   }
 
   /** After a few seconds, a machine that cannot keep up gets the lighter version of the 2.5D view. */

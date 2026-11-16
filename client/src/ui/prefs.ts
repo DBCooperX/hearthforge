@@ -14,10 +14,12 @@ export interface Prefs {
   invFilter: InvFilter;
   /** The character creator shows all eight steps instead of the short three. */
   creatorDetailed: boolean;
+  /** In a fight, the pointer at the edge of the battle map moves the view. */
+  edgeScroll: boolean;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {
