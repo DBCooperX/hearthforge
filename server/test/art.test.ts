@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { ArtStore } from '../src/artLibrary';
 import { artManifest, artMode, ensureArt } from '../src/art';
 
 const png = new Uint8Array([137, 80, 78, 71]);
