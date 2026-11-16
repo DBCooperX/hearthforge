@@ -36,8 +36,11 @@ import {
   type FeatPick,
   type ClassId,
   type CombatState,
+  type Combatant,
   type Disposition,
   type GameState,
+  type FightOutcome,
+  type SurpriseInfo,
   type InvLoc,
   type ItemCategory,
   type ItemDef,
@@ -61,7 +64,7 @@ import {
   type TableInfo,
 } from '../../../shared/types';
 import { CLASSES, defaultGender, profBonusFor } from '../data/classes';
-import { MONSTERS, type LegendaryOption, type MonsterAttack, type MonsterDef, type MonsterSpecial, type Rider } from '../data/monsters';
+import { MONSTERS, passivePerception, stealthBonus, type LegendaryOption, type MonsterAttack, type MonsterDef, type MonsterSpecial, type Rider } from '../data/monsters';
 import { resolveMonster, suggestMonsters } from '../data/monsterSearch';
 import { inArea } from './areas';
 import { EXPOSED, HAMPERED, HELD, HELPLESS, HERO_CONDITIONS, INCAPACITATING, type EffectEnd, type HeroEffect } from '../../../shared/conditions';
@@ -250,6 +253,30 @@ export interface InternalState {
   /** Table talk between the players, whispers included. Never part of the public state. */
   chat: ChatMessage[];
   chatSeq: number;
+  /**
+   * Successful Stealth checks by hero id, with the total and the world clock. A fight opens
+   * with the enemies caught unawares only on one of these. Missing in older saves.
+   */
+  sneaks?: Record<string, { total: number; at: number }>;
+  /** How the last fight ended, for the closing screen. Missing in older saves. */
+  lastFight?: FightOutcome | null;
+}
+
+/** How long a successful Stealth check lets the party open a fight by surprise, in world minutes. */
+export const SNEAK_MINUTES = 60;
+
+/** What the start of a fight by surprise did, for the Dungeon Master to narrate. */
+export interface Opening {
+  side: SurpriseInfo['side'];
+  /** Who was caught unawares and rolled initiative with Disadvantage. */
+  caught: string[];
+  /** Who noticed in time. */
+  noticed: string[];
+  /** The ambushers' Stealth total that the defenders' Passive Perception was measured against. */
+  stealth: number;
+  strike?: { hero: string; target: string; hit: boolean; damage: number; sneakAttack: boolean; targetDown: boolean } | null;
+  /** Why a declared opening strike did not happen. */
+  noStrike?: string;
 }
 
 export type Beat =
@@ -1092,7 +1119,7 @@ export class Game {
   // ----------------------------------------------------------------- combat
 
   /** Set up a battle map and roll initiative. Group counts are for a party of four. */
-  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string }) {
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string; surprise?: string; opener?: string }): Opening | null {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
@@ -1142,16 +1169,124 @@ export class Game {
     this.placeMonsters(midY);
     this.lightTheField(opts.light);
     s.encounter = { source: opts.source, locationId: opts.locationId ?? null, boss };
+    this.spoilsOpen = false;
+    const ambush = this.surprise(heroes, opts.surprise, opts.opener);
+    s.sneaks = {};
     for (const c of heroes) this.enterFight(c);
-    const order = [
-      ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.heroInitiative(c) })),
-      ...s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod) })),
+    const caught = new Set(ambush?.caughtIds ?? []);
+    const mark = (id: string) => (caught.has(id) ? { surprised: true } : {});
+    const order: Combatant[] = [
+      ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.heroInitiative(c, caught.has(c.id)), ...mark(c.id) })),
+      ...s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod, caught.has(m.id)), ...mark(m.id) })),
     ].sort((a, b) => b.initiative - a.initiative || (a.kind === 'pc' ? -1 : 1));
-    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0 };
+    // The hero who strikes from hiding takes the first turn, and that turn's attack is the strike.
+    const opener = ambush?.opener;
+    if (opener) {
+      const i = order.findIndex((o) => o.id === opener.c.id);
+      const [entry] = order.splice(i, 1);
+      order.unshift({ ...entry, ambush: true });
+    }
+    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
     s.phase = 'combat';
-    this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.initiative}`).join(', ')}.`);
+    this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.ambush ? `(${this.t`first, from hiding`})` : o.initiative}`).join(', ')}.`);
     this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
     this.nextTurn();
+    if (!ambush) return null;
+    const out: Opening = { side: ambush.side, caught: ambush.caughtIds.map((id) => this.nameOf(id)), noticed: ambush.noticedIds.map((id) => this.nameOf(id)), stealth: ambush.stealth };
+    if (ambush.noStrike) out.noStrike = ambush.noStrike;
+    if (opener && this.current()?.id === opener.c.id) out.strike = this.openingStrike(opener.c, opener.m);
+    return out;
+  }
+
+  /**
+   * Who is caught unawares as a fight begins (SRD 5.2.1: a surprised creature has Disadvantage
+   * on its Initiative roll). The heroes catch the enemies unawares only on a Stealth check that
+   * succeeded a moment ago, measured against each enemy's Passive Perception; the Dungeon
+   * Master's word alone is not enough. In an ambush the enemies roll Stealth against each
+   * hero's Passive Perception. A hero who struck from hiding is set down next to the target.
+   */
+  private surprise(heroes: Character[], asked?: string, openerRef?: string) {
+    const s = this.s;
+    const word = String(asked ?? '').trim().toLowerCase();
+    const ref = String(openerRef ?? '').trim();
+    let side: SurpriseInfo['side'] | null = ['enemies', 'enemy', 'monsters', 'them'].includes(word) ? 'enemies' : ['party', 'heroes', 'players', 'us', 'ambush'].includes(word) ? 'party' : null;
+    if (ref && !['none', 'no', '-'].includes(ref.toLowerCase())) side = 'enemies';
+    else if (!side) return null;
+    const result = { side, caughtIds: [] as string[], noticedIds: [] as string[], stealth: 0, opener: null as { c: Character; m: Monster } | null, noStrike: '' };
+    if (side === 'party') {
+      // The enemies creep up as a group: the worst roll among their kinds is the one that counts.
+      const kinds = [...new Set(s.monsters.map((m) => m.defId))];
+      result.stealth = Math.min(...kinds.map((id) => d20(this.rng).value + stealthBonus(MONSTERS[id])));
+      for (const c of heroes) (this.heroPassivePerception(c) < result.stealth ? result.caughtIds : result.noticedIds).push(c.id);
+      this.log('roll', result.caughtIds.length
+        ? this.t`Ambush! The enemies' Stealth: ${result.stealth}. Caught unawares, with Disadvantage on Initiative: ${result.caughtIds.map((id) => this.nameOf(id)).join(', ')}.`
+        : this.t`Ambush! The enemies' Stealth: ${result.stealth}. Every hero notices them in time.`);
+      return result;
+    }
+    const now = s.world ? this.world.minutes : 0;
+    const fresh = Object.entries(s.sneaks ?? {}).filter(([id, r]) => now - r.at <= SNEAK_MINUTES && heroes.some((h) => h.id === id && this.conscious(h)));
+    const sneaker = ref ? heroes.find((h) => h.id === ref || h.name.toLowerCase() === ref.toLowerCase()) : null;
+    if (ref && !sneaker) throw new GameError(`Unknown hero "${ref}" for opener. Use a hero id such as "pc1".`);
+    if (!fresh.length || (sneaker && !fresh.some(([id]) => id === sneaker.id))) {
+      throw new GameError(`${sneaker ? `${sneaker.name} has` : 'No hero has'} a successful Stealth check from just now, so nobody is caught unawares. Call skill_check with ability "dex" and skill "stealth" first and start the fight by surprise only if it succeeds; otherwise start it without surprise.`);
+    }
+    result.stealth = sneaker ? s.sneaks![sneaker.id].total : Math.min(...fresh.map(([, r]) => r.total));
+    for (const m of s.monsters) (result.stealth >= passivePerception(MONSTERS[m.defId]) ? result.caughtIds : result.noticedIds).push(m.id);
+    const names = (ids: string[]) => ids.map((id) => this.nameOf(id)).join(', ');
+    this.log('roll', [
+      result.caughtIds.length ? this.t`Surprise! Stealth ${result.stealth}. Caught unawares, with Disadvantage on Initiative: ${names(result.caughtIds)}.` : this.t`Stealth ${result.stealth}: the enemies notice the heroes in time.`,
+      result.caughtIds.length && result.noticedIds.length ? this.t`Not fooled: ${names(result.noticedIds)}.` : '',
+    ].filter(Boolean).join(' '));
+    if (!sneaker) return result;
+    const target = s.monsters[0];
+    if (!result.caughtIds.includes(target.id)) {
+      result.noStrike = `${target.name} noticed ${sneaker.name} (Passive Perception ${passivePerception(MONSTERS[target.defId])} against Stealth ${result.stealth}), so there is no strike from hiding.`;
+      return result;
+    }
+    if (!this.weaponOf(sneaker)?.weapon?.ranged) this.standBeside(sneaker, target);
+    result.opener = { c: sneaker, m: target };
+    return result;
+  }
+
+  /** Puts a hero on a free square next to a monster, behind it as seen from the party if possible. */
+  private standBeside(c: Character, m: Monster) {
+    const n = this.tilesOf(m);
+    const spots: Pt[] = [];
+    for (let y = m.y - 1; y <= m.y + n; y++) for (let x = m.x - 1; x <= m.x + n; x++) {
+      if (inFootprint(m, n, x, y) || x < 0 || y < 0 || x >= this.width || y >= this.height) continue;
+      if (!this.walkable(x, y) || this.monsterAt(x, y) || this.charAt(x, y, c.id)) continue;
+      spots.push({ x, y });
+    }
+    const midY = m.y + (n - 1) / 2;
+    spots.sort((a, b) => b.x - a.x || Math.abs(a.y - midY) - Math.abs(b.y - midY));
+    if (spots[0]) { c.x = spots[0].x; c.y = spots[0].y; }
+  }
+
+  /** The strike from hiding that opens the fight: the hero's first attack, with Advantage because the target cannot see it coming. */
+  private openingStrike(c: Character, m: Monster): NonNullable<Opening['strike']> | null {
+    const ranged = this.weaponOf(c)?.weapon?.ranged;
+    try {
+      this.canAttack();
+      this.targetMonster(c, m.id, ranged ? ranged.long : 5);
+    } catch (e) {
+      if (!(e instanceof GameError)) throw e;
+      return null;
+    }
+    const before = m.hp;
+    this.log('roll', this.t`${c.name} strikes from hiding!`);
+    this.prime(`${c.id}:unseen`);
+    this.spendAttack(c);
+    const hit = this.strike(c, m);
+    this.unprime(`${c.id}:unseen`);
+    const sneakAttack = !!this.s.combat?.once?.includes(`${c.id}:sneak`);
+    this.checkCombatOver();
+    return { hero: c.name, target: m.name, hit, damage: Math.max(0, before - Math.max(0, m.hp)), sneakAttack, targetDown: !m.alive };
+  }
+
+  /** Passive Perception: 10 plus the Perception bonus. */
+  heroPassivePerception(c: Character): number {
+    const prof = c.skills.includes('perception') ? c.profBonus * (c.expertise.includes('perception') ? 2 : 1) : this.feat(c, 'jack_of_all_trades') ? Math.floor(c.profBonus / 2) : 0;
+    return 10 + this.mod(c, 'wis') + prof;
   }
 
   /**
@@ -1289,7 +1424,7 @@ export class Game {
     s.rows = rows.map((r) => r.join(''));
   }
 
-  private initiativeFor(dexMod: number) { return d20(this.rng).value + dexMod; }
+  private initiativeFor(dexMod: number, surprised = false) { return d20(this.rng, surprised ? 'disadvantage' : 'normal').value + dexMod; }
 
   /** A hero's d20. Halfling Luck rerolls a natural 1 once. */
   private heroD20(c: Character, mode: RollMode = 'normal') {
@@ -1376,6 +1511,12 @@ export class Game {
     const s = this.s;
     if (!s.combat) return true;
     this.settleDeaths();
+    const rounds = s.combat.round;
+    const seq = (s.lastFight?.seq ?? 0) + 1;
+    const slainNames = s.monsters.filter((m) => !m.alive).map((m) => m.name);
+    const boss = !!s.encounter?.boss;
+    const ending = (result: FightOutcome['result'], extra: Partial<FightOutcome> = {}): FightOutcome =>
+      ({ seq, result, xp: 0, xpEach: 0, gold: 0, loot: [], slain: slainNames, rounds, boss, leveled: [], ...extra });
     if (!this.consciousChars().length) {
       this.clearEffects();
       for (const c of s.characters) this.leaveFight(c);
@@ -1386,6 +1527,7 @@ export class Game {
       const survivors = s.characters.filter((c) => !c.dead);
       if (!survivors.length) {
         s.phase = 'defeat';
+        s.lastFight = ending('defeat');
         this.log('system', this.t`The party has fallen.`);
         this.beats.push({ kind: 'defeat' });
         return true;
@@ -1399,6 +1541,7 @@ export class Game {
       w.minutes = (Math.floor(w.minutes / 1440) + 1) * 1440 + 8 * 60;
       if (haven) { w.party = { q: haven.q, r: haven.r }; this.settleIn(haven); reveal(w, w.party, 1); }
       s.phase = 'explore';
+      s.lastFight = ending('rescued', { gold: -lost });
       this.log('system', (haven ? this.t`The party is overwhelmed. The survivors wake in ${haven.name} the next morning with 1 HP.` : this.t`The party is overwhelmed. The survivors wake where they fell the next morning with 1 HP.`) + (lost ? ` ${this.t`They are ${lost} gp lighter.`}` : ''));
       this.beats.push({ kind: 'rescued' });
       return true;
@@ -1442,7 +1585,16 @@ export class Game {
     ].filter(Boolean).join(' '));
     s.monsters = [];
     s.rows = [];
+    const levels = new Map(s.characters.map((c) => [c.id, c.level]));
     this.grantXp(xp, this.t`defeating ${slain}`);
+    const living = s.characters.filter((c) => !c.dead).length;
+    s.lastFight = ending('victory', {
+      // As grantXp shares it: whole points for each living hero.
+      xpEach: living && xp > 0 ? Math.max(1, Math.floor(xp / living)) : 0, xp: living && xp > 0 ? Math.max(1, Math.floor(xp / living)) * living : 0, gold, loot: rewards.filter((r) => r !== this.t`${gold} gp`),
+      leveled: s.characters.filter((c) => c.level > (levels.get(c.id) ?? c.level)).map((c) => c.name),
+    });
+    // What the Dungeon Master hands out while telling of the aftermath belongs to the spoils too.
+    this.spoilsOpen = true;
     if (questDone) this.setQuest({ id: questDone, status: 'completed' });
     this.beats.push({ kind: 'combat_end', boss: !!enc?.boss, rewards: [this.t`${xp} XP`, ...rewards].join(', ') });
     return true;
@@ -1862,9 +2014,10 @@ export class Game {
     const guided = m.conditions.includes('guided');
     const studied = !!m.studiedBy?.includes(c.id);
     const aimed = this.primed(`${c.id}:aim`);
+    const unseen = this.primed(`${c.id}:unseen`);
     const seen = this.sight(c.name, m.name, this.heroSees(c, m), this.monsterSees(m, c));
     const prone = this.mHas(m, 'prone');
-    const adv = guided || seen.adv || studied || aimed || (reckless && !brutal) || this.mExposed(m) || this.buffOn(c, 'attackAdv') || (prone && dist <= 5) || c.conditions.includes('invisible')
+    const adv = guided || seen.adv || studied || aimed || unseen || (reckless && !brutal) || this.mExposed(m) || this.buffOn(c, 'attackAdv') || (prone && dist <= 5) || c.conditions.includes('invisible')
       || (marked === 'hunters_mark' && this.feat(c, 'precise_hunter'));
     const dis = seen.dis || this.hampered(c) || (prone && dist > 5) || (!!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c)));
     const mode = brutal ? (dis ? 'disadvantage' : 'normal') : rollMode(adv, dis);
@@ -3851,9 +4004,9 @@ export class Game {
   }
 
   /** Initiative, with the features that sharpen it. */
-  private heroInitiative(c: Character) {
+  private heroInitiative(c: Character, surprised = false) {
     const adv = this.feat(c, 'remarkable_athlete') || this.feat(c, 'feral_instinct');
-    return this.heroD20(c, adv ? 'advantage' : 'normal').value + this.mod(c, 'dex') + (c.feats.includes('alert') ? c.profBonus : 0);
+    return this.heroD20(c, rollMode(adv, surprised)).value + this.mod(c, 'dex') + (c.feats.includes('alert') ? c.profBonus : 0);
   }
 
   /** What rolling initiative sets off: resources that come back, and powers that start with a fight. */
@@ -4894,11 +5047,18 @@ export class Game {
       if (success) this.spendUse(c, 'inspiration');
       this.log('roll', this.t`${c.name}: ${this.n('Peerless Skill')} adds ${die}, ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`);
     }
+    // A Stealth check that succeeded lets the next fight open with the enemies caught unawares.
+    if (name === 'stealth') {
+      const sneaks = (this.s.sneaks ??= {});
+      if (success) sneaks[c.id] = { total, at: this.s.world ? this.world.minutes : 0 };
+      else delete sneaks[c.id];
+    }
     return { character: c.name, roll: r, modifier: mod, total, dc, success };
   }
 
   /** Narration shown to the players as a scene card, headed by where it plays, when, and who is there. */
   addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }) {
+    this.spoilsOpen = false;
     const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
     this.log('dm', scene.text.trim(), { scene: meta });
@@ -5148,8 +5308,19 @@ export class Game {
     const delta = Math.max(-100000, Math.min(500, Math.round(amount) || 0));
     if (this.s.gold + delta < 0) throw new GameError(this.t`The party only has ${this.s.gold} gp`);
     this.s.gold += delta;
+    this.spoils({ gold: delta });
     if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + (reason.trim() ? ` (${reason.trim().slice(0, 100)})` : '') + '.');
     return { gold: this.s.gold };
+  }
+
+  /** Set when a fight is won, until the next scene: what is found meanwhile joins the victory screen's spoils. */
+  private spoilsOpen = false;
+
+  private spoils(add: { item?: string; gold?: number }) {
+    const f = this.s.lastFight;
+    if (!this.spoilsOpen || !f || f.result !== 'victory' || this.s.phase !== 'explore') return;
+    if (add.item && f.loot.length < 12) f.loot.push(add.item);
+    if (add.gold && add.gold > 0) f.gold += add.gold;
   }
 
   grantItem(characterId: string, itemId: string, qty: number) {
@@ -5160,6 +5331,7 @@ export class Game {
     const n = Math.max(1, Math.min(def.stackable ? 10 : 1, Math.round(qty) || 1));
     if (!this.addToBag(c, itemId, n)) throw new GameError(this.t`${c.name}'s bag is full`);
     this.log('system', this.t`${c.name} receives ${`${n > 1 ? `${n}× ` : ''}${this.n(def.name)}`}.`);
+    this.spoils({ item: `${n > 1 ? `${n}× ` : ''}${this.n(def.name)} (${c.name})` });
     return { character: c.name, item: def.name, quantity: n };
   }
 
@@ -5260,6 +5432,7 @@ export class Game {
     this.addToBag(taker, def.id, qty);
     this.addItemNote(def, input.note);
     this.log('system', this.t`${taker.name} receives ${`${qty > 1 ? `${qty}× ` : ''}${def.name}`}.`);
+    this.spoils({ item: `${qty > 1 ? `${qty}× ` : ''}${def.name} (${taker.name})` });
     return { character: taker.name, item: def.name, item_id: def.id, quantity: qty, created, quest_item: !!def.story?.quest };
   }
 
@@ -5392,6 +5565,7 @@ export class Game {
       rumours: rumourViews(this),
       trophies: trophyViews(this),
       unanswered: dm.unanswered ?? [],
+      lastFight: s.lastFight ?? null,
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),
         width: w.width,

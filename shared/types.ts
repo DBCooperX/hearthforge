@@ -404,6 +404,37 @@ export interface Combatant {
   id: string;
   kind: 'pc' | 'monster';
   initiative: number;
+  /** Caught unawares when the fight began: rolled initiative with Disadvantage. */
+  surprised?: boolean;
+  /** Struck first from hiding: takes the first turn, its opening attack already made. */
+  ambush?: boolean;
+}
+
+/** How a fight began when one side caught the other unawares. */
+export interface SurpriseInfo {
+  /** Who was caught unawares: the enemies (the heroes crept up on them) or the party (an ambush). */
+  side: 'enemies' | 'party';
+  /** The hero who opened with a strike from hiding. */
+  opener?: string;
+}
+
+/** How the last fight ended, for the victory or defeat screen that closes the battle map. */
+export interface FightOutcome {
+  /** Grows with every fight, so the browser shows each ending once. */
+  seq: number;
+  result: 'victory' | 'rescued' | 'defeat';
+  /** Experience for the whole party, and what each living hero got. */
+  xp: number;
+  xpEach: number;
+  gold: number;
+  /** What was found, as the log names it: "Potion of Healing (Vex)". */
+  loot: string[];
+  /** The enemies that fell. */
+  slain: string[];
+  rounds: number;
+  boss: boolean;
+  /** Heroes who reached a new level. */
+  leveled: string[];
 }
 
 export interface CombatState {
@@ -432,6 +463,8 @@ export interface CombatState {
   moved?: boolean;
   /** An enemy is leaving a hero's reach, and that hero's player decides whether to strike. */
   reaction?: ReactionPrompt | null;
+  /** Set when the fight began with one side caught unawares. */
+  surprise?: SurpriseInfo | null;
 }
 
 /** The fight waits for one player: take the opportunity attack or let the enemy go. */
@@ -722,6 +755,8 @@ export interface GameState {
   trophies: TrophyView[];
   /** Lines in the story that the Dungeon Master has not answered yet. Their author may still take them back. */
   unanswered: { logId: number; playerId: string }[];
+  /** How the last fight ended. Its `seq` grows with every fight. */
+  lastFight: FightOutcome | null;
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };

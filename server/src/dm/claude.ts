@@ -9,7 +9,7 @@ import { COMPASS, type Compass } from '../../../shared/hex';
 import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
 import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
-import type { Beat, Game, Monster, MonsterIntent } from '../game/engine';
+import type { Beat, Game, Monster, MonsterIntent, Opening } from '../game/engine';
 import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, fightBudget, genderRoster, transcript } from './context';
 import { resolveModels, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
@@ -198,6 +198,8 @@ const STORY_TOOLS: Tool[] = [
     reason: str('One sentence on how the fight started, for the record.'),
     setting: str(`What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup. One of: here, ${BIOMES.join(', ')}.`),
     light: str('How lit the battlefield is: "auto" follows the time of day and the place (dungeons and caves are dark), which is right nearly always. "bright", "dim" or "dark" when the story says otherwise, such as "dark" for a cellar whose lamps were smashed. Heroes with torches light them by themselves.'),
+    surprise: str('Who is caught unawares. "none" for an ordinary start. "enemies" when the heroes crept up on them: it needs a Stealth skill_check that succeeded just before, and the server measures it against each enemy\'s Passive Perception. "party" when the enemies ambush the heroes: the server rolls their Stealth against each hero\'s Passive Perception. Whoever is caught rolls initiative with Disadvantage.'),
+    opener: str('Id of the hero who sneaked up to strike first, for example "pc2", when the players said so; empty otherwise. Needs that hero\'s own successful Stealth check. The server sets the hero beside the first enemy listed, gives them the first turn and makes the weapon attack from hiding at once, with Advantage and Sneak Attack where it applies. Narrate the strike as the result says.'),
   }),
   // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
   looseTool('set_stage', 'Say where exactly the scene plays and who is in it besides the heroes. The players see it as a header above your scene ("Zollhaus, upper floor · morning · Hendrick"). Call it whenever the heroes step into another room or out of the door, or people join or leave them, in the same response as scene. Going to another place with move_to_place or by travel resets it by itself.', {
@@ -399,7 +401,7 @@ export class ClaudeDM implements DungeonMaster {
           }
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
-            game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined });
+            const opening = game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined, surprise: typeof i.surprise === 'string' ? i.surprise : undefined, opener: typeof i.opener === 'string' ? i.opener : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => { const d = resolveMonster(gr.defId); return d ? applyLookTokens(d.look, gr.look ?? []).ignored : []; }))];
             const levels = game.s.characters.filter((c) => !c.dead).map((c) => c.level);
@@ -408,6 +410,8 @@ export class ClaudeDM implements DungeonMaster {
             return {
               started: true, enemies: game.s.monsters.map((m) => m.name), light: game.s.ambient ?? 'bright', difficulty: hard,
               ...(ignored.length ? { ignored_look_values: ignored } : {}),
+              ...(opening ? { surprise: openingReport(opening) } : {}),
+              ...(game.s.phase !== 'combat' ? { fight_over: 'The strike from hiding ended the fight at once. Describe it and the aftermath.' } : {}),
               note: `Combat has begun on the battle map. Describe its opening in the scene and suggest no actions.${hard === 'deadly' ? ' This fight is beyond the party\'s budget: play the monsters with restraint, or give the heroes a way out.' : ''}`,
             };
           }
@@ -663,4 +667,14 @@ export function createDM(env: NodeJS.ProcessEnv, onUsage?: (sample: UsageSample)
   if (!env.ANTHROPIC_API_KEY) return null;
   const effort = (['low', 'medium', 'high', 'xhigh', 'max'] as const).find((e) => e === env.HEARTHFORGE_DM_EFFORT) ?? 'low';
   return new ClaudeDM({ models: resolveModels(env), effort, apiKey: env.ANTHROPIC_API_KEY, onUsage });
+}
+
+/** What a start by surprise did, in the words the Dungeon Master narrates from. */
+function openingReport(o: Opening) {
+  const s = o.strike;
+  return {
+    caught_unawares: o.caught, noticed_in_time: o.noticed, stealth: o.stealth,
+    ...(s ? { strike_from_hiding: `${s.hero} attacks ${s.target} from hiding: ${s.hit ? `hit for ${s.damage} damage${s.sneakAttack ? ', with Sneak Attack' : ''}${s.targetDown ? `, and ${s.target} falls` : ''}` : 'a miss'}. It was ${s.hero}'s action on the first turn of the fight.` } : {}),
+    ...(o.noStrike ? { no_strike: o.noStrike } : {}),
+  };
 }
