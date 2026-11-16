@@ -23,6 +23,9 @@ interface Ent {
   y: number;
   hp: number;
   kind: 'pc' | 'monster';
+  /** A brass nameplate under the token, shown while it is the creature's turn. */
+  plate: Container | null;
+  name: string;
 }
 
 interface Floater {
@@ -58,13 +61,19 @@ function tex(name: string): Texture {
   return t;
 }
 
+/** Ink-drawn tokens are painted at high resolution and scaled down smoothly, with mipmaps so lines stay clean when zoomed out. */
+function smoothTexture(canvas: HTMLCanvasElement): Texture {
+  const t = Texture.from({ resource: canvas, autoGenerateMipmaps: true, scaleMode: 'linear' });
+  t.source.scaleMode = 'linear';
+  return t;
+}
+
 const heroTextures = new Map<string, Texture>();
 function heroTex(art: HeroArt): Texture {
   const k = heroArtKey(art);
   let t = heroTextures.get(k);
   if (!t) {
-    t = Texture.from(heroCanvas(art));
-    t.source.scaleMode = 'nearest';
+    t = smoothTexture(heroCanvas(art));
     heroTextures.set(k, t);
   }
   return t;
@@ -75,8 +84,7 @@ function monsterTex(look: MonsterLook): Texture {
   const k = lookKey(look);
   let t = monsterTextures.get(k);
   if (!t) {
-    t = Texture.from(monsterCanvas(look));
-    t.source.scaleMode = 'nearest';
+    t = smoothTexture(monsterCanvas(look));
     monsterTextures.set(k, t);
   }
   return t;
@@ -184,7 +192,7 @@ export class MapRenderer {
 
     // Tokens
     const seen = new Set<string>();
-    const place = (id: string, kind: 'pc' | 'monster', texture: Texture, x: number, y: number, hp: number, maxHp: number, size = 1) => {
+    const place = (id: string, kind: 'pc' | 'monster', name: string, texture: Texture, x: number, y: number, hp: number, maxHp: number, size = 1) => {
       seen.add(id);
       let e = this.ents.get(id);
       if (!e) {
@@ -196,7 +204,7 @@ export class MapRenderer {
           sp.scale.set((size * TILE) / Math.max(texture.width, texture.height));
           sp.position.set((size * TILE) / 2, size * TILE - sp.height / 2);
         } else {
-          // Hero tokens are drawn at twice the tile's resolution and fill their square.
+          // Hero tokens are round framed portraits drawn at high resolution; they fill their square.
           sp.scale.set(TILE / Math.max(texture.width, texture.height));
           sp.position.set(TILE / 2, TILE - sp.height / 2);
         }
@@ -204,7 +212,7 @@ export class MapRenderer {
         root.addChild(sp, bar);
         root.position.set(x * TILE, y * TILE);
         this.entLayer.addChild(root);
-        e = { root, sprite: sp, bar, path: [], x, y, hp, kind, size };
+        e = { root, sprite: sp, bar, path: [], x, y, hp, kind, size, plate: null, name };
         this.ents.set(id, e);
       }
       if (hp !== e.hp) {
@@ -228,7 +236,7 @@ export class MapRenderer {
     for (const c of state.characters) {
       if (c.dead) continue;
       const heroTexture = heroTex(artOfCharacter(c, state.items));
-      const e = place(c.id, 'pc', heroTexture, c.x, c.y, c.hp, c.maxHp);
+      const e = place(c.id, 'pc', c.name, heroTexture, c.x, c.y, c.hp, c.maxHp);
       if (e.sprite.texture !== heroTexture) e.sprite.texture = heroTexture; // gear changed
       const down = c.hp <= 0;
       e.sprite.rotation = down ? Math.PI / 2 : 0;
@@ -238,7 +246,7 @@ export class MapRenderer {
     }
     for (const m of state.monsters) {
       if (!m.alive) continue;
-      const e = place(m.id, 'monster', !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look), m.x, m.y, m.hp, m.maxHp, m.tiles);
+      const e = place(m.id, 'monster', m.name, !m.restyled && packSprites.has(m.sprite) ? tex(m.sprite) : monsterTex(m.look), m.x, m.y, m.hp, m.maxHp, m.tiles);
       e.root.zIndex = 1;
       // In the dark, a monster nobody in the party can see is only a shape.
       const unseen = this.opts.unseenIds.has(m.id);
@@ -246,6 +254,7 @@ export class MapRenderer {
       e.root.alpha = unseen ? 0.55 : 1;
       e.bar.visible = !unseen;
     }
+    for (const [id, e] of this.ents) this.showPlate(e, seen.has(id) && id === this.opts.activeId && e.bar.visible !== false);
     this.drawShade(state);
     this.entLayer.sortableChildren = true;
     for (const [id, e] of this.ents) {
@@ -324,6 +333,30 @@ export class MapRenderer {
     this.hoverId = m?.id ?? null;
     const unit = TILE * this.scale;
     this.onHoverMonster(m ? { id: m.id, left: this.world.x + m.x * unit, top: this.world.y + m.y * unit, size: m.tiles * unit } : null);
+  }
+
+  /** The nameplate: the creature's name on a small brass plate under its token. */
+  private showPlate(e: Ent, on: boolean) {
+    if (!on) { if (e.plate) e.plate.visible = false; return; }
+    if (!e.plate) {
+      const plate = new Container();
+      const text = new Text({ text: e.name, style: { fontFamily: 'Cinzel, Georgia, serif', fontSize: 26, fontWeight: '700', fill: 0x2a1a08, letterSpacing: 1 } });
+      text.anchor.set(0.5, 0.5);
+      const w = text.width + 26, h = text.height + 8;
+      const g = new Graphics();
+      g.roundRect(-w / 2, -h / 2, w, h, 6).fill(0x3a2410);
+      g.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, 5).fill(0xd9b061);
+      g.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, (h - 4) / 2, 5).fill({ color: 0xf6dc96, alpha: 0.45 });
+      for (const sx of [-1, 1]) g.circle(sx * (w / 2 - 8), 0, 2.5).fill(0x6a4a1c);
+      plate.addChild(g, text);
+      e.root.addChild(plate);
+      e.plate = plate;
+    }
+    // Sits on the bottom rim of the token's frame, like the plate on a miniature's base.
+    e.plate.scale.set(1 / this.scale / 2.2);
+    e.plate.position.set((e.size * TILE) / 2, e.size * TILE - 1);
+    e.plate.visible = true;
+    e.root.zIndex = 5;
   }
 
   private float(e: Ent, label: string, color: number) {

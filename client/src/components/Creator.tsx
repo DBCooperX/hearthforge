@@ -14,7 +14,7 @@ import {
 } from '../../../shared/rules';
 import { CLASS_IDS, GROUPS, OPTIONS, grantedChoices } from '../../../shared/classes';
 import { GENDERS, abilityMod, type Abilities, type AbilityKey, type CharacterSpec, type ClassId, type GameState } from '../../../shared/types';
-import { artOfDraft, heroUrl } from '../game/heroArt';
+import { artOfDraft, heroPortraitUrl, heroUrl } from '../game/heroArt';
 import { BEARDS, HAIR_COLORS, HAIR_STYLES, LOOK_NAMES, OUTFITS, SKINS, SPECIES_SKINS, heroLook } from '../../../shared/heroLook';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { CloseButton } from '../ui/Window';
@@ -443,7 +443,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           </span>
         </label>
         <div className="look">
-          <img className="pixel look-portrait" src={heroUrl(artOfDraft(d)!)} alt="" />
+          <img className="hero-art look-portrait" src={heroPortraitUrl(artOfDraft(d)!, 240)} alt="" />
           <div className="look-rows">
             <Swatches label={t('Skin')} value={look.skin} options={SPECIES_SKINS[d.speciesId ?? 'human']} colors={SKINS} onPick={(skin) => update({ look: { ...look, skin } })} />
             {d.speciesId !== 'dragonborn' && <Choices label={t('Hair')} value={look.hair} options={HAIR_STYLES} onPick={(hair) => update({ look: { ...look, hair } })} />}
@@ -673,7 +673,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
       <div className="panel creator">
         <span className="win-corner tl" /><span className="win-corner tr" /><span className="win-corner bl" /><span className="win-corner br" />
         <header className="creator-head">
-          {d.classId && <img className="pixel" src={heroUrl(artOfDraft(d)!)} alt="" />}
+          {d.classId && <img className="hero-art" src={heroUrl(artOfDraft(d)!)} alt="" />}
           <h1>{t('Create your hero')}</h1>
           <nav className="steps">
             {steps.map((s, i) => {

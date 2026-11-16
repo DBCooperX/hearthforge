@@ -4,7 +4,7 @@ import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl } from '../game/monsterArt';
-import { artOfCharacter, heroUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
 import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
@@ -48,7 +48,7 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
   }
   for (const c of state.characters) {
     out.push({
-      name: c.name, kind: 'hero', icon: '🛡️', image: heroUrl(artOfCharacter(c, state.items)), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
+      name: c.name, kind: 'hero', icon: '🛡️', image: heroPortraitUrl(artOfCharacter(c, state.items)), subtitle: t('Level {level} {class}', { level: c.level, class: classLabel(c, t) }), description: t(CLASS_INFO[c.classId].blurb),
       facts: [`${t('HP')} ${c.hp}/${c.maxHp} · ${t('AC')} ${c.ac}`, state.players.find((p) => p.id === c.ownerId)?.name ? t('Played by {name}', { name: state.players.find((p) => p.id === c.ownerId)!.name }) : ''].filter(Boolean),
     });
   }
@@ -123,7 +123,7 @@ export function EntityProvider({ state, children }: { state: GameState; children
       {card && (
         <div className={`hovercard ${card.entity.kind}`} style={{ left: card.x, top: card.y, transform: card.below ? undefined : 'translateY(-100%)' }}>
           <div className="hc-head">
-            <span className="hc-portrait">{card.entity.image ? <img className={card.entity.image.endsWith('.svg') ? '' : 'pixel'} src={card.entity.image} alt="" /> : card.entity.icon}</span>
+            <span className="hc-portrait">{card.entity.image ? <img className={card.entity.kind === 'hero' || card.entity.kind === 'monster' ? 'hero-art' : card.entity.image.endsWith('.svg') ? '' : 'pixel'} src={card.entity.image} alt="" /> : card.entity.icon}</span>
             <div>
               <b>{card.entity.name}</b>
               <small>{card.entity.subtitle}</small>
