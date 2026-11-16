@@ -39,6 +39,21 @@ describe('art packs', () => {
     expect(m.sprites.goblin).toBeUndefined();
   });
 
+  it('never contacts kenney.nl by itself and lists Kenney as an owner download', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hf-art-'));
+    const real = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (() => { calls++; return Promise.reject(new Error('no network')); }) as typeof fetch;
+    try {
+      await ensureArt(dir, 'kenney', {});
+      const lib = new ArtStore(dir, { HEARTHFORGE_AUTO_ASSETS: 'off', HEARTHFORGE_ART: 'kenney' });
+      await lib.start();
+      expect(lib.library(true, true).packs.find((p) => p.id === 'kenney')).toMatchObject({ source: 'upload', installed: false, url: 'https://kenney.nl/assets/tiny-dungeon' });
+      await expect(lib.install('kenney')).rejects.toMatchObject({ code: 'unknown_pack' });
+    } finally { globalThis.fetch = real; }
+    expect(calls).toBe(0);
+  });
+
   it('never throws when a download is impossible', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hf-art-'));
     await expect(ensureArt(dir, '0x72', {})).resolves.toBeUndefined();
@@ -70,7 +85,7 @@ describe('art library', () => {
 
   it('takes in an uploaded icon pack, matches by file name and lets the host assign the rest', () => {
     const dir = fresh();
-    const lib = new ArtStore(dir, {});
+    const lib = new ArtStore(dir, { HEARTHFORGE_AUTO_ASSETS: 'off', HEARTHFORGE_ART: 'kenney' });
     expect(lib.manifest()).toEqual({ pack: 'generated', sprites: {}, iconPack: 'emoji', icons: {} });
     const added = lib.importZip('Kyrises_16x16_RPG_Icon_Pack_V1.3.zip', zip({
       'icons/16x16/sword_01a.png': pngOf(16, 16), 'icons/32x32/sword_01a.png': pngOf(32, 32), 'icons/32x32/potion_02b.png': pngOf(32, 32),
