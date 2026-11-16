@@ -194,7 +194,7 @@ export function App() {
         return;
       }
       if ((k === ' ' || k === 'enter') && actor && !combat.reaction) { e.preventDefault(); send({ t: 'end_turn', characterId: actor.id }); return; }
-      if (/^[1-9]$/.test(k)) document.querySelector<HTMLButtonElement>(`.actionbar button[data-hotkey="${k}"]:not(:disabled)`)?.click();
+      if (/^[0-9]$/.test(k)) document.querySelector<HTMLButtonElement>(`.actionbar button[data-hotkey="${k}"]:not([aria-disabled="true"])`)?.click();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -227,7 +227,7 @@ export function App() {
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
   else if (risky && state) hint = t('Leaving the reach of {names} invites an opportunity attack. Click the same square again to go anyway, or Disengage first.', { names: risky.ids.map((id) => state.monsters.find((m) => m.id === id)?.name ?? '?').join(', ') });
-  else if (combat && turnChar) hint = `${turnChar.ownerId === playerId ? t("{name}'s turn", { name: turnChar.name }) : t("{name}'s turn. Their player is away, so anyone may act for them.", { name: turnChar.name })} · ${t('{n} ft of movement', { n: combat.movementLeft * 5 })} · ${combat.actionUsed ? (combat.attacksLeft > 0 ? t('one more attack') : t('action used')) : t('action ready')}`;
+  else if (combat && turnChar) hint = `${turnChar.ownerId === playerId ? t("{name}'s turn", { name: turnChar.name }) : t("{name}'s turn. Their player is away, so anyone may act for them.", { name: turnChar.name })}`;
   else if (combat) hint = t('Waiting for {name}…', { name: state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
   else hint = '';
 
@@ -284,7 +284,7 @@ export function App() {
               <TurnBar state={state} />
               <MapView state={state} view={view} onTile={onTile} onMoved={conn.onMoved} />
               <ReactionPrompt state={state} playable={playable} conn={conn} />
-              <ActionBar state={state} actor={actor} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
+              <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
             </main>
             <StoryFeed state={state} conn={conn} compact />
           </>
