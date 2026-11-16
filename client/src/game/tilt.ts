@@ -40,6 +40,12 @@ export function unproject(cam: TiltCam, sx: number, sy: number): { x: number; y:
   return { x: cam.fx + X, y: cam.fy + Z };
 }
 
+/**
+ * How far in front of the focus (in world pixels, towards the viewer) the ground can be drawn before
+ * the perspective blows up: anything nearer is cut off.
+ */
+export const nearLimit = (cam: TiltCam) => (cam.dist * 0.8) / SIN;
+
 /** How much a circle on the ground is squashed on screen (height over width). */
 export const GROUND_SQUASH = COS;
 
@@ -55,7 +61,7 @@ export function clampFocus(fx: number, fy: number, k: number, viewW: number, vie
 }
 
 /** Zoom steps the player can choose, as a multiple of "the whole fight fits". */
-export const ZOOM_MIN = 1;
+export const ZOOM_MIN = 0.6;
 export const ZOOM_MAX = 2.6;
 export const ZOOM_DEFAULT = 1.6;
 export const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 20) / 20));
