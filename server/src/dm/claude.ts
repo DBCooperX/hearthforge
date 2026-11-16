@@ -537,6 +537,24 @@ export class ClaudeDM implements DungeonMaster {
   }
 
   /**
+   * A player steps out of the story and asks the Dungeon Master something. The answer is plain
+   * words on the standard model, never a scene. The tools are only those that put the state right
+   * (coins, items, quests, notes): nothing that rolls, moves the party or lets time pass.
+   */
+  async answerQuestion(game: Game, asked: PlayerLine, onUpdate: () => Promise<void>): Promise<string | null> {
+    const fixes = ['remember_npc', 'update_quest', 'change_gold', 'give_item', 'give_story_item', 'update_story_item', 'take_item', 'equip_item', 'note_clue', 'award_xp', 'record_deed'];
+    const tools = game.s.phase === 'combat' ? [] : STORY_TOOLS.filter((t) => fixes.includes(t.name));
+    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nOUT-OF-CHARACTER QUESTION from the player ${asked.player}${playerHeroes(game, asked.player)}: ${JSON.stringify(asked.text)}\n\nThey have stepped out of the story and ask you, the game master, directly. Nothing happens in the story: no scene, no roll, no time passes, and the world does not move on. Answer in one to four plain sentences, speaking as the Dungeon Master out of character, from what the state and the recent play show (rules, inventory, gold, quests, what the heroes know). Do not reveal secrets the heroes have not learned; if that is what they ask, say so kindly. If the question shows that the game state disagrees with the story (a missing coin or item, a forgotten reward, a wrong quest note), put it right with the matching tool and say what you changed. If you are not sure, say so. Reply in plain text, with no scene tool and no stage directions.`;
+    try {
+      const out = await this.converse(game, 'question', 'standard', prompt, tools, this.storyHandler(game, onUpdate));
+      return out.text ?? out.scene?.narration?.trim() ?? null;
+    } catch (err) {
+      this.report(err);
+      return game.lang === 'de' ? 'Der Spielleiter kann gerade nicht antworten. Versuch es gleich noch einmal.' : 'The Dungeon Master cannot answer right now. Try again in a moment.';
+    }
+  }
+
+  /**
    * Put fresh words to a rolled region before the first scene, on the cheapest model: the
    * descriptions come from tables, and one short call makes them this table's own. Names,
    * places on the map, quests and rewards stay exactly as rolled; only wording changes.

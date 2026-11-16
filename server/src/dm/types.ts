@@ -47,6 +47,12 @@ export interface DungeonMaster {
    * without the matching tool, such as walking to town or handing over a coin. Never throws.
    */
   reconcile?(game: Game, onUpdate: () => Promise<void>): Promise<void>;
+  /**
+   * Answer an out-of-character question as plain words, not a scene: nothing happens in the story and
+   * no time passes. The DM may correct the game state through its tools when the question shows a mistake.
+   * Resolves to null when there is nothing to say. Never throws.
+   */
+  answerQuestion?(game: Game, asked: PlayerLine, onUpdate: () => Promise<void>): Promise<string | null>;
   /** Background housekeeping, such as condensing old memory. Never throws. */
   maintain(game: Game): Promise<void>;
 }

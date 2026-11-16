@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Playing
+- **Ask the Dungeon Master out of character.** Start a line with "to DM:", "an SL:", "Spielleiter:" or "OOC:" (or press "Ask the DM" beside the input) and the answer comes back as a plain grey note, not a story card. It does not move the story on, uses no turn and does not hold up the other players. If your question reveals a mistake, such as a missing coin, the Dungeon Master puts the game right and says so. At a shared table everyone sees the question and the note.
 - **A story you can follow.** Every scene card names where it plays, the time of day and who is there. The Dungeon Master stages each scene and tags every speaker, explains what the heroes would plainly know, adds at most one new mystery per scene, and lets people answer what they are asked instead of pushing hooks. Clues the party finds are filed in a new Clues tab of the journal, grouped by open question.
 - **Story and game stay in step.** When the story walks the party back to town, lets it rest, or has a hero pocket, leave behind or draw something, the game follows: map, music, clock, inventory and gear. The Dungeon Master has tools for story travel, rests and gear, and a quick background check after each reply catches what it narrated without them. Resting an hour or more is a short rest, a night's sleep a long rest, and a note says what came back. "Who is here" lists the people the scene header names.
 

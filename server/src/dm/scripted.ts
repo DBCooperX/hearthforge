@@ -138,5 +138,9 @@ export class ScriptedDM implements DungeonMaster {
     };
   }
 
+  async answerQuestion(game: Game, _asked?: PlayerLine): Promise<string> {
+    return tagged(game.lang)`The Dungeon Master is running on scripts, so it cannot answer questions. Set ANTHROPIC_API_KEY on the server to bring the AI Dungeon Master to the table. Your character sheet, inventory and journal show everything the game knows.`;
+  }
+
   async maintain() {}
 }

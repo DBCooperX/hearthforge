@@ -7,6 +7,7 @@ import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat } from './game/engine';
 import { newSeed } from '../../shared/start';
 import { tagged } from '../../shared/i18n';
+import { parseOoc } from '../../shared/ooc';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -313,7 +314,7 @@ export class Room {
       return this.send(ws, { t: 'error', message: PAUSED_MESSAGE });
     }
     switch (msg.t) {
-      case 'say': return this.say(playerId, String(msg.text ?? ''));
+      case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc);
       case 'unsay': return this.unsay(ws, playerId);
       case 'travel': return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));
       case 'chat': return this.chat(ws, playerId, String(msg.text ?? ''), msg.to ? String(msg.to) : undefined);
@@ -522,15 +523,34 @@ export class Room {
   // ------------------------------------------------------- talking to the DM
 
   /** Something said in character or tried in the story. It is shown at once and answered by the Dungeon Master. */
-  private say(playerId: string, raw: string) {
+  private say(ws: WebSocket, playerId: string, raw: string, ooc: boolean) {
     const text = raw.trim().slice(0, 500);
     if (!text) return;
+    const question = ooc ? parseOoc(text) ?? text : parseOoc(text);
+    if (question) return this.ask(ws, playerId, question);
     const name = this.game.player(playerId)?.name ?? 'Adventurer';
     this.game.log('chat', text, { speaker: name });
     this.setTyping(playerId, null);
     if (this.game.s.phase !== 'lobby') this.pending.push({ playerId, player: name, text, logId: this.game.s.logSeq });
     this.considerAnswer();
     this.flush();
+  }
+
+  /**
+   * A question to the Dungeon Master from outside the story. It is shown to the whole table, answered as a plain
+   * note, and never joins the players' turn: it opens no waiting window and uses no turn.
+   */
+  private ask(ws: WebSocket, playerId: string, question: string) {
+    if (this.game.s.phase === 'lobby') return this.send(ws, { t: 'error', message: tagged(this.game.lang)`Questions to the Dungeon Master open once the adventure has begun.` });
+    const name = this.game.player(playerId)?.name ?? 'Adventurer';
+    this.game.log('ask', question, { speaker: name });
+    this.setTyping(playerId, null);
+    this.flush();
+    const epoch = this.epoch;
+    this.background(async () => {
+      const note = await this.dm.answerQuestion?.(this.game, { player: name, text: question }, async () => this.flush());
+      if (note && epoch === this.epoch) this.game.log('note', note, { speaker: name });
+    });
   }
 
   /** Take back the player's latest line, as long as the Dungeon Master has not started to answer it. */
