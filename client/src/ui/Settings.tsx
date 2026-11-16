@@ -51,6 +51,11 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
               <span className="muted small">{dictationBlocker() === 'insecure' ? t('Voice input needs a secure connection (https). Ask whoever runs this server to switch on HTTPS.') : dictationBlocker() === 'unsupported' ? t('This browser cannot turn speech into text. Chrome, Edge and Safari can.') : t('On')}</span>
             </div>
             <div className="setting">
+              <span>{t('Edge scrolling in fights')} <Info text={t('When the battle map is zoomed in, pointing at its edge moves the view that way. Dragging the map and Shift with the arrow keys work too.')} /></span>
+              <button type="button" role="switch" aria-checked={prefs.edgeScroll} className={prefs.edgeScroll ? 'switch on' : 'switch'}
+                onClick={() => { setPrefs({ edgeScroll: !prefs.edgeScroll }); sfx('tab'); }}>{prefs.edgeScroll ? t('On') : t('Off')}</button>
+            </div>
+            <div className="setting">
               <span>{t('Text size')} <Info text={t('For the story, the journal and item descriptions.')} /></span>
               <span className="pick">
                 {TEXT_SIZES.map((s) => <button key={s} type="button" className={prefs.textSize === s ? 'on' : ''} aria-pressed={prefs.textSize === s} onClick={() => { setPrefs({ textSize: s }); sfx('tab'); }}>{t(SIZE_LABELS[s])}</button>)}
