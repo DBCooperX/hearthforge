@@ -10,7 +10,7 @@ import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
-import { ensureSfx, sfxFile, sfxManifest } from './sfx';
+import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { createDM } from './dm/claude';
@@ -302,6 +302,35 @@ async function musicApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** The effects library belongs to the owner of the server, like the music. */
+async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/sfx/library') return json(200, sfxLibrary(SFX_DIR, env));
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (url.pathname === '/api/sfx/upload') {
+      const body = await readBody(req, 60 * 1024 * 1024);
+      addSfxUpload(SFX_DIR, String(url.searchParams.get('name') ?? 'sounds.zip').slice(0, 160), new Uint8Array(body));
+      return json(200, sfxLibrary(SFX_DIR, env));
+    }
+    if (url.pathname === '/api/sfx/remove') {
+      removeSfxPack(SFX_DIR, JSON.parse((await readBody(req, 4 * 1024)).toString('utf8') || '{}').id);
+      return json(200, sfxLibrary(SFX_DIR, env));
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof SfxError) return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
+    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[sfx]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
@@ -343,6 +372,10 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
     res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
+    return;
+  }
+  if (url.pathname.startsWith('/api/sfx/')) {
+    void sfxApi(req, res, url);
     return;
   }
   if (url.pathname === '/api/sfx') {
@@ -475,7 +508,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
 });
 
 void art.start();
-void ensureSfx(SFX_DIR, env);
+importDroppedSfx(SFX_DIR, env);
 void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
 admin.start();
 

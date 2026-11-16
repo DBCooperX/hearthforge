@@ -33,7 +33,7 @@ Without an icon pack, item icons are emoji rendered by the player's system font.
 
 ## Sound effects
 
-No sound files are bundled. Unless `HEARTHFORGE_SFX=off`, the server downloads these packs by Kenney, all [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), from kenney.nl into its data folder (`/data/sfx`) when it starts: [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds). The bow, spell, healing, level-up and victory sounds are synthesised in the browser by `client/src/sfxSynth.ts`, original code with no recordings. `node scripts/check-sfx-links.mjs` checks that the packs' download links still work.
+No sound files are bundled or downloaded by the server. Kenney's packs do not allow automatic downloads, so the owner can add them under Innkeeper → Assets → Sound effects: open the pack's page, download the zip, drop it there. All three are by Kenney under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/): [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds). They are kept in the server's data folder (`/data/sfx`). Without them, every effect (and the bow, spell, healing, level-up and victory sounds in any case) is synthesised in the browser by `client/src/sfxSynth.ts`, original code with no recordings.
 
 ## Music
 

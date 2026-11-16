@@ -1,35 +1,30 @@
-// Sound effects. The server fetches Kenney's CC0 packs (impact, RPG and interface sounds) from kenney.nl into its own
-// data folder, once; nothing is bundled or mirrored. Sounds without a recording (bow, spells, fanfares) are made by the
-// browser, so a server with no packs, or one that cannot reach kenney.nl, still has effects.
-import { existsSync, mkdirSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+// Sound effects. Kenney's CC0 packs (impact, RPG and interface sounds) sit in the server's data folder. Kenney does not
+// allow automatic downloads, so the owner opens the pack's page, downloads the zip and drops it into the Innkeeper
+// (or copies it into the data folder). Nothing is bundled or mirrored. Sounds without a recording (bow, spells, fanfares)
+// are made by the browser, so a server with no packs still has effects.
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { unzipSync } from 'fflate';
-import { SFX_PACKS, type SfxManifest } from '../../shared/sfx';
+import { SFX_FOLDERS, SFX_OTHER, SFX_PACKS, type SfxLibrary, type SfxManifest } from '../../shared/sfx';
 
 export const sfxEnabled = (env: NodeJS.ProcessEnv) => (env.HEARTHFORGE_SFX ?? 'on').toLowerCase() !== 'off';
-let fetching = false;
 
-/** The link may be absolute or relative to the page, and escaped (&amp; or \\/ in embedded JSON). */
-/** Kenney's Download button asks /download-link/<hex of "assets/<pack>"> for a fresh signed address; the page names the id. */
-export function downloadId(html: string): string | null {
-  return /data-download-id=["']([0-9a-f]+)["']/i.exec(html)?.[1] ?? null;
+export class SfxError extends Error {
+  constructor(readonly code: 'not_audio' | 'too_big' | 'bad_request') { super(code); }
 }
 
-export function zipLink(html: string, page: string): string | null {
-  const m = /["'=(]([^"'\s<>()=]*\.zip)(?=["'\s<>)?#]|$)/i.exec(html.replace(/\\\//g, '/').replace(/&amp;/g, '&'));
-  if (!m) return null;
-  try { return new URL(m[1], page).href; } catch { return null; }
+const oggsIn = (folder: string) => (existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith('.ogg')).sort() : []);
+
+/** Which pack a file belongs to, judged by its name ("kenney_impact-sounds.zip"); anything else goes to "other". */
+export function packFor(fileName: string): string {
+  const n = fileName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return SFX_PACKS.find((p) => n.includes(p.id) || n.includes(p.id.replace(/-sounds$|-audio$/, '') + '-'))?.id ?? SFX_OTHER;
 }
 
-async function download(url: string, fetchFn: typeof fetch): Promise<Uint8Array> {
-  const res = await fetchFn(url, { signal: AbortSignal.timeout(120_000), headers: { 'user-agent': 'hearthforge-sfx-fetch' } });
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
-
-/** Keep only short .ogg recordings, flattened to <dir>/<name>.ogg. Zip entries are untrusted. */
+/** Keep only short .ogg recordings, flattened to <dest>/<name>.ogg. Zip entries are untrusted. */
 export function unpackSfx(zip: Uint8Array, dest: string): number {
-  const files = unzipSync(zip, { filter: (f) => extname(f.name).toLowerCase() === '.ogg' && f.originalSize < 3_000_000 });
+  let files: Record<string, Uint8Array>;
+  try { files = unzipSync(zip, { filter: (f) => extname(f.name).toLowerCase() === '.ogg' && f.originalSize < 3_000_000 }); } catch { throw new SfxError('not_audio'); }
   let n = 0;
   for (const [name, data] of Object.entries(files)) {
     const file = basename(name.replace(/\\/g, '/')).replace(/[^A-Za-z0-9_.-]/g, '_');
@@ -42,52 +37,62 @@ export function unpackSfx(zip: Uint8Array, dest: string): number {
   return n;
 }
 
-/** Fetch every pack that is not on disk yet. The download link carries a content hash, so it is read off the pack's page. Never throws. */
-export async function ensureSfx(dir: string, env: NodeJS.ProcessEnv, fetchFn: typeof fetch = fetch): Promise<void> {
-  if (!sfxEnabled(env)) return;
-  fetching = true;
-  try {
-    for (const pack of SFX_PACKS) {
-      const dest = join(dir, pack.id);
-      if (existsSync(dest) && readdirSync(dest).some((f) => f.endsWith('.ogg'))) continue;
-      try {
-        const page = new TextDecoder().decode(await download(pack.page, fetchFn));
-        const id = downloadId(page);
-        let link: string | null = null;
-        if (id) {
-          const data = JSON.parse(new TextDecoder().decode(await download(`https://kenney.nl/download-link/${id}`, fetchFn))) as { url?: unknown };
-          if (typeof data.url === 'string') link = new URL(data.url, pack.page).href;
-        }
-        link ??= zipLink(page, pack.page);
-        if (!link) throw new Error(`no download link found on ${pack.page}`);
-        const n = unpackSfx(await download(link, fetchFn), dest);
-        if (!n) throw new Error('the zip held no .ogg files');
-        console.log(`[sfx] Unpacked ${n} sounds of "${pack.name}" (${pack.author}, ${pack.license}) into ${dest}.`);
-      } catch (err) {
-        console.warn(`[sfx] Could not get "${pack.name}": ${err instanceof Error ? err.message : err}. The game uses its built-in sounds instead; drop the pack's .ogg files into ${dest} to add them by hand.`);
-      }
-    }
-  } finally {
-    fetching = false;
+/** Take in an uploaded zip (or a single .ogg). Returns how many recordings were added. */
+export function addSfxUpload(dir: string, fileName: string, data: Uint8Array): number {
+  if (!data.length) throw new SfxError('bad_request');
+  const dest = join(dir, packFor(fileName));
+  let n = 0;
+  if (/\.zip$/i.test(fileName)) n = unpackSfx(data, dest);
+  else if (/\.ogg$/i.test(fileName) && String.fromCharCode(...data.slice(0, 4)) === 'OggS') {
+    const file = basename(fileName).replace(/[^A-Za-z0-9_.-]/g, '_');
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(join(dest, file), data);
+    n = 1;
   }
+  if (!n) throw new SfxError('not_audio');
+  return n;
+}
+
+/** On start: take in zips the owner copied into the data folder by hand, then set them aside. Never throws. */
+export function importDroppedSfx(dir: string, env: NodeJS.ProcessEnv): void {
+  if (!sfxEnabled(env) || !existsSync(dir)) return;
+  for (const f of readdirSync(dir).filter((n) => /\.zip$/i.test(n))) {
+    try {
+      const n = addSfxUpload(dir, f, new Uint8Array(readFileSync(join(dir, f))));
+      renameSync(join(dir, f), join(dir, `${f}.done`));
+      console.log(`[sfx] Took in ${n} sounds from ${f}.`);
+    } catch (err) {
+      console.warn(`[sfx] Could not use ${f}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+}
+
+export function sfxLibrary(dir: string, env: NodeJS.ProcessEnv): SfxLibrary {
+  return {
+    enabled: sfxEnabled(env),
+    packs: SFX_PACKS.map((p) => ({ ...p, count: oggsIn(join(dir, p.id)).length })).concat(
+      oggsIn(join(dir, SFX_OTHER)).length ? [{ id: SFX_OTHER, name: 'Other recordings', author: '', license: '', page: '', count: oggsIn(join(dir, SFX_OTHER)).length }] : []),
+  };
+}
+
+export function removeSfxPack(dir: string, id: unknown) {
+  if (typeof id !== 'string' || !SFX_FOLDERS().includes(id)) throw new SfxError('bad_request');
+  for (const f of oggsIn(join(dir, id))) unlinkSync(join(dir, id, f));
+  rmSync(join(dir, id), { recursive: true, force: true });
 }
 
 /** The recordings on the server, for the browsers. */
 export function sfxManifest(dir: string, env: NodeJS.ProcessEnv): SfxManifest {
   if (!sfxEnabled(env)) return { enabled: false, pending: false, files: [] };
   const files: SfxManifest['files'] = [];
-  for (const pack of SFX_PACKS) {
-    const folder = join(dir, pack.id);
-    if (!existsSync(folder)) continue;
-    for (const f of readdirSync(folder).sort()) if (f.endsWith('.ogg')) files.push({ name: f, src: `/sfx/${pack.id}/${encodeURIComponent(f)}` });
-  }
-  return { enabled: true, pending: fetching, files };
+  for (const id of SFX_FOLDERS()) for (const f of oggsIn(join(dir, id))) files.push({ name: f, src: `/sfx/${id}/${encodeURIComponent(f)}` });
+  return { enabled: true, pending: false, files };
 }
 
 /** The file behind /sfx/<pack>/<file>, or null for anything else. */
 export function sfxFile(dir: string, pathname: string): string | null {
   const parts = pathname.slice(5).split('/').map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
-  if (parts.length !== 2 || !SFX_PACKS.some((p) => p.id === parts[0]) || !/^[A-Za-z0-9_.-]+\.ogg$/.test(parts[1]) || parts[1].startsWith('.')) return null;
+  if (parts.length !== 2 || !SFX_FOLDERS().includes(parts[0]) || !/^[A-Za-z0-9_.-]+\.ogg$/.test(parts[1]) || parts[1].startsWith('.')) return null;
   const file = join(dir, parts[0], parts[1]);
   return existsSync(file) && statSync(file).isFile() ? file : null;
 }

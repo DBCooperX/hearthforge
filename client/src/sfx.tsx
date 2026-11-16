@@ -64,11 +64,6 @@ export class SfxPlayer {
     window.addEventListener('keydown', unlock);
     // Any component may ask for a sound without importing this file: window.dispatchEvent(new CustomEvent('hearthforge:sfx', { detail: 'victory' })).
     window.addEventListener(SFX_DOM_EVENT, (e) => { const d = (e as CustomEvent).detail; if (typeof d === 'string') this.play(d); });
-    // Quiet tick for buttons. Skipped for the combat bar and anything that has a sound of its own.
-    window.addEventListener('click', (e) => {
-      const el = (e.target as Element | null)?.closest?.('button, [role="button"]');
-      if (el && !el.closest('[data-sfx="off"]') && !(el as HTMLButtonElement).disabled && el.getAttribute('aria-disabled') !== 'true') this.play('click');
-    }, true);
   }
 
   async refresh() {
@@ -92,7 +87,6 @@ export class SfxPlayer {
       this.master.gain.setTargetAtTime(this.level(next), now, 0.03);
     }
     this.emit();
-    if (!next.muted) this.play('click');
   }
 
   /** Play a sound by name; unknown names are ignored. A short delay in milliseconds lines a sound up behind another. */
@@ -173,7 +167,6 @@ export function sfxForChange(prev: Seen, state: GameState): { event: SfxEvent; a
     if (was.alive && !m.alive) add('monster_death', 250);
     else if (inFight && m.alive && (m.x !== was.x || m.y !== was.y)) for (let i = 0; i < Math.min(3, Math.max(Math.abs(m.x - was.x), Math.abs(m.y - was.y))); i++) add('footstep', 190);
   }
-  if (state.gold !== prev.gold && !fresh.some((e) => e.kind === 'levelup')) add('coins', 0);
   return out.slice(0, 8);
 }
 
