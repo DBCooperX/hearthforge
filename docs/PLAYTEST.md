@@ -19,6 +19,13 @@ These features pass their automated tests and the scripted fallback, but have **
 - [ ] A multiattack monster, a breath weapon, a condition (grapple, frightened) and a legendary action all play out in the combat log.
 - [ ] The DM warns when a fight is too hard for the party.
 
+## Story and game state
+- [ ] Walk back to a nearby town by typing it ("Zurück nach Sturmholm gehen"): the map marker, the music and the side panel follow, and the clock moves on.
+- [ ] Leave an item somewhere, pick one up, and switch weapons by typing it: the inventory and the hero card follow.
+- [ ] Rest for a few hours in the afternoon and sleep through a night: a short and a long rest, each with a note of what came back.
+- [ ] Leave a room or let people walk off: "Who is here" lists only the people the scene header names.
+- [ ] The Innkeeper log shows `[dm] reconcile:` lines; check that nothing was applied twice or guessed.
+
 ## Reputation and merchants
 - [ ] Help or wrong a faction and see the standing change in the journal; rumours turn up in conversation; **undo** takes a deed back.
 - [ ] Open a shop through the DM (curio shop, road peddler) and buy, sell and haggle.

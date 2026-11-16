@@ -582,6 +582,14 @@ export interface Npc {
   visual: VisualBible;
 }
 
+/** Someone in the current scene. Only people the party has met by name have an id, a role and a disposition. */
+export interface ScenePerson {
+  name: string;
+  npcId?: string;
+  role?: string;
+  disposition?: Disposition;
+}
+
 export type QuestStatus = 'active' | 'completed' | 'failed';
 
 export interface Quest {
@@ -667,6 +675,11 @@ export interface GameState {
   players: PlayerInfo[];
   world: WorldView | null;
   memory: MemoryView;
+  /**
+   * The scene the party is in right now, as its header shows it: where, and who is there besides
+   * the heroes. The side panel's "Who is here" follows it. People the party knows carry their id.
+   */
+  scene: { where: string; present: ScenePerson[] } | null;
   travelling: boolean;
   dmBusy: boolean;
   dmMode: 'claude' | 'scripted';

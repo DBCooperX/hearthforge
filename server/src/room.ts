@@ -607,7 +607,12 @@ export class Room {
       try {
         if (!said.length) return;
         const scene = await this.dm.respond(this.game, said, async () => this.flush());
-        if (scene && epoch === this.epoch) this.game.addScene(scene);
+        if (scene && epoch === this.epoch) {
+          this.game.addScene(scene);
+          this.flush();
+          // The players read the scene while the game catches up with anything it narrated.
+          await this.dm.reconcile?.(this.game, async () => { if (epoch === this.epoch) this.flush(); });
+        }
         void this.dm.maintain(this.game);
       } finally {
         if (this.answering === run) this.answering = 0;
