@@ -53,7 +53,7 @@ You run Hearthforge as one Docker container on your own server. You and your fri
 
 ## Contents
 
-[What's in the game](#whats-in-the-game) · [Install](#install-on-proxmox) · [Configuration](#configuration) · [The Innkeeper](#the-innkeeper) · [Art and music](#art-and-music) · [Playing together](#playing-together) · [Where the adventure starts](#where-the-adventure-starts) · [How to play](#how-to-play) · [Development](#development) · [Credits](#credits-and-licenses)
+[What's in the game](#whats-in-the-game) · [Install](#install-on-proxmox) · [Configuration](#configuration) · [The Innkeeper](#the-innkeeper) · [Art and music](#art-and-music) · [Voice and HTTPS](#voice-and-https) · [Playing together](#playing-together) · [Where the adventure starts](#where-the-adventure-starts) · [How to play](#how-to-play) · [Development](#development) · [Credits](#credits-and-licenses)
 
 ## What's in the game
 
@@ -114,6 +114,7 @@ CTID=120 STORAGE=tank MEMORY=4096 IP=192.168.1.50/24 GATEWAY=192.168.1.1 \
 | `CORES`, `MEMORY`, `SWAP`, `DISK` | `2`, `2048`, `512`, `8` | Resources (MB and GB) |
 | `PORT` | `3000` | Port Hearthforge is published on |
 | `ANTHROPIC_API_KEY` | prompt | Set it to skip the prompt |
+| `HTTPS` | prompt | `local` (a certificate from Caddy's own authority, the default), a domain name for Let's Encrypt, or `off` |
 | `BRANCH` | `main` | Git branch to install |
 
 Read [`scripts/proxmox-install.sh`](scripts/proxmox-install.sh) first if you like; it is short.
@@ -157,6 +158,9 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_REACTION_WAIT` | `20` | Seconds a player gets to decide on an opportunity attack when an enemy leaves their hero's reach. After that the hero strikes. `0` never asks. |
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
+| `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Assets → Narrator. |
+| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | Only for hosted narrator voices. See [Voice and HTTPS](#voice-and-https). |
+| `COMPOSE_PROFILES=https`, `HEARTHFORGE_DOMAIN`, `HEARTHFORGE_LOCAL_HOSTS`, `HEARTHFORGE_DNS_PROVIDER`, `HEARTHFORGE_DNS_TOKEN`, `HEARTHFORGE_ACME_EMAIL` | off | HTTPS through Caddy (`.env` only). See [HTTPS](#https). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
 | `HEARTHFORGE_ADMIN_PASSWORD` | generated | First password of the `innkeeper` account; only read on the very first start (`.env` only). |
 | `HEARTHFORGE_ADMIN` | `on` | `off` removes the Innkeeper (`.env` only). |
@@ -188,7 +192,7 @@ Heroes, seats and saves belong to the account, so a player picks up their hero o
 
 **How updating works.** A second small container, the *updater*, sits next to the game. When you press **Update now** the game leaves a request in a folder they share. The updater pulls the latest code, builds the new image while the game keeps running, and swaps the container in a few seconds. If the build fails or the new version does not come up healthy, it puts the previous one back and the panel says so. Saved games are not touched. The updater needs the Docker socket, which is as good as root in the guest. It opens no port and only understands `check` and `update`. To go without it, remove the `updater` service from `docker-compose.yml`; the panel then says updates are done in the terminal.
 
-Passwords travel over plain HTTP unless you put TLS in front. Five wrong passwords lock an address out for five minutes. If you forget the `innkeeper` password, leave an empty file named `innkeeper-reset` in the data folder and restart; the server makes up a new one and prints it in its log (and in `/data/innkeeper-first-password.txt`). Everyone else keeps their account:
+Passwords travel over plain HTTP unless you switch on [HTTPS](#https). Five wrong passwords lock an address out for five minutes. If you forget the `innkeeper` password, leave an empty file named `innkeeper-reset` in the data folder and restart; the server makes up a new one and prints it in its log (and in `/data/innkeeper-first-password.txt`). Everyone else keeps their account:
 
 ```bash
 docker compose exec hearthforge touch /data/innkeeper-reset && docker compose restart hearthforge
@@ -217,6 +221,30 @@ docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}"
 ```
 
 Browsers only allow sound after the first click, so music starts when a player first touches the page. A scene with no track is silent, and a failed download never breaks the game.
+
+## Voice and HTTPS
+
+**Speak instead of typing.** A microphone button sits beside the story's text box. Hold it (or hold `Ctrl+M`) and talk, let go, and the words land in the box so you can fix them before you send. A short tap starts listening and a second tap stops it. The browser does the speech recognition itself, in the player's interface language (English, or German with Swiss accents in mind), so the server needs nothing extra. Chrome, Edge and Safari can do it; Firefox cannot, and there the button is simply not shown. Browsers only allow the microphone on **https**, so switch on [HTTPS](#https) first; on plain http the button is hidden and Settings says why.
+
+**The narrator.** The Dungeon Master's story is read aloud as it arrives, while the music steps back. Each scene card also has a small speaker to read it again or stop. Every player has their own mute button and volume slider next to the music ones. The Innkeeper picks the voice for the whole server under **Assets → Narrator**, with a **Listen** button for each:
+
+| Voice | Cost | |
+| --- | --- | --- |
+| **Piper** (default) | free | Runs on the server's CPU. Part of the image; its voices (about 60 to 120 MB each) are downloaded once from [Piper's collection](https://huggingface.co/rhasspy/piper-voices) into `/data/voice`. Clear, a little like an audiobook robot. Defaults: *northern English man* and *Thorsten* for German. Each voice links to its licence card. |
+| **OpenAI** (`OPENAI_API_KEY`) | a few cents an evening | `gpt-4o-mini-tts`, told to read like a fireside storyteller. Every voice speaks both languages. |
+| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. |
+
+Put the keys under **Settings → Voice** and restart. Speech is stored on the server (up to 400 MB, oldest first), so a scene read once is never paid for twice, and only the Dungeon Master's own story can be read, by players sitting at that table. Long scenes are read in parts, so the first sentences start while the rest is still being made. On two cores Piper needs a second or two per part.
+
+### HTTPS
+
+Caddy can sit in front of the game and take care of certificates. The easiest way is the Innkeeper: **Server & updates → HTTPS**. Type a domain or the server's local address, press **Switch HTTPS on**, and the updater writes the settings into `.env` and starts Caddy (the panel shows its state and log). By hand: add `COMPOSE_PROFILES=https` to `.env`, choose one of the three ways below, and run `docker compose up -d --build`. The game stays reachable on port 3000 as before.
+
+1. **A public domain.** Point a domain at your router and forward ports 80 and 443 to the server. Set `HEARTHFORGE_DOMAIN=dnd.example.ch` (and `HEARTHFORGE_ACME_EMAIL` if you like). Caddy gets a free Let's Encrypt certificate and renews it by itself.
+2. **A domain only your network knows.** Your own DNS (for example Pi-hole or your router) points `dnd.example.ch` at the server, and nothing is forwarded. Let's Encrypt then checks a DNS record instead: set `HEARTHFORGE_DNS_PROVIDER` to the plugin name from [caddy-dns](https://github.com/caddy-dns) (`cloudflare`, `duckdns`, `hetzner` or `digitalocean`, the ones that take a single token) and `HEARTHFORGE_DNS_TOKEN` to an API token that may edit DNS records. Caddy is then built with that plugin.
+3. **No domain.** Set `HEARTHFORGE_LOCAL_HOSTS` to the server's address, for example `192.168.1.50` (several are separated by commas). Caddy makes its own local certificate. Each device trusts it once: open `http://192.168.1.50/hearthforge-ca.crt`, install it (on iOS and Android as a CA certificate; on Windows and macOS into the trusted roots), then use `https://192.168.1.50`. The installer sets this up by default, with the container's IP, so give the container a fixed IP or DHCP reservation.
+
+With HTTPS on, set `HEARTHFORGE_TRUST_PROXY=on` so the Innkeeper sees each player's own address instead of Caddy's.
 
 ## Playing together
 

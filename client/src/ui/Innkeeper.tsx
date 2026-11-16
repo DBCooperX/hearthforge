@@ -3,7 +3,7 @@
 // It is reached from the list of tables and from Settings, by accounts with the Innkeeper role.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ADMIN_ERRORS, MODEL_SUGGESTIONS, SETTINGS, SETTING_GROUPS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
+  ADMIN_ERRORS, HTTPS_DNS_PROVIDERS, MODEL_SUGGESTIONS, type HttpsStatus, SETTINGS, SETTING_GROUPS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
   type BackupInfo, type LogLine, type SettingDef, type SettingGroup, type SettingValue, type UpdaterStatus, type UsageReport, type UsageTotals,
 } from '../../../shared/admin';
 import { CLASS_INFO } from '../../../shared/content';
@@ -20,6 +20,7 @@ import { playTime } from './Profile';
 import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
 import { SfxLibrary } from './SfxLibrary';
+import { NarratorLibrary } from './NarratorLibrary';
 import { SoundLibrary } from './SoundLibrary';
 import { TabBar, Window } from './Window';
 
@@ -125,7 +126,7 @@ function AssetsPane() {
     <div className="assets-pane">
       <TabBar tabs={(Object.keys(ASSET_TABS) as (keyof typeof ASSET_TABS)[]).map((id) => ({ id, label: t(ASSET_TABS[id]) }))} value={sub} onChange={setSub} />
       <div className="assets-body">
-        {sub === 'art' ? <ArtWindow embedded /> : sub === 'effects' ? <SfxLibrary /> : <SoundLibrary key={sub} layer={sub} />}
+        {sub === 'art' ? <ArtWindow embedded /> : sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : <SoundLibrary key={sub} layer={sub} />}
       </div>
     </div>
   );
@@ -472,6 +473,98 @@ function Commits({ list }: { list: UpdaterStatus['incoming'] }) {
   );
 }
 
+// ---------------------------------------------------------------------------- https
+
+/** HTTPS through Caddy, which browsers need before they allow the microphone. The updater writes it into .env and restarts Caddy. */
+function HttpsSection({ fail, say }: PaneProps) {
+  const t = useT();
+  const [h, reload] = usePoll<HttpsStatus>('/https', 4000, fail);
+  const [form, setForm] = useState<{ domain: string; local: string; email: string; dnsProvider: string; dnsToken: string } | null>(null);
+  const [lan, setLan] = useState(false);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (!h || form) return;
+    const here = window.location.hostname;
+    const looksLocal = /^(\d{1,3}\.){3}\d{1,3}$/.test(here) || here.endsWith('.lan') || here.endsWith('.local') || here.endsWith('.home');
+    setForm({ domain: h.domain, local: h.local || (looksLocal ? here : ''), email: h.email, dnsProvider: h.dnsProvider, dnsToken: '' });
+    setLan(!!h.dnsProvider);
+  }, [h, form]);
+  if (!h || !form) return null;
+  const working = sending || h.state === 'working';
+  const send = async (mode: 'on' | 'off') => {
+    setSending(true);
+    try {
+      const body: Record<string, string> = { mode, domain: form.domain, local: form.local, email: form.email, dnsProvider: lan ? form.dnsProvider : '' };
+      if (!lan) body.dnsToken = '';
+      else if (form.dnsToken) body.dnsToken = form.dnsToken;
+      reload(await inn<HttpsStatus>('/https', { body }));
+      setForm({ ...form, dnsToken: '' });
+      say(mode === 'on' ? t('Caddy is being started. This takes a minute, longer the first time.') : t('HTTPS is being switched off.'));
+    } catch (err) { fail(err); } finally { setSending(false); }
+  };
+  const first = form.local.split(',')[0]?.trim();
+  const caddy = h.caddy === 'running' ? t('Caddy is running.') : h.caddy === 'none' ? t('Caddy is not running.') : t('Caddy: {state}', { state: h.caddy });
+  return (
+    <section>
+      <h3>{t('HTTPS')}</h3>
+      <p className="muted small">{t('Browsers only allow the microphone (voice input) on https, and it keeps passwords off the network. Caddy, a small web server next to the game, takes care of the certificates.')}</p>
+      {!h.connected || !h.known ? (
+        <Note kind="warn"><span>{t('HTTPS is set up by the updater, which is not running or is too old. Run the installer once more, or set it in .env (see "HTTPS" in the README).')}</span></Note>
+      ) : (
+        <>
+          <p className={h.state === 'failed' ? 'inn-state is-bad' : working ? 'inn-state is-busy' : 'inn-state'}>
+            {h.on ? t('HTTPS is on.') : t('HTTPS is off.')} {h.on && caddy}
+            {h.message && <span className="muted"> · {h.message}</span>}
+          </p>
+          {h.on && (h.domain || h.local) && (
+            <p className="small">
+              {h.domain && <a href={`https://${h.domain}`} target="_blank" rel="noreferrer">https://{h.domain}</a>}
+              {h.domain && h.local && ' · '}
+              {h.local && h.local.split(',').map((x, i) => <span key={x}>{i > 0 && ' · '}<a href={`https://${x}`} target="_blank" rel="noreferrer">https://{x}</a></span>)}
+            </p>
+          )}
+          <form className="https-form" onSubmit={(e) => { e.preventDefault(); void send('on'); }}>
+            <label><span>{t('Domain')} <Info text={t('A name that points at this server, such as dnd.example.ch. Caddy gets a free certificate from Let\'s Encrypt and renews it by itself. Leave empty to use only the local addresses below.')} /></span>
+              <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="dnd.example.ch" spellCheck={false} />
+            </label>
+            {form.domain && (
+              <label className="inn-check"><input type="checkbox" checked={lan} onChange={(e) => setLan(e.target.checked)} />{t('This domain is only known inside my network (no ports forwarded)')}</label>
+            )}
+            {form.domain && !lan && <p className="muted small">{t('Ports 80 and 443 must reach this server from the internet, so Let\'s Encrypt can check the domain.')}</p>}
+            {form.domain && lan && (
+              <>
+                <label><span>{t('DNS provider')} <Info text={t('Let\'s Encrypt then checks a DNS record instead of a website. Caddy is built once with your provider\'s plugin, which takes a few minutes.')} /></span>
+                  <select value={form.dnsProvider} onChange={(e) => setForm({ ...form, dnsProvider: e.target.value })}>
+                    <option value="">{t('Choose…')}</option>
+                    {HTTPS_DNS_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                <label><span>{t('DNS API token')}</span>
+                  <input type="password" autoComplete="off" value={form.dnsToken} onChange={(e) => setForm({ ...form, dnsToken: e.target.value })} placeholder={h.dnsToken ? t('Set. Leave empty to keep it.') : t('A token that may edit DNS records')} spellCheck={false} />
+                </label>
+              </>
+            )}
+            <label><span>{t('Local addresses')} <Info text={t('Addresses in your network, such as this server\'s IP, separated by commas. They get a certificate from Caddy\'s own authority, which each device has to trust once.')} /></span>
+              <input value={form.local} onChange={(e) => setForm({ ...form, local: e.target.value })} placeholder="192.168.1.50" spellCheck={false} />
+            </label>
+            {form.domain && !lan && (
+              <label><span>{t('Email for Let\'s Encrypt (optional)')}</span>
+                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} spellCheck={false} />
+              </label>
+            )}
+            {first && <p className="muted small">{t('Each device trusts the local certificate once. Download it here and install it (on phones as a CA certificate):')} <a href={`http://${first}/hearthforge-ca.crt`}>http://{first}/hearthforge-ca.crt</a></p>}
+            <div className="inn-row">
+              <button type="submit" className="primary" disabled={working || (!form.domain.trim() && !form.local.trim()) || (lan && !!form.domain && (!form.dnsProvider || (!form.dnsToken && !h.dnsToken)))}>{h.on ? t('Save and restart Caddy') : t('Switch HTTPS on')}</button>
+              {h.on && <button type="button" disabled={working} onClick={() => { if (window.confirm(t('Switch HTTPS off? Voice input stops working until it is on again.'))) void send('off'); }}>{t('Switch HTTPS off')}</button>}
+            </div>
+          </form>
+          {h.log.length > 0 && <details open={h.state === 'failed'}><summary>{t('HTTPS log')}</summary><pre className="inn-log small">{h.log.join('\n')}</pre></details>}
+        </>
+      )}
+    </section>
+  );
+}
+
 function ServerPane({ fail, say, firstPassword, onPassword }: PaneProps & { firstPassword: boolean; onPassword: () => void }) {
   const t = useT();
   const { lang } = useLang();
@@ -520,6 +613,7 @@ function ServerPane({ fail, say, firstPassword, onPassword }: PaneProps & { firs
         )}
         <p className="muted small">{t('If a new version does not start, the updater puts the previous one back by itself. Automatic updates can be switched on under Settings.')}</p>
       </section>
+      <HttpsSection fail={fail} say={say} />
       <section>
         <h3>{t('Restart')}</h3>
         {o.restartPending && <Note kind="warn"><span>{t('Settings were changed. They apply after a restart.')}</span></Note>}

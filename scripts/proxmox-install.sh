@@ -27,6 +27,7 @@ DISK="${DISK:-8}"                               # GB
 PORT="${PORT:-3000}"                            # port Hearthforge listens on inside the container
 REPO="${REPO:-https://github.com/DBCooperX/hearthforge.git}"
 BRANCH="${BRANCH:-main}"
+HTTPS="${HTTPS:-}"                              # local | <domain> | off. HTTPS is needed for voice input.
 APP_DIR="/opt/hearthforge"
 
 say() { printf '\n\033[1;33m==>\033[0m %s\n' "$*"; }
@@ -56,6 +57,24 @@ ensure_admin_password() {
   printf '%s' "$ADMIN_PASSWORD_NEW" | pct exec "$CTID" -- bash -c "pw=\$(cat); cd $APP_DIR && touch .env && chmod 600 .env && sed -i '/^HEARTHFORGE_ADMIN_PASSWORD=/d' .env && printf '\nHEARTHFORGE_ADMIN_PASSWORD=%s\n' \"\$pw\" >> .env"
 }
 
+# HTTPS through Caddy, which browsers need before they allow the microphone (voice input).
+# "local": a certificate from Caddy's own authority for the container's IP. A domain: Let's Encrypt.
+configure_https() {
+  local mode="$1" ip
+  case "$mode" in
+    ""|off|no|none) return 0 ;;
+  esac
+  ip="$(ct_ip || true)"
+  in_ct "cd $APP_DIR && sed -i '/^COMPOSE_PROFILES=/d; /^HEARTHFORGE_DOMAIN=/d; /^HEARTHFORGE_LOCAL_HOSTS=/d; /^HEARTHFORGE_TRUST_PROXY=/d' .env"
+  if [ "$mode" = "local" ]; then
+    [ -n "$ip" ] || { echo "No IP for the container yet; HTTPS stays off. Re-run with HTTPS=local later."; return 0; }
+    in_ct "cd $APP_DIR && printf '\nCOMPOSE_PROFILES=https\nHEARTHFORGE_LOCAL_HOSTS=%s\nHEARTHFORGE_TRUST_PROXY=on\n' '$ip' >> .env"
+  else
+    printf '%s' "$mode" | grep -Eq '^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' || die "HTTPS must be local, off or a domain name, not: $mode"
+    in_ct "cd $APP_DIR && printf '\nCOMPOSE_PROFILES=https\nHEARTHFORGE_DOMAIN=%s\nHEARTHFORGE_LOCAL_HOSTS=%s\nHEARTHFORGE_TRUST_PROXY=on\n' '$mode' '$ip' >> .env"
+  fi
+}
+
 compose_up() {
   say "Building and starting Hearthforge (the first build takes a few minutes)"
   in_ct "cd $APP_DIR && docker compose up -d --build"
@@ -74,6 +93,18 @@ finish() {
     echo "    Password:   $ADMIN_PASSWORD_NEW"
     echo "                Sign in with it once and choose your own. It is not shown again."
   fi
+  if in_ct "grep -q '^COMPOSE_PROFILES=.*https' $APP_DIR/.env 2>/dev/null"; then
+    local domain
+    domain="$(in_ct "sed -n 's/^HEARTHFORGE_DOMAIN=//p' $APP_DIR/.env" | tail -n1)"
+    if [ -n "$domain" ]; then
+      echo "    HTTPS:      https://${domain}   (ports 80 and 443 must reach this container for the certificate)"
+    else
+      echo "    HTTPS:      https://${ip:-<container-ip>}"
+      echo "                Trust its certificate once on each device: http://${ip:-<container-ip>}/hearthforge-ca.crt"
+      echo "                Give the container a fixed IP or a DHCP reservation, or the certificate stops matching."
+    fi
+    echo "                Voice input (the microphone) only works over HTTPS."
+  fi
   echo "    Logs:       pct exec $CTID -- docker compose -f $APP_DIR/docker-compose.yml logs -f"
 }
 
@@ -86,6 +117,8 @@ if [ -n "$EXISTING" ]; then
   wait_for_network
   in_ct "cd $APP_DIR && git pull --ff-only"
   ensure_admin_password
+  # An existing install keeps its settings; HTTPS=local (or a domain) on the command line switches HTTPS on.
+  configure_https "$HTTPS"
   compose_up
   in_ct "docker image prune -f >/dev/null" || true
   finish
@@ -109,6 +142,11 @@ if [ -z "$API_KEY" ] && [ -r /dev/tty ]; then
   read -rs API_KEY < /dev/tty || true
   printf '\n' > /dev/tty
 fi
+if [ -z "$HTTPS" ] && [ -r /dev/tty ]; then
+  printf 'HTTPS, needed for voice input: Enter for a local certificate, a domain name, or "off": ' > /dev/tty
+  read -r HTTPS < /dev/tty || true
+fi
+HTTPS="${HTTPS:-local}"
 [ -n "$API_KEY" ] || echo "No API key given. Hearthforge will use the scripted Dungeon Master until you add one to $APP_DIR/.env."
 
 say "Finding the Debian 12 container template"
@@ -148,6 +186,7 @@ in_ct "cd $APP_DIR && cp -n .env.example .env && chmod 600 .env"
 # Pass the key on stdin so it never appears in a process list or shell history.
 printf '%s' "$API_KEY" | pct exec "$CTID" -- bash -c "key=\$(cat); cd $APP_DIR && sed -i \"s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=\${key}|; s|^HEARTHFORGE_PORT=.*|HEARTHFORGE_PORT=${PORT}|\" .env"
 ensure_admin_password
+configure_https "$HTTPS"
 
 compose_up
 finish

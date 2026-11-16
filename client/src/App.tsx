@@ -24,6 +24,7 @@ import { musicContext } from '../../shared/music';
 import { LangSwitch, useT } from './i18n';
 import { MusicControl, useMusic } from './music';
 import { useSfx } from './sfx';
+import { useNarrator } from './narrator';
 import { playerId, useConnection } from './net';
 import { useAccount, type AccountState } from './account';
 import type { Profile } from '../../shared/accounts';
@@ -79,6 +80,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   }, []);
   useMusic(musicContext(state));
   useSfx(state);
+  useNarrator(state);
 
   /** The shop shown in the trade window. */
   const [shopId, setShopId] = useState<string | null>(null);

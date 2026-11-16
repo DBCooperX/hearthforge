@@ -4,6 +4,7 @@ import type { InvFilter, InvSort } from '../../../shared/inventory';
 import type { QuestStatus } from '../../../shared/types';
 import { MUSIC_ERRORS } from '../../../shared/music';
 import { SFX_ERRORS, SFX_PACKS } from '../../../shared/sfx';
+import { PIPER_VOICES, PROVIDER_LABELS, VOICE_ERRORS } from '../../../shared/voice';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
 import { ACCOUNT_ERRORS } from '../../../shared/accounts';
 import { SHOP_BLURBS, SHOP_NAMES } from '../../../shared/trade';
@@ -40,7 +41,8 @@ export const TEXT_SIZES = ['normal', 'large', 'larger'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 export const SIZE_LABELS: Record<TextSize, string> = { normal: 'Normal', large: 'Large', larger: 'Larger' };
 
-export const SHORTCUTS: { keys: string[]; text: string }[] = [
+export const SHORTCUTS: { keys: string[]; text: string; combo?: boolean }[] = [
+  { keys: ['Ctrl', 'M'], text: 'Hold to speak instead of typing', combo: true },
   { keys: ['C'], text: 'Character sheet' },
   { keys: ['I'], text: 'Inventory' },
   { keys: ['J'], text: 'Journal' },
@@ -70,7 +72,7 @@ export const ART_ERRORS = {
 export { MUSIC_ERRORS };
 export const SCENE_LABELS = { tavern: 'Tavern', town: 'Town', overworld: 'Overworld', dungeon: 'Dungeon', combat: 'Combat', boss: 'Boss fight' } as const;
 export const ACCESS_LABELS = { auto: 'Downloads by itself', click: 'Paste a link', manual: 'Get it there, drop it here' } as const;
-export const ASSET_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', art: 'Art' } as const;
+export const ASSET_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', art: 'Art' } as const;
 
 /** The Innkeeper's sections. */
 export const INN_TABS = {
@@ -102,7 +104,7 @@ export const ALL_LABELS: string[] = [
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(ACCOUNT_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
-  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),
+  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(TIER_LABELS), ...Object.values(TIER_TEXT), ...FACTIONS.map((f) => f.blurb), ...TROPHIES.flatMap((x) => [x.name, x.text]),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
