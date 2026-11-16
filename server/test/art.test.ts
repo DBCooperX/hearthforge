@@ -139,6 +139,13 @@ describe('art library', () => {
     expect(lib.manifest().pack).toBe('0x72');
     lib.activate('tiles', 'generated');
     expect(lib.manifest().pack).toBe('generated');
+    // The server tells open browsers to reload only when the tile sprites differ, so an icon-only change must leave them alone.
+    const before = JSON.stringify(lib.manifest().sprites);
+    lib.activate('icons', 'emoji');
+    expect(JSON.stringify(lib.manifest().sprites)).toBe(before);
+    lib.activate('tiles', '0x72');
+    expect(JSON.stringify(lib.manifest().sprites)).not.toBe(before);
+    lib.activate('tiles', 'generated');
     expect(() => lib.importZip('x.zip', new Uint8Array([1, 2, 3]))).toThrow(ArtError);
     expect(() => lib.importZip('x.zip', zip({ 'a.txt': new Uint8Array([1]) }))).toThrow(ArtError);
     expect(() => lib.activate('icons', 'game-icons')).toThrow(ArtError);

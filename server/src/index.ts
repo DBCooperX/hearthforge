@@ -228,6 +228,12 @@ function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
   });
 }
 
+/** Tell every open browser that the owner changed art, music or effects, so nobody has to reload by hand. */
+function announceAssets(change: Omit<Extract<ServerMessage, { t: 'assets' }>, 't'>) {
+  const payload = JSON.stringify({ t: 'assets', ...change } satisfies ServerMessage);
+  for (const ws of conns.keys()) if (ws.readyState === ws.OPEN) ws.send(payload);
+}
+
 async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   const json = (status: number, body: unknown) => {
     res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -244,9 +250,12 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     }
     if (req.method !== 'POST') return json(405, { error: 'bad_request' });
     if (!canEdit) { req.resume(); return json(403, { error: 'forbidden' }); }
+    const tilesBefore = JSON.stringify(art.manifest().sprites ?? {});
+    const done = () => announceAssets({ icons: true, tiles: JSON.stringify(art.manifest().sprites ?? {}) !== tilesBefore });
     if (url.pathname === '/api/art/upload') {
       const zip = await readBody(req, MAX_UPLOAD);
       const added = art.importZip(String(url.searchParams.get('name') ?? 'pack.zip').slice(0, 120), new Uint8Array(zip));
+      done();
       return json(200, { ...added, library: art.library(canEdit, ART_UPLOADS) });
     }
     if (url.pathname === '/api/art/action') {
@@ -258,6 +267,7 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       else if (m.do === 'describe') art.describe(id, m);
       else if (m.do === 'remove') art.remove(id);
       else throw new ArtError('bad_request');
+      done();
       return json(200, { library: art.library(canEdit, ART_UPLOADS) });
     }
     return json(404, { error: 'bad_request' });
@@ -282,10 +292,12 @@ async function musicApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (url.pathname === '/api/music/upload') {
       const body = await readBody(req, 96 * 1024 * 1024);
       addUpload(MUSIC_DIR, String(url.searchParams.get('name') ?? 'track.mp3').slice(0, 160), new Uint8Array(body), url.searchParams.get('layer'), url.searchParams.get('context'));
+      announceAssets({ music: true });
       return json(200, musicLibrary(MUSIC_DIR, env));
     }
     if (url.pathname === '/api/music/action') {
       await musicAction(MUSIC_DIR, env, JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'));
+      announceAssets({ music: true });
       return json(200, musicLibrary(MUSIC_DIR, env));
     }
     return json(404, { error: 'bad_request' });
@@ -315,10 +327,12 @@ async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (url.pathname === '/api/sfx/upload') {
       const body = await readBody(req, 60 * 1024 * 1024);
       addSfxUpload(SFX_DIR, String(url.searchParams.get('name') ?? 'sounds.zip').slice(0, 160), new Uint8Array(body));
+      announceAssets({ sfx: true });
       return json(200, sfxLibrary(SFX_DIR, env));
     }
     if (url.pathname === '/api/sfx/remove') {
       removeSfxPack(SFX_DIR, JSON.parse((await readBody(req, 4 * 1024)).toString('utf8') || '{}').id);
+      announceAssets({ sfx: true });
       return json(200, sfxLibrary(SFX_DIR, env));
     }
     return json(404, { error: 'bad_request' });
