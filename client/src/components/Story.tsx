@@ -13,6 +13,9 @@ import { tr } from '../../../shared/i18n';
 import { parseOoc } from '../../../shared/ooc';
 import { classLabel } from '../game/util';
 import { Icon } from '../ui/icons';
+import { ReadAloud } from '../narrator';
+import { MicButton } from '../dictation';
+import { useLang } from '../i18n';
 
 // ------------------------------------------------------------- entities
 
@@ -218,7 +221,7 @@ function DiceRoll({ roll, animate }: { roll: RollInfo; animate: boolean }) {
 
 // ----------------------------------------------------------------- feed
 
-function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean; takeBack?: () => void }) {
+function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; animate: boolean; takeBack?: () => void; table: string; lang: string }) {
   const t = useT();
   switch (entry.kind) {
     case 'dm':
@@ -227,6 +230,7 @@ function Entry({ entry, animate, takeBack }: { entry: LogEntry; animate: boolean
           {entry.scene && (
             <header><span className="mood-dot" />{entry.scene.title}<small>{t(entry.scene.mood)}</small></header>
           )}
+          <ReadAloud table={table} entry={entry.id} lang={lang} />
           {entry.scene?.where && <SceneStage scene={entry.scene} />}
           {entry.text.split(/\n{2,}/).map((p, i) => <p key={i}><RichText text={p} /></p>)}
         </article>
@@ -279,6 +283,7 @@ interface FeedProps {
 /** The story: scene cards, what players said, dice and system notes, plus the box to act in. */
 export function StoryFeed({ state, conn, compact }: FeedProps) {
   const t = useT();
+  const { lang } = useLang();
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
   // Entries already on screen when the feed mounts appear instantly; later ones animate in.
@@ -303,7 +308,7 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
   return (
     <section className={compact ? 'story compact' : 'story'}>
       <div className="feed">
-        {state.log.map((l) => <Entry key={l.id} entry={l} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />)}
+        {state.log.map((l) => <Entry key={l.id} entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />)}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}
         {state.travelling && <p className="line typing">{t('On the road…')}</p>}
         {state.gathering && !state.dmBusy && <p className="line typing">{answered ? t('The Dungeon Master gives the others a moment to act…') : t('The Dungeon Master is listening. Say what you do, and it is resolved together with the others.')}</p>}
@@ -320,6 +325,7 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
         onSubmit={(e) => { e.preventDefault(); say(text, ooc); setText(''); setOoc(false); signal(''); }}
       >
         <input value={text} onChange={(e) => { setText(e.target.value); signal(e.target.value); }} maxLength={500} placeholder={asking ? t('Ask the Dungeon Master out of character…') : exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
+        <MicButton lang={lang} text={text} setText={(v) => { setText(v); signal(v); }} />
         <button type="button" className="ooc-toggle" aria-pressed={asking} disabled={!ooc && parseOoc(text) !== null} title={t('Out-of-character question: answered as a note, the story does not move on')} onClick={() => setOoc(!ooc)}>{t('Ask the DM')}</button>
         <button className="primary" disabled={!text.trim()}>{t('Send')}</button>
       </form>

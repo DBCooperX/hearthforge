@@ -4,7 +4,7 @@
 import type { Lang } from './i18n';
 
 export type SettingKind = 'secret' | 'model' | 'choice' | 'number' | 'text';
-export type SettingGroup = 'dm' | 'play' | 'art' | 'server';
+export type SettingGroup = 'dm' | 'play' | 'voice' | 'art' | 'server';
 
 export interface SettingDef {
   key: string;
@@ -39,6 +39,9 @@ export const SETTINGS: SettingDef[] = [
   { key: 'HEARTHFORGE_MUSIC', group: 'play', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Background music', help: 'Freely licensed tracks are downloaded onto the server when it starts. Manage them under Assets.' },
   { key: 'HEARTHFORGE_SFX', group: 'play', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Sound effects', help: 'Sword hits, shots, spells, footsteps, coins and fanfares. Add the free Kenney CC0 recordings under Assets; without them the browser makes the sounds itself. Off silences all effects for everyone.' },
   { key: 'FREESOUND_API_KEY', group: 'play', kind: 'secret', fallback: '', label: 'Freesound API key', help: 'Free from freesound.org/apiv2/apply. With it the server fetches CC0 ambient loops (crowd, town, forest, cave) by itself, and the Ambient tab gets a button for more.' },
+  { key: 'HEARTHFORGE_NARRATOR', group: 'voice', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Narrator', help: 'Reads the Dungeon Master\'s story aloud. Choose the voice under Assets → Narrator; each player can mute it or turn it down. Off removes it for everyone.' },
+  { key: 'OPENAI_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'OpenAI API key', help: 'Only for the narrator, if you pick an OpenAI voice. From platform.openai.com. A few cents per evening of play.' },
+  { key: 'ELEVENLABS_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'ElevenLabs API key', help: 'Only for the narrator, if you pick an ElevenLabs voice. From elevenlabs.io; the free plan covers a short session a month.' },
   { key: 'HEARTHFORGE_ART', group: 'art', kind: 'choice', fallback: 'generated', choices: ['generated', 'kenney', '0x72'], label: 'Starting art pack', help: 'Only used until a pack is chosen under Assets.' },
   { key: 'HEARTHFORGE_AUTO_ASSETS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Fetch free art by itself', help: 'On downloads the freely licensed item icons (game-icons.net) the first time the server starts. Music has its own switch.' },
   { key: 'HEARTHFORGE_ART_UPLOADS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Art pack changes', help: 'Off locks the art library, also for the Innkeeper.' },
@@ -49,6 +52,7 @@ export const SETTINGS: SettingDef[] = [
 export const SETTING_GROUPS: Record<SettingGroup, string> = {
   dm: 'Dungeon Master',
   play: 'Playing',
+  voice: 'Voice',
   art: 'Art',
   server: 'Server',
 };

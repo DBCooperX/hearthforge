@@ -3,7 +3,8 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { MUSIC_FALLBACK, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
 import { useT } from './i18n';
-import { SfxControl, sfx } from './sfx';
+import { SfxControl } from './sfx';
+import { NarratorControl } from './narrator';
 
 const KEY = 'hearthforge.music';
 const FADE = 2.2;
@@ -11,6 +12,8 @@ const FADE = 2.2;
 const MANIFEST_REFRESH_MS = 30_000;
 /** Fights cut in faster than a walk into town. */
 const FADE_FIGHT = 0.9;
+/** How loud music and ambient sound stay while the narrator reads. */
+const DUCK = 0.35;
 
 interface Settings { muted: boolean; volume: number; ambient: number; ambientMuted: boolean }
 interface Voice { track: MusicTrack; context: MusicContext; el: HTMLAudioElement; gain: GainNode }
@@ -78,7 +81,7 @@ export class MusicPlayer {
         try {
           this.ctx = new AC();
           this.master = this.ctx.createGain();
-          this.master.gain.value = this.settings.muted ? 0 : this.settings.volume;
+          this.master.gain.value = this.musicLevel(this.settings);
           this.master.connect(this.ctx.destination);
           this.ambientMaster = this.ctx.createGain();
           this.ambientMaster.gain.value = this.ambientLevel(this.settings);
@@ -122,7 +125,23 @@ export class MusicPlayer {
     if (this.started) void this.refresh();
   }
 
-  private ambientLevel(s: Settings) { return s.ambientMuted ? 0 : s.ambient; }
+  /** While the narrator reads, music and ambient sound step back so the voice is easy to follow. */
+  private ducked = false;
+  private musicLevel(s: Settings) { return (s.muted ? 0 : s.volume) * (this.ducked ? DUCK : 1); }
+  private ambientLevel(s: Settings) { return (s.ambientMuted ? 0 : s.ambient) * (this.ducked ? DUCK : 1); }
+
+  /** Lower the music while the narrator speaks, and bring it back afterwards. */
+  duck(on: boolean) {
+    if (on === this.ducked) return;
+    this.ducked = on;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    for (const [node, level] of [[this.master, this.musicLevel(this.settings)], [this.ambientMaster, this.ambientLevel(this.settings)]] as const) {
+      if (!node) continue;
+      node.gain.cancelScheduledValues(now);
+      node.gain.setTargetAtTime(level, now, on ? 0.25 : 0.6);
+    }
+  }
 
   setMuted(muted: boolean) { this.save({ ...this.settings, muted }); }
   setAmbientMuted(ambientMuted: boolean) { this.save({ ...this.settings, ambientMuted }); }
@@ -137,7 +156,7 @@ export class MusicPlayer {
     if (this.ctx && this.master) {
       const now = this.ctx.currentTime;
       this.master.gain.cancelScheduledValues(now);
-      this.master.gain.setTargetAtTime(next.muted ? 0 : next.volume, now, 0.08);
+      this.master.gain.setTargetAtTime(this.musicLevel(next), now, 0.08);
     }
     if (this.ctx && this.ambientMaster) {
       const now = this.ctx.currentTime;
@@ -292,8 +311,7 @@ const credit = (t: MusicTrack) => `${t.title}${t.artist ? ` · ${t.artist}` : ''
 export function MusicControl() {
   const t = useT();
   const m = useSyncExternalStore(music.subscribe, music.getSnapshot);
-  const fx = useSyncExternalStore(sfx.subscribe, sfx.getSnapshot);
-  if (!m.enabled) return fx.enabled ? <span className="music" role="group" aria-label={t('Sound effects')}><SfxControl /></span> : null;
+  if (!m.enabled) return <span className="music" role="group" aria-label={t('Sound effects')}><SfxControl /><NarratorControl /></span>;
   const silent = m.muted;
   let status: string;
   if (!m.available) status = m.pending ? t('The server is still fetching the music…') : t('No music on this server yet.');
@@ -333,6 +351,7 @@ export function MusicControl() {
         </>
       )}
       <SfxControl />
+      <NarratorControl />
       <span className="music-now" role="status">{status}</span>
     </span>
   );

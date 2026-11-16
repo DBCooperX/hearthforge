@@ -4,6 +4,7 @@ import { buildOf, isStale, mayAutoReload } from '../../shared/update';
 import { reloadItemIcons } from './game/itemArt';
 import { music } from './music';
 import { sfx } from './sfx';
+import { narrator } from './narrator';
 import { CLOSED_REASONS } from './ui/labels';
 import { accountSession, signedOut } from './account';
 import { JOIN_ERRORS, type ChatMessage, type ClientMessage, type GameState, type ServerMessage, type TableSummary, type TestMonster, type TypingWhere } from '../../shared/types';
@@ -182,6 +183,7 @@ export function useConnection(): Connection {
             if (msg.icons) void reloadItemIcons();
             if (msg.music) void music.refresh();
             if (msg.sfx) void sfx.refresh();
+            if (msg.voice) void narrator.refresh();
             if (msg.tiles) reloadOrAsk();
             break;
           case 'state':

@@ -859,7 +859,7 @@ export type ServerMessage =
   /** A message from the owner of the server to everyone, such as an announced restart. */
   | { t: 'notice'; text: string }
   /** The owner changed something in the Innkeeper that every browser loads from the server. Tiles can only be swapped by loading the page again. */
-  | { t: 'assets'; icons?: boolean; tiles?: boolean; music?: boolean; sfx?: boolean }
+  | { t: 'assets'; icons?: boolean; tiles?: boolean; music?: boolean; sfx?: boolean; voice?: boolean }
   /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
   | { t: 'error'; message: string; join?: boolean }
   /** The monsters the test toolbox can start a fight with. */

@@ -13,6 +13,9 @@ import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
+import { Narrator, VoiceError, langOf } from './voice';
+import { speechParts } from '../../shared/voice';
+import { SESSION_HEADER } from './accountApi';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
 import { JoinError } from './game/engine';
@@ -53,6 +56,7 @@ const art = new ArtStore(ART_DIR, env);
 const ART_UPLOADS = (env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
 const MUSIC_DIR = env.MUSIC_DIR ?? join(DATA_DIR, 'music');
 const SFX_DIR = env.SFX_DIR ?? join(DATA_DIR, 'sfx');
+const VOICE_DIR = env.VOICE_DIR ?? join(DATA_DIR, 'voice');
 const TRUST_PROXY = (env.HEARTHFORGE_TRUST_PROXY ?? 'off').toLowerCase() === 'on';
 
 /** The address a request comes from. Behind a reverse proxy the owner trusts, the one it reports. */
@@ -78,6 +82,7 @@ const MIME: Record<string, string> = {
 };
 
 const store = new Store(DATA_DIR);
+const narrator = new Narrator(VOICE_DIR, env);
 const claude = createDM(env, (sample) => usage.record(sample));
 const dm = claude ?? new ScriptedDM();
 const rooms = new Map<string, Room>();
@@ -352,6 +357,74 @@ async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** Send a finished speech file. Browsers ask for audio in byte ranges. */
+function sendAudio(req: IncomingMessage, res: ServerResponse, file: string, type: string, extra: Record<string, string> = {}) {
+  const size = statSync(file).size;
+  const range = byteRange(req.headers.range, size);
+  const headers = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=86400', ...extra };
+  if (range) {
+    res.writeHead(206, { ...headers, 'content-range': `bytes ${range.start}-${range.end}/${size}`, 'content-length': range.end - range.start + 1 });
+    createReadStream(file, range).pipe(res);
+  } else {
+    res.writeHead(200, { ...headers, 'content-length': size });
+    createReadStream(file).pipe(res);
+  }
+}
+
+/**
+ * The narrator. Anyone may ask what it can do; a player at a table may hear that table's story read aloud, one part at a
+ * time; only the Innkeeper chooses the voice. Nothing but the Dungeon Master's own story is ever spoken, so a key for a
+ * paid voice cannot be spent on anything else.
+ */
+async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (url.pathname === '/api/voice') return json(200, narrator.manifest());
+    if (req.method === 'GET' && url.pathname === '/api/voice/line') {
+      const account = accounts.account(req.headers[SESSION_HEADER]);
+      const room = rooms.get(tableId(url.searchParams.get('table')));
+      if (!account || !room || !room.game.player(account.id)) return json(403, { error: 'forbidden' });
+      const id = Number(url.searchParams.get('entry'));
+      const entry = room.game.s.log.find((l) => l.id === id);
+      if (!entry || entry.kind !== 'dm') return json(404, { error: 'bad_request' });
+      const parts = speechParts(entry.text);
+      const part = Math.max(0, Math.floor(Number(url.searchParams.get('part')) || 0));
+      if (part >= parts.length) return json(404, { error: 'bad_request' });
+      const lang = langOf(room.game.s.language);
+      const audio = await narrator.speak(parts[part], lang);
+      // The next part is made while this one plays.
+      if (part + 1 < parts.length) void narrator.speak(parts[part + 1], lang).catch(() => {});
+      return sendAudio(req, res, audio.file, audio.type, { 'x-parts': String(parts.length), 'access-control-expose-headers': 'x-parts' });
+    }
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/voice/library') return json(200, narrator.library());
+    if (req.method === 'GET' && url.pathname === '/api/voice/preview') {
+      const lang = langOf(url.searchParams.get('lang'));
+      const sample = lang === 'de'
+        ? 'Der Regen trommelt auf das Dach der Taverne. Am Kamin hebt eine Fremde den Kopf und mustert euch lange. «Ihr seid spät», sagt sie leise. «Setzt euch. Die Strasse nach Norden ist nicht mehr sicher.»'
+        : 'Rain drums on the roof of the tavern. By the hearth, a stranger lifts her head and studies you for a long moment. "You are late," she says quietly. "Sit. The north road is no longer safe."';
+      const over: Record<string, unknown> = {};
+      for (const k of ['provider', 'openai', 'elevenlabs', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
+      if (url.searchParams.has('piper')) over.piper = { ...narrator.library().choice.piper, [lang]: url.searchParams.get('piper') };
+      const audio = await narrator.speak(sample, lang, over);
+      return sendAudio(req, res, audio.file, audio.type);
+    }
+    if (req.method === 'POST' && url.pathname === '/api/voice/action') {
+      await narrator.action(JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'));
+      return json(200, narrator.library());
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof VoiceError) return json(err.code === 'failed' ? 500 : 400, { error: err.code });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[voice]', err instanceof Error ? err.message : err);
+    return json(502, { error: 'failed' });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
@@ -397,6 +470,10 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
     res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
+    return;
+  }
+  if (url.pathname === '/api/voice' || url.pathname.startsWith('/api/voice/')) {
+    void voiceApi(req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/sfx/')) {
@@ -546,6 +623,8 @@ accounts.onDeleted = (id) => {
 };
 
 void art.start();
+narrator.onChange = () => announceAssets({ voice: true });
+void narrator.start();
 importDroppedSfx(SFX_DIR, env);
 void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
 admin.start();
@@ -554,6 +633,8 @@ server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
   console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
   console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
+  const voice = narrator.manifest();
+  console.log(`Narrator: ${!narrator.enabled ? 'off (HEARTHFORGE_NARRATOR)' : voice.provider === 'off' ? 'off (chosen in the Innkeeper)' : voice.provider === 'piper' && !narrator.piperReady ? 'Piper is not in this image' : `${voice.provider}${voice.langs.length ? `, reads ${voice.langs.join(' and ')}` : ', voices are still being fetched'}`}. Kept in ${VOICE_DIR}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
   else if (claude.models.storyOnKey) console.log(`Dungeon Master: Claude. Every story turn: ${claude.models.key} (HEARTHFORGE_DM_STORY_ON_KEY). Combat: ${claude.models.standard}. Background: ${claude.models.background}.`);

@@ -29,6 +29,10 @@ services:
       HEARTHFORGE_ADMIN_PASSWORD: ${HEARTHFORGE_ADMIN_PASSWORD:-}
       HEARTHFORGE_AUTO_UPDATE: ${HEARTHFORGE_AUTO_UPDATE:-off}
       HEARTHFORGE_TRUST_PROXY: ${HEARTHFORGE_TRUST_PROXY:-off}
+      # The narrator (reads the story aloud). Piper is in the image; these keys are only for hosted voices.
+      HEARTHFORGE_NARRATOR: ${HEARTHFORGE_NARRATOR:-on}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
     volumes:
       - hearthforge-data:/data
 
@@ -50,5 +54,34 @@ services:
       - .:/repo
       - hearthforge-data:/data
 
+  # HTTPS in front of the game, needed for voice input (browsers only allow the microphone on https).
+  # Only started with COMPOSE_PROFILES=https in .env; see "HTTPS" in the README.
+  caddy:
+    profiles: [https]
+    build:
+      context: ./caddy
+      args:
+        CADDY_FLAVOUR: ${HEARTHFORGE_DNS_PROVIDER:+dns}
+        CADDY_DNS: ${HEARTHFORGE_DNS_PROVIDER:-}
+    image: hearthforge-caddy:local
+    restart: unless-stopped
+    depends_on:
+      - hearthforge
+    ports:
+      - "${HEARTHFORGE_HTTP_PORT:-80}:80"
+      - "${HEARTHFORGE_HTTPS_PORT:-443}:443"
+      - "${HEARTHFORGE_HTTPS_PORT:-443}:443/udp"
+    environment:
+      HEARTHFORGE_DOMAIN: ${HEARTHFORGE_DOMAIN:-}
+      HEARTHFORGE_LOCAL_HOSTS: ${HEARTHFORGE_LOCAL_HOSTS:-}
+      HEARTHFORGE_ACME_EMAIL: ${HEARTHFORGE_ACME_EMAIL:-}
+      HEARTHFORGE_DNS_PROVIDER: ${HEARTHFORGE_DNS_PROVIDER:-}
+      HEARTHFORGE_DNS_TOKEN: ${HEARTHFORGE_DNS_TOKEN:-}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   hearthforge-data:
+  caddy-data:
+  caddy-config:

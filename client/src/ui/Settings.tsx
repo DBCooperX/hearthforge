@@ -8,6 +8,7 @@ import { SETTINGS_TABS, SHORTCUTS, SIZE_LABELS, TEXT_SIZES } from './labels';
 import { setPrefs, usePrefs } from './prefs';
 import { sfx } from './sound';
 import { Kbd, TabBar, Window } from './Window';
+import { dictationBlocker } from '../dictation';
 
 interface Props {
   onClose: () => void;
@@ -46,6 +47,10 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
               </span>
             </div>
             <div className="setting">
+              <span>{t('Voice input')} <Info text={t('Hold the microphone beside the text box, or Ctrl+M, and speak. The words land in the box, so you can fix them before sending.')} /></span>
+              <span className="muted small">{dictationBlocker() === 'insecure' ? t('Voice input needs a secure connection (https). Ask whoever runs this server to switch on HTTPS.') : dictationBlocker() === 'unsupported' ? t('This browser cannot turn speech into text. Chrome, Edge and Safari can.') : t('On')}</span>
+            </div>
+            <div className="setting">
               <span>{t('Text size')} <Info text={t('For the story, the journal and item descriptions.')} /></span>
               <span className="pick">
                 {TEXT_SIZES.map((s) => <button key={s} type="button" className={prefs.textSize === s ? 'on' : ''} aria-pressed={prefs.textSize === s} onClick={() => { setPrefs({ textSize: s }); sfx('tab'); }}>{t(SIZE_LABELS[s])}</button>)}
@@ -57,7 +62,7 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
         {tab === 'keys' && (
           <ul className="shortcuts">
             {SHORTCUTS.map((s) => (
-              <li key={s.text}><span className="keys">{s.keys.map((k, i) => <span key={k}>{i > 0 && (s.keys.length === 2 ? '–' : '')}<Kbd>{k}</Kbd></span>)}</span>{t(s.text)}</li>
+              <li key={s.text}><span className="keys">{s.keys.map((k, i) => <span key={k}>{i > 0 && (s.combo ? '+' : s.keys.length === 2 ? '–' : '')}<Kbd>{k}</Kbd></span>)}</span>{t(s.text)}</li>
             ))}
           </ul>
         )}
