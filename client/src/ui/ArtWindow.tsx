@@ -210,7 +210,7 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
             {more.length > 0 && (
               <section>
                 <h3>{t('More free packs')}</h3>
-                <p className="muted small">{t('These sites want a login or do not allow automatic downloads. Get the zip there and drop it above. Mind the credit each artist asks for.')}</p>
+                <p className="muted small">{t('Item icon packs. Once added, their pictures replace the emoji for items, skills and spells in the inventory, character sheet and hotbar. Pictures are matched by file name, and Assign icons fixes the rest. These sites want a login or do not allow automatic downloads: get the zip there and drop it above. Mind the credit each artist asks for.')}</p>
                 <ul className="art-packs">
                   {more.map((c) => <li key={c.id} className="art-pack"><div><b>{c.name}</b><Credit p={c} /></div><span className="art-pack-actions"><a href={c.url} target="_blank" rel="noreferrer noopener">{t('Get it here')}</a></span></li>)}
                 </ul>
