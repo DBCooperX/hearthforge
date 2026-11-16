@@ -7,7 +7,7 @@ import { HOTBAR_DRAG, abilityRef } from '../game/hotbar';
 import { ABILITIES, ABILITY_NAMES, CLASS_INFO, SAVE_PROFS, SKILLS, SLOT_LABELS } from '../../../shared/content';
 import { castingAbility, weaponAttack } from '../../../shared/build';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityDef, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
-import { artOfCharacter, heroUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
 import { conditionHelp, heroTitle } from '../game/util';
 import { ABILITY_HELP, BACKGROUNDS, CLASSES, GLOSSARY, SKILL_HELP, loc } from '../../../shared/rules';
@@ -78,7 +78,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
       <div className="cs">
         <aside className="cs-id">
           <div className="cs-portrait" style={{ '--class': CLASS_INFO[c.classId].color } as React.CSSProperties}>
-            <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+            <img className="hero-art" src={heroPortraitUrl(artOfCharacter(c, state.items), 296)} alt="" />
             <span className="cs-level" title={t('Level {n}', { n: c.level })}>{c.level}</span>
           </div>
           <h2>{c.name}</h2>

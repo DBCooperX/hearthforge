@@ -1,7 +1,7 @@
 import { CLASS_INFO } from '../../../shared/content';
 import { BEAST_FORMS, shownResources } from '../../../shared/classes';
 import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc } from '../../../shared/types';
-import { artOfCharacter, heroUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { playerId } from '../net';
 import { useT } from '../i18n';
 import { classLabel, conditionHelp } from '../game/util';
@@ -54,7 +54,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             }}
           >
             <div className="portrait" style={{ borderColor: CLASS_INFO[c.classId].color }}>
-              <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+              <img className="hero-art" src={heroPortraitUrl(artOfCharacter(c, state.items))} alt="" />
               <span className="ac" title={t('Armor Class')}>{c.ac}</span>
             </div>
             <div className="info">

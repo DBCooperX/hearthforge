@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Look
+- **Heroes and monsters drawn in ink.** The generated characters, monsters and portraits no longer look like a child's pixel drawing. They are painted at high resolution like ink illustrations in an old rulebook: shaded forms with ink contours, muted earthy colours, cross-hatching in the shadows and a heavy outer line. Heroes have heroic proportions and real faces (brows, eyes, nose, mouth), dragonborn get a proper dragon's head, and monsters get scowling brows, jaws and bending legs. Every token and portrait sits in a round frame: brass with rivets for heroes, blackened iron for monsters. The party panel, hero tabs, lobby, character sheet, creator and hover cards show head-and-shoulders portraits; the inventory keeps the whole figure. On the battle map the creature whose turn it is gets a brass nameplate on its token. Everything is still drawn by the game itself, so nothing is downloaded and every look the creator or the Dungeon Master picks still shows.
 - **A tavern behind the table.** The lobby, the table room and the character creator now sit in front of a candlelit tavern table: darkened, softly blurred and vignetted so the forms stay readable, with the panels turned into frosted iron that lets the firelight through. A very slow drift and candle flicker bring it to life (off with "reduce motion"); the creator pushes it further back. Phones get a tall crop of the party. The picture is WebP with a JPEG fallback.
 
 ### Playing

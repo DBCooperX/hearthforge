@@ -23,6 +23,7 @@ import './hotbar.css';
 import './fight.css';
 import './zone.css';
 import './test.css';
+import './art.css';
 import './ui/prefs';
 
 // Art packs are optional; never wait long for them.

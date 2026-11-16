@@ -267,7 +267,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
           <div className="doll-stage">
             <div className="col">{LEFT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
             <div className="figure">
-              <img className="pixel" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+              <img className="hero-art" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
             </div>
             <div className="col">{RIGHT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
           </div>
