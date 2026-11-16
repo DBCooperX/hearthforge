@@ -209,6 +209,10 @@ export class AdminApi {
         if (!room) throw new Refused(404, 'not_found');
         if (body.do === 'delete') { console.log(`[innkeeper] Table "${room.game.s.table.title}" was deleted.`); ctx.auth.setPaused(room.name, false); room.close(); }
         else if (body.do === 'pause' || body.do === 'resume') { ctx.auth.setPaused(room.name, body.do === 'pause'); room.flush(); }
+        else if (body.do === 'test_on' || body.do === 'test_keep' || body.do === 'test_discard') {
+          room.setTestMode(body.do === 'test_on', body.do !== 'test_discard');
+          console.log(`[innkeeper] Test mode ${body.do === 'test_on' ? 'on' : body.do === 'test_keep' ? 'ended, changes kept' : 'ended, changes discarded'} at table "${room.game.s.table.title}".`);
+        }
         else if (body.do === 'remove') room.remove(String(body.playerId ?? ''));
         else throw new Refused(400, 'bad_request');
         ctx.tablesChanged();
@@ -326,6 +330,7 @@ export class AdminApi {
         language: room.game.lang,
         phase: s.phase,
         paused: ctx.auth.paused(room.name),
+        testMode: !!s.testMode,
         region: s.setting?.name ?? '',
         seed: s.table.start.seed ?? '',
         code: s.table.code,

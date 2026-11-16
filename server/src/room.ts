@@ -1,10 +1,11 @@
 // A room is one table: a Game, the players sitting at it and its Dungeon Master.
 import { createHash } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TypingWhere } from '../../shared/types';
+import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
-import { Game, GameError, type Beat } from './game/engine';
+import { Game, GameError, type Beat, type InternalState } from './game/engine';
+import { monsterCatalog, playtest } from './game/playtest';
 import { newSeed } from '../../shared/start';
 import { tagged } from '../../shared/i18n';
 import { parseOoc } from '../../shared/ooc';
@@ -257,7 +258,7 @@ export class Room {
     this.game.checkTrophies();
     const state: ServerMessage = {
       t: 'state',
-      state: this.game.publicState({ busy: this.dmBusy > 0, mode: this.dm.mode, model: this.dm.model, gathering: this.gathering, unanswered: this.pending.map((l) => ({ logId: l.logId, playerId: l.playerId })) }),
+      state: this.game.publicState({ busy: this.dmBusy > 0, mode: this.dm.mode, model: this.dm.model, gathering: this.gathering, unanswered: this.pending.filter((l) => !l.director).map((l) => ({ logId: l.logId, playerId: l.playerId })) }),
     };
     const payload = JSON.stringify(state);
     for (const ws of this.sockets.keys()) {
@@ -316,6 +317,7 @@ export class Room {
     switch (msg.t) {
       case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc);
       case 'unsay': return this.unsay(ws, playerId);
+      case 'test': return this.testAction(ws, playerId, msg.do);
       case 'travel': return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));
       case 'chat': return this.chat(ws, playerId, String(msg.text ?? ''), msg.to ? String(msg.to) : undefined);
       case 'typing': return this.setTyping(playerId, msg.where === 'story' || msg.where === 'chat' ? msg.where : null);
@@ -555,7 +557,7 @@ export class Room {
 
   /** Take back the player's latest line, as long as the Dungeon Master has not started to answer it. */
   private unsay(ws: WebSocket, playerId: string) {
-    const at = this.pending.map((l) => l.playerId).lastIndexOf(playerId);
+    const at = this.pending.map((l) => (l.director ? '' : l.playerId)).lastIndexOf(playerId);
     if (at < 0) {
       return this.send(ws, { t: 'error', message: tagged(this.game.lang)`Too late: the Dungeon Master is already answering.` });
     }
@@ -623,7 +625,7 @@ export class Room {
     const epoch = this.epoch;
     this.background(async () => {
       // Taken only now, so anything said while an earlier scene was being written is included.
-      const said = this.pending.splice(0).map(({ player, text }) => ({ player, text }));
+      const said = this.pending.splice(0).map(({ player, text, director }) => ({ player, text, ...(director ? { director } : {}) }));
       try {
         if (!said.length) return;
         const scene = await this.dm.respond(this.game, said, async () => this.flush());
@@ -640,6 +642,60 @@ export class Room {
         this.considerAnswer();
       }
     });
+  }
+
+  // ---------------------------------------------------------------- test mode
+
+  /** The host's toolbox at a table in test mode. */
+  private testAction(ws: WebSocket, playerId: string, action: TestAction) {
+    const g = this.game;
+    if (!g.s.testMode) return this.send(ws, { t: 'error', message: tagged(g.lang)`Test mode is off at this table.` });
+    if (!action || typeof action !== 'object') return;
+    if (!this.attempt(ws, () => g.requireHost(playerId))) return;
+    if (action.op === 'catalog') return this.send(ws, { t: 'test_catalog', monsters: monsterCatalog(g) });
+    this.enqueue(async () => {
+      if (this.closed) return;
+      let hint: string | undefined;
+      if (!this.attempt(ws, () => { hint = playtest(g, action)?.hint; })) return;
+      // The hint reaches the Dungeon Master at once, whoever else is at the table, and never shows in the story.
+      if (hint) this.pending.push({ playerId, player: 'Test mode', text: hint, director: true, logId: g.s.logSeq });
+      this.flush();
+      if (hint) this.answer();
+      await this.pump();
+    });
+  }
+
+  /**
+   * The owner switches test mode on or off. On, the table is saved as it stands. Off, the campaign either
+   * keeps what the tests did or goes back to how it was before them.
+   */
+  setTestMode(on: boolean, keep = true) {
+    const g = this.game;
+    const s = g.s;
+    if (on === !!s.testMode) return;
+    if (on) {
+      const { chat: _chat, testMode: _mode, ...rest } = s;
+      s.testMode = { since: Date.now(), snapshot: JSON.stringify({ ...rest, chat: [] }) };
+      g.log('system', tagged(g.lang)`Test mode is on. The host has a toolbox, and nothing counts unless the innkeeper keeps it.`);
+    } else if (keep) {
+      delete s.testMode;
+      g.log('system', tagged(g.lang)`Test mode is over. The story carries on as it stands.`);
+    } else {
+      const snap = JSON.parse(s.testMode!.snapshot) as InternalState;
+      // Seats, chat and the language belong to the table, not to the story, and stay as they are now.
+      g.s = { ...snap, players: s.players, seats: s.seats, hostId: s.hostId, ready: s.ready, chat: s.chat, chatSeq: s.chatSeq, table: s.table, language: s.language };
+      g.beats = [];
+      g.moves = [];
+      this.epoch++;
+      this.reactionWaiter?.(false);
+      this.pending = [];
+      this.answering = 0;
+      this.graceOnly = false;
+      if (this.gatherTimer) clearTimeout(this.gatherTimer);
+      this.gatherTimer = null;
+      g.log('system', tagged(g.lang)`Test mode is over. The story is back to how it was before the tests.`);
+    }
+    this.flush();
   }
 
   // -------------------------------------------------------------- table talk

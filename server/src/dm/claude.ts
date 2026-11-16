@@ -491,7 +491,8 @@ export class ClaudeDM implements DungeonMaster {
   }
 
   private situation(game: Game): string {
-    return game.s.phase === 'combat' ? describeCombat(game) : describeWorld(game);
+    const state = game.s.phase === 'combat' ? describeCombat(game) : describeWorld(game);
+    return game.s.testMode ? `TEST MODE: the table's host is playtesting and may set levels, hit points, items, gold, the clock and the place directly. Take the state below as the truth, and do not comment on sudden changes.\n${state}` : state;
   }
 
   async narrate(game: Game, beats: Beat[], onUpdate: () => Promise<void>): Promise<Scene | null> {
@@ -534,7 +535,10 @@ export class ClaudeDM implements DungeonMaster {
     return text;
   }
 
-  async respond(game: Game, said: PlayerLine[], onUpdate: () => Promise<void>): Promise<Scene | null> {
+  async respond(game: Game, all: PlayerLine[], onUpdate: () => Promise<void>): Promise<Scene | null> {
+    // In test mode the host may send a hint that is not something a player said.
+    const hints = all.filter((l) => l.director);
+    const said = all.filter((l) => !l.director);
     const inCombat = game.s.phase === 'combat';
     const one = said.length === 1 ? said[0] : null;
     const who = one ? `the player ${one.player}${playerHeroes(game, one.player)}` : '';
@@ -544,7 +548,10 @@ export class ClaudeDM implements DungeonMaster {
     const ask = inCombat
       ? `${one ? `In the middle of the fight, ${who} says to you: ${JSON.stringify(one.text)}` : `In the middle of the fight, several players speak to you:\n${lines}`}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions.`
       : `${one ? `The player ${one.player}${playerHeroes(game, one.player)} says or does this: ${JSON.stringify(one.text)}` : together}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. ${one ? 'Their message is' : 'Their messages are'} already shown to everyone, so open with how the world answers ${one ? 'it' : 'them'} instead of repeating ${one ? 'it' : 'them'}.`;
-    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${ask}`;
+    const directed = hints.length
+      ? `PLAYTEST DIRECTION from the table's host (no hero knows of it, and no player sees this note): ${hints.map((h) => JSON.stringify(h.text)).join(' and ')}\n\nMake that happen in the story now, in a way that fits the place, the time and what the heroes were doing. Use your tools for whatever changes the world (a merchant, a person, a fight, a roll), then call scene. Never mention the note, the host or testing; narrate it as the world acting on its own.`
+      : '';
+    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${[said.length ? ask : '', directed].filter(Boolean).join('\n\n')}`;
     this.turns.delete(game);
     const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {

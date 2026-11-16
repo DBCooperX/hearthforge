@@ -761,12 +761,47 @@ export interface GameState {
   unanswered: { logId: number; playerId: string }[];
   /** How the last fight ended. Its `seq` grows with every fight. */
   lastFight: FightOutcome | null;
+  /** Set while the owner has the table in test mode: the host gets a toolbox, everyone sees the badge. `since` is the time it was switched on. */
+  testMode: { since: number } | null;
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };
 
+/**
+ * What the host can do at a table in test mode (the Testmodus toolbox). Everything is a plain value the
+ * server checks; nothing here is meant for the Dungeon Master's tools.
+ */
+export type TestAction =
+  /** Start a fight with these monsters (catalogue ids), or with a challenge budget when `monsters` is empty. */
+  | { op: 'fight'; monsters?: { id: string; count: number }[]; budget?: number; kind?: string; opening?: 'none' | 'surprise' | 'ambush'; heroId?: string }
+  /** Raise a hero by `levels` levels (default 1). Pending choices wait on the hero as usual. */
+  | { op: 'level'; characterId: string; levels?: number }
+  /** Share experience points among the heroes, as after a fight. */
+  | { op: 'xp'; amount: number }
+  | { op: 'hp'; characterId: string; hp: number }
+  | { op: 'revive'; characterId: string }
+  | { op: 'condition'; characterId: string; condition: string; on: boolean }
+  /** Mana, class resources and spent abilities back to full. Hit points stay as they are. */
+  | { op: 'restore'; characterId?: string }
+  | { op: 'item'; characterId: string; itemId: string; qty?: number }
+  | { op: 'gold'; amount: number }
+  /** Jump to a known place, and to a spot on its zone map. */
+  | { op: 'jump'; locationId: string; spot?: string }
+  /** Put every place of the region on the map. */
+  | { op: 'reveal' }
+  | { op: 'time'; minutes?: number; hour?: number }
+  | { op: 'rest'; kind: 'short' | 'long' }
+  /** Tell the Dungeon Master what happens next. The hint never appears in the story. */
+  | { op: 'scene'; text: string }
+  /** Ask for the monster catalogue; the answer is a `test_catalog` message. */
+  | { op: 'catalog' };
+
+/** One creature of the catalogue, as the test toolbox lists it. */
+export interface TestMonster { id: string; name: string; cr: string; kind: string }
+
 export type ClientMessage =
   | { t: 'lobby' }
+  | { t: 'test'; do: TestAction }
   | { t: 'join'; room: string; playerId: string; token: string; name: string; code?: string }
   | { t: 'create_table'; playerId: string; token: string; name: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
   | { t: 'leave_table' }
@@ -826,7 +861,9 @@ export type ServerMessage =
   /** The owner changed something in the Innkeeper that every browser loads from the server. Tiles can only be swapped by loading the page again. */
   | { t: 'assets'; icons?: boolean; tiles?: boolean; music?: boolean; sfx?: boolean }
   /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
-  | { t: 'error'; message: string; join?: boolean };
+  | { t: 'error'; message: string; join?: boolean }
+  /** The monsters the test toolbox can start a fight with. */
+  | { t: 'test_catalog'; monsters: TestMonster[] };
 
 /**
  * Reasons the server refuses a seat. They are sent in English and translated by the

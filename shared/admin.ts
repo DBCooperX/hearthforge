@@ -139,6 +139,8 @@ export interface AdminTable {
   language: Lang;
   phase: string;
   paused: boolean;
+  /** The table is in test mode: its host has a toolbox, and the campaign can go back to how it was. */
+  testMode: boolean;
   region: string;
   seed: string;
   code: string | null;

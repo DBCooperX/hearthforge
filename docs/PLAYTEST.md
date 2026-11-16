@@ -48,5 +48,14 @@ These features pass their automated tests and the scripted fallback, but have **
 - [ ] Two browsers at one table: seats, ready check, whisper in table talk, an opportunity-attack prompt that waits for the right player only.
 - [ ] Reload one browser mid-fight and get the seat back.
 
+## Test mode
+Use it to reach a situation without playing up to it. Innkeeper → Tables → **Test mode** switches it on for a table (the table is saved as it stands); the host then clicks the **Test mode** badge in the top bar.
+- [ ] Start a fight with picked creatures, one with a challenge budget, one with the heroes surprising the enemies (with and without a hero striking first) and one with an ambush.
+- [ ] Level a hero up two levels: the level-up screen offers the new choices. Give XP to the party.
+- [ ] Set hit points to 1, knock a hero out and revive them; put a condition on and lift it; refill mana.
+- [ ] Jump to a place and a zone spot, move the clock to dusk, take a long rest.
+- [ ] Send a scene hint ("a merchant appears"): the Dungeon Master plays it without mentioning the hint.
+- [ ] Back in the Innkeeper, **Undo changes** puts the story back to how it was; **Keep changes** keeps it.
+
 ## Report
 Note anything odd with the seed (`World seed:` in the game log) and the Innkeeper log lines, so it can be replayed.
