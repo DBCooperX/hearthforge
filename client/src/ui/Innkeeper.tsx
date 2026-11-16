@@ -16,6 +16,7 @@ import { Icon, type IconName } from './icons';
 import { inn, innDownload, innkeeperSession, InnError, setInnkeeperSession } from './innkeeperApi';
 import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
+import { SfxLibrary } from './SfxLibrary';
 import { SoundLibrary } from './SoundLibrary';
 import { TabBar, Window } from './Window';
 
@@ -157,7 +158,7 @@ function AssetsPane() {
     <div className="assets-pane">
       <TabBar tabs={(Object.keys(ASSET_TABS) as (keyof typeof ASSET_TABS)[]).map((id) => ({ id, label: t(ASSET_TABS[id]) }))} value={sub} onChange={setSub} />
       <div className="assets-body">
-        {sub === 'art' ? <ArtWindow embedded /> : <SoundLibrary key={sub} layer={sub} />}
+        {sub === 'art' ? <ArtWindow embedded /> : sub === 'effects' ? <SfxLibrary /> : <SoundLibrary key={sub} layer={sub} />}
       </div>
     </div>
   );

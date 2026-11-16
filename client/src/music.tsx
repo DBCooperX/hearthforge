@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { MUSIC_FALLBACK, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
 import { useT } from './i18n';
+import { SfxControl, sfx } from './sfx';
 
 const KEY = 'hearthforge.music';
 const FADE = 2.2;
@@ -291,7 +292,8 @@ const credit = (t: MusicTrack) => `${t.title}${t.artist ? ` · ${t.artist}` : ''
 export function MusicControl() {
   const t = useT();
   const m = useSyncExternalStore(music.subscribe, music.getSnapshot);
-  if (!m.enabled) return null;
+  const fx = useSyncExternalStore(sfx.subscribe, sfx.getSnapshot);
+  if (!m.enabled) return fx.enabled ? <span className="music" role="group" aria-label={t('Sound effects')}><SfxControl /></span> : null;
   const silent = m.muted;
   let status: string;
   if (!m.available) status = m.pending ? t('The server is still fetching the music…') : t('No music on this server yet.');
@@ -330,6 +332,7 @@ export function MusicControl() {
           />
         </>
       )}
+      <SfxControl />
       <span className="music-now" role="status">{status}</span>
     </span>
   );

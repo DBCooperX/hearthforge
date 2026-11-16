@@ -152,6 +152,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_ART_UPLOADS` | `on` | `off` locks the art library against changes from the browser. |
 | `HEARTHFORGE_AUTO_ASSETS` | `on` | Fetch freely licensed item icons on first start. |
 | `HEARTHFORGE_MUSIC` | `on` | `off` skips the music download and the player. |
+| `HEARTHFORGE_SFX` | `on` | `off` silences all effects. Kenney's CC0 packs are added by the owner under Assets → Sound effects. |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the DM waits for the other players after the first one acts. `0` answers every action at once. |
 | `HEARTHFORGE_REACTION_WAIT` | `20` | Seconds a player gets to decide on an opportunity attack when an enemy leaves their hero's reach. After that the hero strikes. `0` never asks. |
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
