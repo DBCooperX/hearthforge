@@ -2080,4 +2080,10 @@ export const DE: Record<string, string> = {
   'When the battle map is zoomed in, pointing at its edge moves the view that way. Dragging the map and Shift with the arrow keys work too.': 'Ist die Kampfkarte herangezoomt, verschiebt sich die Ansicht, wenn du mit der Maus an ihren Rand fährst. Ziehen mit der Maus und Shift mit den Pfeiltasten gehen auch.',
   'Look around the battle map (or drag it, or point at its edge)': 'Auf der Kampfkarte umschauen (oder sie ziehen oder an den Rand fahren)',
   'Back to whoever is acting': 'Zurück zu dem, der am Zug ist',
+  // One sound menu
+  'Turn on: {what}': 'Einschalten: {what}',
+  'Turn off: {what}': 'Ausschalten: {what}',
+  '{what}: volume': '{what}: Lautstärke',
+  'Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.': 'Musik, Umgebungsgeräusche, Effekte, Erzähler und Oberfläche. Der Lautsprecher oben in der Leiste öffnet dieselben Regler.',
+  'Close a window or cancel; with nothing open, the settings': 'Fenster schliessen oder abbrechen; ist nichts offen, die Einstellungen',
 };
