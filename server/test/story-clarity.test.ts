@@ -6,6 +6,9 @@ import { DM_SYSTEM_PROMPT, describeWorld, languageNote } from '../src/dm/context
 import { ScriptedDM } from '../src/dm/scripted';
 import { Game } from '../src/game/engine';
 
+/** A prompt as the model reads it, whether sent as one string or as cache-friendly blocks. */
+const text = (c: any): string => (typeof c === 'string' ? c : c.map((b: any) => b.text ?? '').join(''));
+
 function newGame(lang: 'en' | 'de' = 'en') {
   let seed = 7;
   const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
@@ -100,8 +103,8 @@ describe('clues in the journal', () => {
     await dm.respond(g, [{ player: 'Tester', text: 'I pick up the coin' }], async () => {});
     expect(g.s.memory.mysteries[0]).toMatchObject({ question: 'Why does the coin stay wet?', solved: false });
     await dm.respond(g, [{ player: 'Tester', text: 'I ask Bram about it' }], async () => {});
-    expect(requests[1].messages[0].content).toContain('Open questions and what the party knows about each');
-    expect(requests[1].messages[0].content).toContain('- Why does the coin stay wet? The coin by the hearth is cold and drips, though nobody pulled it from water. (the wet coin)');
+    expect(text(requests[1].messages[0].content)).toContain('Open questions and what the party knows about each');
+    expect(text(requests[1].messages[0].content)).toContain('- Why does the coin stay wet? The coin by the hearth is cold and drips, though nobody pulled it from water. (the wet coin)');
   });
 
   it('upgrades saves from before clue tracking', () => {

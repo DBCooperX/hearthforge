@@ -11,6 +11,9 @@ import type { PlayerLine } from '../src/dm/types';
 import { Game } from '../src/game/engine';
 import { Room, type RoomTiming } from '../src/room';
 
+/** A prompt as the model reads it, whether sent as one string or as cache-friendly blocks. */
+const promptText = (c: any): string => (typeof c === 'string' ? c : c.map((b: any) => b.text ?? '').join(''));
+
 describe('recognising a question to the DM', () => {
   it('strips the German and English labels, in any case', () => {
     for (const line of ['to DM: how many coins does Vex have?', 'TO DM, how many coins does Vex have?', 'to the dm: how many coins does Vex have?', 'an SL: how many coins does Vex have?', 'An den Spielleiter: how many coins does Vex have?', 'an den Spielleiter how many coins does Vex have?', 'Spielleiter: how many coins does Vex have?', 'SL: how many coins does Vex have?', 'OOC: how many coins does Vex have?', '(ooc) how many coins does Vex have?', 'Frage an den SL: how many coins does Vex have?', 'DM: how many coins does Vex have?']) {
@@ -58,7 +61,7 @@ describe('the Claude DM answering a question', () => {
     const names = requests[0].tools.map((t: any) => t.name);
     expect(names).toEqual(expect.arrayContaining(['change_gold', 'give_item', 'take_item']));
     for (const banned of ['scene', 'skill_check', 'start_combat', 'travel_to', 'rest', 'advance_time', 'delve']) expect(names).not.toContain(banned);
-    expect(requests[0].messages[0].content).toContain('OUT-OF-CHARACTER QUESTION');
+    expect(promptText(requests[0].messages[0].content)).toContain('OUT-OF-CHARACTER QUESTION');
   });
 
   it('puts the state right when the question shows a mistake, and says so', async () => {

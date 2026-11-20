@@ -4,6 +4,9 @@ import { resolveModels, tierForBeats, type ModelConfig } from '../src/dm/models'
 import { ScriptedDM } from '../src/dm/scripted';
 import { Game } from '../src/game/engine';
 
+/** A prompt as the model reads it, whether sent as one string or as cache-friendly blocks. */
+const text = (c: any): string => (typeof c === 'string' ? c : c.map((b: any) => b.text ?? '').join(''));
+
 const MODELS: ModelConfig = { background: 'bg-model', standard: 'std-model', key: 'key-model', forced: null };
 
 /** Drives the real tool loop against a stubbed Messages API. */
@@ -111,7 +114,8 @@ describe('Claude Dungeon Master', () => {
     expect(requests[0].tools.map((t: any) => t.name)).toContain('start_combat');
     expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false)).toBe(true);
     expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['change_standing', 'equip_item', 'find_monsters', 'give_story_item', 'log_event', 'note_clue', 'open_shop', 'rest', 'rumour', 'secret', 'set_stage', 'start_combat', 'take_item', 'travel_to', 'update_story_item']);
-    expect(requests[0].messages[0].content).toMatch(/Emberfall[\s\S]*Silence the Warren[\s\S]*I buy a round/);
+    expect(text(requests[0].messages[0].content)).toMatch(/Emberfall[\s\S]*Silence the Warren/);
+    expect(text(requests[0].messages[0].content)).toContain('I buy a round');
     const results = requests[1].messages[2].content;
     expect(results.map((r: any) => !!r.is_error)).toEqual([false, false, false, true, false, false, false]);
     expect(g.s.gold).toBe(gold - 5);
@@ -125,7 +129,7 @@ describe('Claude Dungeon Master', () => {
     // The scene was flagged important, so the next reply is escalated to the key model.
     await dm.respond(g, [{ player: 'Tester', text: 'What now?' }], noop);
     expect(requests[2].model).toBe('key-model');
-    expect(requests[2].messages[0].content).toMatch(/Pip Underbough[\s\S]*Met Marta/);
+    expect(text(requests[2].messages[0].content)).toMatch(/Pip Underbough[\s\S]*Met Marta/);
   });
 
   it('starts fights the DM calls for and accepts plain text in place of a scene', async () => {
