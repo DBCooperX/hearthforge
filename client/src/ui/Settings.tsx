@@ -2,7 +2,7 @@
 // shortcuts and the table, sorted into tabs so that nothing needs scrolling.
 import { useState, type ReactNode } from 'react';
 import { LangSwitch, useT } from '../i18n';
-import { MusicControl } from '../music';
+import { SoundMixer } from '../music';
 import { Info } from './Hint';
 import { SETTINGS_TABS, SHORTCUTS, SIZE_LABELS, TEXT_SIZES } from './labels';
 import { setPrefs, usePrefs } from './prefs';
@@ -36,16 +36,7 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
         {tab === 'game' && (
           <>
             <div className="setting"><span>{t('Interface language')} <Info text={t('The language of the story is chosen by the host of the table.')} /></span><LangSwitch /></div>
-            <div className="setting"><span>{t('Music')}</span><MusicControl /><span className="muted small setting-none">{t('Music is switched off on this server.')}</span></div>
-            <div className="setting">
-              <span>{t('Interface sounds')} <Info text={t('Quiet sounds for windows, pages and gear.')} /></span>
-              <span className="setting-controls">
-                <input type="range" min={0} max={1} step={0.05} value={prefs.soundVolume} disabled={!prefs.sounds} aria-label={t('Volume of the interface sounds')}
-                  onChange={(e) => setPrefs({ soundVolume: Number(e.target.value) })} onPointerUp={() => sfx('equip')} />
-                <button type="button" role="switch" aria-checked={prefs.sounds} className={prefs.sounds ? 'switch on' : 'switch'}
-                  onClick={() => { setPrefs({ sounds: !prefs.sounds }); sfx('tab'); }}>{prefs.sounds ? t('On') : t('Off')}</button>
-              </span>
-            </div>
+            <div className="setting setting-mix"><span>{t('Sound')} <Info text={t('Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.')} /></span><SoundMixer /></div>
             <div className="setting">
               <span>{t('Voice input')} <Info text={t('Hold the microphone beside the text box, or Ctrl+M, and speak. The words land in the box, so you can fix them before sending.')} /></span>
               <span className="muted small">{dictationBlocker() === 'insecure' ? t('Voice input needs a secure connection (https). Ask whoever runs this server to switch on HTTPS.') : dictationBlocker() === 'unsupported' ? t('This browser cannot turn speech into text. Chrome, Edge and Safari can.') : t('On')}</span>

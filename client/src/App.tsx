@@ -207,7 +207,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
       const toggles: Record<string, Overlay> = { i: 'inventory', c: 'sheet', m: 'map', j: 'journal' };
       if (k === 't' && state.shops.length) { setOverlay((o) => (o === 'trade' ? null : 'trade')); e.preventDefault(); return; }
       if (toggles[k] && !(k === 'm' && combat)) { setOverlay((o) => (o === toggles[k] ? null : toggles[k])); e.preventDefault(); return; }
-      if (k === 'escape') { if (risky) setRisky(null); else if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else setTravelTarget(null); return; }
+      if (k === 'escape') { if (risky) setRisky(null); else if (targeting) setTargeting(null); else if (overlay) setOverlay(null); else if (travelTarget) setTravelTarget(null); else setOverlay('settings'); return; }
       if (overlay || !combat) return;
       const dirs: Record<string, [number, number]> = { w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] };
       if (dirs[k] && actor && !e.shiftKey) {
@@ -222,7 +222,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [state, actor, combat, targeting, overlay, innkeeper, send, risky]);
+  }, [state, actor, combat, targeting, overlay, innkeeper, send, risky, travelTarget]);
 
   const view: ViewOptions = useMemo(() => {
     const reach = state && combat && turnChar ? reachable(state, turnChar, combat.movementLeft) : new Set<string>();

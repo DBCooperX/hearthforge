@@ -187,25 +187,6 @@ const SpeakerIcon = ({ off }: { off?: boolean }) => (
   </svg>
 );
 
-/** Mute button and volume slider for the narrator, beside the music ones. Hidden while the server has no narrator. */
-export function NarratorControl() {
-  const t = useT();
-  const n = useNarratorState();
-  if (!n.manifest.enabled) return null;
-  return (
-    <>
-      <button type="button" className={`music-toggle ${n.muted ? 'off' : ''}`} onClick={() => narrator.setMuted(!n.muted)} aria-pressed={!n.muted} title={n.muted ? t('Turn the narrator on') : t('Turn the narrator off')}>
-        <SpeakerIcon off={n.muted} />
-      </button>
-      <input
-        type="range" className="ambient-range" min={0} max={100} step={1} value={n.muted ? 0 : Math.round(n.volume * 100)}
-        onChange={(e) => narrator.setVolume(Number(e.target.value) / 100)}
-        aria-label={t('Narrator volume')} title={t('Narrator volume')}
-      />
-    </>
-  );
-}
-
 /** The small button on a story card that reads it aloud, or stops it. */
 export function ReadAloud({ table, entry, lang }: { table: string; entry: number; lang: string }) {
   const t = useT();

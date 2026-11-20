@@ -1,10 +1,12 @@
 // Background music. One player for the whole page: it follows the game's music context,
 // crossfades between tracks, and remembers each player's mute and volume in the browser.
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { MUSIC_FALLBACK, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
 import { useT } from './i18n';
-import { SfxControl } from './sfx';
-import { NarratorControl } from './narrator';
+import { sfx } from './sfx';
+import { narrator, useNarratorState } from './narrator';
+import { setPrefs, usePrefs } from './ui/prefs';
+import { sfx as uiSound } from './ui/sound';
 
 const KEY = 'hearthforge.music';
 const FADE = 2.2;
@@ -307,52 +309,107 @@ export function useMusic(context: MusicContext) {
 
 const credit = (t: MusicTrack) => `${t.title}${t.artist ? ` · ${t.artist}` : ''}${t.license ? ` · ${t.license}` : ''}`;
 
-/** Mute button and volume slider, with the current track's credit on hover. */
+/** One line of the sound menu: what it is, a mute button and a volume slider. */
+function Row({ label, muted, volume, onMute, onVolume, children }: { label: string; muted: boolean; volume: number; onMute: () => void; onVolume: (v: number) => void; children: ReactNode }) {
+  const t = useT();
+  return (
+    <div className={muted ? 'mix-row off' : 'mix-row'}>
+      <button type="button" className="music-toggle" onClick={onMute} aria-pressed={!muted} title={muted ? t('Turn on: {what}', { what: label }) : t('Turn off: {what}', { what: label })}>{children}</button>
+      <span className="mix-label">{label}</span>
+      <input type="range" min={0} max={100} step={1} value={muted ? 0 : Math.round(volume * 100)} onChange={(e) => onVolume(Number(e.target.value) / 100)} aria-label={t('{what}: volume', { what: label })} />
+    </div>
+  );
+}
+
+const NoteIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M9 17.5V5.2l10-2v12.1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    <ellipse cx="6.5" cy="17.6" rx="2.9" ry="2.3" fill="currentColor" />
+    <ellipse cx="16.5" cy="15.4" rx="2.9" ry="2.3" fill="currentColor" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+const WindIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+const HornIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
+    <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+const VoiceIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M7 4.5h4a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H9.5L6 17.5v-3a3 3 0 0 1-2-2.8v-4.2a3 3 0 0 1 3-3z" fill="currentColor" />
+    <path d="M17 7.5a5 5 0 0 1 0 7M19.5 5a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+
+const ClickIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M6 4l11 7.5-5 1.2 3 5.8-2.2 1.1-3-5.9L6 17z" fill="currentColor" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+
+/** Every sound of the game in one place: music, ambient sound, effects, the narrator and the interface, each with mute and volume. */
+export function SoundMixer() {
+  const t = useT();
+  const m = useSyncExternalStore(music.subscribe, music.getSnapshot);
+  const fx = useSyncExternalStore(sfx.subscribe, sfx.getSnapshot);
+  const n = useNarratorState();
+  const prefs = usePrefs();
+  let status = '';
+  if (m.enabled) {
+    if (!m.available) status = m.pending ? t('The server is still fetching the music…') : t('No music on this server yet.');
+    else if (m.muted) status = t('Music is off');
+    else if (!m.unlocked) status = t('Music starts with your first click.');
+    else if (m.track) status = `${t('Now playing')}: ${credit(m.track)}`;
+    else status = t('No music for this scene.');
+    if (!m.ambientMuted && m.unlocked && m.ambientTrack) status += ` — ${t('Ambient sound')}: ${credit(m.ambientTrack)}`;
+  }
+  return (
+    <div className="mixer">
+      {m.enabled && <Row label={t('Music')} muted={m.muted} volume={m.volume} onMute={() => music.setMuted(!m.muted)} onVolume={(v) => music.setVolume(v)}><NoteIcon off={m.muted} /></Row>}
+      {m.enabled && m.ambientAvailable && <Row label={t('Ambient sound')} muted={m.ambientMuted} volume={m.ambient} onMute={() => music.setAmbientMuted(!m.ambientMuted)} onVolume={(v) => music.setAmbient(v)}><WindIcon off={m.ambientMuted} /></Row>}
+      {fx.enabled && <Row label={t('Sound effects')} muted={fx.muted} volume={fx.volume} onMute={() => sfx.setMuted(!fx.muted)} onVolume={(v) => sfx.setVolume(v)}><HornIcon off={fx.muted} /></Row>}
+      {n.manifest.enabled && <Row label={t('Narrator')} muted={n.muted} volume={n.volume} onMute={() => narrator.setMuted(!n.muted)} onVolume={(v) => narrator.setVolume(v)}><VoiceIcon off={n.muted} /></Row>}
+      <Row label={t('Interface sounds')} muted={!prefs.sounds} volume={prefs.soundVolume} onMute={() => { setPrefs({ sounds: !prefs.sounds }); uiSound('tab'); }} onVolume={(v) => { setPrefs(v <= 0 ? { sounds: false } : { sounds: true, soundVolume: v }); uiSound('click'); }}><ClickIcon off={!prefs.sounds} /></Row>
+      {status && <p className="mix-now muted small" role="status">{status}</p>}
+    </div>
+  );
+}
+
+/** One speaker button in the top bar that opens the sound menu, instead of a row of sliders. */
 export function MusicControl() {
   const t = useT();
   const m = useSyncExternalStore(music.subscribe, music.getSnapshot);
-  if (!m.enabled) return <span className="music" role="group" aria-label={t('Sound effects')}><SfxControl /><NarratorControl /></span>;
-  const silent = m.muted;
-  let status: string;
-  if (!m.available) status = m.pending ? t('The server is still fetching the music…') : t('No music on this server yet.');
-  else if (silent) status = t('Music is off');
-  else if (!m.unlocked) status = t('Music starts with your first click.');
-  else if (m.track) status = `${t('Now playing')}: ${credit(m.track)}`;
-  else status = t('No music for this scene.');
-  if (!m.ambientMuted && m.unlocked && m.ambientTrack) status += ` — ${t('Ambient sound')}: ${credit(m.ambientTrack)}`;
+  const fx = useSyncExternalStore(sfx.subscribe, sfx.getSnapshot);
+  const n = useNarratorState();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    // Esc closes the menu first, before anything else listens for it.
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); setOpen(false); } };
+    window.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', key, true);
+    return () => { window.removeEventListener('pointerdown', away); window.removeEventListener('keydown', key, true); };
+  }, [open]);
+  const prefs = usePrefs();
+  const allOff = !prefs.sounds && (!m.enabled || m.muted) && (!m.enabled || !m.ambientAvailable || m.ambientMuted) && (!fx.enabled || fx.muted) && (!n.manifest.enabled || n.muted);
   return (
-    <span className={`music ${silent || !m.available ? 'off' : ''}`} role="group" aria-label={t('Music')}>
-      <button type="button" className="music-toggle" onClick={() => music.setMuted(!silent)} aria-pressed={!silent} title={silent ? t('Turn music on') : t('Turn music off')}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M9 17.5V5.2l10-2v12.1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          <ellipse cx="6.5" cy="17.6" rx="2.9" ry="2.3" fill="currentColor" />
-          <ellipse cx="16.5" cy="15.4" rx="2.9" ry="2.3" fill="currentColor" />
-          {silent && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
-        </svg>
+    <span className={`music ${allOff ? 'off' : ''}`} ref={box}>
+      <button type="button" className={open ? 'nav-btn icon-only on' : 'nav-btn icon-only'} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} title={t('Sound')} aria-label={t('Sound')}>
+        <HornIcon off={allOff} />
       </button>
-      <input
-        type="range" min={0} max={100} step={1} value={m.muted ? 0 : Math.round(m.volume * 100)}
-        onChange={(e) => music.setVolume(Number(e.target.value) / 100)}
-        aria-label={t('Music volume')} title={t('Music volume')}
-      />
-      {m.ambientAvailable && (
-        <>
-          <button type="button" className={`music-toggle ${m.ambientMuted ? 'off' : ''}`} onClick={() => music.setAmbientMuted(!m.ambientMuted)} aria-pressed={!m.ambientMuted} title={m.ambientMuted ? t('Turn ambient sound on') : t('Turn ambient sound off')}>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              {m.ambientMuted && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
-            </svg>
-          </button>
-          <input
-            type="range" className="ambient-range" min={0} max={100} step={1} value={m.ambientMuted ? 0 : Math.round(m.ambient * 100)}
-            onChange={(e) => music.setAmbient(Number(e.target.value) / 100)}
-            aria-label={t('Ambient sound volume')} title={t('Ambient sound volume')}
-          />
-        </>
-      )}
-      <SfxControl />
-      <NarratorControl />
-      <span className="music-now" role="status">{status}</span>
+      {open && <div className="mix-pop" role="dialog" aria-label={t('Sound')}><SoundMixer /></div>}
     </span>
   );
 }

@@ -1,11 +1,10 @@
 // Sound effects: sword hits, shots, spells, footsteps, coins and fanfares. One player for the page, with its own volume
 // and mute (separate from the music and the ambient loops). Recordings the server downloaded are used where there is
 // one; everything else is made by sfxSynth.ts.
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import { SFX_DOM_EVENT, SFX_EVENTS, pickSample, sfxForLog, type SfxEvent, type SfxManifest } from '../../shared/sfx';
 import type { GameState } from '../../shared/types';
 import { synth } from './sfxSynth';
-import { useT } from './i18n';
 
 const KEY = 'hearthforge.sfx';
 /** The same sound is not started twice within this many milliseconds, so a volley is not a roar. */
@@ -182,27 +181,4 @@ export function useSfx(state: GameState | null) {
     if (!prev || prev.room !== state.room) return;
     for (const s of sfxForChange(prev, state)) sfx.play(s.event, s.at);
   }, [state]);
-}
-
-/** Mute button and volume slider for the effects, shown beside the music ones. */
-export function SfxControl() {
-  const t = useT();
-  const s = useSyncExternalStore(sfx.subscribe, sfx.getSnapshot);
-  if (!s.enabled) return null;
-  return (
-    <>
-      <button type="button" data-sfx="off" className={`music-toggle ${s.muted ? 'off' : ''}`} onClick={() => sfx.setMuted(!s.muted)} aria-pressed={!s.muted} title={s.muted ? t('Turn sound effects on') : t('Turn sound effects off')}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
-          <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          {s.muted && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
-        </svg>
-      </button>
-      <input
-        type="range" className="ambient-range" min={0} max={100} step={1} value={s.muted ? 0 : Math.round(s.volume * 100)}
-        onChange={(e) => sfx.setVolume(Number(e.target.value) / 100)}
-        aria-label={t('Sound effects volume')} title={t('Sound effects volume')}
-      />
-    </>
-  );
 }

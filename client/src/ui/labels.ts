@@ -48,7 +48,7 @@ export const SHORTCUTS: { keys: string[]; text: string; combo?: boolean }[] = [
   { keys: ['J'], text: 'Journal' },
   { keys: ['M'], text: 'Map' },
   { keys: ['T'], text: 'Trade, where there is a merchant' },
-  { keys: ['Esc'], text: 'Close a window or cancel' },
+  { keys: ['Esc'], text: 'Close a window or cancel; with nothing open, the settings' },
   { keys: ['1', '4'], text: 'Switch hero or bookmark in an open window' },
   { keys: ['W', 'A', 'S', 'D'], text: 'Move in a fight' },
   { keys: ['Shift', '←↑→↓'], text: 'Look around the battle map (or drag it, or point at its edge)' },
