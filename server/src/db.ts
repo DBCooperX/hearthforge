@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { InternalState } from './game/engine';
 
+export interface BinRow { id: number; owner: string; deletedAt: number; meta: string }
+
 export class Store {
   private db: DatabaseSync;
 
@@ -15,6 +17,15 @@ export class Store {
       room TEXT PRIMARY KEY,
       state TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+    // Deleted tables wait here, so a table deleted by mistake can come back. `meta` is what the
+    // list shows, `payload` is the whole table with the heroes' stats.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS deleted_tables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner TEXT NOT NULL,
+      deleted_at INTEGER NOT NULL,
+      meta TEXT NOT NULL,
+      payload TEXT NOT NULL
     )`);
   }
 
@@ -50,6 +61,27 @@ export class Store {
 
   delete(room: string) {
     this.db.prepare('DELETE FROM rooms WHERE room = ?').run(room);
+  }
+
+  /** Put a deleted table in the bin. Returns its number there. */
+  binAdd(owner: string, deletedAt: number, meta: string, payload: string): number {
+    const r = this.db.prepare('INSERT INTO deleted_tables (owner, deleted_at, meta, payload) VALUES (?, ?, ?, ?)').run(owner, deletedAt, meta, payload);
+    return Number(r.lastInsertRowid);
+  }
+
+  /** What is in the bin, newest first: one owner's tables, or everybody's. */
+  binList(owner?: string): BinRow[] {
+    const sql = `SELECT id, owner, deleted_at AS deletedAt, meta FROM deleted_tables ${owner === undefined ? '' : 'WHERE owner = ?'} ORDER BY id DESC`;
+    const rows = (owner === undefined ? this.db.prepare(sql).all() : this.db.prepare(sql).all(owner)) as { id: number; owner: string; deletedAt: number; meta: string }[];
+    return rows.map((r) => ({ id: Number(r.id), owner: r.owner, deletedAt: Number(r.deletedAt), meta: r.meta }));
+  }
+
+  binPayload(id: number): string | undefined {
+    return (this.db.prepare('SELECT payload FROM deleted_tables WHERE id = ?').get(id) as { payload: string } | undefined)?.payload;
+  }
+
+  binDrop(id: number) {
+    this.db.prepare('DELETE FROM deleted_tables WHERE id = ?').run(id);
   }
 
   close() {

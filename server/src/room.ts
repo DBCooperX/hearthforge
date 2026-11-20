@@ -45,8 +45,12 @@ export interface RoomHooks {
   changed?(room: Room): void;
   /** A socket was sent away from the table (left, removed by the host, table closed). */
   detached?(ws: WebSocket, room: Room): void;
-  /** The table is gone for good. */
+  /** The table is gone. */
   closed?(room: Room): void;
+  /** The table got a new name. */
+  renamed?(room: Room): void;
+  /** A table was deleted on purpose, by this name: keep it in the bin before it goes. */
+  binned?(state: InternalState, by: string): void;
   /** A fresh invite code no other table uses. */
   newCode?(): string;
   /** True while the Innkeeper has paused the table. */
@@ -179,6 +183,13 @@ export class Room {
     return true;
   }
 
+  /** Give the table another name. Everyone sees it at once. */
+  rename(title: string) {
+    this.game.s.table.title = title;
+    this.hooks.renamed?.(this);
+    this.flush();
+  }
+
   get empty() { return this.sockets.size === 0; }
 
   /** What the lobby shows about this table. */
@@ -299,9 +310,12 @@ export class Room {
     for (const ws of this.sockets.keys()) this.send(ws, { t: 'notice', text });
   }
 
-  /** Remove the table and everything saved for it. */
-  close() {
+  /** Remove the table and everything saved for it. A table deleted on purpose (`by`) waits in the bin first. */
+  close(by?: string) {
     this.stop('closed');
+    if (by !== undefined) {
+      try { this.hooks.binned?.(this.game.s, by); } catch (err) { console.error('[bin] could not keep the table:', err); }
+    }
     try {
       this.store.delete(this.name);
     } catch (err) {
@@ -407,9 +421,6 @@ export class Room {
       case 'chat': return this.chat(ws, playerId, String(msg.text ?? ''), msg.to ? String(msg.to) : undefined);
       case 'typing': return this.setTyping(playerId, msg.where === 'story' || msg.where === 'chat' ? msg.where : null);
       case 'leave_table': return this.quit(ws, playerId);
-      case 'close_table':
-        if (this.attempt(ws, () => g.requireHost(playerId))) this.close();
-        return;
       case 'kick': {
         const target = String(msg.playerId ?? '');
         if (!this.attempt(ws, () => g.kick(playerId, target))) return;

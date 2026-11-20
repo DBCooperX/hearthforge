@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ABILITIES, CLASS_INFO } from '../../../shared/content';
 import { buildSheet, type Draft } from '../../../shared/build';
 import { PREMADES, type Premade } from '../../../shared/premades';
@@ -18,6 +18,9 @@ import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
 import { Chip, Hint, Info } from '../ui/Hint';
 import { TabBar } from '../ui/Window';
 import { MusicControl } from '../music';
+import { DeletedTables } from '../ui/Bin';
+import { AccountFail, accountCall, accountSession } from '../account';
+import type { BinItem } from '../../../shared/accounts';
 import { classLabel, heroTitle } from '../game/util';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
@@ -40,6 +43,20 @@ export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; 
   const [locked, setLocked] = useState(false);
   const me = name.replace(/\s+/g, ' ').trim();
   const tables = conn.tables ?? [];
+  /** The table being renamed or deleted from this list, and what has been typed so far. */
+  const [editing, setEditing] = useState<{ id: string; mode: 'rename' | 'delete'; text: string } | null>(null);
+  const [binError, setBinError] = useState('');
+  const loadBin = useCallback(() => accountCall<{ tables: BinItem[] }>('/bin').then((r) => r.tables), []);
+  const actBin = useCallback((what: 'restore' | 'purge', id: number) => accountCall<{ tables: BinItem[] }>('/bin', { do: what, id }).then((r) => r.tables), []);
+  const binFailed = (err: unknown) => setBinError(err instanceof AccountFail && err.code === 'not_found' ? t('That table is not in the bin any more.') : t('Something went wrong. Try again.'));
+  const mayManage = (tb: TableSummary) => tb.hostId === playerId || who.account.role === 'innkeeper';
+  const manage = () => {
+    if (!editing) return;
+    const text = editing.text.trim();
+    if (editing.mode === 'rename') conn.send({ t: 'rename_table', session: accountSession(), room: editing.id, title: text });
+    else conn.send({ t: 'delete_table', session: accountSession(), room: editing.id, confirm: text });
+    setEditing(null);
+  };
   const ready = conn.connected && !!me && !conn.joining;
 
   // An invite link, or a reload while seated, goes straight to that table once we know who is asking.
@@ -111,6 +128,32 @@ export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; 
                   ))}
                   {tb.players.length === 0 && <span className="muted">{t('Nobody sits here.')}</span>}
                 </div>
+                {mayManage(tb) && (
+                  <div className="table-manage">
+                    {editing?.id === tb.id ? (
+                      <form onSubmit={(e) => { e.preventDefault(); if (editing.mode === 'rename' ? editing.text.trim() : editing.text.trim() === tb.title) manage(); }}>
+                        {editing.mode === 'rename' ? (
+                          <label>{t('New name of the table')}<input value={editing.text} maxLength={40} autoFocus onChange={(e) => setEditing({ ...editing, text: e.target.value })} /></label>
+                        ) : (
+                          <label>
+                            {t('To delete this table, type its name: {title}', { title: tb.title })}
+                            <input value={editing.text} maxLength={40} autoFocus autoComplete="off" onChange={(e) => setEditing({ ...editing, text: e.target.value })} />
+                          </label>
+                        )}
+                        {editing.mode === 'delete' && <small className="muted">{t('Its story and heroes are kept in the list of deleted tables, so you can bring it back later.')}</small>}
+                        <span className="row">
+                          <button className={editing.mode === 'delete' ? 'danger' : 'primary'} disabled={editing.mode === 'rename' ? !editing.text.trim() : editing.text.trim() !== tb.title}>{editing.mode === 'rename' ? t('Rename') : t('Delete the table')}</button>
+                          <button type="button" className="link" onClick={() => setEditing(null)}>{t('Cancel')}</button>
+                        </span>
+                      </form>
+                    ) : (
+                      <span className="row">
+                        <button type="button" className="link" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>{t('Rename')}</button>
+                        <button type="button" className="link danger" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'delete', text: '' })}>{t('Delete the table')}</button>
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="table-join">
                   {asking === tb.id && !mine && (
                     <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} autoFocus
@@ -126,6 +169,9 @@ export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; 
             );
           })}
         </ul>
+
+        {binError && <p className="notice error" role="alert">{binError}</p>}
+        <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />
 
         <div className="lobby-foot">
           <form className="open-table" onSubmit={open}>
@@ -384,7 +430,6 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
     if (!state.characters.length) addRandom();
     conn.send({ t: 'start' });
   };
-  const close = () => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) conn.send({ t: 'close_table' }); };
   return (
     <div className="splash tavern">
       <Backdrop />
@@ -475,7 +520,6 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
             <small className="muted dm-mode" tabIndex={state.dmMode === 'claude' ? undefined : 0}>{t('Dungeon Master')}: {state.dmMode === 'claude' ? `Claude (${state.dmModel})` : t('scripted')}</small>
           </Hint>
           <button className="link" onClick={() => conn.leave()} title={t('Your seat and your heroes at this table are given up')}>{t('Leave the table')}</button>
-          {host && <button className="link danger" onClick={close}>{t('Close the table')}</button>}
         </footer>
       </div>
       {creating && <Creator state={state} conn={conn} initial={creating} onClose={() => setCreating(null)} />}

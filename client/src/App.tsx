@@ -361,7 +361,6 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
             <Invite state={state} conn={conn} />
             <div className="row">
               <button onClick={() => { setOverlay(null); conn.leave(); }} title={t('Your seat and your heroes stay yours. Come back from the list of tables.')}>{t('Back to the tables')}</button>
-              {state.hostId === playerId && <button className="link danger" onClick={() => { if (window.confirm(t('Close this table for everyone? Its heroes and its story are deleted.'))) send({ t: 'close_table' }); }}>{t('Close the table')}</button>}
             </div>
           </Window>
         )}
