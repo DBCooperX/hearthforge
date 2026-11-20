@@ -13,6 +13,8 @@ import { useLang, useT, type Translate } from '../i18n';
 import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
+import { DeletedTables } from './Bin';
+import type { BinItem } from '../../../shared/accounts';
 import { Icon, type IconName } from './icons';
 import { inn, innDownload, InnError } from './innkeeperApi';
 import { signedOut } from '../account';
@@ -142,9 +144,13 @@ function Tables({ fail, say }: PaneProps) {
   const act = async (body: Record<string, unknown>) => {
     try { set(await inn<{ tables: AdminTable[] }>('/tables', { body })); sfx('tab'); } catch (err) { fail(err); }
   };
+  const loadBin = useCallback(() => inn<{ tables: BinItem[] }>('/bin').then((r) => r.tables), []);
+  const actBin = useCallback((what: 'restore' | 'purge', id: number) => inn<{ tables: BinItem[] }>('/bin', { body: { do: what, id } }).then((r) => r.tables), []);
   if (!data) return <p className="muted">{t('Loading…')}</p>;
-  if (!data.tables.length) return <p className="muted">{t('No table has been opened yet.')}</p>;
+  const bin = <DeletedTables everyone always load={loadBin} act={actBin} onError={fail} watch={data.tables.length} />;
+  if (!data.tables.length) return <><p className="muted">{t('No table has been opened yet.')}</p>{bin}</>;
   return (
+    <>
     <ul className="inn-cards">
       {data.tables.map((tb) => (
         <li key={tb.id} className={tb.players.some((p) => p.connected) ? 'inn-card live' : 'inn-card'}>
@@ -165,7 +171,7 @@ function Tables({ fail, say }: PaneProps) {
               <button type="button" title={t('Give the host a toolbox to start fights, level up, jump to places and more. The story can go back to how it was afterwards.')} onClick={() => { if (window.confirm(t('Switch test mode on at "{title}"? The table is saved as it is now, and the host gets a toolbox. When you end test mode you can keep the changes or go back.', { title: tb.title }))) void act({ table: tb.id, do: 'test_on' }); }}>{t('Test mode')}</button>
             )}
             <button type="button" onClick={() => innDownload(`/table?id=${encodeURIComponent(tb.id)}`).catch(fail)}>{t('Download')}</button>
-            <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the table "{title}" with its heroes and its story? This cannot be undone, except from a backup.', { title: tb.title }))) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }}>{t('Delete')}</button>
+            <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the table "{title}"? Its story and heroes wait in the list of deleted tables, so you can bring it back.', { title: tb.title }))) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }}>{t('Delete')}</button>
           </header>
           <dl>
             <div><dt>{t('Players')}</dt><dd>
@@ -186,6 +192,8 @@ function Tables({ fail, say }: PaneProps) {
         </li>
       ))}
     </ul>
+    {bin}
+    </>
   );
 }
 

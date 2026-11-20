@@ -24,6 +24,7 @@ import type { AdminConnection } from '../../shared/admin';
 import { AdminApi } from './admin/api';
 import { Auth } from './admin/auth';
 import { Accounts } from './accounts';
+import { TableBin } from './bin';
 import { accountApi } from './accountApi';
 import { Config } from './admin/config';
 import { testKey } from './admin/keytest';
@@ -164,7 +165,11 @@ function tellCredits(ids: string[], always = false) {
   }
 }
 
+const bin = new TableBin(store, accounts);
+
 const hooks: RoomHooks = {
+  binned: (state, by) => { bin.add(state, by); },
+  renamed: (room) => accounts.retitle(room.name, room.game.s.table.title),
   changed: pushTables,
   detached: (ws) => void seated.delete(ws),
   closed: (room) => { rooms.delete(room.name); pushTables(); },
@@ -180,6 +185,14 @@ const hooks: RoomHooks = {
 const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
 // Every saved table is listed in the lobby. A table costs nothing until somebody sits down at it.
 for (const id of store.names()) rooms.set(id, openRoom(id));
+
+/** A table comes back from the bin and is listed again. */
+function restoreTable(binId: number, by: { id: string; innkeeper: boolean }) {
+  const out = bin.restore(binId, by, (id) => rooms.has(id), (code) => [...rooms.values()].some((r) => r.game.s.table.code === code));
+  rooms.set(out.room, openRoom(out.room));
+  pushTables();
+  return out;
+}
 
 const tableId = (raw: unknown) => String(raw ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
 
@@ -262,6 +275,8 @@ const admin = new AdminApi({
   store,
   rooms,
   openRoom: (id) => openRoom(id),
+  bin,
+  restoreTable,
   tablesChanged: () => pushTables(),
   connections,
   disconnect: ({ id, ip }) => {
@@ -488,7 +503,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/account/')) {
-    void accountApi({ accounts, rooms, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; } }, req, res, url);
+    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; } }, req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/admin/')) {
@@ -635,6 +650,27 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       seated.delete(ws);
       lobby.add(ws);
       return send(tableList());
+    }
+    if (msg.t === 'delete_table' || msg.t === 'rename_table') {
+      // Both are done from the list of tables, never from inside a game, by the host or the Innkeeper.
+      const account = accounts.account(msg.session);
+      const refuse = (message: string) => send({ t: 'error', message, join: true });
+      if (!account) return refuse(JOIN_ERRORS.signIn);
+      const room = rooms.get(tableId(msg.room));
+      if (!room) return refuse(JOIN_ERRORS.noTable);
+      if (room.game.s.hostId !== account.id && account.role !== 'innkeeper') return refuse(JOIN_ERRORS.notHost);
+      const title = room.game.s.table.title;
+      if (msg.t === 'delete_table') {
+        if (String(msg.confirm ?? '').trim() !== title) return refuse(JOIN_ERRORS.wrongName);
+        console.log(`[tables] ${account.username} deleted the table "${title}". It waits in the bin.`);
+        auth.setPaused(room.name, false);
+        room.close(account.username);
+      } else {
+        const next = String(msg.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (!next) return refuse(JOIN_ERRORS.titleNeeded);
+        room.rename(next);
+      }
+      return;
     }
     if (msg.t === 'join' || msg.t === 'create_table') {
       try {

@@ -101,3 +101,22 @@ export const isAccountId = (id: string) => id.startsWith(ACCOUNT_PREFIX);
 export const cleanUsername = (raw: unknown) => String(raw ?? '').replace(/\s+/g, ' ').trim();
 export const usernameOk = (name: string) => /^[\p{L}\p{N} _.-]{3,24}$/u.test(name);
 export const PASSWORD_MIN = 8;
+
+/** A deleted table waiting in the bin, as the lists show it. */
+export interface BinItem {
+  id: number;
+  /** The account that hosted the table. Only they and the Innkeeper can bring it back. */
+  owner: string;
+  ownerName: string;
+  title: string;
+  language: string;
+  deletedAt: number;
+  /** Who deleted it, by name. */
+  deletedBy: string;
+  players: string[];
+  heroes: string[];
+  playing: boolean;
+}
+
+/** How many deleted tables each host keeps in the bin. The oldest one goes when an eleventh arrives. */
+export const BIN_KEEP = 10;

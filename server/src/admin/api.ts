@@ -11,6 +11,7 @@ import { AccountsError, type Accounts } from '../accounts';
 import { SESSION_HEADER, legacySeats } from '../accountApi';
 import { ROLES, type Role } from '../../../shared/accounts';
 import { ConfigError, type Config } from './config';
+import { BinError, type TableBin } from '../bin';
 import type { Logs } from './logs';
 import type { Updater } from './updater';
 import { dayOf, type Usage } from './usage';
@@ -53,6 +54,8 @@ export interface AdminContext {
   store: { save(room: string, state: InternalState): void; info?(): { room: string; savedAt: string; bytes: number }[] };
   rooms: Map<string, Room>;
   openRoom(id: string): Room;
+  bin: TableBin;
+  restoreTable(binId: number, by: { id: string; innkeeper: boolean }): { room: string; title: string };
   tablesChanged(): void;
   connections(): AdminConnection[];
   /** Close one connection, or every connection from an address. */
@@ -141,6 +144,7 @@ export class AdminApi {
     } catch (err) {
       if (err instanceof Refused) { req.resume(); return send(err.status, { error: err.code }); }
       if (err instanceof AccountsError) return send(err.code === 'too_many' ? 429 : err.code === 'signed_out' ? 401 : 400, { error: err.code });
+      if (err instanceof BinError) return send(err.code === 'forbidden' ? 403 : 404, { error: 'not_found' });
       if (err instanceof ConfigError) return send(400, { error: 'bad_value', key: err.message });
       if (err instanceof SyntaxError) return send(400, { error: 'bad_request' });
       console.error('[innkeeper]', err);
@@ -172,6 +176,7 @@ export class AdminApi {
       switch (path) {
         case '/overview': return this.overview();
         case '/tables': return this.tables();
+        case '/bin': return { tables: ctx.bin.list() };
         case '/players': return { connections: ctx.connections(), bans: ctx.auth.bans };
         case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
@@ -265,7 +270,7 @@ export class AdminApi {
         const body = await this.json(req);
         const room = ctx.rooms.get(String(body.table ?? ''));
         if (!room) throw new Refused(404, 'not_found');
-        if (body.do === 'delete') { console.log(`[innkeeper] Table "${room.game.s.table.title}" was deleted.`); ctx.auth.setPaused(room.name, false); room.close(); }
+        if (body.do === 'delete') { console.log(`[innkeeper] Table "${room.game.s.table.title}" was deleted.`); ctx.auth.setPaused(room.name, false); room.close(me.username); }
         else if (body.do === 'pause' || body.do === 'resume') { ctx.auth.setPaused(room.name, body.do === 'pause'); room.flush(); }
         else if (body.do === 'test_on' || body.do === 'test_keep' || body.do === 'test_discard') {
           room.setTestMode(body.do === 'test_on', body.do !== 'test_discard');
@@ -275,6 +280,17 @@ export class AdminApi {
         else throw new Refused(400, 'bad_request');
         ctx.tablesChanged();
         return this.tables();
+      }
+      case '/bin': {
+        const body = await this.json(req);
+        const by = { id: me.id, innkeeper: true };
+        const id = Math.round(Number(body.id));
+        if (body.do === 'restore') {
+          const out = ctx.restoreTable(id, by);
+          console.log(`[innkeeper] The table "${out.title}" was brought back from the bin.`);
+        } else if (body.do === 'purge') { ctx.bin.purge(id, by); console.log('[innkeeper] A table was deleted from the bin for good.'); }
+        else throw new Refused(400, 'bad_request');
+        return { tables: ctx.bin.list() };
       }
       case '/players': {
         const body = await this.json(req);
