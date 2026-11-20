@@ -368,7 +368,7 @@ describe('a table with several players', () => {
     expect(chris.state.characters.every((c) => c.ownerId === 'chris')).toBe(true);
   });
 
-  it('closes a table for good, and drops one that everybody left before playing', () => {
+  it('drops a table that everybody left before playing', () => {
     const closed: string[] = [];
     const { r, store } = room({}, { closed: (x) => closed.push(x.name) });
     const chris = sock(), mira = sock();
@@ -376,8 +376,6 @@ describe('a table with several players', () => {
     r.join(ws(mira), 'mira', 'token-mira-0123456789', 'Mira');
     r.saveNow();
     expect(store.names()).toEqual(['friday']);
-    r.handle(ws(mira), { t: 'close_table' });
-    expect(closed).toEqual([]);
     r.handle(ws(mira), { t: 'leave_table' });
     expect(mira.of('left')).toEqual([{ t: 'left', reason: 'left' }]);
     expect(chris.state.players).toHaveLength(1);

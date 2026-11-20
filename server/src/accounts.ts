@@ -388,6 +388,36 @@ export class Accounts {
     this.saveSoon();
   }
 
+  /** A table is deleted: its heroes leave every profile, and come back here so a restore can return them. */
+  takeHeroes(table: string): Record<string, HeroStats[]> {
+    const out: Record<string, HeroStats[]> = {};
+    for (const a of this.s.accounts) {
+      for (const [key, h] of Object.entries(a.heroes)) {
+        if (h.table !== table) continue;
+        (out[a.id] ??= []).push(h);
+        delete a.heroes[key];
+      }
+    }
+    if (Object.keys(out).length) this.saveSoon();
+    return out;
+  }
+
+  /** The heroes of a restored table go back to their players' profiles. */
+  giveHeroes(rows: Record<string, HeroStats[]>, table: string, title: string) {
+    for (const [id, heroes] of Object.entries(rows)) {
+      const a = this.get(id);
+      if (!a) continue;
+      for (const h of heroes) a.heroes[`${table}/${h.heroId}`] = { ...h, table, tableTitle: title };
+    }
+    this.saveSoon();
+  }
+
+  /** A table was renamed: the heroes' rows follow. */
+  retitle(table: string, title: string) {
+    for (const a of this.s.accounts) for (const h of Object.values(a.heroes)) if (h.table === table) h.tableTitle = title;
+    this.saveSoon();
+  }
+
   profile(id: string): Profile | null {
     const a = this.get(id);
     if (!a) return null;
