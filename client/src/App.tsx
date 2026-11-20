@@ -28,6 +28,7 @@ import { useNarrator } from './narrator';
 import { playerId, useConnection } from './net';
 import { useAccount, type AccountState } from './account';
 import type { Profile } from '../../shared/accounts';
+import { OUT_OF_CREDIT, chf, type CreditView } from '../../shared/credits';
 import { SignInScreen } from './components/SignIn';
 import { ProfileWindow } from './ui/Profile';
 import { Icon, type IconName } from './ui/icons';
@@ -386,7 +387,26 @@ function Toasts({ conn }: { conn: ReturnType<typeof useConnection> }) {
   return (
     <div className="toasts">
       {update}
+      <CreditNote credit={conn.credit} />
       {conn.toasts.map((x) => <div key={x.id} className={x.notice ? 'toast notice' : 'toast'} role={x.notice ? 'alert' : undefined}>{x.notice && <b>{t('The innkeeper says')}</b>}{t(x.text)}</div>)}
+    </div>
+  );
+}
+
+/**
+ * The early warning when a player's AI credit runs low, and the clear stop when it is used up. It stays until the
+ * player closes it, and comes back when the state changes.
+ */
+function CreditNote({ credit }: { credit: CreditView | null }) {
+  const t = useT();
+  const state = credit?.out ? 'out' : credit?.low ? 'low' : null;
+  const [closed, setClosed] = useState<string | null>(null);
+  if (!credit || !state || closed === state) return null;
+  return (
+    <div className={`toast credit-note is-${state}`} role="alert">
+      <b>{t('AI credit')}</b>
+      <span>{state === 'out' ? t(OUT_OF_CREDIT) : t('Your AI credit is running low: {left} left. Ask the innkeeper to top it up before it runs out.', { left: chf(credit.balance) })}</span>
+      <button type="button" className="link" onClick={() => setClosed(state)}>{t('OK')}</button>
     </div>
   );
 }

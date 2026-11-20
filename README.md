@@ -149,6 +149,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_DM_FORCE_MODEL` | empty | A model id that replaces the automatic choice. |
 | `HEARTHFORGE_DM_STORY_ON_KEY` | `off` | `on` runs every story turn outside fights on the key-moment model, for comparing dialogue quality. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. |
+| `HEARTHFORGE_DM_CACHE_TTL` | `1h` | How long the DM's system prompt and tools stay in Claude's prompt cache: `1h` or `5m`. An hour costs a little more to write but survives quiet spells and rare key-moment calls. |
 | `HEARTHFORGE_ART` | `generated` | Tile pack for a fresh server: `generated`, `kenney` or `0x72`. A choice made in the game wins. |
 | `HEARTHFORGE_ART_UPLOADS` | `on` | `off` locks the art library against changes from the browser. |
 | `HEARTHFORGE_AUTO_ASSETS` | `on` | Fetch freely licensed item icons on first start. |

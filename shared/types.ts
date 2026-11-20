@@ -12,6 +12,7 @@ import type { LightKindId, LightLevel, LightSource, Senses } from './light';
 import type { FactionView, RumourView } from './reputation';
 import type { ZoneView } from './zone';
 import type { TrophyView } from './achievements';
+import type { CreditView } from './credits';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -863,7 +864,9 @@ export type ServerMessage =
   /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
   | { t: 'error'; message: string; join?: boolean }
   /** The monsters the test toolbox can start a fight with. */
-  | { t: 'test_catalog'; monsters: TestMonster[] };
+  | { t: 'test_catalog'; monsters: TestMonster[] }
+  /** How much AI credit this account has left. Sent on sign-in and after each cost while credits can run out. */
+  | { t: 'credits'; credit: CreditView };
 
 /**
  * Reasons the server refuses a seat. They are sent in English and translated by the

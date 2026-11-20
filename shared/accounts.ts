@@ -2,6 +2,8 @@
 // Innkeeper creates accounts or sends invite links, and decides who else may be an Innkeeper.
 // Heroes, seats and saves belong to the account, so a player picks up their hero on any device.
 
+import type { CreditView } from './credits';
+
 export type Role = 'player' | 'innkeeper';
 export const ROLES: Role[] = ['player', 'innkeeper'];
 
@@ -46,6 +48,8 @@ export interface Profile {
   account: AccountView;
   stats: PlayStats;
   heroes: HeroStats[];
+  /** What the AI has cost this account, and how much credit is left. */
+  credit?: CreditView;
 }
 
 /** An account as the Innkeeper lists it. */

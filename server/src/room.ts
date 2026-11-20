@@ -53,7 +53,15 @@ export interface RoomHooks {
   paused?(room: Room): boolean;
   /** Something for a player's account stats: added to the account once, and to each hero named. */
   stats?(playerId: string, delta: Partial<PlayStats>, heroes: HeroRef[]): void;
+  /** Why this player may not ask the AI for anything new right now (their credit is used up), or null. */
+  mayAsk?(playerId: string): string | null;
 }
+
+/**
+ * What a player does that has the AI Dungeon Master write something: saying or asking something, starting the
+ * adventure, travelling, resting, going on into a dungeon. A fight already under way is always finished.
+ */
+const ASKS_THE_DM: ClientMessage['t'][] = ['say', 'start', 'travel', 'go', 'delve', 'short_rest', 'long_rest'];
 
 /** Sitting down again after this long away counts as a new session. */
 export const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -398,6 +406,10 @@ export class Room {
     // A paused table can still be left and talked at, but nothing moves in the game.
     if (this.hooks.paused?.(this) && !['chat', 'typing', 'leave_table'].includes(msg.t)) {
       return this.send(ws, { t: 'error', message: PAUSED_MESSAGE });
+    }
+    if (ASKS_THE_DM.includes(msg.t)) {
+      const refused = this.hooks.mayAsk?.(playerId);
+      if (refused) return this.send(ws, { t: 'error', message: refused });
     }
     switch (msg.t) {
       case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc);
