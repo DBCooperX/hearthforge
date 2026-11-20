@@ -50,6 +50,8 @@ const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
 ];
 
 /** Nothing but the door until the browser is signed in to an account. */
+const noTile = () => {};
+
 export function App() {
   const acct = useAccount();
   if (acct.profile === undefined) return <div className="splash tavern" />;
@@ -308,24 +310,22 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
           onSheet={(c) => { setSelectedId(c.id); setOverlay('sheet'); }}
           onLevelUp={(c) => { setSelectedId(c.id); setOverlay('levelup'); }}
         />
-        {combat ? (
+        {combat || fightEnd ? (
           <>
-            <main className="stage">
-              <TurnBar state={state} />
-              <MapView state={state} view={view} onTile={onTile} onMoved={conn.onMoved} />
-              <SurpriseBanner state={state} />
-              <ReactionPrompt state={state} playable={playable} conn={conn} />
-              <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
-            </main>
-            <StoryFeed state={state} conn={conn} compact />
-          </>
-        ) : fightEnd ? (
-          <>
-            {/* The battle map stays a moment after the last blow, under the victory or defeat screen. */}
-            <main className={fightEnd.leaving ? 'stage fight-over leaving' : 'stage fight-over'}>
-              <TurnBar state={fightEnd.frozen} />
-              <MapView state={fightEnd.frozen} view={view} onTile={() => {}} onMoved={conn.onMoved} />
-              <FightEndBanner end={fightEnd} onContinue={endFight} />
+            {/* One battle map from the first blow to the closing screen: it stays a moment after the
+                last blow, under the victory or defeat screen, and still plays that blow. */}
+            <main className={combat ? 'stage' : fightEnd!.leaving ? 'stage fight-over leaving' : 'stage fight-over'}>
+              <TurnBar state={combat ? state : fightEnd!.frozen} />
+              <MapView state={combat ? state : fightEnd!.frozen} view={view} onTile={combat ? onTile : noTile} onMoved={conn.onMoved} />
+              {combat ? (
+                <>
+                  <SurpriseBanner state={state} />
+                  <ReactionPrompt state={state} playable={playable} conn={conn} />
+                  <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
+                </>
+              ) : (
+                <FightEndBanner end={fightEnd!} onContinue={endFight} />
+              )}
             </main>
             <StoryFeed state={state} conn={conn} compact />
           </>

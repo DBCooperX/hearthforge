@@ -28,20 +28,23 @@
 }
 
 /* ---------- the closing screen ---------- */
-.stage.fight-over .map { filter: saturate(0.6) brightness(0.72); transition: filter 1.2s ease; }
+/* The last blow plays out on the battle map first (about a second and a quarter), then the
+   map dims and the card rises. --fight-beat is that pause. */
+.stage.fight-over { --fight-beat: 1.3s; }
+.stage.fight-over .map { filter: saturate(0.6) brightness(0.72); transition: filter 1.2s ease var(--fight-beat); }
 .stage.fight-over.leaving { animation: fight-fade 0.7s ease-in forwards; }
 @keyframes fight-fade { to { opacity: 0; filter: blur(3px); } }
 
 .fight-end {
   position: absolute; inset: 0; z-index: 40; display: grid; place-items: center;
   background: radial-gradient(ellipse at center, rgba(10, 8, 7, 0.35), rgba(10, 8, 7, 0.82));
-  animation: fight-end-in 0.5s ease-out both; cursor: pointer;
+  animation: fight-end-in 0.5s ease-out var(--fight-beat, 0s) both; cursor: pointer;
 }
 .fight-end-card {
   cursor: default; position: relative; width: min(520px, calc(100% - 32px)); padding: 22px 30px 20px; text-align: center;
   background: var(--iron); border: 1px solid #4a423a; border-radius: 6px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 220, 170, 0.06);
-  animation: fight-card-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
+  animation: fight-card-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) calc(var(--fight-beat, 0s) + 0.1s) both;
 }
 .fight-end-rule { height: 14px; margin: -6px auto 6px; width: 168px; background: var(--runes) center / contain no-repeat; opacity: 0.7; }
 .fight-end h2 {
@@ -53,12 +56,12 @@
 .fight-end-sub { margin: 4px 0 14px; color: #cfc4b5; font-family: var(--font-story); font-size: 16px; }
 .fight-end-stats { margin: 0 0 16px; display: grid; gap: 6px; text-align: left; }
 .fight-end-stats > div { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 5px 10px; background: rgba(0, 0, 0, 0.25); border-radius: 3px; animation: fight-row-in 0.4s ease-out both; }
-.fight-end-stats > div:nth-child(1) { animation-delay: 0.45s; }
-.fight-end-stats > div:nth-child(2) { animation-delay: 0.6s; }
-.fight-end-stats > div:nth-child(3) { animation-delay: 0.75s; }
-.fight-end-stats > div:nth-child(4) { animation-delay: 0.9s; }
-.fight-end-stats > div:nth-child(5) { animation-delay: 1.05s; }
-.fight-end-stats > div:nth-child(6) { animation-delay: 1.2s; }
+.fight-end-stats > div:nth-child(1) { animation-delay: calc(var(--fight-beat, 0s) + 0.45s); }
+.fight-end-stats > div:nth-child(2) { animation-delay: calc(var(--fight-beat, 0s) + 0.6s); }
+.fight-end-stats > div:nth-child(3) { animation-delay: calc(var(--fight-beat, 0s) + 0.75s); }
+.fight-end-stats > div:nth-child(4) { animation-delay: calc(var(--fight-beat, 0s) + 0.9s); }
+.fight-end-stats > div:nth-child(5) { animation-delay: calc(var(--fight-beat, 0s) + 1.05s); }
+.fight-end-stats > div:nth-child(6) { animation-delay: calc(var(--fight-beat, 0s) + 1.2s); }
 .fight-end-stats dt { color: #9d9389; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; align-self: center; }
 .fight-end-stats dd { margin: 0; color: #efe6d8; font-size: 14.5px; }
 .fight-end-stats dd.coin { color: #ffd98a; }
@@ -69,6 +72,7 @@
 @keyframes fight-card-in { from { opacity: 0; transform: translateY(14px) scale(0.92); } }
 @keyframes fight-row-in { from { opacity: 0; transform: translateX(-8px); } }
 @media (prefers-reduced-motion: reduce) {
+  .stage.fight-over { --fight-beat: 0s; }
   .surprise-banner, .fight-end, .fight-end-card, .fight-end-stats > div, .stage.fight-over.leaving { animation-duration: 0.01s !important; animation-delay: 0s !important; }
 }
 

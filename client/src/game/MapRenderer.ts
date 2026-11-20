@@ -20,6 +20,9 @@ import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam 
 import tableUrl from '../assets/battle-table.webp';
 import { Effects, HEAL_COLOR, damageColor, isPhysical, type P3 } from './fx';
 
+/** The ring of a save against something that does no damage: a charm, a poison, a hold. */
+const ARCANE = 0xb89cff;
+
 export type BattleView = 'tilt' | 'flat';
 
 interface Stand {
@@ -70,7 +73,8 @@ interface Floater {
   rise: boolean;
 }
 
-interface Dying { stand: Stand; life: number }
+/** A slain creature's figure or token, fading out once the blows still flying at it have landed. */
+interface Dying { node: Container; fig: Sprite | null; ent: Ent; life: number; waited: number }
 
 interface Queued { actor: string | null; run: () => void; since: number }
 
@@ -227,6 +231,8 @@ export class MapRenderer {
   private entLayer = new Container();
   private tiles: Sprite[] = [];
   private ents = new Map<string, Ent>();
+  /** Creatures that just left the board, kept a moment so the blow that felled them can still land. */
+  private gone = new Map<string, Ent>();
   private floaters: Floater[] = [];
   private floatLayer = new Container();
   private state: GameState | null = null;
@@ -395,6 +401,9 @@ export class MapRenderer {
     }
     for (const e of this.ents.values()) { e.root.destroy({ children: true }); e.stand?.root.destroy({ children: true }); }
     this.ents.clear();
+    for (const d of this.dying) d.node.destroy({ children: true });
+    this.dying = [];
+    this.gone.clear();
     this.cam.ready = false;
     this.tcamReady = false;
   }
@@ -508,12 +517,20 @@ export class MapRenderer {
       if (seen.has(id)) continue;
       // Slain monsters get a last damage number, then vanish.
       if (e.kind === 'monster' && e.hp > 0) this.hpChanged(e, -e.hp);
-      if (e.stand) {
-        if (this.reduced) e.stand.root.destroy({ children: true });
-        else { e.stand.bar.clear(); if (e.plate) e.plate.visible = false; this.dying.push({ stand: e.stand, life: e.incoming > 0 ? 1.3 : 0.9 }); }
+      if (e.plate) e.plate.visible = false;
+      if (this.reduced && e.incoming === 0) {
+        e.stand?.root.destroy({ children: true });
+        e.root.destroy({ children: true });
+      } else if (e.stand) {
+        e.stand.bar.clear();
+        this.dying.push({ node: e.stand.root, fig: e.stand.fig, ent: e, life: 0.9, waited: 0 });
+        e.root.destroy({ children: true });
+      } else {
+        e.bar.visible = false;
+        this.dying.push({ node: e.root, fig: e.sprite, ent: e, life: 0.9, waited: 0 });
       }
-      e.root.destroy({ children: true });
       this.ents.delete(id);
+      this.gone.set(id, e);
     }
   }
 
@@ -720,7 +737,7 @@ export class MapRenderer {
 
   /** The point where a creature is hit: its chest, or the middle of a flat token. */
   private chest(id: string): P3 | null {
-    const e = this.ents.get(id);
+    const e = this.ents.get(id) ?? this.gone.get(id);
     if (e) return this.center(e, this.tilt ? (e.stand?.figH ?? TILE) * (e.down ? 0.15 : 0.55) : 0);
     const p = this.lastPos.get(id);
     return p ? { ...p, h: this.tilt ? TILE * 0.6 : 0 } : null;
@@ -731,7 +748,8 @@ export class MapRenderer {
     if (!fresh.length) return;
     const wasIdle = this.queue.length === 0;
     const byName = new Map<string, string>();
-    for (const m of state.monsters) byName.set(m.name, m.id);
+    // The living win over a fallen creature that had the same name.
+    for (const m of [...state.monsters].sort((a, b) => Number(a.alive) - Number(b.alive))) byName.set(m.name, m.id);
     for (const c of state.characters) byName.set(c.name, c.id);
     for (const entry of fresh) {
       const r = entry.roll;
@@ -743,18 +761,20 @@ export class MapRenderer {
         const hit = r.outcome === 'hit' || r.outcome === 'crit';
         const t = this.ents.get(target);
         if (hit && t) t.incoming++;
-        this.queue.push({ actor, since: this.pulse, run: () => this.attack(actor, target, hit, r.outcome === 'crit', r.damage?.type) });
-      } else if (r.target.kind === 'DC' && r.damage && actor) {
-        // A spell that forces a save: it blooms around whoever had to save.
+        this.queue.push({ actor, since: this.pulse, run: () => this.attack(actor, target, hit, r.outcome === 'crit', r.damage?.type, hit ? t : undefined) });
+      } else if (r.target.kind === 'DC' && actor) {
+        // Something that forces a save (a spell, a breath, a poison): it blooms around whoever had
+        // to save. With no damage to it, the ring is a faint arcane one.
         const failed = r.outcome === 'failure';
-        const type = r.damage.type;
-        const t = this.ents.get(actor);
+        const type = r.damage?.type;
+        const color = type ? damageColor(type) : ARCANE;
+        const t = r.damage ? this.ents.get(actor) : undefined;
         if (t) t.incoming++;
         this.queue.push({ actor: null, since: this.pulse, run: () => {
           const p = this.chest(actor);
           if (p) {
-            this.fx.ring({ ...p, h: 0 }, damageColor(type), TILE * 0.9);
-            if (failed) this.fx.impact(p, damageColor(type));
+            this.fx.ring({ ...p, h: 0 }, color, TILE * (type ? 0.9 : 0.7));
+            if (failed && type) this.fx.impact(p, color);
           }
           if (t) this.landed(t);
         } });
@@ -770,10 +790,11 @@ export class MapRenderer {
     if (t.incoming === 0 && t.held) { this.showHp(t, t.held.delta); t.held = null; }
   }
 
-  private attack(actorId: string, targetId: string, hit: boolean, crit: boolean, type: string | undefined) {
+  private attack(actorId: string, targetId: string, hit: boolean, crit: boolean, type: string | undefined, counted?: Ent) {
     const from = this.chest(actorId), to = this.chest(targetId);
-    const t = this.ents.get(targetId);
-    const land = () => { if (t && hit) this.landed(t); };
+    // The creature as it was when the blow was struck: it may have fallen and left the board since.
+    const t = counted ?? this.ents.get(targetId) ?? this.gone.get(targetId);
+    const land = () => { if (counted) this.landed(counted); };
     if (!from || !to) { land(); return; }
     const a = this.ents.get(actorId);
     const reach = a && t ? Math.max(Math.abs(a.x - t.x) - (a.x < t.x ? a.size - 1 : t.size - 1), Math.abs(a.y - t.y) - (a.y < t.y ? a.size - 1 : t.size - 1)) : 1;
@@ -836,7 +857,7 @@ export class MapRenderer {
       }
     }
     // Damage held for a hit that never arrived shows anyway.
-    for (const e of this.ents.values()) if (e.held && this.pulse - e.held.at > 3) { e.incoming = 0; this.showHp(e, e.held.delta); e.held = null; }
+    for (const e of [...this.ents.values(), ...this.gone.values()]) if (e.held && this.pulse - e.held.at > 3) { e.incoming = 0; this.showHp(e, e.held.delta); e.held = null; }
 
     this.drawGlow(state);
     this.drawOverlay(state);
@@ -845,6 +866,21 @@ export class MapRenderer {
     else this.tickFlat(dt, state);
 
     this.fx.tick(dt);
+    // The fallen stand until the blow that felled them lands, then fade into the floor.
+    this.dying = this.dying.filter((d) => {
+      if (d.ent.incoming > 0 && d.waited < 3) { d.waited += dt; return true; }
+      d.life -= dt;
+      if (d.life <= 0) {
+        d.node.destroy({ children: true });
+        if (this.gone.get(d.ent.id) === d.ent) this.gone.delete(d.ent.id);
+        return false;
+      }
+      const f = Math.min(1, d.life / 0.6);
+      d.node.alpha = f;
+      if (d.fig) d.fig.tint = mixColor(0xffffff, 0x3a2a2a, 1 - f);
+      if (d.fig && d.node !== d.ent.root) d.fig.y += dt * 6 * (1 - f);
+      return true;
+    });
 
     // Floating numbers
     const k = this.tilt ? this.tcam.k : this.scale;
@@ -1102,16 +1138,6 @@ export class MapRenderer {
         st.fig.scale.y = sy * (1 + 0.014 * Math.sin(this.pulse * 2.1 + e.phase));
       }
     }
-    // The fallen fade into the floor.
-    this.dying = this.dying.filter((d) => {
-      d.life -= dt;
-      if (d.life <= 0) { d.stand.root.destroy({ children: true }); return false; }
-      const f = Math.min(1, d.life / 0.6);
-      d.stand.root.alpha = f;
-      d.stand.fig.tint = mixColor(0xffffff, 0x3a2a2a, 1 - f);
-      d.stand.fig.y += dt * 6 * (1 - f);
-      return true;
-    });
   }
 
   /**

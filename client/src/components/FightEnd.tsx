@@ -5,9 +5,9 @@ import type { FightOutcome, GameState } from '../../../shared/types';
 import { useT } from '../i18n';
 import { sfx } from '../ui/sound';
 
-/** How long the closing screen stays at least, and at most while the Dungeon Master is still writing. */
-const MIN_MS = 3200;
-const MAX_MS = 11000;
+/** How long the closing screen stays at least, and at most while the Dungeon Master is still writing. Both include the moment the last blow plays out before the card rises (--fight-beat in fight.css). */
+const MIN_MS = 4500;
+const MAX_MS = 12300;
 const FADE_MS = 700;
 
 export interface FightEnd {
@@ -23,28 +23,42 @@ export interface FightEnd {
  */
 export function useFightEnd(state: GameState | null): [FightEnd | null, () => void] {
   const lastCombat = useRef<GameState | null>(null);
+  // Worked out while rendering, so the battle map never leaves the screen between the last blow
+  // and the closing screen: it stays mounted and still plays that blow.
+  const fresh = useRef<FightEnd | null>(null);
   const [end, setEnd] = useState<FightEnd | null>(null);
   const started = useRef(0);
 
   if (state?.phase === 'combat') lastCombat.current = state;
-
-  useEffect(() => {
+  else if (state && lastCombat.current) {
     const before = lastCombat.current;
-    if (!state || state.phase === 'combat' || !before) return;
     lastCombat.current = null;
     // The fight just left the screen. Show its ending if the server recorded a new one
     // (a fight that was abandoned or replaced by a new adventure has none).
     const f = state.lastFight;
-    if (!f || f.seq === before.lastFight?.seq) return;
-    const slain = new Set(f.slain);
-    const frozen: GameState = {
-      ...before,
-      monsters: before.monsters.map((m) => (slain.has(m.name) ? { ...m, hp: 0, alive: false } : m)),
-      combat: before.combat && { ...before.combat, reaction: null },
-    };
+    if (f && f.seq !== before.lastFight?.seq) {
+      const slain = new Set(f.slain);
+      fresh.current = {
+        frozen: {
+          ...before,
+          // The newest log, so the blows that ended the fight still play on the frozen map.
+          log: state.log,
+          monsters: before.monsters.map((m) => (slain.has(m.name) ? { ...m, hp: 0, alive: false } : m)),
+          combat: before.combat && { ...before.combat, reaction: null },
+        },
+        outcome: f,
+        leaving: false,
+      };
+    }
+  }
+
+  useEffect(() => {
+    const next = fresh.current;
+    if (!next) return;
+    fresh.current = null;
     started.current = Date.now();
-    setEnd({ frozen, outcome: f, leaving: false });
-    sfx(f.result === 'victory' ? 'victory' : 'defeat');
+    setEnd(next);
+    sfx(next.outcome.result === 'victory' ? 'victory' : 'defeat');
   }, [state]);
 
   // Later loot that the Dungeon Master hands out while the screen shows.
@@ -69,7 +83,7 @@ export function useFightEnd(state: GameState | null): [FightEnd | null, () => vo
   }, [end?.leaving]);
 
   const dismiss = () => setEnd((e) => e && { ...e, leaving: true });
-  return [end, dismiss];
+  return [fresh.current ?? end, dismiss];
 }
 
 /** The banner over the frozen battle map. */

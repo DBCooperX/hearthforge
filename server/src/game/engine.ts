@@ -67,6 +67,7 @@ import { CLASSES, defaultGender, profBonusFor } from '../data/classes';
 import { MONSTERS, passivePerception, stealthBonus, type LegendaryOption, type MonsterAttack, type MonsterDef, type MonsterSpecial, type Rider } from '../data/monsters';
 import { resolveMonster, suggestMonsters } from '../data/monsterSearch';
 import { inArea } from './areas';
+import { affordablePrefix, bestSpot, reachableSpots, type Board, type Foe, type Spot, type SpotQuery, type Stance } from './tactics';
 import { EXPOSED, HAMPERED, HELD, HELPLESS, HERO_CONDITIONS, INCAPACITATING, type EffectEnd, type HeroEffect } from '../../../shared/conditions';
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
@@ -2894,6 +2895,65 @@ export class Game {
     return false;
   }
 
+  /** The battle map as the movement planner sees it, for one monster. */
+  private tacticsBoard(m: Monster): Board {
+    const n = this.tilesOf(m);
+    const foeAt = (x: number, y: number) => !!this.charAt(x, y);
+    return {
+      canPass: (p) => {
+        for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) if (!this.walkable(p.x + dx, p.y + dy) || foeAt(p.x + dx, p.y + dy)) return false;
+        return true;
+      },
+      canStop: (p) => !this.monsterBlocked(p, m),
+      cost: (p) => tileCost(this.tile(p.x, p.y)),
+      cutsCorner: (a, b) => !this.walkable(b.x, a.y) || !this.walkable(a.x, b.y),
+    };
+  }
+
+  /** A path to the free square nearest a hero it cannot reach, so it at least closes in. */
+  private closestApproach(m: Monster, board: Board, t: Character): Pt[] {
+    const size = this.tilesOf(m);
+    const spots = reachableSpots(board, { x: m.x, y: m.y }, 60);
+    let best: Spot | null = null;
+    let bestD = this.mdist(m, t);
+    for (const s of spots) {
+      const d = distToFootprint(s.p, size, t);
+      if (d < bestD || (best && d === bestD && s.cost < best.cost)) { best = s; bestD = d; }
+    }
+    return best?.path ?? [];
+  }
+
+  /**
+   * Where a shooter or a creature backing off ends its move: a square it can shoot its target
+   * from, out of reach and in cover, or as far off and as hidden as it can get. If its target
+   * cannot be shot from anywhere it can reach, another hero who can becomes the target.
+   */
+  private pickSpot(m: Monster, board: Board, tactic: Stance, target: Character, atk: MonsterAttack | null, speed: number, flyby: boolean): { path: Pt[]; shot: boolean; target?: Character } {
+    const start = { x: m.x, y: m.y };
+    const size = this.tilesOf(m);
+    const budget = tactic === 'hold_position' ? Math.min(speed, 2) : speed;
+    const spots = reachableSpots(board, start, budget);
+    const heroes = this.consciousChars();
+    const foes: Foe[] = heroes.map((c) => ({ id: c.id, x: c.x, y: c.y, threatens: !this.incapacitated(c) }));
+    const shot = atk?.ranged ? { range: atk.range, long: atk.longRange ?? atk.range } : null;
+    const query = (t: Character): SpotQuery => ({
+      spots, start, size, foes, target: foes.find((f) => f.id === t.id)!, shot, stance: tactic,
+      noProvoke: tactic === 'disengage' || flyby,
+      los: (a, b) => this.los(a, b),
+      cover: (from, to) => cheb(from, to) > 1 && hasCover(this.s.rows, from, to),
+    });
+    let best = bestSpot(query(target));
+    let chosen = target;
+    if (shot && tactic === 'engage' && best.shot === 0) {
+      for (const c of heroes) {
+        if (c.id === target.id) continue;
+        const r = bestSpot(query(c));
+        if (r.shot > best.shot || (r.shot === best.shot && r.score > best.score)) { best = r; chosen = c; }
+      }
+    }
+    return { path: best.spot.path, shot: best.shot > 0, target: chosen };
+  }
+
   /** Ask players about opportunity attacks. Off for scripted play and tests: every hero then follows its setting, with "ask" striking. */
   interactiveReactions = false;
   /** Told when a hero lands a killing blow, scores a critical hit or dies, for the players' account stats. */
@@ -2931,7 +2991,8 @@ export class Game {
     }
     const targets = this.consciousChars();
     if (!targets.length) { this.acting = null; return { monster: m.name, moved: 0, note: 'no targets' }; }
-    let speed = Math.floor(def.speed / 5);
+    // A flier moves at its flying speed: a bat or a stirge barely crawls on foot.
+    let speed = Math.floor(Math.max(def.speed, def.fly ?? 0) / 5);
     if (this.mHas(m, 'restrained')) speed = 0;
     else if (this.mHas(m, 'slowed')) speed = Math.floor(speed / 2);
     if (this.mHas(m, 'prone')) {
@@ -2941,52 +3002,58 @@ export class Game {
       this.log('roll', this.t`${m.name} gets back up, which costs half the movement.`);
     }
     const size = this.tilesOf(m);
-    const canEnter = (p: Pt) => !this.monsterBlocked(p, m);
-    const pathToAdjacent = (t: Character) => this.bfs(m, (p) => distToFootprint(p, size, t) <= 1 && (p.x === m.x && p.y === m.y || !this.monsterBlocked(p, m)), canEnter);
+    const board = this.tacticsBoard(m);
+    const canStop = (p: Pt) => (p.x === m.x && p.y === m.y) || board.canStop(p);
+    // Allies can be walked through, but not stood on.
+    const pathToAdjacent = (t: Character) => this.bfs(m, (p) => distToFootprint(p, size, t) <= 1 && canStop(p), board.canPass);
 
     let target = targets.find((t) => t.id === intent.targetId);
-    if (!target) {
-      const scored = targets.map((t) => { const p = pathToAdjacent(t); return { t, d: p ? this.pathCost(p) : 999 }; });
-      scored.sort((a, b) => a.d - b.d || this.mdist(m, a.t) - this.mdist(m, b.t));
-      target = scored[0].t;
-    }
+    const paths = new Map<string, Pt[] | null>();
+    const pathTo = (t: Character) => { if (!paths.has(t.id)) paths.set(t.id, pathToAdjacent(t)); return paths.get(t.id)!; };
+    const byPath = () => targets.map((t) => { const p = pathTo(t); return { t, d: p ? this.pathCost(p) : 999 }; })
+      .sort((a, b) => a.d - b.d || this.mdist(m, a.t) - this.mdist(m, b.t));
+    if (!target) target = byPath()[0].t;
     const tactic = (['engage', 'hold_position', 'retreat', 'disengage'] as const).find((x) => x === intent.tactic) ?? 'engage';
     const backOff = tactic === 'retreat' || tactic === 'disengage';
-    const meleePath = pathToAdjacent(target);
-    const choice = this.chooseAction(m, def, String(intent.attack ?? ''), target, meleePath !== null && this.pathCost(meleePath) <= speed, backOff);
-    const chosen = choice.rep;
-
-    // Plan the movement by walking it in thought, then step back to the start.
-    const start = { x: m.x, y: m.y };
-    const walked: Pt[] = [];
-    const stepTo = (p: Pt) => { m.x = p.x; m.y = p.y; walked.push(p); };
-    if (tactic === 'engage') {
-      if (!chosen || !chosen.ranged) {
-        // Creatures with a long reach stop as soon as the target is within it.
-        const reach = chosen ? Math.max(1, Math.floor(chosen.range / 5)) : 1;
-        for (const p of this.afford(meleePath ?? [], speed).walked) { if (reach > 1 && this.mdist(m, target) <= reach && this.los(this.mpoint(m, target), target)) break; stepTo(p); }
-      } else {
-        const inRange = () => this.mdist(m, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(this.mpoint(m, target!), target!);
-        const path = meleePath ?? [];
-        for (const p of this.afford(path, speed).walked) { if (inRange()) break; stepTo(p); }
-      }
-    } else if (backOff) {
-      for (let left = speed; left > 0; ) {
-        const score = (p: Pt) => Math.min(...targets.map((t) => distToFootprint(p, size, t)));
-        let best: Pt | null = null;
-        for (const d of DIRS) {
-          const n = { x: m.x + d.x, y: m.y + d.y };
-          if (!this.walkable(n.x, n.y) || this.monsterBlocked(n, m) || tileCost(this.tile(n.x, n.y)) > left) continue;
-          if (d.x !== 0 && d.y !== 0 && (!this.walkable(m.x + d.x, m.y) || !this.walkable(m.x, m.y + d.y))) continue;
-          if (score(n) > score(best ?? m)) best = n;
-        }
-        if (!best) break;
-        left -= tileCost(this.tile(best.x, best.y));
-        stepTo(best);
+    let meleePath = pathTo(target);
+    let choice = this.chooseAction(m, def, String(intent.attack ?? ''), target, meleePath !== null && this.pathCost(meleePath) <= speed, backOff);
+    // A brute whose chosen foe is walled in by others goes for one it can reach.
+    if (!meleePath && tactic === 'engage' && (!choice.rep || !choice.rep.ranged)) {
+      const other = byPath()[0];
+      if (other.d < 999) {
+        target = other.t;
+        meleePath = pathTo(target);
+        choice = this.chooseAction(m, def, String(intent.attack ?? ''), target, this.pathCost(meleePath!) <= speed, backOff);
       }
     }
-    m.x = start.x; m.y = start.y;
-    const disengage = tactic === 'disengage';
+    const chosen = choice.rep;
+
+    const start = { x: m.x, y: m.y };
+    let walked: Pt[] = [];
+    const shooter = !!chosen?.ranged;
+    if (tactic === 'engage' && !shooter) {
+      // Creatures with a long reach stop as soon as the target is within it.
+      const reach = chosen ? Math.max(1, Math.floor(chosen.range / 5)) : 1;
+      const path = meleePath ?? this.closestApproach(m, board, target);
+      const steps = affordablePrefix(board, path, speed);
+      const stop = steps.findIndex((p) => canStop(p) && distToFootprint(p, size, target!) <= reach && this.los(nearestFootprintTile(p, size, target!), target!));
+      walked = reach > 1 && stop >= 0 ? steps.slice(0, stop + 1) : steps;
+      if (reach > 1 && this.mdist(m, target) <= reach && this.los(this.mpoint(m, target), target)) walked = [];
+    } else if (shooter || backOff) {
+      const pick = this.pickSpot(m, board, tactic, target, chosen ?? null, speed, !!def.flags?.flyby);
+      if (pick.target && pick.target.id !== target.id) target = pick.target;
+      walked = pick.path;
+      // Nowhere within a move to shoot from: close in along the way, stopping once in range.
+      if (tactic === 'engage' && shooter && !pick.shot) {
+        const inRange = (p: Pt) => distToFootprint(p, size, target!) * 5 <= (chosen!.longRange ?? chosen!.range) && this.los(nearestFootprintTile(p, size, target!), target!);
+        const steps = affordablePrefix(board, meleePath ?? this.closestApproach(m, board, target), speed);
+        const stop = steps.findIndex((p) => canStop(p) && inRange(p));
+        walked = stop >= 0 ? steps.slice(0, stop + 1) : steps;
+      }
+    }
+    // A goblin slipping out of reach to shoot uses Nimble Escape for it, as its bonus action.
+    const leaves = walked.length > 0 && !def.flags?.flyby && this.consciousChars().some((c) => !this.incapacitated(c) && this.mdist(m, c) <= 1 && distToFootprint(walked[walked.length - 1], size, c) > 1);
+    const disengage = tactic === 'disengage' || (!!def.nimbleEscape && leaves);
     const plan: MonsterPlan = {
       monsterId: m.id, targetId: target.id, attack: choice.name, tactic, path: walked, done: 0,
       // Disengage takes the action, except for a creature that can do it as a bonus action (Nimble Escape).
