@@ -192,8 +192,11 @@ export class Narrator {
     throw new VoiceError('bad_request');
   }
 
-  /** Speech for a piece of story, from the cache or freshly made. */
-  async speak(raw: string, lang: Lang, override?: Partial<VoiceChoice>): Promise<Audio> {
+  /**
+   * Speech for a piece of story, from the cache or freshly made. `paid` hears when a paid voice (OpenAI or
+   * ElevenLabs) had to read it: speech from the cache, and Piper, cost nothing.
+   */
+  async speak(raw: string, lang: Lang, override?: Partial<VoiceChoice>, paid?: (provider: 'openai' | 'elevenlabs', chars: number) => void): Promise<Audio> {
     if (!this.enabled) throw new VoiceError('bad_request');
     const choice = override ? cleanChoice({ ...this.choice, ...override }) : this.choice;
     const text = speakable(raw).slice(0, MAX_TEXT);
@@ -219,6 +222,7 @@ export class Narrator {
         else if (provider === 'openai') await this.viaOpenAI(voice, choice.speed, text, tmp);
         else await this.viaElevenLabs(voice, choice.speed, text, tmp);
         renameSync(tmp, file);
+        if (provider !== 'piper') paid?.(provider, text.length);
       } catch (err) {
         rmSync(tmp, { force: true });
         this.lastError = err instanceof Error ? err.message : String(err);

@@ -15,6 +15,7 @@ import { BinError, type TableBin } from '../bin';
 import type { Logs } from './logs';
 import type { Updater } from './updater';
 import { dayOf, type Usage } from './usage';
+import { CreditsError, type Credits } from '../credits';
 
 export const NOTICES = {
   restart5: 'The server restarts in 5 minutes. Your game is saved.',
@@ -47,6 +48,7 @@ export interface AdminContext {
   auth: Auth;
   accounts: Accounts;
   usage: Usage;
+  credits: Credits;
   logs: Logs;
   updater: Updater;
   store: { save(room: string, state: InternalState): void; info?(): { room: string; savedAt: string; bytes: number }[] };
@@ -65,6 +67,8 @@ export interface AdminContext {
   /** Save everything and end the process; Docker starts it again. */
   restart(): void;
   testKey(key: string, models: string[]): Promise<KeyTest>;
+  /** Credits of these accounts changed: tell their players. */
+  creditsChanged?(ids: string[]): void;
   now?: () => number;
 }
 
@@ -178,6 +182,7 @@ export class AdminApi {
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
         case '/https': return ctx.updater.https();
         case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title ?? id);
+        case '/credits': return this.credits();
         case '/logs': return { lines: ctx.logs.since(Number(url.searchParams.get('after')) || 0) };
         case '/backups': return { backups: this.backups() };
         case '/backup': {
@@ -242,6 +247,24 @@ export class AdminApi {
           default: throw new Refused(400, 'bad_request');
         }
         return { ...this.accountList(), ...extra };
+      }
+      case '/credits': {
+        const body = await this.json(req);
+        const id = String(body.id ?? '');
+        const target = () => { const a = ctx.accounts.get(id); if (!a) throw new Refused(404, 'not_found'); return a; };
+        try {
+          switch (body.do) {
+            case 'config': ctx.credits.setConfig((body.config ?? {}) as Record<string, unknown>); console.log(`[innkeeper] ${me.username} changed the credit settings (credits ${ctx.credits.config.on ? 'on' : 'off'}).`); break;
+            case 'top_up': { const a = target(); ctx.credits.topUp(a.id, body.chf, body.note); console.log(`[innkeeper] ${me.username} booked CHF ${Number(body.chf).toFixed(2)} for ${a.username}.`); ctx.creditsChanged?.([a.id]); break; }
+            case 'free': { const a = target(); ctx.credits.setFree(a.id, body.free === true); ctx.creditsChanged?.([a.id]); break; }
+            default: throw new Refused(400, 'bad_request');
+          }
+        } catch (err) {
+          if (err instanceof CreditsError) throw new Refused(err.code === 'not_found' ? 404 : 400, err.code);
+          throw err;
+        }
+        if (body.do === 'config') ctx.creditsChanged?.(ctx.accounts.list().map((a) => a.id));
+        return this.credits();
       }
       case '/tables': {
         const body = await this.json(req);
@@ -452,6 +475,10 @@ export class AdminApi {
   }
 
   /** Everything worth keeping, as one JSON document. API keys and passwords are never part of it. */
+  private credits() {
+    return this.ctx.credits.report(this.ctx.accounts.list().map((a) => ({ id: a.id, username: a.username, role: a.role })));
+  }
+
   private snapshot(only?: string[]) {
     const { ctx } = this;
     const tables: Record<string, InternalState> = {};
@@ -462,7 +489,7 @@ export class AdminApi {
       createdAt: new Date(this.now()).toISOString(),
       app: ctx.version,
       tables,
-      ...(only ? {} : { settings: ctx.config.exportable(), ...ctx.auth.exportable(), accounts: ctx.accounts.exportable() }),
+      ...(only ? {} : { settings: ctx.config.exportable(), ...ctx.auth.exportable(), accounts: ctx.accounts.exportable(), credits: ctx.credits.exportable() }),
     };
   }
 
@@ -499,7 +526,7 @@ export class AdminApi {
   /** Put the tables of a backup back. Tables that are not in it stay as they are. */
   private restore(data: unknown, withSettings: boolean) {
     const { ctx } = this;
-    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown; accounts?: unknown };
+    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown; accounts?: unknown; credits?: unknown };
     if (!d || typeof d !== 'object' || d.format !== BACKUP_FORMAT || !d.tables || typeof d.tables !== 'object') throw new Refused(400, 'bad_backup');
     const entries = Object.entries(d.tables as Record<string, InternalState>);
     for (const [id, s] of entries) {
@@ -518,6 +545,7 @@ export class AdminApi {
       if (Array.isArray(d.bans)) for (const b of d.bans) if (b && typeof b.ip === 'string') ctx.auth.ban(b.ip, String(b.note ?? ''));
       const added = ctx.accounts.restore(d.accounts);
       if (added) console.log(`[innkeeper] ${added} account${added === 1 ? '' : 's'} came back from the backup. Reset their passwords to let them in.`);
+      ctx.credits.restore(d.credits);
     }
     ctx.tablesChanged();
     console.log(`[innkeeper] Restored ${entries.length} table${entries.length === 1 ? '' : 's'} from a backup.`);

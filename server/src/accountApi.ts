@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isAccountId, type LegacySeat } from '../../shared/accounts';
+import type { CreditView } from '../../shared/credits';
 import { AccountsError, type Accounts } from './accounts';
 import { BinError, type TableBin } from './bin';
 import type { Room } from './room';
@@ -18,6 +19,8 @@ export interface AccountApiContext {
   restoreTable(binId: number, by: { id: string; innkeeper: boolean }): { room: string; title: string };
   ipOf(req: IncomingMessage): string;
   tablesChanged(): void;
+  /** An account's AI credit. */
+  creditOf?(id: string): CreditView | null;
 }
 
 function readBody(req: IncomingMessage, max = 16 * 1024): Promise<Record<string, unknown>> {
@@ -89,7 +92,7 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       if (path === '/me') {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
-        return send(200, accounts.profile(me.id));
+        return send(200, { ...accounts.profile(me.id), credit: ctx.creditOf?.(me.id) ?? undefined });
       }
       if (path === '/bin') {
         const me = accounts.account(token);

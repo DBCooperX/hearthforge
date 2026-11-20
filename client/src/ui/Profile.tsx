@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { PASSWORD_MIN, type PlayStats, type Profile } from '../../../shared/accounts';
 import { CLASSES } from '../../../shared/rules';
 import type { ClassId } from '../../../shared/types';
+import { chf, type CreditView } from '../../../shared/credits';
 import { accountCall } from '../account';
 import { accountErrorText } from '../components/SignIn';
 import { useLang, useT, type Translate } from '../i18n';
@@ -21,6 +22,26 @@ function StatTiles({ stats }: { stats: PlayStats }) {
     [t('Critical hits'), stats.crits], [t('Deaths'), stats.deaths], [t('Gold earned'), t('{0} gp', { 0: stats.gold })],
   ];
   return <div className="inn-stats">{tiles.map(([label, value]) => <div key={label} className="inn-stat"><small>{label}</small><b>{value}</b></div>)}</div>;
+}
+
+/** What the AI has cost you, and what is left of what you paid in. */
+function CreditTiles({ credit }: { credit: CreditView }) {
+  const t = useT();
+  return (
+    <section>
+      <h3>{t('AI credit')}</h3>
+      {credit.out && <div className="inn-note is-bad"><span>{t('Your credit is used up. Ask the innkeeper to top it up, then carry on.')}</span></div>}
+      {credit.low && <div className="inn-note is-warn"><span>{t('Your credit is running low. Ask the innkeeper to top it up before it runs out.')}</span></div>}
+      <div className="inn-stats">
+        {credit.limited && <div className="inn-stat"><small>{t('Left')}</small><b>{chf(credit.balance)}</b></div>}
+        <div className="inn-stat"><small>{t('Paid in')}</small><b>{chf(credit.paid)}</b></div>
+        <div className="inn-stat"><small>{t('AI costs so far')}</small><b>{chf(credit.spent)}</b></div>
+      </div>
+      <p className="muted small">{credit.limited
+        ? t('The Dungeon Master and the narrator cost the innkeeper real money. Your share is taken off what you paid in: at a table with friends the cost is split among everyone sitting there.')
+        : t('What your share of the Dungeon Master and the narrator has cost so far. At a table with friends the cost is split among everyone sitting there.')}</p>
+    </section>
+  );
 }
 
 export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profile; onClose: () => void; onChanged: () => void }) {
@@ -49,6 +70,7 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
       subtitle={<span className="muted">{account.role === 'innkeeper' ? t('Innkeeper') : t('Player')} · {t('Member since {when}', { when: new Date(account.createdAt).toLocaleDateString(lang) })}</span>}>
       <div className="inn-stack profile-body">
         {account.mustChange && <div className="inn-note is-warn"><span>{t('You are still using a password you did not choose. Choose your own below.')}</span></div>}
+        {profile.credit && (profile.credit.limited || profile.credit.spent > 0 || profile.credit.paid !== 0) && <CreditTiles credit={profile.credit} />}
         <section>
           <h3>{t('At the tables')}</h3>
           <StatTiles stats={stats} />

@@ -1,12 +1,13 @@
 // The Innkeeper: the panel of whoever owns this server. Tables, players, art packs, settings and
 // API key, updates and restarts, costs, the log and backups, so that nothing needs a terminal.
 // It is reached from the list of tables and from Settings, by accounts with the Innkeeper role.
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   ADMIN_ERRORS, HTTPS_DNS_PROVIDERS, MODEL_SUGGESTIONS, type HttpsStatus, SETTINGS, SETTING_GROUPS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
   type BackupInfo, type LogLine, type SettingDef, type SettingGroup, type SettingValue, type UpdaterStatus, type UsageReport, type UsageTotals,
 } from '../../../shared/admin';
 import { CLASS_INFO } from '../../../shared/content';
+import { chf, type CreditConfig, type CreditReport } from '../../../shared/credits';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
 import { ArtWindow } from './ArtWindow';
@@ -672,6 +673,93 @@ function UsageRows<T extends UsageTotals>({ rows, name, head }: { rows: T[]; nam
   );
 }
 
+// ---------------------------------------------------------------------------- credits
+
+/**
+ * Player credits: what each account's share of the AI has cost, what they paid in, and the switch that stops a
+ * player whose credit is used up. Changes apply at once.
+ */
+function CreditsPane({ fail, say }: PaneProps) {
+  const t = useT();
+  const { lang } = useLang();
+  const [r, set] = usePoll<CreditReport>('/credits', 15000, fail);
+  const [draft, setDraft] = useState<CreditConfig | null>(null);
+  const [topUp, setTopUp] = useState<{ id: string; chf: string; note: string } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const act = async (body: Record<string, unknown>) => {
+    try { const next = await inn<CreditReport>('/credits', { body }); set(next); return next; } catch (err) { fail(err); return null; }
+  };
+  if (!r) return <p className="muted">{t('Loading…')}</p>;
+  const c = draft ?? r.config;
+  const edit = (patch: Partial<CreditConfig>) => setDraft({ ...c, ...patch });
+  const field = (label: string, value: number, onChange: (n: number) => void, step: string) => (
+    <label>{label}<input type="number" min="0" step={step} value={Number.isFinite(value) ? value : ''} onChange={(e) => onChange(e.target.valueAsNumber)} /></label>
+  );
+  const book = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!topUp) return;
+    const who = r.rows.find((x) => x.id === topUp.id)?.username ?? '';
+    const amount = Number(topUp.chf.replace(',', '.'));
+    if (await act({ do: 'top_up', id: topUp.id, chf: amount, note: topUp.note })) { say(t('{amount} booked for {name}.', { amount: chf(amount), name: who })); setTopUp(null); }
+  };
+  return (
+    <section className="inn-credits">
+      <h3>{t('Player credits')}</h3>
+      <label className="inn-switch">
+        <input type="checkbox" checked={r.config.on} onChange={(e) => void act({ do: 'config', config: { on: e.target.checked } }).then((ok) => ok && say(e.target.checked ? t('Credits are on.') : t('Credits are off.')))} />
+        <span><b>{t('Players pay for the AI with credits')}</b><br /><span className="muted small">{r.config.on
+          ? t('A player whose credit is used up cannot ask the Dungeon Master for anything new until you top it up. A fight already under way is finished. Innkeepers and accounts marked free are never stopped.')
+          : t('Off: what each account costs is counted below, but nobody is stopped. Switch it on once your players have paid in.')}</span></span>
+      </label>
+      <form className="inn-credit-config" onSubmit={(e) => { e.preventDefault(); void act({ do: 'config', config: c }).then((ok) => { if (ok) { setDraft(null); say(t('Saved.')); } }); }}>
+        {field(t('Francs per US dollar'), c.chfPerUsd, (n) => edit({ chfPerUsd: n }), '0.01')}
+        {field(t('Warn players below (CHF)'), c.warnChf, (n) => edit({ warnChf: n }), '0.5')}
+        {field(t('ElevenLabs voice, $ per 1000 characters'), c.voiceUsdPer1k.elevenlabs, (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, elevenlabs: n } }), '0.001')}
+        {field(t('OpenAI voice, $ per 1000 characters'), c.voiceUsdPer1k.openai, (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, openai: n } }), '0.001')}
+        <button type="submit" disabled={!draft}>{t('Save')}</button>
+      </form>
+      <table className="inn-table">
+        <thead><tr><th>{t('Account')}</th><th className="num">{t('Left')}</th><th className="num">{t('Paid in')}</th><th className="num">{t('Dungeon Master')}</th><th className="num">{t('Narrator')}</th><th className="num">{t('Last 30 days')}</th><th>{t('Free')}</th><th /></tr></thead>
+        <tbody>
+          {r.rows.map((a) => (
+            <Fragment key={a.id}>
+              <tr className={a.out ? 'is-out' : a.low ? 'is-low' : undefined}>
+                <td><button type="button" className="link" onClick={() => setOpen(open === a.id ? null : a.id)} aria-expanded={open === a.id}><b>{a.username}</b></button>{a.role === 'innkeeper' && <span className="muted small"> · {t('Innkeeper')}</span>}</td>
+                <td className="num">{a.limited ? <b className={a.out ? 'bad' : a.low ? 'warn' : undefined}>{chf(a.balance)}</b> : <span className="muted">{t('no limit')}</span>}</td>
+                <td className="num">{chf(a.paid)}</td>
+                <td className="num">{chf(a.spentClaude)}</td>
+                <td className="num">{chf(a.spentVoice)}</td>
+                <td className="num">{chf(a.last30)}</td>
+                <td>{a.role === 'innkeeper' ? <span className="muted">—</span> : <input type="checkbox" checked={a.free} aria-label={t('Free')} onChange={(e) => void act({ do: 'free', id: a.id, free: e.target.checked })} />}</td>
+                <td className="inn-actions"><button type="button" onClick={() => setTopUp({ id: a.id, chf: '', note: '' })}>{t('Top up')}</button></td>
+              </tr>
+              {topUp?.id === a.id && (
+                <tr className="inn-subrow"><td colSpan={8}>
+                  <form className="inn-topup" onSubmit={book}>
+                    <label>{t('Amount (CHF)')}<input autoFocus inputMode="decimal" value={topUp.chf} onChange={(e) => setTopUp({ ...topUp, chf: e.target.value })} placeholder="10.00" /></label>
+                    <label>{t('Note')}<input value={topUp.note} maxLength={80} onChange={(e) => setTopUp({ ...topUp, note: e.target.value })} placeholder={t('for example: TWINT, 20 Nov')} /></label>
+                    <button type="submit" className="primary" disabled={!Number(topUp.chf.replace(',', '.'))}>{t('Book')}</button>
+                    <button type="button" className="link" onClick={() => setTopUp(null)}>{t('Cancel')}</button>
+                  </form>
+                  <p className="muted small">{t('A negative amount corrects a mistake or pays money back.')}</p>
+                </td></tr>
+              )}
+              {open === a.id && (
+                <tr className="inn-subrow"><td colSpan={8}>
+                  {a.topUps.length === 0 ? <span className="muted">{t('Nothing paid in yet.')}</span> : (
+                    <ul className="inn-list">{a.topUps.map((p, i) => <li key={i}><span>{new Date(p.at).toLocaleDateString(lang)}</span><b>{chf(p.chf)}</b><span className="muted">{p.note}</span></li>)}</ul>
+                  )}
+                </td></tr>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small">{t('Each call to the AI is shared equally among the accounts sitting at the table, at the list prices below and your rate of francs per dollar. Piper voices cost nothing. An estimate: your invoices from Anthropic and ElevenLabs are what count.')}</p>
+    </section>
+  );
+}
+
 function UsagePane({ fail }: PaneProps) {
   const t = useT();
   const [r] = usePoll<UsageReport>('/usage', 15000, fail);
@@ -840,7 +928,7 @@ export function Innkeeper({ account, onClose }: { account: AccountView; onClose:
             {tab === 'assets' && <AssetsPane />}
             {tab === 'settings' && <SettingsPane {...pane} go={setTab} />}
             {tab === 'server' && <ServerPane {...pane} firstPassword={first} onPassword={loadStatus} />}
-            {tab === 'usage' && <UsagePane {...pane} />}
+            {tab === 'usage' && <div className="inn-stack"><CreditsPane {...pane} /><UsagePane {...pane} /></div>}
             {tab === 'logs' && <LogsPane {...pane} />}
             {tab === 'backups' && <BackupsPane {...pane} />}
           </div>
