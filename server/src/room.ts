@@ -179,6 +179,14 @@ export class Room {
     return true;
   }
 
+  /** The account behind a seat has a new name. */
+  renamePlayer(id: string, name: string): boolean {
+    if (this.closed || !this.game.renamePlayer(id, name)) return false;
+    this.flush();
+    this.saveNow();
+    return true;
+  }
+
   get empty() { return this.sockets.size === 0; }
 
   /** What the lobby shows about this table. */

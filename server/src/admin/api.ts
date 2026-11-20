@@ -220,7 +220,8 @@ export class AdminApi {
           }
           case 'revoke': accounts.revoke(String(body.code ?? '')); break;
           case 'role': accounts.setRole(id, role, me.id); console.log(`[innkeeper] ${name()} is now ${role === 'innkeeper' ? 'an innkeeper' : 'a player'}.`); break;
-          case 'rename': accounts.rename(id, body.username); break;
+          case 'rename': { const was = name(); accounts.rename(id, body.username); console.log(`[innkeeper] ${was} is now called ${name()}.`); break; }
+          case 'stats': accounts.clearStats(id, body.what === 'hero' ? 'hero' : body.what === 'heroes' ? 'heroes' : 'all', typeof body.hero === 'string' ? body.hero : undefined); console.log(`[innkeeper] Stats of ${name()} were cleared.`); break;
           case 'reset': extra = { password: accounts.reset(id, me.id) }; console.log(`[innkeeper] The password of ${name()} was reset.`); break;
           case 'delete': { const who = name(); accounts.remove(id, me.id); console.log(`[innkeeper] The account ${who} was deleted.`); break; }
           case 'assign': {

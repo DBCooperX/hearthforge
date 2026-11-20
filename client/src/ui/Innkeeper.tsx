@@ -249,7 +249,9 @@ function AccountsPane({ fail, say, me }: PaneProps & { me: string }) {
                 <td className="num">{a.heroes}</td>
                 <td className="num">{playTime(t, a.stats.playMs)}</td>
                 <td className="inn-actions">
+                  <button type="button" onClick={() => { const next = window.prompt(t('New name for {name}:', { name: a.username }), a.username); if (next && next.trim() !== a.username) void act({ do: 'rename', id: a.id, username: next }).then((ok) => ok && say(t('The name was changed.'))); }}>{t('Rename')}</button>
                   {a.id !== me && <>
+                    <button type="button" onClick={() => { if (window.confirm(t('Clear the stats of {name}? Their numbers and hero list start again from zero.', { name: a.username }))) void act({ do: 'stats', id: a.id, what: 'all' }).then((ok) => ok && say(t('The stats were cleared.'))); }}>{t('Clear')}</button>
                     <button type="button" onClick={() => { if (window.confirm(t('Give {name} a new password? They are signed out everywhere.', { name: a.username }))) void act({ do: 'reset', id: a.id }).then((out) => out?.password && setShown({ kind: 'password', who: a.username, value: out.password })); }}>{t('New password')}</button>
                     <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the account {name}? Their heroes stay at the tables, but nobody can sign in as them any more.', { name: a.username }))) void act({ do: 'delete', id: a.id }).then((ok) => ok && say(t('The account was deleted.'))); }}>{t('Delete')}</button>
                   </>}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Accounts
+- **Rename accounts.** Players rename themselves in their profile; the Innkeeper renames any account, the default "innkeeper" too, from Players → Accounts. Seats at tables follow the new name (unless someone there already has it), and sessions stay signed in. The password-recovery file now finds the owner even after a rename.
+- **Clear your stats.** In the profile: reset all numbers and the hero list, clear the whole list, or remove one hero's entry (the hero stays at the table). The Innkeeper can clear any account's stats.
+- **German says "Innkeeper"**, not "Wirt", for the owner's panel and role; the group panel heading is "Party".
+
 ### Voice
 - **Speak instead of typing.** A microphone button beside the story's text box: hold it (or `Ctrl+M`) and talk, let go, and the words land in the box to fix before sending. A tap starts and a second tap stops. The browser's own speech recognition, in the player's interface language (German tuned for Swiss speakers, written with "ss"). Chrome, Edge and Safari; hidden in Firefox and on plain http, and Settings says why.
 - **A narrator reads the story aloud.** Every new Dungeon Master scene is read as it arrives, while the music steps back; a small speaker on each scene card reads it again or stops. Each player has a mute button and volume slider next to the music. The Innkeeper picks the voice for the whole server under Assets → Narrator, with Listen buttons: **Piper** runs free on the server (in the image; its voices are downloaded from Piper's collection the first time), or **OpenAI** and **ElevenLabs** with an API key under Settings → Voice. Speech is cached on the server, long scenes are read in parts so they start quickly, and only the table's own story can be spoken.

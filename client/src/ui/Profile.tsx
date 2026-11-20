@@ -28,6 +28,8 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
   const { lang } = useLang();
   const [pw, setPw] = useState({ current: '', next: '', again: '' });
   const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  const [name, setName] = useState(profile.account.username);
+  const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
   // Fresh numbers whenever the window opens.
   useEffect(() => { onChanged(); }, []);
   const { account, stats, heroes } = profile;
@@ -44,6 +46,29 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
     }
   };
 
+  const rename = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      await accountCall('/rename', { username: name });
+      setNote({ text: t('The name was changed.'), bad: false });
+      onChanged();
+    } catch (err) {
+      setNote({ text: accountErrorText(t, err), bad: true });
+    }
+  };
+
+  /** Clear numbers: everything, the hero list, or one hero's entry. */
+  const clear = async (what: 'all' | 'heroes' | 'hero', ask: string, done: string, hero?: string) => {
+    if (!window.confirm(ask)) return;
+    try {
+      await accountCall('/stats', { what, hero });
+      setNote({ text: done, bad: false });
+      onChanged();
+    } catch (err) {
+      setNote({ text: accountErrorText(t, err), bad: true });
+    }
+  };
+
   return (
     <Window title={account.username} icon="character" size="medium" className="profile" onClose={onClose}
       subtitle={<span className="muted">{account.role === 'innkeeper' ? t('Innkeeper') : t('Player')} · {t('Member since {when}', { when: new Date(account.createdAt).toLocaleDateString(lang) })}</span>}>
@@ -52,12 +77,15 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
         <section>
           <h3>{t('At the tables')}</h3>
           <StatTiles stats={stats} />
+          <p className="inn-actions">
+            <button type="button" className="link danger" onClick={() => void clear('all', t('Reset all your numbers to zero and clear the hero list? This cannot be undone.'), t('Your stats were reset.'))}>{t('Reset all')}</button>
+          </p>
         </section>
         <section>
           <h3>{t('Your heroes')}</h3>
           {heroes.length === 0 ? <p className="muted">{t('None yet. Sit down at a table and make one.')}</p> : (
             <table className="inn-table">
-              <thead><tr><th>{t('Hero')}</th><th>{t('Table')}</th><th className="num">{t('Sessions')}</th><th className="num">{t('Play time')}</th><th className="num">{t('Kills')}</th><th className="num">{t('Crits')}</th><th className="num">{t('Deaths')}</th><th className="num">{t('Gold')}</th></tr></thead>
+              <thead><tr><th>{t('Hero')}</th><th>{t('Table')}</th><th className="num">{t('Sessions')}</th><th className="num">{t('Play time')}</th><th className="num">{t('Kills')}</th><th className="num">{t('Crits')}</th><th className="num">{t('Deaths')}</th><th className="num">{t('Gold')}</th><th /></tr></thead>
               <tbody>
                 {heroes.map((h) => (
                   <tr key={`${h.table}/${h.heroId}`}>
@@ -65,12 +93,23 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
                     <td>{h.tableTitle}</td>
                     <td className="num">{h.sessions}</td><td className="num">{playTime(t, h.playMs)}</td><td className="num">{h.kills}</td>
                     <td className="num">{h.crits}</td><td className="num">{h.deaths}</td><td className="num">{h.gold}</td>
+                    <td className="inn-actions"><button type="button" className="link danger" aria-label={t('Remove hero entry')} title={t('Remove hero entry')} onClick={() => void clear('hero', t('Remove this hero from your list?'), t('The hero entry was removed.'), `${h.table}/${h.heroId}`)}>{t('Clear')}</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          <p className="muted small">{t('Gold is what the party took in while the hero was in it. Play time counts while you sit at the table. Test mode does not count.')}</p>
+          {heroes.length > 0 && <p className="inn-actions"><button type="button" className="link danger" onClick={() => void clear('heroes', t('Clear the hero list? The totals above stay.'), t('The hero entry was removed.'))}>{t('Clear hero list')}</button></p>}
+          <p className="muted small">{t('Removing an entry only clears the list. The hero stays at the table.')} {t('Gold is what the party took in while the hero was in it. Play time counts while you sit at the table. Test mode does not count.')}</p>
+        </section>
+        <section>
+          <h3>{t('Account name')}</h3>
+          <form className="inn-form" onSubmit={rename}>
+            <label>{t('New name')}<input value={name} maxLength={24} autoComplete="username" onChange={(e) => setName(e.target.value)} /></label>
+            <button type="submit" disabled={name.trim().length < 3 || name.trim() === account.username}>{t('Change name')}</button>
+          </form>
+          {note && <p className={note.bad ? 'inn-error' : 'muted'} role="status">{note.text}</p>}
+          <p className="muted small">{t('You sign in with the new name from now on. Your seats at the tables take it too.')}</p>
         </section>
         <section>
           <h3>{t('Password')}</h3>
