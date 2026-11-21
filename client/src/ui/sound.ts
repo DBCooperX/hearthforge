@@ -2,7 +2,7 @@
 // They are short and quiet on purpose: a page turning, a buckle, a latch.
 import { getPrefs, masterLevel } from './prefs';
 
-export type Sfx = 'open' | 'close' | 'tab' | 'page' | 'click' | 'equip' | 'drop' | 'coin' | 'deny' | 'victory' | 'defeat' | 'ambush';
+export type Sfx = 'open' | 'close' | 'tab' | 'page' | 'click' | 'equip' | 'drop' | 'coin' | 'deny' | 'victory' | 'defeat' | 'ambush' | 'turn';
 
 let ctx: AudioContext | null = null;
 let noise: AudioBuffer | null = null;
@@ -76,6 +76,10 @@ const RECIPES: Record<Sfx, (ac: AudioContext, out: AudioNode) => void> = {
   drop: (ac, out) => { tone(ac, out, { from: 190, to: 110, dur: 0.1, gain: 0.5 }); hiss(ac, out, { dur: 0.06, gain: 0.22, from: 900 }); },
   coin: (ac, out) => { tone(ac, out, { from: 2900, dur: 0.12, gain: 0.14 }); tone(ac, out, { at: 0.06, from: 3700, dur: 0.16, gain: 0.12 }); },
   deny: (ac, out) => { tone(ac, out, { type: 'triangle', from: 170, to: 120, dur: 0.16, gain: 0.4 }); },
+  // Your turn: two bright strikes of a small bell, rising.
+  turn: (ac, out) => {
+    for (const [i, f] of [587, 880].entries()) { tone(ac, out, { type: 'triangle', from: f, at: i * 0.12, dur: 0.35, gain: 0.2 }); tone(ac, out, { type: 'sine', from: f * 2, at: i * 0.12, dur: 0.2, gain: 0.05 }); }
+  },
   // A short rising call on a horn, the last note held.
   victory: (ac, out) => {
     for (const [i, f] of [392, 523, 659].entries()) { tone(ac, out, { type: 'triangle', from: f, at: i * 0.13, dur: 0.16, gain: 0.22 }); tone(ac, out, { type: 'sine', from: f * 2, at: i * 0.13, dur: 0.12, gain: 0.05 }); }

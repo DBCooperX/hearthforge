@@ -354,7 +354,6 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
         </div>
         <div className="hb-end">
           <OpportunitySwitch actor={c} conn={conn} />
-          {nudge && <div className="hb-nudge" role="status">{nudge === 'spent' ? t('Nothing left to do? End your turn.') : t('Still there? End your turn when you are done.')}<em>{t('Space')}</em></div>}
           <Hint title={t('End turn')} text={<>{t('Hand the turn to the next in the initiative order.')}<em>{t('Space')}</em></>}>
             <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
               <Glyph keys={['action:end_turn']} emoji="⏭️" />
@@ -371,7 +370,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
  * A gentle reminder to end the turn: after the player's chosen delay without doing anything on
  * their turn, or soon after the action and movement are used up. It never ends the turn.
  */
-function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): 'idle' | 'spent' | null {
+export function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): 'idle' | 'spent' | null {
   const { turnReminder } = usePrefs();
   const [nudge, setNudge] = useState<'idle' | 'spent' | null>(null);
   const spent = !!combat && combat.actionUsed && combat.attacksLeft <= 0 && combat.movementLeft <= 0;
