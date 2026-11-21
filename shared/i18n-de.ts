@@ -1063,6 +1063,7 @@ export const DE: Record<string, string> = {
   '{name} is writing…': '{name} schreibt…',
   '{names} are writing…': '{names} schreiben…',
   'Who hears it': 'Wer es hört',
+  'Resize window': 'Fenstergrösse ändern',
   'Everyone': 'Alle',
   'Whisper: {name}': 'Flüstern: {name}',
   'Whisper to {name}…': '{name} etwas zuflüstern…',
