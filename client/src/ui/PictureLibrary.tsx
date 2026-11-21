@@ -159,7 +159,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <span className="muted small">{t('A goblin as it would stand on the battle map, about {price}. It goes on your own costs and is not used in play.', { price: usd(price) })}</span>
         </div>
         {sample?.kind === 'figure' && <figure className="picture-sample-img figure"><FigureImg url={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
-        <p className="muted small">{t('Not happy with a figure? Delete it below, and it is painted anew the next time it is needed.')}</p>
+        <p className="muted small">{t('Not happy with a figure, for example one that still holds a weapon? Repaint it below, or delete it, and it is painted anew.')}</p>
       </section>
 
       <section>
@@ -193,6 +193,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
                 <button type="button" className={`picture-thumb${p.moment === 'figure' ? ' figure' : ''}`} onClick={() => setOpen(p)} title={p.caption}>{p.moment === 'figure' ? <FigureImg url={p.url} alt={p.caption} /> : <img src={p.url} alt={p.caption} loading="lazy" />}</button>
                 <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' || p.moment === 'figure' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : p.moment === 'figure' ? t('Battle figure') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
                 <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
+                {p.moment === 'figure' && <button type="button" className="link" disabled={!!busy || !hasKey} onClick={() => { void ask(t('Repaint this battle figure? It is painted anew now, and the picture is billed like any other.')).then((yes) => { if (yes) void act({ do: 'repaint', id: p.id }); }); }}>{t('Repaint')}</button>}
                 <button type="button" className="link danger" onClick={() => { void ask(p.moment === 'figure' ? t('Delete this battle figure? The drawn one stands in until it is painted anew.') : t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
               </li>
             ))}

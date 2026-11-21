@@ -11,6 +11,7 @@ import { LOOK_NAMES, heroLook } from '../../../shared/heroLook';
 import { SPECIES } from '../../../shared/rules';
 import type { Game } from './engine';
 import type { Character } from '../../../shared/types';
+import { ITEMS } from '../../../shared/content';
 
 /** What the Dungeon Master asked to be shown. */
 export interface PictureAsk {
@@ -150,7 +151,19 @@ export function placePictureHint(game: Game): Record<string, string> {
 
 /** What a hero's battle figure is painted from: their portrait. No portrait, no painted figure. */
 export function heroFigureSubject(c: Pick<Character, 'id' | 'portraitId'>): string | null {
-  return c.portraitId ? `h:${c.id}|${c.portraitId}` : null;
+  return c.portraitId ? `h:${c.id}|${c.portraitId}|${HERO_FIGURE_VERSION}` : null;
+}
+
+/**
+ * Bumped whenever how a hero's figure is painted changes, so every figure painted the old way is replaced, once and
+ * lazily, the next time its hero is on a battle map. v2: figures are painted unarmed, the overlay draws the gear.
+ */
+export const HERO_FIGURE_VERSION = 'v2';
+
+/** What the hero holds, wields or wears on the back, which the overlay draws and the painter must therefore leave out. */
+function heldGear(c: Character): string[] {
+  const names = (['mainHand', 'offHand'] as const).map((slot) => c.equipment?.[slot]).filter((i) => !!i).map((i) => ITEMS[i!.defId]?.name ?? i!.defId);
+  return [...new Set(names)];
 }
 
 /** A monster's figure is shared by every monster of the same kind and look, on every table of the server. */
@@ -168,12 +181,14 @@ const keyFor = (color: string): FigureKey => (/pink|purple|magenta|violet/i.test
 /** The prompt for a hero's battle figure. The hero's portrait goes along as the only reference. */
 export function heroFigurePrompt(c: Character): { prompt: string; key: FigureKey } {
   const key = keyFor(heroLook(c).color);
+  const gear = heldGear(c);
   return {
     key,
     prompt: [
       `Style: ${FIGURE_STYLE}`,
       `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
-      'The attached image is this hero\'s painted portrait. Paint the very same person, now standing at full length: the same face, skin, hair, beard, build, colours and clothes, wearing their armour or robes, but with both hands empty and relaxed at their sides: no weapon, staff, bow or shield in the picture, which are added separately. Standing upright on both feet, in a calm, ready stance.',
+      'The attached image is this hero\'s painted portrait. Use it ONLY as a reference for the face, skin, hair, beard, build, colours and for the clothes and armour. Paint the very same person, now standing at full length, wearing their armour or robes, in a calm, ready stance upright on both feet.',
+      `Both hands must be EMPTY, open and relaxed at the sides, with nothing in or near them. Leave out every item a hero can hold or carry: no weapon of any kind (sword, axe, mace, dagger, spear, bow, crossbow, club, hammer), no shield, no quiver or arrows, no staff, wand, orb, torch, lantern, book, tool or any other held object, no weapon on the back or sheathed at the belt.${gear.length ? ` In particular, do not draw: ${gear.join(', ')}.` : ''} Even if the portrait shows such things, leave them out: they are added separately by the game. Only clothing and armour are painted.`,
       figureBackdrop(key),
     ].join('\n\n'),
   };
