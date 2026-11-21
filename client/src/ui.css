@@ -43,9 +43,8 @@
 }
 .win-head::after {
   content: ''; position: absolute; left: 16px; right: 16px; bottom: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, #b98a3a 12%, #f0c877 50%, #b98a3a 88%, transparent);
 }
-.win-head h1 { font-size: 17px; letter-spacing: 0.14em; text-transform: uppercase; overflow-wrap: anywhere; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+.win-head h1 { font-size: 17px; letter-spacing: 0.14em; text-transform: uppercase; overflow-wrap: anywhere; }
 .win-icon { color: var(--gold); display: grid; }
 .win-sub { color: var(--muted); font-size: 13.5px; margin-left: 6px; }
 .win-close {
@@ -69,8 +68,7 @@
 .hero-tab.on { background: linear-gradient(#342f2c, #252220); color: var(--text); border-color: var(--edge); box-shadow: inset 0 2px 0 var(--gold); }
 .hero-tab.drop { border-color: var(--ok); box-shadow: 0 0 10px rgba(108, 192, 108, 0.45); }
 .hero-tab-face {
-  flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--class);
-  background: radial-gradient(circle at 50% 35%, #35312d, #0f0d0c 80%); box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+  flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
 }
 .hero-tab-face img { width: 28px; height: 28px; object-fit: contain; }
 .hero-tab-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
@@ -106,8 +104,7 @@
 .float { position: fixed; z-index: 70; pointer-events: none; animation: tip-in 0.12s ease both; }
 .float.interactive { pointer-events: auto; }
 @keyframes tip-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-.hint-tip {
-  max-width: 310px; padding: 8px 12px 9px; border-radius: 5px; border: 1px solid #a88c58; color: var(--ink);
+.hint-tip { padding: 8px 12px 9px; border-radius: 5px; border: 1px solid #a88c58; color: var(--ink);
   background: var(--paper-grain), linear-gradient(175deg, var(--parchment), var(--parchment-2));
   box-shadow: 0 0 0 1px #0f0d0c, 0 10px 28px rgba(0, 0, 0, 0.7); font-family: var(--font-story); font-size: calc(15px * var(--text-scale)); line-height: 1.4;
 }
@@ -335,8 +332,7 @@
 .cs { flex: 1; min-height: 0; display: grid; grid-template-columns: 258px minmax(0, 1fr) minmax(0, 350px); }
 .cs-id { padding: 20px 16px 16px; border-right: 1px solid var(--edge); background: rgba(0, 0, 0, 0.18); display: grid; gap: 8px; align-content: start; justify-items: center; text-align: center; overflow-y: auto; }
 .cs-portrait {
-  --class: var(--gold); width: 148px; height: 148px; position: relative; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--class); margin-bottom: 6px;
-  background: radial-gradient(circle at 50% 35%, #35312d, #0f0d0c 80%);
+  --class: var(--gold); width: 148px; height: 148px; position: relative; display: grid; place-items: center; border-radius: 50%; margin-bottom: 6px;
   box-shadow: 0 0 0 3px #12100f, 0 0 0 4px #564f48, inset 0 0 26px rgba(0, 0, 0, 0.8), 0 0 28px color-mix(in srgb, var(--class) 28%, transparent);
 }
 .cs-portrait img { width: 116px; height: 116px; object-fit: contain; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.6)); }
@@ -431,7 +427,6 @@
 .settings-body section { display: grid; gap: 8px; }
 .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 15px; }
 .setting > span:first-child small { display: block; color: var(--muted); }
-.music + .setting-none { display: none; }
 .setting-controls { display: flex; align-items: center; gap: 10px; }
 .setting-controls input[type='range'] { width: 110px; padding: 0; accent-color: #d9a851; box-shadow: none; background: none; border: none; }
 .switch { min-width: 52px; padding: 3px 10px; border-radius: 13px; font-size: 13px; color: var(--muted); }
@@ -534,8 +529,6 @@
 .win.art-window.win-large { height: min(780px, calc(100vh - 24px)); }
 
 /* ---------- the Innkeeper: the owner's panel ---------- */
-.innkeeper-door { position: fixed; left: 14px; bottom: 10px; font-size: 13px; opacity: 0.7; z-index: 2; }
-.innkeeper-door:hover { opacity: 1; }
 .toast.notice { background: #1e1b19; border-color: #d9a851; font-size: 15px; max-width: min(560px, 90vw); padding: 10px 16px; }
 .toast.credit-note { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; pointer-events: auto; background: #1e1b19; border-color: #d9a851; max-width: min(560px, 90vw); padding: 10px 16px; }
 .toast.credit-note.is-out { border-color: #d0483a; background: #2a1512; }
@@ -606,7 +599,7 @@
 .inn-bar i { display: block; height: 8px; min-width: 2px; border-radius: 4px; background: linear-gradient(90deg, #8d6420, #d9a851); }
 .inn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .inn-list li { display: flex; align-items: center; gap: 12px; padding: 4px 8px; border: 1px solid rgba(86, 79, 72, 0.4); border-radius: 6px; }
-.inn-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 8px 10px; border-radius: 6px; border: 1px solid transparent; }
+.inn-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; border-radius: 6px; border: 1px solid transparent; }
 .inn-setting.changed { border-color: #d9a851; background: rgba(230, 183, 101, 0.06); }
 .inn-setting-text { display: grid; gap: 1px; min-width: 0; }
 .inn-setting-text small { color: var(--muted); }

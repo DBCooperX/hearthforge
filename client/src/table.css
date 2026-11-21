@@ -4,8 +4,6 @@
 /* ---------- lobby ---------- */
 .lobby { width: min(760px, 100%); max-height: 100%; overflow-y: auto; padding: 26px 28px; display: grid; gap: 16px; }
 .lobby header.join { width: auto; padding: 0; gap: 10px; }
-.lobby-name { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
-.lobby-name input { font-size: 17px; padding: 9px 12px; }
 .notice { background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 14.5px; }
 .notice.error { background: #4a1a14; border-color: #d0483a; }
 .tables { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -28,16 +26,16 @@
 .who.here { color: var(--ink); }
 .who.here::before { background: #3f9a3f; box-shadow: 0 0 5px #5fd05f; }
 .table-join { grid-column: 2; grid-row: 2 / span 2; display: grid; gap: 6px; justify-items: end; }
-.table-join input { width: 130px; text-transform: uppercase; letter-spacing: 0.14em; text-align: center; }
+.table-join input { text-transform: uppercase; letter-spacing: 0.14em; text-align: center; }
 .warn { color: #9a2f1c; max-width: 190px; text-align: right; }
 .lobby-foot { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 14px; }
 .by-code { display: flex; gap: 6px; }
-.by-code input { width: 130px; text-transform: uppercase; letter-spacing: 0.14em; }
-.open-table { width: 100%; display: grid; gap: 12px; }
+.by-code input { text-transform: uppercase; letter-spacing: 0.14em; }
+.open-table { width: 100%; display: grid; }
 .open-table label, .open-table .field { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; }
-.pick button.on, .session-lang button.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
-label.check { display: flex; grid-template-columns: none; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text); cursor: pointer; }
+.pick button.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+label.check { display: flex; grid-template-columns: none; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text); }
 label.check input { width: auto; margin-top: 3px; accent-color: var(--gold); box-shadow: none; }
 label.check small { display: block; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -45,8 +43,6 @@ button.danger, button.link.danger { color: #e08a7c; }
 button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #ff9f8f; }
 
 /* ---------- the table before the adventure ---------- */
-.table-room { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
-.table-room > :only-child { grid-column: 1 / -1; }
 .seats { display: grid; gap: 10px; align-content: start; background: rgba(0, 0, 0, 0.22); border: 1px solid #37332e; border-radius: 8px; padding: 12px; }
 .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .players li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0, 0, 0, 0.25); border: 1px solid #37332e; border-radius: 6px; }
@@ -104,7 +100,6 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
 .badge { display: inline-block; min-width: 18px; margin-left: 5px; padding: 0 5px; border-radius: 9px; background: var(--ember); color: #24160a; font-size: 11.5px; font-weight: 700; line-height: 18px; text-align: center; animation: pulse 1.2s 3; }
 
 @media (max-width: 760px) {
-  .table-room { grid-template-columns: minmax(0, 1fr); }
   .table-card { grid-template-columns: 1fr; }
   .table-join { grid-column: 1; grid-row: auto; justify-items: stretch; }
   .presence { display: none; }
@@ -112,27 +107,10 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
 .players li.away .dot { background: #8d7c66; box-shadow: none; }
 
 /* ---------- the world a table starts in ---------- */
-.world-setup { display: grid; gap: 12px; background: rgba(0, 0, 0, 0.22); border: 1px solid #37332e; border-radius: 8px; padding: 12px; }
-.world-setup h2 { margin: 0; }
-.world-setup .field { display: grid; gap: 6px; font-size: 14px; }
-.world-setup .field > span:first-child { font-weight: 600; }
-.world-setup .pick button:disabled { opacity: 0.55; cursor: default; }
-.world-setup .pick button.on:disabled { opacity: 1; }
-.world-setup textarea { width: 100%; resize: vertical; font: inherit; }
 .seed-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .seed-row input { width: 15ch; flex: 0 1 auto; letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* DM style: the same look as the world setup, plus the rules slider. */
-.style-setup { display: grid; gap: 12px; }
-.style-setup.bare { gap: 12px; }
-.style-setup .field { display: grid; gap: 6px; font-size: 14px; }
-.style-setup .field > span:first-child { font-weight: 600; }
-.style-setup .pick button:disabled { opacity: 0.55; cursor: default; }
-.style-setup .pick button.on:disabled { opacity: 1; }
-.rules-slider { display: flex; align-items: center; gap: 10px; }
-.rules-slider small { color: var(--muted); white-space: nowrap; }
-.rules-slider input[type='range'] { flex: 1; min-width: 120px; padding: 0; accent-color: #d9a851; background: none; border: none; box-shadow: none; }
-.rules-slider input[type='range']:disabled { opacity: 0.7; }
 
 /* Renaming and deleting a table, from the list of tables. */
 .table-manage { grid-column: 1; font-size: 13.5px; }

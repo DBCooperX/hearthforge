@@ -12,7 +12,6 @@ import '@fontsource/alegreya-sans/latin-700.css';
 import '@fontsource/cinzel/latin-600.css';
 import '@fontsource/cinzel/latin-700.css';
 import './styles.css';
-import './theme.css';
 import './creator.css';
 import './table.css';
 import './ui.css';
