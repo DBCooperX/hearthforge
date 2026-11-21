@@ -153,11 +153,21 @@ describe('the shelf and a table that plays a book', () => {
     expect(g.s.memory.npcs[1].locationId).toBe(g.world.locations.find((l) => l.name === 'The Lantern and Oar')!.id);
     expect(g.s.memory.quests[0].title).toBe('Silence the Sunken Bell');
     expect(g.s.setting?.campaign).toMatchObject({ id, title: 'The Sunken Bell', focus: null });
+    // Nothing of our own invention: no rolled factions, no random fights in camp.
+    expect(g.s.factions).toEqual([]);
+    g.world.placeId = null;
+    g.world.party = g.world.locations.find((l) => l.name === 'Drowned Chapel')!;
+    g.world.minutes += 24 * 60;
+    (g as any).rng = () => 0;
+    g.longRest();
+    expect(g.s.phase).toBe('explore');
+    expect(g.s.log.some((l) => /camp is attacked/i.test(l.text))).toBe(false);
 
     let about = describeTable(g);
     expect(about).toMatch(/CAMPAIGN BOOK: this table plays the published adventure "The Sunken Bell"/);
     expect(about).toMatch(/s4 Chapter 3: The Drowned Chapel \(p\. 4\): The chapel/);
     expect(about).toMatch(/No section is open yet/);
+    expect(about).toMatch(/Stick to the book\. Do not invent quests, side quests/);
     const read = campaignTool(g, { section: 's2', search: '' }) as { text: string; next: string };
     expect(read.text).toMatch(/Lantern and Oar/);
     expect(read.next).toMatch(/^s3 /);
@@ -178,7 +188,7 @@ describe('the shelf and a table that plays a book', () => {
     expect(de.s.memory.npcs[0].role).toBe('Bürgermeisterin');
   });
 
-  it('gives the campaign tool only to tables that play a book', async () => {
+  it('gives every table the same tools, and only a book table something to read', async () => {
     const { id } = await shelfWithBell();
     const requests: any[] = [];
     const dm = new ClaudeDM({ models: { background: 'b', standard: 's', key: 'k', forced: null }, effort: 'low', apiKey: 'test' });
@@ -198,12 +208,16 @@ describe('the shelf and a table that plays a book', () => {
     };
     const plain = play(false);
     await dm.respond(plain, [{ player: 'Host', text: 'We look around' }], async () => {});
-    expect(requests[0].tools.map((t: any) => t.name)).not.toContain('campaign');
+    const shared = JSON.stringify(requests[0].tools) + requests[0].system[0].text;
+    expect(requests[1].messages[2].content[0]).toMatchObject({ is_error: true, content: 'This table plays no campaign book.' });
+    expect(text(requests[0].messages[0].content)).not.toMatch(/CAMPAIGN BOOK/);
     requests.length = 0;
     const book = play(true);
     await dm.respond(book, [{ player: 'Host', text: 'We row out' }], async () => {});
     const names = requests[0].tools.map((t: any) => t.name);
     expect(names).toContain('campaign');
+    // The same cached prefix as any other table.
+    expect(JSON.stringify(requests[0].tools) + requests[0].system[0].text).toBe(shared);
     expect(names.at(-1)).toBe('scene');
     expect(text(requests[0].messages[0].content)).toMatch(/CAMPAIGN BOOK/);
     expect(requests[1].messages[2].content[0].content).toMatch(/giant frogs/);

@@ -952,7 +952,8 @@ export class Game {
     s.world = world;
     s.memory = memory;
     s.setting = setting;
-    s.factions = makeFactions(setting.seed, this.lang, setting.region === 'classic');
+    // A campaign book brings its own powers and people; the rolled guild, temple and watch would be inventions of ours.
+    s.factions = setting.campaign ? [] : makeFactions(setting.seed, this.lang, setting.region === 'classic');
     s.achievements = [];
     s.stats = emptyStats();
     s.gold = s.characters.reduce((sum, c) => sum + 5 + (BACKGROUNDS[c.backgroundId]?.gold ?? 10), 0);
@@ -1138,7 +1139,8 @@ export class Game {
     const found = reveal(w, next, code === 'h' || code === 'm' ? 2 : 1).filter((l) => !l.parentId);
     const here = w.locations.find((l) => !l.parentId && sameHex(l, next));
     if (sameHex(next, t.to) || (here && found.includes(here))) return this.endTravel('arrived');
-    if (!here && this.rng() < encounterChance(code, w.minutes)) {
+    // A campaign book has its own wandering monsters, which the Dungeon Master runs from the book.
+    if (!here && !s.setting?.campaign && this.rng() < encounterChance(code, w.minutes)) {
       const journey = this.journeyText(t);
       s.travel = null;
       this.log('system', this.t`After ${journey}, the party is set upon. ${formatTime(w.minutes, this.lang)}.`);
@@ -4822,7 +4824,7 @@ export class Game {
     this.needExplore();
     const w = this.world;
     if (w.minutes - this.s.lastLongRest < 16 * 60) throw new GameError(this.t`The party is not tired enough for another long rest yet`);
-    if (!this.isSafe() && this.rng() < 0.3) {
+    if (!this.isSafe() && !this.s.setting?.campaign && this.rng() < 0.3) {
       this.advanceTime(4 * 60);
       this.log('system', this.t`The camp is attacked in the night!`);
       const code = trueTerrain(w, w.party);

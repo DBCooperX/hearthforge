@@ -1,5 +1,6 @@
 // The Innkeeper's side of the server: everything under /api/admin. Only a request that carries
 // a live session may do anything beyond asking whether the panel exists and signing in.
+import { campaignShelf } from '../campaign/registry';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
@@ -173,7 +174,9 @@ export class AdminApi {
         case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
         case '/https': return ctx.updater.https();
-        case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title ?? id);
+        case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title
+          // Reading a campaign book when it arrives is booked under the book, not a table.
+          ?? (id.startsWith('campaign:') ? `📖 ${campaignShelf()?.info(id.slice(9))?.title ?? id.slice(9)}` : id));
         case '/credits': return this.credits();
         case '/logs': return { lines: ctx.logs.since(Number(url.searchParams.get('after')) || 0) };
         case '/backups': return { backups: this.backups() };

@@ -28,7 +28,9 @@ export function campaignNote(game: Game): string[] {
     '',
     `CAMPAIGN BOOK: this table plays the published adventure "${d.title}"${d.levels ? ` (for character levels ${d.levels})` : ''}. Run it as a good Dungeon Master runs a published adventure:`,
     '- The book is your script for places, people, secrets, encounters and treasure. Follow its plot, its clues and its encounters, and use the names it uses.',
-    '- The players are free. When they wander off the page, improvise in the spirit of the book, then let its threads find them again; never force them back.',
+    "- Stick to the book. Do not invent quests, side quests, villains, factions, twists or mysteries of your own: every quest you record with update_quest is one of the book's, named as the book names it, and the clues, secrets and rumours you use come from the book. This replaces the general advice to invent varied quests and to treat the main trouble as one thread among many: here the book's plot is the main thread, and its hooks should reach the party.",
+    "- The players are free. When they do something the book does not cover, improvise only what that moment needs, in the spirit of the book, and do not spin it into a storyline of its own; then let the book's threads find them again, never by force.",
+    "- The server rolls no random fights on the road or in camp at this table. Use the book's own random or wandering encounters, when the book calls for them.",
     '- Before you run a part of the book for the first time (a new chapter, a new location, a keyed room, an important talk), read that section with the campaign tool. Do not invent what the book already says.',
     '- The book is reference for you, never text to read out: tell it in your own words, in the table language and the table style. Its boxed read-aloud text may guide your narration.',
     `- Fights: build them with start_combat from the book's monsters, using the closest catalogue creature (find_monsters) and restyling it where needed. Scale numbers to this party.${d.system ? ` The book is written for ${d.system}: convert its statistics, checks and treasure to 5e as you go.` : ''}`,
@@ -50,7 +52,7 @@ export function campaignNote(game: Game): string[] {
 }
 
 /** The tool's description and its plain-string arguments, checked here. */
-export const CAMPAIGN_TOOL_DESCRIPTION = "Read the campaign book this table plays. Give a section id from the list to read that section; it becomes the part of the book you are running, and its text stays with you on later turns until you read another. Or give search words (a name, a room key, a monster) to find which sections mention them. Only for tables that play a campaign book.";
+export const CAMPAIGN_TOOL_DESCRIPTION = "Read the campaign book this table plays, if it plays one (the table description says so). Give a section id from the list to read that section; it becomes the part of the book you are running, and its text stays with you on later turns until you read another. Or give search words (a name, a room key, a monster) to find which sections mention them.";
 
 export function campaignTool(game: Game, input: { section?: unknown; search?: unknown }): unknown {
   const c = campaignOf(game);

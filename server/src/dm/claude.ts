@@ -82,6 +82,15 @@ const SCENE_TOOL = tool(
   },
 );
 
+/**
+ * Every table gets the tool to read a campaign book, also tables without one (where it says so), so that all
+ * tables share one cached copy of the tools and system prompt per model instead of two.
+ */
+const CAMPAIGN_TOOL = looseTool('campaign', CAMPAIGN_TOOL_DESCRIPTION, {
+  section: str('Id of the section to read, for example "s4", or an empty string.'),
+  search: str('Words to look for in the book, or an empty string.'),
+});
+
 const STORY_TOOLS: Tool[] = [
   tool('skill_check', 'Ask the server to roll an ability check for a hero attempting something with an uncertain outcome. The players see the roll. Returns the result to narrate from.', {
     character_id: str('Id of the hero making the check, for example "pc1".'),
@@ -251,6 +260,7 @@ const STORY_TOOLS: Tool[] = [
     after: str('For hold: what must happen first, in plain words, for example "the party has found the ledger in the mill cellar". Empty string otherwise.'),
     not_before: str('For hold, when timing matters: the earliest moment, as "in 2 days", "tomorrow", "tonight" or "day 4". Empty string for no limit.'),
   }),
+  CAMPAIGN_TOOL,
   SCENE_TOOL,
 ];
 
@@ -266,15 +276,6 @@ interface SceneInput {
 /** The DM's tools, exported so tests can keep the strict set within the API's grammar limit. */
 export const DM_TOOLS: Tool[] = [MONSTER_TOOL, ...STORY_TOOLS];
 
-/** Only tables that play a campaign book get the tool to read it, so other tables keep their tool list and its cache. */
-const CAMPAIGN_TOOL = looseTool('campaign', CAMPAIGN_TOOL_DESCRIPTION, {
-  section: str('Id of the section to read, for example "s4", or an empty string.'),
-  search: str('Words to look for in the book, or an empty string.'),
-});
-/** The story tools for this table: the scene tool stays last. */
-function storyTools(game: Game): Tool[] {
-  return game.s.setting?.campaign ? [...STORY_TOOLS.slice(0, -1), CAMPAIGN_TOOL, STORY_TOOLS[STORY_TOOLS.length - 1]] : STORY_TOOLS;
-}
 
 export class ClaudeDM implements DungeonMaster {
   readonly mode = 'claude' as const;
@@ -546,7 +547,7 @@ export class ClaudeDM implements DungeonMaster {
     if (!beats.length) return null;
     const prompt = this.turn(game, `Narrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`);
     try {
-      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, storyTools(game), this.storyHandler(game, onUpdate));
+      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
     } catch (err) {
       this.report(err);
@@ -602,7 +603,7 @@ export class ClaudeDM implements DungeonMaster {
     this.turns.delete(game);
     const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {
-      const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : storyTools(game);
+      const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
       const out = await this.converse(game, 'reply', inCombat ? tierForReply(game) : storyTier(this.models, tierForReply(game)), prompt, tools, this.storyHandler(game, onUpdate, record ?? undefined));
       const scene = this.finish(game, out);
       if (record && scene) this.turns.set(game, { ...record, narration: scene.text });
