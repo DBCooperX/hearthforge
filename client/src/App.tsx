@@ -141,6 +141,23 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   );
   const combat = state?.phase === 'combat' ? state.combat : null;
   const [fightEnd, endFight] = useFightEnd(state);
+  // After a fight: the story column and the world panel arrive in steps, and the Dungeon Master's
+  // first scene after the battle gets an "After the battle" divider.
+  const [afterFight, setAfterFight] = useState<{ logId: number; arriving: boolean } | null>(null);
+  const fightShown = useRef<number | null>(null);
+  useEffect(() => {
+    if (fightEnd && fightShown.current !== fightEnd.outcome.seq) {
+      fightShown.current = fightEnd.outcome.seq;
+      setAfterFight({ logId: fightEnd.frozen.log[fightEnd.frozen.log.length - 1]?.id ?? 0, arriving: false });
+    }
+    if (!fightEnd && fightShown.current !== null) {
+      fightShown.current = null;
+      setAfterFight((a) => a && { ...a, arriving: true });
+      const timer = window.setTimeout(() => setAfterFight((a) => a && { ...a, arriving: false }), 1800);
+      return () => window.clearTimeout(timer);
+    }
+  }, [fightEnd?.outcome.seq, !fightEnd]);
+  useEffect(() => { if (combat) setAfterFight(null); }, [!!combat]);
   const activeId = combat?.order[combat.turnIndex]?.id ?? null;
   const turnChar = playable.find((c) => c.id === activeId) ?? null;
   const selected = state?.characters.find((c) => c.id === selectedId) ?? null;
@@ -311,7 +328,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
 
   return (
     <EntityProvider state={state}>
-      <div className={combat ? 'game fighting' : 'game'}>
+      <div className={combat ? 'game fighting' : afterFight?.arriving ? 'game after-fight' : 'game'}>
         <header className="topbar">
           <Wordmark />
           <button className="link table-name" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>{state.table.title}</button>
@@ -366,7 +383,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
                   <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
                 </>
               ) : (
-                <FightEndBanner end={fightEnd!} onContinue={endFight} />
+                <FightEndBanner end={fightEnd!} onContinue={endFight} writing={state.dmBusy} />
               )}
             </main>
             <StoryFeed state={state} conn={conn} compact />
@@ -382,7 +399,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
                     : <span className="muted">{t('The host can start a new adventure.')}</span>}
                 </div>
               )}
-              <StoryFeed state={state} conn={conn} />
+              <StoryFeed state={state} conn={conn} afterFight={afterFight?.logId} />
             </main>
             <WorldPanel {...travel} onExpand={() => setOverlay('map')} onJournal={() => setOverlay('journal')} onTrade={openTrade} />
           </>

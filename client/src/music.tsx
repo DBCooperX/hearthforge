@@ -14,6 +14,8 @@ const FADE = 2.2;
 const MANIFEST_REFRESH_MS = 30_000;
 /** Fights cut in faster than a walk into town. */
 const FADE_FIGHT = 0.9;
+/** Leaving a fight: the battle music resolves slowly into the scene's music instead of cutting. */
+const FADE_AFTER_FIGHT = 4;
 /** How loud music and ambient sound stay while the narrator reads. */
 const DUCK = 0.35;
 
@@ -187,11 +189,13 @@ export class MusicPlayer {
     const options = this.settings.muted ? [] : this.candidates(this.context);
     if (this.voice && this.voice.context === this.context && options.some((t) => t.id === this.voice!.track.id)) return;
     const fight = this.context === 'combat' || this.context === 'boss';
-    this.fadeOut(fight ? FADE_FIGHT : FADE);
+    const fromFight = !fight && !!this.voice && (this.voice.context === 'combat' || this.voice.context === 'boss');
+    const fade = fight ? FADE_FIGHT : fromFight ? FADE_AFTER_FIGHT : FADE;
+    this.fadeOut(fade);
     if (!options.length) return;
     const saved = this.resume.get(this.context);
     const resumed = !fight && saved ? options.find((t) => t.id === saved.id) : undefined;
-    this.play(resumed ?? this.pick(options), resumed ? saved!.time : 0, fight ? FADE_FIGHT : FADE);
+    this.play(resumed ?? this.pick(options), resumed ? saved!.time : 0, fade);
   }
 
   /** The ambient loop belongs to the scene. Fights keep the loop of the scene they started in. */

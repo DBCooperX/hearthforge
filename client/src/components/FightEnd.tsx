@@ -5,10 +5,12 @@ import type { FightOutcome, GameState } from '../../../shared/types';
 import { useT } from '../i18n';
 import { sfx } from '../ui/sound';
 
-/** How long the closing screen stays at least, and at most while the Dungeon Master is still writing. Both include the moment the last blow plays out before the card rises (--fight-beat in fight.css). */
-const MIN_MS = 4500;
-const MAX_MS = 12300;
-const FADE_MS = 700;
+/**
+ * How long the battle map takes to sink away after Continue (the HUD slides off, the map dims, blurs
+ * and pulls back), before the story takes the screen. Matches .stage.fight-over.leaving in fight.css.
+ * The card itself waits for Continue: the player sets the pace, as in most role-playing games.
+ */
+const LEAVE_MS = 1500;
 
 export interface FightEnd {
   /** The battle as it stood at the last blow, with the fallen marked; shown under the banner. */
@@ -27,7 +29,6 @@ export function useFightEnd(state: GameState | null): [FightEnd | null, () => vo
   // and the closing screen: it stays mounted and still plays that blow.
   const fresh = useRef<FightEnd | null>(null);
   const [end, setEnd] = useState<FightEnd | null>(null);
-  const started = useRef(0);
 
   if (state?.phase === 'combat') lastCombat.current = state;
   else if (state && lastCombat.current) {
@@ -56,7 +57,6 @@ export function useFightEnd(state: GameState | null): [FightEnd | null, () => vo
     const next = fresh.current;
     if (!next) return;
     fresh.current = null;
-    started.current = Date.now();
     setEnd(next);
     sfx(next.outcome.result === 'victory' ? 'victory' : 'defeat');
   }, [state]);
@@ -67,18 +67,9 @@ export function useFightEnd(state: GameState | null): [FightEnd | null, () => vo
     if (end && f && f.seq === end.outcome.seq && f !== end.outcome) setEnd({ ...end, outcome: f });
   }, [state?.lastFight]);
 
-  const busy = !!state?.dmBusy;
-  useEffect(() => {
-    if (!end || end.leaving) return;
-    const shown = Date.now() - started.current;
-    const wait = Math.max(MIN_MS - shown, 0) + (busy ? Math.max(0, MAX_MS - Math.max(shown, MIN_MS)) : 0);
-    const timer = window.setTimeout(() => setEnd((e) => e && { ...e, leaving: true }), wait);
-    return () => window.clearTimeout(timer);
-  }, [end?.outcome.seq, end?.leaving, busy]);
-
   useEffect(() => {
     if (!end?.leaving) return;
-    const timer = window.setTimeout(() => setEnd(null), FADE_MS);
+    const timer = window.setTimeout(() => setEnd(null), LEAVE_MS);
     return () => window.clearTimeout(timer);
   }, [end?.leaving]);
 
@@ -87,13 +78,14 @@ export function useFightEnd(state: GameState | null): [FightEnd | null, () => vo
 }
 
 /** The banner over the frozen battle map. */
-export function FightEndBanner({ end, onContinue }: { end: FightEnd; onContinue: () => void }) {
+export function FightEndBanner({ end, onContinue, writing }: { end: FightEnd; onContinue: () => void; /** The Dungeon Master is still writing what happens next. */ writing?: boolean }) {
   const t = useT();
   const f = end.outcome;
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') { e.preventDefault(); onContinue(); } };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    // Captured first, so Esc here continues and does not also open the game menu.
+    const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); onContinue(); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
   }, [onContinue]);
   const title = f.result === 'victory' ? t('Victory!') : f.result === 'defeat' ? t('Defeat') : t('Overwhelmed');
   const sub = f.result === 'victory'
@@ -113,6 +105,7 @@ export function FightEndBanner({ end, onContinue }: { end: FightEnd; onContinue:
           {f.leveled.length > 0 && <div className="up"><dt>{t('Level up')}</dt><dd>{f.leveled.join(', ')}</dd></div>}
           <div className="rounds"><dt>{t('Rounds')}</dt><dd>{f.rounds}</dd></div>
         </dl>
+        <p className={writing ? 'fight-end-next writing' : 'fight-end-next'} aria-live="polite">{writing ? t('The dust settles…') : t('The story goes on.')}</p>
         <button type="button" className="primary" onClick={onContinue} autoFocus>{t('Continue')}</button>
       </div>
     </div>

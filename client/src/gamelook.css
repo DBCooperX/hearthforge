@@ -1,0 +1,78 @@
+/* ---------- the game look: what makes the page feel like a game window rather than a web page ---------- */
+
+/* Our own pointer: an iron-and-gold arrowhead, drawn here (no third-party art). The hand stays for links and buttons. */
+:root {
+  --cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2 L3 21 L8.2 16.6 L11.6 24.4 L15 23 L11.7 15.3 L18.6 15 Z' fill='%23231d17' stroke='%23f0c877' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5.2 6.2 L5.2 16.4 L8.6 13.6' fill='none' stroke='%23ee8f3c' stroke-width='1.1' stroke-linecap='round' opacity='.9'/%3E%3C/svg%3E") 3 2, default;
+  --cursor-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 2 L3 21 L8.2 16.6 L11.6 24.4 L15 23 L11.7 15.3 L18.6 15 Z' fill='%23f0c877' stroke='%23231d17' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5.2 6.2 L5.2 16.4 L8.6 13.6' fill='none' stroke='%23fff3da' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, pointer;
+}
+html, body { cursor: var(--cursor); }
+button:not(:disabled), a, [role='button'], .map, summary, label.check, .adv-card, .choice, .menu-entry { cursor: var(--cursor-hand); }
+input[type='text'], input[type='password'], input:not([type]), textarea, .feed, .chat-feed { cursor: auto; }
+
+/* The interface is not text to select; the story, the chat, the log and every field are. */
+body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+input, textarea, .feed, .chat-feed, .inn-log, .inn-table, .bio, .scene, .journal, [contenteditable] { -webkit-user-select: text; user-select: text; }
+img { -webkit-user-drag: none; }
+
+/* Keyboard focus glows like hot metal, never the browser's blue ring. */
+:focus-visible { outline: 2px solid rgba(240, 200, 119, 0.85); outline-offset: 2px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; border-color: #f0c877 !important; box-shadow: 0 0 0 1px #f0c877, 0 0 10px rgba(238, 143, 60, 0.35); }
+
+/* Scrollbars: thin iron rails. */
+* { scrollbar-width: thin; scrollbar-color: #6b5a44 transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: linear-gradient(#7a6548, #57472f); border-radius: 6px; border: 2px solid rgba(0, 0, 0, 0.35); }
+
+/* Native drop-downs, check boxes and sliders, dressed in the game's iron and gold. */
+select {
+  -webkit-appearance: none; appearance: none; padding-right: 30px !important; color: #ead7b0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23e6b765' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right 11px center, linear-gradient(#262119, #17130f) !important;
+  border: 1px solid #5d5348; border-radius: 6px;
+}
+select option { background: #1b1713; color: #ead7b0; }
+input[type='checkbox'] {
+  -webkit-appearance: none; appearance: none; flex: none; width: 18px !important; height: 18px !important; padding: 0 !important; margin: 0; display: inline-grid; place-items: center; vertical-align: -3px;
+  border: 1px solid #8e6524; border-radius: 4px; background: linear-gradient(#211c17, #14110e); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+input[type='checkbox']::after { content: ''; width: 9px; height: 5px; border: 2px solid #1a1208; border-top: none; border-right: none; transform: rotate(-45deg) translate(1px, -1px); opacity: 0; }
+input[type='checkbox']:checked { background: linear-gradient(#f0c877, #b8862f); border-color: #f0c877; }
+input[type='checkbox']:checked::after { opacity: 1; }
+input[type='range'] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #8d6420, #e6b765); }
+input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff3da, #e6b765 45%, #8d6420); border: 1px solid #2a2019; box-shadow: 0 0 6px rgba(238, 143, 60, 0.5); }
+input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff3da, #e6b765 45%, #8d6420); border: 1px solid #2a2019; }
+
+/* Screens fade in instead of snapping: the list of tables, the table room, the game. */
+.splash, .game { animation: screen-in 0.45s ease-out both; }
+@keyframes screen-in { from { opacity: 0; } }
+
+/* ---------- the command bar: where the player says what their hero does ---------- */
+.story:not(.compact) .composer {
+  position: relative; align-items: center; gap: 8px; margin: 0 max(20px, calc((100% - 780px) / 2)) 14px; padding: 7px 8px 7px 14px;
+  background: var(--paper-grain), linear-gradient(175deg, var(--parchment) 0%, #e6d3a8 60%, var(--parchment-2) 100%);
+  border: 1px solid #8e6a35; border-radius: 4px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 245, 220, 0.35), inset 0 -10px 20px rgba(120, 80, 30, 0.12);
+}
+.story:not(.compact) .composer::before, .story:not(.compact) .composer::after {
+  content: ''; position: absolute; top: 6px; bottom: 6px; width: 5px; border-radius: 3px; background: linear-gradient(#6b4a22, #3b2812);
+}
+.story:not(.compact) .composer::before { left: -3px; }
+.story:not(.compact) .composer::after { right: -3px; }
+.composer .quill { display: none; }
+.story:not(.compact) .composer .quill { display: block; flex: none; font-size: 20px; color: #7a4f1c; transform: rotate(-12deg); }
+.story:not(.compact) .composer input {
+  flex: 1; min-width: 0; background: transparent; border: none; border-bottom: 1px dashed rgba(90, 60, 25, 0.35); border-radius: 0; padding: 8px 4px;
+  color: #2b1d0e; font-family: var(--font-story); font-size: 17px; caret-color: #7a2a12; box-shadow: none;
+}
+.story:not(.compact) .composer input::placeholder { color: rgba(70, 45, 20, 0.55); }
+.story:not(.compact) .composer input:focus-visible { box-shadow: none; border-color: transparent !important; border-bottom: 1px solid #7a4f1c !important; }
+.story:not(.compact) .composer .mic, .story:not(.compact) .composer .ooc-toggle {
+  height: 36px; border-color: rgba(90, 60, 25, 0.45); color: #5a3c17; background: rgba(255, 250, 235, 0.35);
+}
+.story:not(.compact) .composer .mic:hover, .story:not(.compact) .composer .ooc-toggle:hover { border-color: #5a3c17; color: #2b1d0e; }
+.story:not(.compact) .composer .ooc-toggle[aria-pressed='true'] { background: #3a3d45; color: #f0f1f5; border-color: #3a3d45; }
+.story:not(.compact) .composer.ooc { background: linear-gradient(175deg, #d9dbe2, #c3c6cf); border-color: #6b6f7a; }
+.story:not(.compact) .composer button.primary { height: 38px; padding: 0 18px; border-radius: 3px; box-shadow: 0 2px 6px rgba(60, 35, 10, 0.45); }
+
+/* Suggested actions: carved tablets with their number key. */
+.chip-action { display: inline-flex; align-items: center; gap: 8px; border-radius: 4px; }
+.chip-action .kbd { font-size: 11px; min-width: 18px; padding: 0 4px; }
