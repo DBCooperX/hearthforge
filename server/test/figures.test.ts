@@ -8,9 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PICTURE_CONFIG, type PictureConfig } from '../../shared/illustrations';
 import { baseLook } from '../../shared/monsterLook';
 import { Game } from '../src/game/engine';
-import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, tallFigure } from '../src/game/pictures';
+import { HERO_FIGURE_VERSION, heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, tallFigure } from '../src/game/pictures';
 import { Illustrator, cleanConfig } from '../src/illustrations';
 import { MONSTERS } from '../src/data/monsters';
+import { ITEMS } from '../../shared/content';
 import { Room } from '../src/room';
 import type { Store } from '../src/db';
 import { ScriptedDM } from '../src/dm/scripted';
@@ -57,11 +58,24 @@ describe('battle figure prompts', () => {
     const brann = game().s.characters[0];
     expect(heroFigureSubject(brann)).toBeNull();
     brann.portraitId = 'a1b2c3d4e5f6a7b8c9';
-    expect(heroFigureSubject(brann)).toBe(`h:${brann.id}|a1b2c3d4e5f6a7b8c9`);
+    expect(heroFigureSubject(brann)).toBe(`h:${brann.id}|a1b2c3d4e5f6a7b8c9|${HERO_FIGURE_VERSION}`);
     const { prompt } = heroFigurePrompt(brann);
     expect(prompt).toContain('Brann: a');
     expect(prompt).toContain('painted portrait');
     expect(prompt).toContain('full length');
+  });
+
+  it('paint heroes unarmed, naming their gear as things to leave out, and repaint figures made the old way', () => {
+    const brann = game().s.characters[0];
+    brann.portraitId = 'a1b2c3d4e5f6a7b8c9';
+    const { prompt } = heroFigurePrompt(brann);
+    expect(prompt).toContain('EMPTY');
+    expect(prompt).toContain('no shield');
+    expect(prompt).toContain('ONLY as a reference');
+    const held = [brann.equipment.mainHand, brann.equipment.offHand].filter(Boolean).map((i) => ITEMS[i!.defId].name);
+    for (const name of held) expect(prompt).toContain(name);
+    // Figures painted before this change carry no version, so they no longer match and are painted anew.
+    expect(heroFigureSubject(brann)).not.toBe(`h:${brann.id}|a1b2c3d4e5f6a7b8c9`);
   });
 
   it('share one subject among monsters of the same kind and look', () => {

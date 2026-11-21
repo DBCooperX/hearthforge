@@ -653,10 +653,21 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         const picture = body.do === 'sample' ? await illustrator.sample(pay) : body.do === 'sample_figure' ? await illustrator.sampleFigure(pay) : await illustrator.samplePortrait(pay);
         return json(200, { ...illustrator.library(), sample: picture });
       }
-      const gone = body.do === 'delete' ? illustrator.info(String(body.id)) : null;
-      const done = illustrator.action(body);
+      // "Repaint" deletes a battle figure and paints it anew at once, at every table where its hero or monster stands.
+      const repaint = body.do === 'repaint';
+      const gone = body.do === 'delete' || repaint ? illustrator.info(String(body.id)) : null;
+      if (repaint && gone?.moment !== 'figure') throw new PictureError('bad_request');
+      const done = illustrator.action(repaint ? { do: 'delete', id: body.id } : body);
       // A deleted battle figure leaves the drawn one at once; the next time it is needed it is painted anew.
-      if (gone?.moment === 'figure' && gone.subject) figureArrived(gone.subject);
+      if (gone?.moment === 'figure' && gone.subject) {
+        figureArrived(gone.subject);
+        if (repaint) {
+          for (const r of rooms.values()) {
+            const s = r.game.s;
+            if (s.phase === 'combat' && (s.characters.some((c) => heroFigureSubject(c) === gone.subject) || s.monsters.some((m) => m.alive && monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === gone.subject))) paintFigures(r);
+          }
+        }
+      }
       // A deleted portrait leaves its hero with the drawn bust until the look changes.
       if (body.do === 'delete') {
         for (const r of rooms.values()) {
