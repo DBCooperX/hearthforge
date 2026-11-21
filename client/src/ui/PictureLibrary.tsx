@@ -161,7 +161,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
             {lib.recent.map((p) => (
               <li key={p.id}>
                 <button type="button" className="picture-thumb" onClick={() => setOpen(p)} title={p.caption}><img src={p.url} alt={p.caption} loading="lazy" /></button>
-                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : t(PICTURE_MOMENT_LABELS[p.moment])}</span>
+                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
                 <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
                 <button type="button" className="link danger" onClick={() => { void ask(t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
               </li>

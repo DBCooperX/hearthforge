@@ -2,13 +2,19 @@
 // shading, then the lightest tones). It all happens in the browser on a canvas; the picture file is the same one the
 // server already serves, so it costs nothing and needs no extra asset.
 
-export interface Stroke { pts: [number, number][]; width: number; start: number; dur: number; layer: 0 | 1 | 2 }
+export interface Stroke { pts: [number, number][]; width: number; start: number; dur: number; layer: number }
 export type Rng = () => number;
 
 /** Total time of the animation in milliseconds. */
-export const REVEAL_MS = 4200;
-/** When each pass starts and ends, in milliseconds. They overlap, so the shading begins while the outlines still finish. */
-export const PASSES: [number, number][] = [[0, 1700], [1000, 2900], [1900, 3300]];
+export const REVEAL_MS = 6600;
+/** Share of the picture (darkest first) that each tone layer ends at. The last layer is everything. */
+export const BAND_SHARES = [0.08, 0.22, 0.42, 0.68];
+/** When each layer is drawn, in milliseconds: the dark marks first, the light tones last. They overlap a little. */
+export const PASSES: [number, number][] = [[1500, 2700], [2300, 3500], [3100, 4300], [3900, 5100], [4700, 5900]];
+/** The outlines that trace the picture's real edges, drawn before the tones. */
+export const OUTLINE_PASS: [number, number] = [0, 2300];
+/** Hatching direction (radians) of each tone layer, alternating so the shading cross-hatches. */
+const HATCH = [-0.7, 0.55, -0.35, 0.9];
 
 /** How dark each pixel is (0 light … 1 dark). */
 export function darkness(rgba: Uint8ClampedArray): Float32Array {
@@ -27,56 +33,152 @@ export function darkestShare(d: Float32Array, share: number): number {
   return 0;
 }
 
-/** Points where a pass has something to draw (every `step` pixels), so strokes go where the picture has marks. */
+/** A box blur (two passes), so noise and paper grain do not count as edges. */
+export function blur(src: Float32Array, w: number, h: number, r: number): Float32Array {
+  let a = src;
+  for (let pass = 0; pass < 2; pass++) {
+    const tmp = new Float32Array(a.length), out = new Float32Array(a.length);
+    for (let y = 0; y < h; y++) {
+      let sum = 0;
+      for (let x = -r; x <= r; x++) sum += a[y * w + Math.min(w - 1, Math.max(0, x))];
+      for (let x = 0; x < w; x++) {
+        tmp[y * w + x] = sum / (2 * r + 1);
+        sum += a[y * w + Math.min(w - 1, x + r + 1)] - a[y * w + Math.max(0, x - r)];
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let y = -r; y <= r; y++) sum += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+      for (let y = 0; y < h; y++) {
+        out[y * w + x] = sum / (2 * r + 1);
+        sum += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
+      }
+    }
+    a = out;
+  }
+  return a;
+}
+
+export interface Gradient { gx: Float32Array; gy: Float32Array; mag: Float32Array }
+/** Sobel gradient of the (blurred) darkness: it points across an edge, so the edge itself runs at right angles to it. */
+export function gradient(d: Float32Array, w: number, h: number): Gradient {
+  const gx = new Float32Array(d.length), gy = new Float32Array(d.length), mag = new Float32Array(d.length);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const a = d[i - w - 1], b = d[i - w], c = d[i - w + 1], e = d[i - 1], f = d[i + 1], g = d[i + w - 1], hh = d[i + w], k = d[i + w + 1];
+      const sx = (c + 2 * f + k) - (a + 2 * e + g), sy = (g + 2 * hh + k) - (a + 2 * b + c);
+      gx[i] = sx; gy[i] = sy; mag[i] = Math.hypot(sx, sy);
+    }
+  }
+  return { gx, gy, mag };
+}
+
+/**
+ * Follows the picture's real edges: from strong edge points it walks along the edge (at right angles to the gradient) in
+ * both directions until the edge fades, turns sharply or has been walked before. The result is a set of polylines.
+ */
+export function traceEdges(gr: Gradient, w: number, h: number, rng: Rng, maxStrokes = 1100): [number, number][][] {
+  const { gx, gy, mag } = gr;
+  const strong = percentile(mag, 0.88);
+  if (strong <= 1e-4) return [];
+  const step = 3.5 * Math.max(1, Math.max(w, h) / 1000), maxLen = 240 * Math.max(1, Math.max(w, h) / 1000);
+  const cell = Math.max(3, Math.round(step));
+  const cw = Math.ceil(w / cell), visited = new Uint8Array(cw * Math.ceil(h / cell));
+  const at = (x: number, y: number) => (Math.round(y) * w + Math.round(x));
+  const inside = (x: number, y: number) => x >= 2 && y >= 2 && x < w - 2 && y < h - 2;
+  const mark = (x: number, y: number) => { visited[Math.floor(y / cell) * cw + Math.floor(x / cell)] = 1; };
+  const seen = (x: number, y: number) => visited[Math.floor(y / cell) * cw + Math.floor(x / cell)] === 1;
+  const seeds: [number, number][] = [];
+  for (let y = 3; y < h - 3; y += cell) for (let x = 3; x < w - 3; x += cell) if (mag[y * w + x] >= strong) seeds.push([x, y]);
+  for (let i = seeds.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [seeds[i], seeds[j]] = [seeds[j], seeds[i]]; }
+  const walk = (x: number, y: number, dir: number): [number, number][] => {
+    const pts: [number, number][] = [];
+    let px = x, py = y;
+    const k0 = at(px, py);
+    let tx = -gy[k0] / (mag[k0] || 1), ty = gx[k0] / (mag[k0] || 1);
+    tx *= dir; ty *= dir;
+    for (let len = 0; len < maxLen; len += step) {
+      px += tx * step; py += ty * step;
+      if (!inside(px, py)) break;
+      const k = at(px, py), m = mag[k];
+      if (m < strong * 0.55 || seen(px, py)) break;
+      let nx = -gy[k] / m, ny = gx[k] / m;
+      if (nx * tx + ny * ty < 0) { nx = -nx; ny = -ny; }
+      if (nx * tx + ny * ty < 0.5) break;
+      tx = nx; ty = ny;
+      pts.push([px, py]);
+      mark(px, py);
+    }
+    return pts;
+  };
+  const out: [number, number][][] = [];
+  for (const [sx, sy] of seeds) {
+    if (out.length >= maxStrokes) break;
+    if (seen(sx, sy)) continue;
+    mark(sx, sy);
+    const back = walk(sx, sy, -1).reverse(), fwd = walk(sx, sy, 1);
+    const line: [number, number][] = [...back, [sx, sy], ...fwd];
+    if (line.length >= 4) out.push(line);
+  }
+  return out;
+}
+
+/** The value below which `p` (0..1) of the numbers lie, from a histogram, so it is fast on a million pixels. */
+export function percentile(v: Float32Array, p: number): number {
+  let max = 0;
+  for (const x of v) if (x > max) max = x;
+  if (max <= 0) return 0;
+  const bins = new Uint32Array(512);
+  for (const x of v) bins[Math.min(511, Math.floor((x / max) * 511))]++;
+  let n = 0;
+  const want = v.length * p;
+  for (let b = 0; b < 512; b++) { n += bins[b]; if (n >= want) return ((b + 1) / 512) * max; }
+  return max;
+}
+
+/** Points where a layer has something to draw (every `step` pixels), so strokes go where the picture has marks. */
 export function candidates(d: Float32Array, w: number, h: number, lo: number, hi: number, step = 6): [number, number][] {
   const out: [number, number][] = [];
   for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) { const v = d[y * w + x]; if (v >= lo && v < hi) out.push([x, y]); }
   return out;
 }
 
-const wobble = (rng: Rng, a: number, len: number, from: [number, number], n: number, bend: number): [number, number][] => {
-  const pts: [number, number][] = [from];
-  let ang = a;
-  for (let i = 1; i <= n; i++) {
-    ang += (rng() - 0.5) * bend;
-    const p = pts[i - 1];
-    pts.push([p[0] + Math.cos(ang) * len / n, p[1] + Math.sin(ang) * len / n]);
-  }
-  return pts;
-};
-
 /** Every stroke of the picture, planned up front: where, how wide, when it starts and how long it takes. */
-export function planStrokes(w: number, h: number, outline: [number, number][], shade: [number, number][], rng: Rng): Stroke[] {
+export function planStrokes(w: number, h: number, edges: [number, number][][], tones: [number, number][][], rng: Rng): Stroke[] {
   const scale = Math.max(w, h) / 960;
   const strokes: Stroke[] = [];
-  const pick = (c: [number, number][]): [number, number] => c[Math.floor(rng() * c.length)];
-  const spread = (layer: 0 | 1, count: number, cands: [number, number][], widthRange: [number, number], lenRange: [number, number], bend: number, flow: number | null) => {
-    if (!cands.length) return;
-    const [t0, t1] = PASSES[layer];
-    const span = t1 - t0;
-    for (let i = 0; i < count; i++) {
-      const [x, y] = pick(cands);
-      const len = (lenRange[0] + rng() * (lenRange[1] - lenRange[0])) * scale;
-      const ang = flow === null ? rng() * Math.PI * 2 : flow + (rng() - 0.5) * 0.5;
-      // The pass sweeps from left to right, with some scatter, like a hand moving across the page.
-      const start = t0 + (0.65 * (x / w) + 0.35 * rng()) * span * 0.85;
+  // 1. Outlines: the real edges, drawn in a sweep from left to right with some scatter, each at a hand's pace.
+  const [o0, o1] = OUTLINE_PASS;
+  for (const line of edges) {
+    let len = 0;
+    for (let i = 1; i < line.length; i++) len += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+    const cx = line[Math.floor(line.length / 2)][0];
+    strokes.push({ pts: line, width: (5 + rng() * 4) * scale, start: o0 + (0.7 * (cx / w) + 0.3 * rng()) * (o1 - o0) * 0.85, dur: 90 + len * 1.6, layer: 0 });
+  }
+  // 2. Tones from the darkest to the lightest: short hatching strokes over where that tone lies, sweeping across the page.
+  const widths = [11, 15, 20, 26];
+  tones.forEach((cells, k) => {
+    const [t0, t1] = PASSES[k];
+    const ang0 = HATCH[k % HATCH.length], len = (60 + k * 14) * scale, wd = widths[k % widths.length] * scale;
+    for (const [x, y] of cells) {
+      const a = ang0 + (rng() - 0.5) * 0.3, dx = Math.cos(a) * len / 2, dy = Math.sin(a) * len / 2;
+      const bend = (rng() - 0.5) * 8 * scale;
       strokes.push({
-        pts: wobble(rng, ang, len, [x, y], 6, bend), width: (widthRange[0] + rng() * (widthRange[1] - widthRange[0])) * scale,
-        start, dur: 110 + rng() * 180, layer,
+        pts: [[x - dx, y - dy], [x + bend, y + bend * 0.5], [x + dx, y + dy]], width: wd,
+        start: t0 + (0.6 * ((x + y) / (w + h)) + 0.4 * rng()) * (t1 - t0) * 0.85, dur: 120 + rng() * 160, layer: k,
       });
     }
-  };
-  spread(0, 300, outline, [6, 12], [36, 90], 0.9, null);
-  spread(1, 460, shade.length ? shade : outline, [18, 34], [70, 150], 0.35, -0.6);
-  // The broad final pass: wide, slightly wavy strokes back and forth over the whole page.
-  const rows = 16;
-  const [t0, t1] = PASSES[2];
+  });
+  // 3. The broad final pass: wide, slightly wavy strokes back and forth over the whole page, for the lightest tones.
+  const rows = 16, last = tones.length;
+  const [f0, f1] = PASSES[last];
   for (let r = 0; r < rows; r++) {
     const y = (r + 0.5) * (h / rows);
     const ltr = r % 2 === 0;
     const pts: [number, number][] = [];
     for (let i = 0; i <= 8; i++) { const x = -50 * scale + (w + 100 * scale) * (ltr ? i / 8 : 1 - i / 8); pts.push([x, y + (rng() - 0.5) * 16 * scale]); }
-    strokes.push({ pts, width: (h / rows) * 1.9, start: t0 + (r / rows) * (t1 - t0) * 0.8, dur: 600 + rng() * 200, layer: 2 });
+    strokes.push({ pts, width: (h / rows) * 1.9, start: f0 + (r / rows) * (f1 - f0) * 0.8, dur: 600 + rng() * 200, layer: last });
   }
   return strokes;
 }
@@ -140,11 +242,13 @@ export class CharcoalReveal {
     const a = this.art.getContext('2d', { willReadFrequently: true })!;
     a.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
     const px = a.getImageData(0, 0, w, h);
-    const d = darkness(px.data);
-    const t1 = darkestShare(d, 0.1), t2 = darkestShare(d, 0.38);
-    const soft = 0.08;
-    // Pass 1 keeps only the darkest marks, pass 2 the mid tones as well, pass 3 everything.
-    for (const t of [t1, t2]) {
+    const raw = darkness(px.data);
+    // Edges and tones are read from a slightly blurred copy, so grain and paper texture do not count.
+    const d = blur(raw, w, h, Math.max(1, Math.round(Math.max(w, h) / 500)));
+    const th = BAND_SHARES.map((sh) => darkestShare(d, sh));
+    const soft = 0.07;
+    // Layer k holds every mark at least as dark as its threshold; the last layer is the whole picture.
+    for (const t of th) {
       const l = canvas(w, h);
       const lg = l.getContext('2d')!;
       const out = lg.createImageData(w, h);
@@ -158,7 +262,10 @@ export class CharcoalReveal {
     this.layers.push(this.art);
     this.masks = this.layers.map(() => canvas(w, h));
     this.tmp = canvas(w, h);
-    this.strokes = planStrokes(w, h, candidates(d, w, h, t1, 2), candidates(d, w, h, t2, t1), rng);
+    const edges = traceEdges(gradient(d, w, h), w, h, rng);
+    // Hatching cells: layer 0 fills the dark marks the outlines passed over, each later layer its own band of tone.
+    const tones = th.map((t, k) => candidates(d, w, h, t, k === 0 ? 2 : th[k - 1], Math.max(5, Math.round((7 + k * 3) * Math.max(w, h) / 960))));
+    this.strokes = planStrokes(w, h, edges, tones, rng);
     this.drawn = this.strokes.map(() => 0);
     this.render();
   }

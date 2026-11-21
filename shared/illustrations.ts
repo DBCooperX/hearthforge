@@ -57,7 +57,7 @@ export const PICTURE_MODELS: Record<PictureProvider, PictureModel[]> = {
 };
 
 /** The moments the Dungeon Master may mark for a picture. */
-export const PICTURE_MOMENTS = ['boss', 'victory', 'reveal', 'opening', 'arrival', 'farewell'] as const;
+export const PICTURE_MOMENTS = ['boss', 'victory', 'reveal', 'opening', 'place', 'farewell'] as const;
 export type PictureMoment = (typeof PICTURE_MOMENTS)[number];
 
 export const PICTURE_MOMENT_LABELS: Record<PictureMoment, string> = {
@@ -65,7 +65,7 @@ export const PICTURE_MOMENT_LABELS: Record<PictureMoment, string> = {
   victory: 'A hard fight is won',
   reveal: 'A big secret comes out',
   opening: 'The opening scene of an adventure',
-  arrival: 'The party first sees a grand place',
+  place: 'The party arrives at a new place for the first time',
   farewell: 'A death, a parting or the end of a quest',
 };
 
@@ -127,7 +127,7 @@ export const DEFAULT_PICTURE_CONFIG: PictureConfig = {
   customStyle: '',
   portraits: true,
   portraitsPerDay: 3,
-  moments: { boss: true, victory: true, reveal: true, opening: false, arrival: false, farewell: false },
+  moments: { boss: true, victory: true, reveal: true, opening: false, place: true, farewell: false },
   perTableDay: 4,
   gapMinutes: 20,
   monthUsd: 10,
