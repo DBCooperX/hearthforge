@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { SETTINGS, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo, type HttpsRequest } from '../../../shared/admin';
+import { SETTINGS, type AdminCampaign, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo, type HttpsRequest } from '../../../shared/admin';
 import type { InternalState } from '../game/engine';
 import type { Room } from '../room';
 import type { Auth } from './auth';
@@ -177,6 +177,7 @@ export class AdminApi {
         case '/overview': return this.overview();
         case '/tables': return this.tables();
         case '/bin': return { tables: ctx.bin.list() };
+        case '/campaign': return this.campaign(url.searchParams.get('id') ?? '');
         case '/players': return { connections: ctx.connections(), bans: ctx.auth.bans };
         case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
@@ -435,6 +436,38 @@ export class AdminApi {
     });
     tables.sort((a, b) => Number(b.players.some((p) => p.connected)) - Number(a.players.some((p) => p.connected)) || (a.savedAt < b.savedAt ? 1 : -1));
     return { tables };
+  }
+
+  /** The story of one table: what the Dungeon Master set up and what the party has found so far. */
+  private campaign(id: string): AdminCampaign {
+    const room = this.ctx.rooms.get(id);
+    if (!room) throw new Refused(404, 'not_found');
+    const s = room.game.s;
+    const m = s.memory;
+    const dayOf = (minutes: number) => Math.floor(minutes / 1440) + 1;
+    const places = s.world?.locations ?? [];
+    const placeName = (pid: string | null) => places.find((l) => l.id === pid)?.name ?? '';
+    return {
+      id: room.name,
+      title: s.table.title,
+      language: room.game.lang,
+      phase: s.phase,
+      day: s.world ? dayOf(s.world.minutes) : 0,
+      region: s.setting?.name ?? '',
+      premise: s.setting?.premise ?? '',
+      premiseId: s.setting?.premiseId ?? '',
+      custom: s.setting?.custom ?? '',
+      chronicle: m.chronicle ?? '',
+      quests: m.quests.map((q) => ({ id: q.id, title: q.title, status: q.status, summary: q.summary, notes: q.notes ?? [], rewardXp: q.rewardXp ?? 0, rewardGold: q.rewardGold ?? 0 })),
+      mysteries: (m.mysteries ?? []).map((x) => ({ id: x.id, question: x.question, solved: x.solved, clues: x.clues.map((c) => ({ day: c.day, text: c.text, source: c.source, place: c.place })) })),
+      secrets: (m.secrets ?? []).map((x) => ({ id: x.id, text: x.text, after: x.after, revealedDay: x.revealed === null ? null : dayOf(x.revealed) })),
+      npcs: m.npcs.map((n) => ({ id: n.id, name: n.name, role: n.role, disposition: n.disposition, met: n.met, place: placeName(n.locationId), notes: n.notes ?? [] })),
+      places: places.map((l) => ({ id: l.id, name: l.name, kind: l.kind, discovered: l.discovered, visited: l.visited, origin: l.origin, cleared: l.stages?.length ? (l.cleared ?? 0) : null, total: l.stages?.length ?? null })),
+      factions: (s.factions ?? []).map((f) => ({ id: f.id, name: f.name, standing: f.standing })),
+      timeline: (m.timeline ?? []).map((e) => ({ id: e.id, day: Math.floor(e.at / 1440) + 1, what: e.what, where: e.where, knownBy: e.knownBy, by: e.by, planned: !!e.planned })),
+      journal: m.journal.map((j) => ({ day: j.day, text: j.text })),
+      rumours: (m.rumours ?? []).map((r) => ({ text: r.text, day: r.day, heardDay: r.heard, from: placeName(r.fromId), aboutParty: r.aboutParty })),
+    };
   }
 
   // ------------------------------------------------------------------ restart

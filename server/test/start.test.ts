@@ -4,7 +4,7 @@ import { TERRAIN, findRoute, hexDistance, neighbors } from '../../shared/hex';
 import { ITEMS } from '../../shared/content';
 import { CLASSIC_START, PREMISES, hashSeed, newSeed, normalizeSeed, type StartOptions } from '../../shared/start';
 import { MONSTERS } from '../src/data/monsters';
-import { MINOR_SITES, PREMISE_TEXT, SANCTUARIES, THEMES, THREATS, TOWNS, VILLAGES } from '../src/data/regions';
+import { ERRANDS, MINOR_SITES, PREMISE_TEXT, SANCTUARIES, THEMES, THREATS, TOWNS, TWISTS, VILLAGES } from '../src/data/regions';
 import { describeBeats, describeWorld, DM_SYSTEM_PROMPT } from '../src/dm/context';
 import { scriptedScene } from '../src/dm/scripted';
 import { Game, GameError } from '../src/game/engine';
@@ -62,7 +62,7 @@ describe('seeds', () => {
     }
     expect(names.size).toBeGreaterThan(30);
     expect(towns.size).toBeGreaterThan(30);
-    expect(quests.size).toBe(THREATS.length);
+    expect(quests.size).toBeGreaterThan(THREATS.length * 2);
   });
 });
 
@@ -90,7 +90,8 @@ describe('random regions', () => {
       for (const t of texts) { expect(t, `R${i}`).not.toMatch(/[{}]|undefined/); expect(t.trim().length, `R${i}`).toBeGreaterThan(2); }
       expect(memory.npcs.map((n) => n.locationId).sort()).toEqual(['home', 'sanctuary', 'tavern', 'village']);
       expect(new Set(memory.npcs.map((n) => n.name)).size).toBe(4);
-      expect(memory.quests[0].summary).toContain(memory.npcs.find((n) => n.id === 'authority')!.name);
+      // Each quest names the person who asks for it.
+      for (const q of memory.quests) expect(memory.npcs.some((n) => q.summary.includes(n.name)), `${q.title} on R${i}`).toBe(true);
     }
   });
 
@@ -112,6 +113,69 @@ describe('random regions', () => {
     expect(text).not.toMatch(/\b(the|of|and|with)\b/);
     expect(setting.name).toMatch(/^(das|die|der) /);
     expect(setting.premise).toContain(world.locations[0].name); // the DM's notes use the names the players see
+  });
+});
+
+describe('quests', () => {
+  const head = (title: string) => title.split('{')[0];
+  const worlds = Array.from({ length: 160 }, (_, i) => ({ en: generateWorld(random(`Q${i}`), 'en'), de: generateWorld(random(`Q${i}`), 'de') }));
+
+  it('opens with a main quest and a side quest, and every hook, side quest and twist turns up', () => {
+    const main = new Set<string>(), side = new Set<string>(), twists = new Set<string>();
+    for (const { en } of worlds) {
+      expect(en.memory.quests.map((q) => q.id)).toEqual(['main', 'side']);
+      main.add(en.memory.quests[0].title);
+      side.add(en.memory.quests[1].title);
+      for (const t of TWISTS) if (en.setting.plot!.includes(t.split(/\{\w+\}/).sort((a, b) => b.length - a.length)[0])) twists.add(t);
+    }
+    const seen = (titles: Set<string>, title: string) => [...titles].some((t) => t.startsWith(head(title)));
+    for (const h of THREATS.flatMap((t) => t.hooks)) expect(seen(main, h.title.en), h.title.en).toBe(true);
+    for (const q of [...MINOR_SITES.map((m) => m.quest), ...ERRANDS]) expect(seen(side, q.title.en), q.title.en).toBe(true);
+    expect(twists.size).toBe(TWISTS.length);
+  });
+
+  it('rolls the same quests in German as in English, in finished German sentences', () => {
+    for (const { en, de } of worlds) {
+      expect(de.memory.quests.map((q) => [q.id, q.rewardXp])).toEqual(en.memory.quests.map((q) => [q.id, q.rewardXp]));
+      expect(de.setting.plot).toBeDefined();
+      for (const q of de.memory.quests) {
+        expect(`${q.title} ${q.summary}`).not.toMatch(/[{}]|undefined|\b(the|of|and|with|at|from|near)\b/);
+        expect(q.summary).not.toMatch(/  |\s[.,]/);
+      }
+    }
+  });
+
+  it('puts the places a quest leads to on the map, and lets the side dungeon end its quest', () => {
+    for (const { en } of worlds) {
+      const { world, memory, setting } = en;
+      const loc = (id: string) => world.locations.find((l) => l.id === id)!;
+      expect(loc('lair').questId).toBe('main');
+      expect(loc('lair').discovered).toBe(true);
+      const sideHere = loc('minor').questId === 'side';
+      if (sideHere) expect(loc('minor').discovered).toBe(true);
+      for (const q of memory.quests) {
+        const who = memory.npcs.find((n) => q.summary.includes(n.name))!;
+        if (who.id === 'villager') expect(loc('village').discovered, q.title).toBe(true);
+        if (who.id === 'keeper') expect(loc('sanctuary').discovered, q.title).toBe(true);
+      }
+      // The Dungeon Master is told what each quest really asks, and the twist.
+      expect(setting.plot).toContain(`Main quest (quest "${memory.quests[0].title}"`);
+      expect(setting.plot).toContain(`Side quest (quest "${memory.quests[1].title}"`);
+      expect(setting.plot).toContain('Hidden twist');
+      expect(setting.plot).not.toMatch(/[{}]/);
+    }
+  });
+
+  it('tells only the Dungeon Master the plot', () => {
+    const g = table({ region: 'random', premise: 'arrival', seed: 'PLOT-1234' });
+    g.start();
+    const plot = g.s.setting!.plot!;
+    expect(describeWorld(g)).toContain(`Plot, for you only: ${plot}`);
+    expect(JSON.stringify(g.publicState({ busy: false, mode: 'scripted', model: null }))).not.toContain('Hidden twist');
+    // The classic region and old saves have no plot line.
+    const classic = table({ ...CLASSIC_START, seed: 'X' });
+    classic.start();
+    expect(describeWorld(classic)).not.toContain('Plot, for you only');
   });
 });
 

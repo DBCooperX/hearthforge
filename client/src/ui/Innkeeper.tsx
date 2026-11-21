@@ -14,6 +14,7 @@ import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
 import { DeletedTables } from './Bin';
+import { Campaign } from './Campaign';
 import type { BinItem } from '../../../shared/accounts';
 import { Icon, type IconName } from './icons';
 import { inn, innDownload, InnError } from './innkeeperApi';
@@ -181,12 +182,14 @@ function Tables({ fail, say }: PaneProps) {
   const t = useT();
   const { lang } = useLang();
   const [data, set] = usePoll<{ tables: AdminTable[] }>('/tables', 5000, fail);
+  const [story, setStory] = useState<string | null>(null);
   const act = async (body: Record<string, unknown>) => {
     try { set(await inn<{ tables: AdminTable[] }>('/tables', { body })); sfx('tab'); } catch (err) { fail(err); }
   };
   const loadBin = useCallback(() => inn<{ tables: BinItem[] }>('/bin').then((r) => r.tables), []);
   const actBin = useCallback((what: 'restore' | 'purge', id: number) => inn<{ tables: BinItem[] }>('/bin', { body: { do: what, id } }).then((r) => r.tables), []);
   if (!data) return <p className="muted">{t('Loading…')}</p>;
+  if (story) return <Campaign id={story} onBack={() => setStory(null)} onError={fail} />;
   const bin = <DeletedTables everyone always load={loadBin} act={actBin} onError={fail} watch={data.tables.length} />;
   if (!data.tables.length) return <><p className="muted">{t('No table has been opened yet.')}</p>{bin}</>;
   return (
@@ -210,6 +213,7 @@ function Tables({ fail, say }: PaneProps) {
             ) : (
               <button type="button" title={t('Give the host a toolbox to start fights, level up, jump to places and more. The story can go back to how it was afterwards.')} onClick={() => { void ask(t('Switch test mode on at "{title}"? The table is saved as it is now, and the host gets a toolbox. When you end test mode you can keep the changes or go back.', { title: tb.title })).then((yes) => { if (yes) void act({ table: tb.id, do: 'test_on' }); }); }}>{t('Test mode')}</button>
             )}
+            <button type="button" title={t('See the story of this table: quests, clues, people, places and what the Dungeon Master holds back.')} onClick={() => setStory(tb.id)}>{t('Story')}</button>
             <button type="button" onClick={() => innDownload(`/table?id=${encodeURIComponent(tb.id)}`).catch(fail)}>{t('Download')}</button>
             <button type="button" className="link danger" onClick={() => { void ask(t('Delete the table "{title}"? Its story and heroes wait in the list of deleted tables, so you can bring it back.', { title: tb.title }), { danger: true }).then((yes) => { if (yes) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }); }}>{t('Delete')}</button>
           </header>

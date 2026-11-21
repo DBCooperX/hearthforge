@@ -189,7 +189,7 @@ describe('innkeeper API', () => {
   it('tells anyone whether the panel exists, and nothing else without a session', async () => {
     const r = await rig();
     expect((await call(r, '/status', undefined, '')).body).toEqual({ enabled: true, firstPassword: true });
-    for (const path of ['/overview', '/tables', '/players', '/env', '/usage', '/logs', '/backups', '/backup']) {
+    for (const path of ['/overview', '/tables', '/campaign?id=friday', '/players', '/env', '/usage', '/logs', '/backups', '/backup']) {
       expect((await call(r, path, undefined, '')).status, path).toBe(401);
       expect((await call(r, path, undefined, 'f'.repeat(64))).status, path).toBe(401);
     }
@@ -215,6 +215,21 @@ describe('innkeeper API', () => {
     const o = (await call(r, '/overview')).body as AdminOverview;
     expect(o).toMatchObject({ version: '0.1.0', tables: 1, playing: 1, connections: 1, restartPending: false, restartAt: null, dm: { mode: 'scripted' } });
     expect(o.updater.connected).toBe(false);
+  });
+
+  it('shows the story of a table, with what the party has not found marked', async () => {
+    const r = await rig();
+    const { room } = seatTable(r, 'friday', ['Chris']);
+    const m = room.game.s.memory;
+    m.chronicle = 'The party reached the mill.';
+    m.secrets = [{ id: 's1', text: 'The miller is the culprit.', after: 'the ledger is found', notBefore: null, revealed: null }, { id: 's2', text: 'The well is cursed.', after: 'x', notBefore: null, revealed: 1500 }];
+    m.mysteries = [{ id: 'm1', question: 'Who poisoned the well?', solved: false, clues: [{ day: 1, text: 'A wet coin', source: 'Griet', place: 'the mill' }] }];
+    m.timeline = [{ id: 'e1', at: -2880, what: 'The miller hid the ledger', where: 'the mill', knownBy: '', by: 'story' }];
+    const c = (await call(r, '/campaign?id=friday')).body;
+    expect(c).toMatchObject({ id: 'friday', chronicle: 'The party reached the mill.', mysteries: [{ question: 'Who poisoned the well?', clues: [{ text: 'A wet coin' }] }] });
+    expect(c.secrets).toEqual([{ id: 's1', text: 'The miller is the culprit.', after: 'the ledger is found', revealedDay: null }, { id: 's2', text: 'The well is cursed.', after: 'x', revealedDay: 2 }]);
+    expect(c.timeline[0]).toMatchObject({ day: -1, by: 'story' });
+    expect((await call(r, '/campaign?id=nope')).status).toBe(404);
   });
 
   it('lists tables and lets the innkeeper pause, clear and delete them', async () => {
