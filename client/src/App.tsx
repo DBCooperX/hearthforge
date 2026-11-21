@@ -9,6 +9,7 @@ import { ChatPanel, lastForeignChat } from './components/Chat';
 import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
 import { FightEndBanner, SurpriseBanner, useFightEnd } from './components/FightEnd';
+import { TurnCallout } from './components/TurnCallout';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
@@ -379,6 +380,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
               {combat ? (
                 <>
                   <SurpriseBanner state={state} />
+                  <TurnCallout state={state} actor={actor} />
                   <ReactionPrompt state={state} playable={playable} conn={conn} />
                   <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
                 </>
