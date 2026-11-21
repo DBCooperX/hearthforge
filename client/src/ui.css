@@ -717,3 +717,15 @@
 /* Sub-sections of the Innkeeper with their own tabs (Sound and voice, Art, Server). */
 .inn-sub { padding: 12px 20px 22px; }
 .inn-sub.fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* The campaign overview in the Innkeeper */
+.camp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: sticky; top: 0; z-index: 1; padding: 6px 0; background: var(--panel, #231f1b); }
+.camp-head b { font-family: var(--font-head); font-size: 17px; color: #f0dcae; }
+.camp-spoil { display: flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; }
+.camp-block { border: 1px solid rgba(86, 79, 72, 0.6); border-radius: 8px; padding: 10px 12px; background: rgba(0, 0, 0, 0.14); }
+.camp-block h3 { margin: 0 0 6px; }
+.camp-text { white-space: pre-wrap; margin: 0; }
+.camp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 14px; }
+.camp-list.tight { gap: 5px; }
+.camp-list p { margin: 2px 0 0; }
+.camp-notes { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; }

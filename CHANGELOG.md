@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Interface
+- **The Innkeeper can read a table's whole story.** Each table in the Innkeeper's Tables list has a Story button: quests with their notes, the story's open questions with the clues found, held-back secrets, people met, places found (with dungeon progress), the timeline, factions, rumours, the journal and the running summary. What the party does not know yet (the Dungeon Master's premise, held-back secrets, undiscovered places and people, planned events) stays hidden until "Show what the party does not know yet" is ticked, so the Innkeeper can read along without spoilers. English and German.
 - **Esc opens a game menu**, as in any PC role-playing game: Resume, The adventure (story style, challenge, content, story language), Party and invites, Settings, Your account, Innkeeper, Art credits, Fullscreen, Leave the table and, for the host, New adventure. The same menu (with a menu button top right) works on the list of tables and in the table room. Windows opened from it lead back to it on Esc. The gear button and the language switch in the top bar are gone; the language is under Settings → Game.
 - **Settings has three tabs:** Game, Audio and Keyboard. The table, account and server entries moved into the menu.
 - **The game's own confirm dialogs** replace the browser's pop-up boxes everywhere (removing a player, deleting a table, restarting the server, a new adventure…). Enter confirms, Esc cancels.

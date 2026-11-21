@@ -191,6 +191,37 @@ export interface AdminTable {
   usage: UsageTotals;
 }
 
+/**
+ * One table's whole story as the Innkeeper sees it: what the Dungeon Master has set up, and which
+ * of it the party has already found. Things the party does not know yet are marked `known: false`.
+ */
+export interface AdminCampaign {
+  id: string;
+  title: string;
+  language: Lang;
+  phase: string;
+  day: number;
+  /** The region and what the Dungeon Master knows about it, in English. Empty before the adventure starts. */
+  region: string;
+  premise: string;
+  /** Which premise was used: an id such as "arrival", or "custom" with the host's own text in `custom`. */
+  premiseId: string;
+  custom: string;
+  /** The story so far: the running summary of older scenes. */
+  chronicle: string;
+  quests: { id: string; title: string; status: 'active' | 'completed' | 'failed'; summary: string; notes: string[]; rewardXp: number; rewardGold: number }[];
+  mysteries: { id: string; question: string; solved: boolean; clues: { day: number; text: string; source: string; place: string }[] }[];
+  /** Truths held back until something has happened. `revealed` is the world day when they came out. */
+  secrets: { id: string; text: string; after: string; revealedDay: number | null }[];
+  npcs: { id: string; name: string; role: string; disposition: string; met: boolean; place: string; notes: string[] }[];
+  places: { id: string; name: string; kind: string; discovered: boolean; visited: boolean; origin: 'seed' | 'dm'; cleared: number | null; total: number | null }[];
+  factions: { id: string; name: string; standing: number }[];
+  /** Newest last. `day` is the world day (1 is the first). Negative days came before the adventure. */
+  timeline: { id: string; day: number; what: string; where: string; knownBy: string; by: 'story' | 'party'; planned: boolean }[];
+  journal: { day: number; text: string }[];
+  rumours: { text: string; day: number; heardDay: number | null; from: string; aboutParty: boolean }[];
+}
+
 export interface AdminConnection {
   id: number;
   ip: string;
