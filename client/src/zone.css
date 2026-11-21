@@ -39,6 +39,9 @@
 .zspot:not(.visited):not(.here) .zspot-icon { font-size: 4px; font-weight: 700; fill: #6b5536; }
 .zspot-name { font-size: 3.3px; font-weight: 700; text-anchor: middle; fill: #2d2216; paint-order: stroke; stroke: #efe3c4; stroke-width: 0.9; stroke-linejoin: round; }
 .zspot:not(.visited) .zspot-name { font-style: italic; font-weight: 400; fill: #5b4a35; }
+.zspot-name.hidden { display: none; }
+.zspot:hover .zspot-name.hidden { display: inline; }
+.zspot-name { pointer-events: none; }
 .zspot-badge { font-size: 3.2px; fill: #2f6b2f; font-weight: 700; }
 .zspot-flag { font-size: 4px; }
 .zspot-ring { fill: none; stroke: #b3261e; stroke-width: 0.7; animation: zspot-pulse 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }

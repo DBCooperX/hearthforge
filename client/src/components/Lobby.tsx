@@ -334,7 +334,7 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
               </div>
               {shown && (
                 <PremadeDetail premade={shown} taken={state.characters.some((c) => c.premadeId === shown.id)} full={full} onClose={() => setPicked(null)}
-                  onAdd={() => addPremade(shown.id)} onCustomize={() => setCreating({ ...shown.spec, premadeId: undefined, backstory: loc(shown.bio, lang) })} />
+                  onAdd={() => addPremade(shown.id)} onCustomize={() => setCreating({ ...shown.spec, premadeId: undefined, appearance: loc(shown.appearance, lang), backstory: loc(shown.bio, lang) })} />
               )}
             </section>
             <section className="adventure">

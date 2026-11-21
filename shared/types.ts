@@ -67,6 +67,8 @@ export interface ItemDef {
     ranged?: { normal: number; long: number };
     finesse?: boolean;
     twoHanded?: boolean;
+    /** A light weapon: one in each hand lets a hero fight with two weapons. */
+    light?: boolean;
     /** Magic bonus to attack and damage rolls. */
     bonus?: number;
     /** More damage on every hit (Flame Tongue). */
@@ -449,6 +451,8 @@ export interface CombatState {
   bonusUsed: boolean;
   /** Further weapon attacks still allowed by the Attack action taken this turn (Extra Attack). */
   attacksLeft: number;
+  /** A weapon attack was made with the Attack action this turn; the off-hand attack follows from it. */
+  attacked?: boolean;
   /** Savage Attacker has been used this turn. */
   savageUsed?: boolean;
   /** Combatants who have spent their reaction since their own last turn began. */
@@ -833,8 +837,11 @@ export type ClientMessage =
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
-  | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc }
-  | { t: 'give'; characterId: string; from: InvLoc; toCharacterId: string }
+  /** `qty` moves only part of a stack. */
+  | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc; qty?: number }
+  /** `qty` hands over only part of a stack. */
+  | { t: 'give'; characterId: string; from: InvLoc; toCharacterId: string; qty?: number }
+  | { t: 'offhand'; characterId: string; targetId: string }
   | { t: 'buy'; characterId: string; shopId: string; defId: string; qty: number }
   | { t: 'sell'; characterId: string; shopId: string; from: InvLoc; qty: number }
   | { t: 'haggle'; characterId: string; shopId: string }

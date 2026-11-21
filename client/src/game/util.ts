@@ -112,3 +112,11 @@ export function conditionHelp(condition: string, t: (text: string) => string): s
   const help = (CONDITION_HELP as Record<string, string>)[condition] ?? BUFF_HELP[condition];
   return help ? t(help) : undefined;
 }
+
+/** A name short enough for a small label: the first name when the whole is long, cut with a dot-dot-dot if even that is. */
+export function shortName(name: string, max = 12): string {
+  const n = name.trim();
+  if (n.length <= max) return n;
+  const first = n.split(/\s+/)[0];
+  return first.length <= max ? first : `${first.slice(0, max - 1)}…`;
+}

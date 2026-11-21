@@ -69,6 +69,49 @@ function pathD(a: ZoneSpot, b: ZoneSpot, seed: number): string {
   return `M${a.x} ${a.y}Q${(mx - (dy / len) * bend).toFixed(1)} ${(my + (dx / len) * bend).toFixed(1)} ${b.x} ${b.y}`;
 }
 
+interface LabelSpot { text: string; x: number; y: number; anchor: 'middle' | 'start' | 'end'; hidden: boolean }
+const LABEL_MAX = 17;
+const CHAR_W = 1.8; // width of one letter at the label size, in map units
+const shorten = (name: string, max = LABEL_MAX) => (name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name);
+
+/**
+ * Where each spot's name goes. Long names are cut short; a name is tried below its spot, above it, then
+ * to the right and left, and it takes the first place where it touches no other name or spot. A name that
+ * fits nowhere is hidden until the pointer is over its spot (the full name is always in the hint bar).
+ * The party's own spot and explored places choose first, so unexplored ones give way.
+ */
+function placeLabels(spots: ZoneSpot[], at: string | null): Map<string, LabelSpot> {
+  type Box = { x0: number; x1: number; y0: number; y1: number };
+  const hit = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const taken: Box[] = spots.map((s) => ({ x0: s.x - 5, x1: s.x + 5, y0: s.y - 5, y1: s.y + 5 }));
+  const order = [...spots].sort((a, b) => Number(b.id === at) - Number(a.id === at) || Number(b.visited) - Number(a.visited));
+  const out = new Map<string, LabelSpot>();
+  for (const sp of order) {
+    let placed: { text: string; c: { x: number; y: number; anchor: LabelSpot['anchor']; box: Box } } | null = null;
+    // The whole name first, then a shorter one, before a name gives way altogether.
+    for (const max of [LABEL_MAX, 11]) {
+      const text = shorten(sp.name, max), w = text.length * CHAR_W;
+      const tries: { x: number; y: number; anchor: LabelSpot['anchor']; box: Box }[] = [
+        { x: sp.x, y: sp.y + 8.4, anchor: 'middle', box: { x0: sp.x - w / 2, x1: sp.x + w / 2, y0: sp.y + 5.4, y1: sp.y + 9.2 } },
+        { x: sp.x, y: sp.y - 6.2, anchor: 'middle', box: { x0: sp.x - w / 2, x1: sp.x + w / 2, y0: sp.y - 9.8, y1: sp.y - 6 } },
+        { x: sp.x + 6.4, y: sp.y + 1.2, anchor: 'start', box: { x0: sp.x + 6.4, x1: sp.x + 6.4 + w, y0: sp.y - 2, y1: sp.y + 2.4 } },
+        { x: sp.x - 6.4, y: sp.y + 1.2, anchor: 'end', box: { x0: sp.x - 6.4 - w, x1: sp.x - 6.4, y0: sp.y - 2, y1: sp.y + 2.4 } },
+        { x: sp.x + 4.4, y: sp.y + 8.4, anchor: 'start', box: { x0: sp.x + 4.4, x1: sp.x + 4.4 + w, y0: sp.y + 5.4, y1: sp.y + 9.2 } },
+        { x: sp.x - 4.4, y: sp.y + 8.4, anchor: 'end', box: { x0: sp.x - 4.4 - w, x1: sp.x - 4.4, y0: sp.y + 5.4, y1: sp.y + 9.2 } },
+        { x: sp.x + 4.4, y: sp.y - 6.2, anchor: 'start', box: { x0: sp.x + 4.4, x1: sp.x + 4.4 + w, y0: sp.y - 9.8, y1: sp.y - 6 } },
+        { x: sp.x - 4.4, y: sp.y - 6.2, anchor: 'end', box: { x0: sp.x - 4.4 - w, x1: sp.x - 4.4, y0: sp.y - 9.8, y1: sp.y - 6 } },
+      ];
+      const free = tries.find((c) => !taken.some((o) => hit(c.box, o)));
+      if (free) { placed = { text, c: free }; break; }
+    }
+    if (placed) taken.push(placed.c.box);
+    const text = placed?.text ?? shorten(sp.name);
+    const c = placed?.c;
+    out.set(sp.id, { text, x: (c?.x ?? sp.x) - sp.x, y: (c?.y ?? sp.y + 8.4) - sp.y, anchor: c?.anchor ?? 'middle', hidden: !placed && sp.id !== at });
+  }
+  return out;
+}
+
 /**
  * The map of the place the party is in: the spots the story has named, the paths between them,
  * where the party stands, and fog over what nobody has explored yet.
@@ -77,6 +120,7 @@ export function ZoneMap({ zone, onGo, placeId, big }: Props) {
   const t = useT();
   const [hover, setHover] = useState<ZoneSpot | null>(null);
   const decor = useMemo(() => decorFor(zone), [zone.seed, zone.style.ground, zone.style.terrain, zone.spots.length]);
+  const labels = useMemo(() => placeLabels(zone.spots, zone.at), [zone.spots, zone.at]);
   const paths = zonePaths(zone);
   const under = zone.style.ground === 'underground';
   const visited = zone.spots.filter((s) => s.visited).length;
@@ -128,7 +172,7 @@ export function ZoneMap({ zone, onGo, placeId, big }: Props) {
               <circle r={4.2} className="zspot-disc" />
               <text y={1.55} className="zspot-icon">{s.visited || here ? SPOT_ICON[s.kind] : '?'}</text>
               {s.cleared && <text x={3.4} y={-2.6} className="zspot-badge">✓</text>}
-              <text y={8.4} className="zspot-name">{s.name}</text>
+              {(() => { const l = labels.get(s.id); return l && <text x={l.x} y={l.y} style={{ textAnchor: l.anchor }} className={`zspot-name${l.hidden ? ' hidden' : ''}`}>{l.text}</text>; })()}
               {here && <text x={4.2} y={-3.4} className="zspot-flag">🚩</text>}
             </g>
           );

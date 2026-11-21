@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Playtest fixes
+- **Tidy names.** Place names on the zone map no longer overlap: long names are cut short, each name takes a free spot around its place, and one that still finds no room shows when you point at the place. Long hero names are cut with a dot-dot-dot in the party panel and on the battle nameplate, which shows the first name.
+- **Table talk is a window.** Drag it by its title bar; it stays where you left it (double-click the title bar to put it back).
+- **Two-weapon fighting.** A light melee weapon (dagger, shortsword, scimitar, handaxe) can go in the off hand next to another light weapon. After attacking, the new Off-hand attack button spends the bonus action on a second strike without the ability modifier.
+- **Splitting stacks.** Click a stack, then Split… to take some out into a new stack or hand them to another hero; hold Shift while dropping a stack on a hero tab to hand over part of it.
+- **Ready-made heroes in German.** Appearance and backstory of the ready-made heroes show in the table's language.
+- Battle map buttons (view and zoom) no longer pass clicks on to the map underneath.
+
 ### Combat
 - **End turn reminder.** On your turn in a fight, after 20 seconds with nothing happening, the End turn button starts to glow and a reminder appears; a few seconds after your action and movement are used up it comes sooner. The turn never ends by itself. Set the delay (off, 20, 45 or 90 seconds) in Settings → Game.
 - **"Your turn" in the middle of the map.** When one of your heroes comes up in a fight, a large "Your turn" banner (German "Du bist dran") appears in the middle of the battle map for a moment, with a short bell; if you play several heroes it names the one whose turn it is. The end turn reminder ("Still there?") appears there too, large and in the middle.

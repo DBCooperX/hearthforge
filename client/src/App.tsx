@@ -5,7 +5,7 @@ import type { Character } from '../../shared/types';
 import { CharacterSheet } from './components/CharacterSheet';
 import { ActionBar, ReactionPrompt, TurnBar, type Targeting } from './components/Hud';
 import { Inventory } from './components/Inventory';
-import { ChatPanel, lastForeignChat } from './components/Chat';
+import { ChatWindow, lastForeignChat } from './components/Chat';
 import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
 import { FightEndBanner, SurpriseBanner, useFightEnd } from './components/FightEnd';
@@ -187,7 +187,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
 
   const targetAbility = targeting?.kind === 'ability' ? ABILITIES[targeting.abilityId] : null;
   const wantsAlly = targeting?.kind === 'item' || targetAbility?.target === 'ally';
-  const wantsEnemy = targeting?.kind === 'attack' || targetAbility?.target === 'enemy';
+  const wantsEnemy = targeting?.kind === 'attack' || targeting?.kind === 'offhand' || targetAbility?.target === 'enemy';
 
   const pickCharacter = useCallback(
     (c: Character) => {
@@ -216,7 +216,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         if (!actor) return conn.toast(t('Wait for your turn'));
         if (targeting?.kind === 'ability' && targeting.item && targetAbility?.target === 'enemy') send({ t: 'use_item', characterId: actor.id, uid: targeting.item, targetId: monster.id });
         else if (targeting?.kind === 'ability' && targetAbility?.target === 'enemy') send({ t: 'ability', characterId: actor.id, abilityId: targeting.abilityId, targetId: monster.id, ...(targeting.level ? { level: targeting.level } : {}) });
-        else send({ t: 'attack', characterId: actor.id, targetId: monster.id });
+        else send({ t: targeting?.kind === 'offhand' ? 'offhand' : 'attack', characterId: actor.id, targetId: monster.id });
         setTargeting(null);
         return;
       }
@@ -315,7 +315,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} onMenu={onMenu} />{frontLayer}{inn}<Toasts conn={conn} /></>;
 
   let hint: string;
-  if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
+  if (targeting?.kind === 'offhand') hint = t('Off-hand attack: click an enemy next to you. Esc to cancel.');
+  else if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
   else if (risky && state) hint = t('Leaving the reach of {names} invites an opportunity attack. Click the same square again to go anyway, or Disengage first.', { names: risky.ids.map((id) => state.monsters.find((m) => m.id === id)?.name ?? '?').join(', ') });
@@ -440,7 +441,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
             </div>
           </Window>
         )}
-        {chatOpen && state.table.maxPlayers > 1 && <div className="chat-float panel"><ChatPanel state={state} conn={conn} onClose={() => setChatOpen(false)} /></div>}
+        {chatOpen && state.table.maxPlayers > 1 && <ChatWindow state={state} conn={conn} onClose={() => setChatOpen(false)} />}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
         {inn}
         <Toasts conn={conn} />

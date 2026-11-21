@@ -107,6 +107,9 @@ export const isMonkWeapon = (def: ItemDef) => !!def.weapon && !def.weapon.ranged
 
 type Attacker = { classId: ClassId; abilities: Abilities; feats: string[]; profBonus: number; level?: number; options?: string[]; form?: string | null };
 
+/** Whether a weapon can be wielded in the off hand: a light melee weapon. */
+export const isLightWeapon = (def: ItemDef | null | undefined) => !!def?.weapon?.light && !def.weapon.ranged && !def.weapon.twoHanded;
+
 /** The weapon attack a hero makes with what they hold: bonus to hit and damage. `dice` are the damage dice alone. */
 export function weaponAttack(c: Attacker, def: ItemDef | null | undefined) {
   const form = c.form ? BEAST_FORMS[c.form] : undefined;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { GameState } from '../../../shared/types';
 import { useLang, useT } from '../i18n';
 import { playerId, useTypingSignal, type Connection } from '../net';
@@ -95,5 +95,49 @@ export function ChatPanel({ state, conn, onClose }: Props) {
         <button disabled={!text.trim()}>{t('Send')}</button>
       </form>
     </section>
+  );
+}
+
+const POS_KEY = 'hf.chatPos';
+type Pos = { x: number; y: number };
+const loadPos = (): Pos | null => { try { const p = JSON.parse(localStorage.getItem(POS_KEY) ?? 'null'); return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null; } catch { return null; } };
+
+/** Table talk as a floating window: drag it by the title bar; it stays where you left it. */
+export function ChatWindow(props: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<Pos | null>(loadPos);
+  const keep = (p: Pos): Pos => {
+    const w = ref.current?.offsetWidth ?? 360;
+    return { x: Math.max(0, Math.min(window.innerWidth - Math.min(w, 120), p.x)), y: Math.max(0, Math.min(window.innerHeight - 40, p.y)) };
+  };
+  // Keep it reachable when the browser window gets smaller.
+  useEffect(() => {
+    const onResize = () => setPos((p) => (p ? keep(p) : p));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const down = (e: RPointerEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    if (!el.closest('.chat > header') || el.closest('button')) return;
+    const box = ref.current?.getBoundingClientRect();
+    if (!box) return;
+    const dx = e.clientX - box.left, dy = e.clientY - box.top;
+    let last: Pos = { x: box.left, y: box.top };
+    const move = (ev: PointerEvent) => { last = keep({ x: ev.clientX - dx, y: ev.clientY - dy }); setPos(last); };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try { localStorage.setItem(POS_KEY, JSON.stringify(last)); } catch { /* private mode: the position just is not remembered */ }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+  };
+  return (
+    <div ref={ref} className="chat-float panel" style={pos ? { left: pos.x, top: pos.y, right: 'auto' } : undefined}>
+      <div className="chat-drag" onPointerDown={down} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('.chat > header')) return; try { localStorage.removeItem(POS_KEY); } catch { /* ignore */ } setPos(null); }}>
+        <ChatPanel {...props} />
+      </div>
+    </div>
   );
 }

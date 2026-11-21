@@ -189,7 +189,7 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
         ))}
       </div>
       {token && <div ref={anchor} className="token-anchor" style={{ left: token.left, top: token.top, width: token.size, height: token.size }} />}
-      <div className="map-controls" role="toolbar" aria-label={t('Battle view')}>
+      <div className="map-controls" role="toolbar" aria-label={t('Battle view')} onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <span className="map-mode" role="group">
           <button type="button" className={mode === 'tilt' ? 'on' : ''} aria-pressed={mode === 'tilt'} onClick={() => pickMode('tilt')} title={t('Tilted view with standing miniatures, light and spell effects')}>2.5D</button>
           <button type="button" className={mode === 'flat' ? 'on' : ''} aria-pressed={mode === 'flat'} onClick={() => pickMode('flat')} title={t('Flat view from above: lighter for older computers')}>{t('Flat')}</button>
