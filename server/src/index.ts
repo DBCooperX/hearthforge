@@ -10,6 +10,7 @@ import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
+import { readBody as readRaw } from './http';
 import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
@@ -308,18 +309,8 @@ const admin = new AdminApi({
   testKey,
 });
 
-function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
-  return new Promise((done, fail) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on('data', (c: Buffer) => {
-      size += c.length;
-      if (size > max) { fail(new ArtError('too_big')); req.resume(); } else chunks.push(c);
-    });
-    req.on('end', () => done(Buffer.concat(chunks)));
-    req.on('error', fail);
-  });
-}
+
+const readBody = (req: IncomingMessage, max: number) => readRaw(req, max, () => new ArtError('too_big'));
 
 /** Tell every open browser that the owner changed art, music or effects, so nobody has to reload by hand. */
 function announceAssets(change: Omit<Extract<ServerMessage, { t: 'assets' }>, 't'>) {

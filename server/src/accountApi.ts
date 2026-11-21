@@ -1,16 +1,15 @@
 // Everything under /api/account: signing in and out, invite links, your own password and profile,
 // and taking over the seats this browser had before accounts existed.
-import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isAccountId, type LegacySeat } from '../../shared/accounts';
 import type { CreditView } from '../../shared/credits';
 import { AccountsError, type Accounts } from './accounts';
+import { hashToken, readBody as readRaw } from './http';
 import { BinError, type TableBin } from './bin';
 import type { Room } from './room';
 
 export const SESSION_HEADER = 'x-hearthforge-session';
 
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export interface AccountApiContext {
   accounts: Accounts;
@@ -23,23 +22,14 @@ export interface AccountApiContext {
   creditOf?(id: string): CreditView | null;
 }
 
-function readBody(req: IncomingMessage, max = 16 * 1024): Promise<Record<string, unknown>> {
-  return new Promise((done, fail) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on('data', (c: Buffer) => {
-      size += c.length;
-      if (size > max) { fail(new AccountsError('bad_request')); req.resume(); } else chunks.push(c);
-    });
-    req.on('end', () => {
-      try {
-        const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-        if (!body || typeof body !== 'object' || Array.isArray(body)) fail(new AccountsError('bad_request'));
-        else done(body);
-      } catch { fail(new AccountsError('bad_request')); }
-    });
-    req.on('error', fail);
-  });
+
+/** A JSON object body; anything else is a bad request. */
+async function readBody(req: IncomingMessage, max = 16 * 1024): Promise<Record<string, unknown>> {
+  const raw = await readRaw(req, max, () => new AccountsError('bad_request'));
+  let body: unknown;
+  try { body = JSON.parse(raw.toString('utf8') || '{}'); } catch { throw new AccountsError('bad_request'); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AccountsError('bad_request');
+  return body as Record<string, unknown>;
 }
 
 /** Seats at the tables that belong to a browser id from before accounts, not to an account. */

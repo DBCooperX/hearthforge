@@ -21,6 +21,7 @@ import { AccountFail, accountCall, accountSession } from '../account';
 import type { BinItem } from '../../../shared/accounts';
 import { classLabel, heroTitle } from '../game/util';
 import { ask } from '../ui/Confirm';
+import { copyText } from '../ui/clipboard';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
 export interface Me { account: AccountView; onProfile: () => void; onSignOut: () => void }
@@ -188,13 +189,6 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   );
 }
 
-function copyText(text: string, field: HTMLInputElement | null): boolean {
-  // The clipboard API needs https; on a plain-http LAN address fall back to selecting the field.
-  if (navigator.clipboard && window.isSecureContext) { void navigator.clipboard.writeText(text); return true; }
-  if (!field) return false;
-  field.select();
-  try { return document.execCommand('copy'); } catch { return false; }
-}
 
 /** How to bring friends to this table: a link, and the code if it has one. */
 export function Invite({ state, conn }: { state: GameState; conn: Connection }) {

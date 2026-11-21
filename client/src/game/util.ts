@@ -7,7 +7,7 @@ import type { MonsterView } from '../../../shared/types';
 import type { Character, GameState } from '../../../shared/types';
 
 export const key = (x: number, y: number) => `${x},${y}`;
-export const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+export { cheb } from '../../../shared/battlemap';
 
 export function tileAt(state: GameState, x: number, y: number): string {
   if (y < 0 || y >= state.map.height || x < 0 || x >= state.map.width) return '#';

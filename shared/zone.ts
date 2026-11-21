@@ -4,6 +4,7 @@
 // The server keeps the zone; the layout is procedural and stable, so a spot never jumps around.
 import type { TerrainCode } from './hex';
 import type { LocationKind } from './types';
+import { mulberry32 } from './start';
 
 export const SPOT_KINDS = [
   'square', 'house', 'tavern', 'shop', 'smithy', 'temple', 'shrine', 'mill', 'well', 'gate', 'tower', 'bridge',
@@ -118,16 +119,7 @@ export function zoneStyle(kind: LocationKind, terrain: TerrainCode, shore: boole
 }
 
 /** A small seeded random stream. */
-export function zoneRng(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export const zoneRng = mulberry32;
 
 export function hashText(s: string): number {
   let h = 2166136261;

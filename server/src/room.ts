@@ -1,5 +1,4 @@
 // A room is one table: a Game, the players sitting at it and its Dungeon Master.
-import { createHash } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
@@ -11,9 +10,9 @@ import { tagged } from '../../shared/i18n';
 import { parseOoc } from '../../shared/ooc';
 import type { PlayStats } from '../../shared/accounts';
 import type { HeroRef } from './accounts';
+import { hashToken } from './http';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 /** How long a typing notice counts without being renewed. */
 const TYPING_MS = 5000;
