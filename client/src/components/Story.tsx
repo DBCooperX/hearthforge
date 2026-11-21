@@ -309,6 +309,7 @@ function ScenePicture({ scene }: { scene: SceneMeta }) {
     try { reveal = new CharcoalReveal(cv, im); } catch { drawnPictures.add(id); setDoneFor(id); return; }
     let raf = 0, stopped = false, lastScratch = -1e9;
     const t0 = performance.now();
+    window.dispatchEvent(new CustomEvent(SFX_DOM_EVENT, { detail: 'pencil_tap' }));
     const finish = () => {
       if (stopped) return;
       stopped = true;
