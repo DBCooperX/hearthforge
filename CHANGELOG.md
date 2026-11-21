@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixes
+- **The clock matches the opening.** An adventure no longer always starts at 08:00 on day 1: a festival opens at dusk (19:00), a shipwreck at dawn (06:00), your own opening and a campaign book's start at the time of day they name ("one evening", "im Morgengrauen"), and books read from now on note the hour their first scene plays at. The Dungeon Master is told when the adventure began and, at book tables, to move the clock with the story instead of saying it is evening while the map shows morning.
+
 ### Maintenance
 - Cleanup before the mobile work: unused code, 90 unused German strings and about 460 lines of stale or overridden CSS removed (theme.css folded into styles.css, screens pixel-identical), duplicated helpers shared, and the type check now fails on unused imports and variables.
 

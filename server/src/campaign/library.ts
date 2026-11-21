@@ -17,6 +17,8 @@ export interface CampaignDigest {
   overview: string;
   /** How the book opens: where the heroes start and what draws them in. English. */
   opening: string;
+  /** The hour of day the first scene plays at, if the book says. Books read before this field have none. */
+  startHour?: number | null;
   /** The rules the book was written for, if not 5e: "B/X", "system neutral". Empty for 5e. */
   system: string;
   /** The kind of country, one of the region themes, so the map looks right. */

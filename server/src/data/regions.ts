@@ -1050,6 +1050,8 @@ export interface PremiseTpl {
   opening: string;
   /** What the players read when no AI is telling the story. */
   intro: L;
+  /** The hour of day 1 the opening plays at, when it is not the usual 08:00. */
+  hour?: number;
 }
 
 export const PREMISE_TEXT: Record<string, PremiseTpl> = {
@@ -1059,7 +1061,7 @@ export const PREMISE_TEXT: Record<string, PremiseTpl> = {
     intro: { en: 'Your road ends, for now, {regionIn}.', de: 'Eure Reise endet vorerst {regionIn}.' },
   },
   shipwreck: {
-    startIn: 'shore', theme: 'coast',
+    startIn: 'shore', theme: 'coast', hour: 6,
     opening: "The heroes were passengers or crew aboard a small trading ship (a river or lake boat if this region has no sea) that broke up on the rocks in last night's storm. They wake at dawn on the shore among the wreckage, soaked and bruised, with only the gear they carried. Nobody else from the ship is in sight. They have never been in this country: they know nothing of {town}, whose smoke they can see a few hours away, or of anyone in it. Open on the shore. Let the players say why their heroes were aboard. Something worth following has washed up with them: a survivor, a sealed chest or tracks leading inland.",
     intro: { en: 'At dawn the water gives you back. You lie on a strange shore {regionIn}, among the wreckage of your ship.', de: 'Im Morgengrauen gibt euch das Wasser wieder her. Ihr liegt an einem fremden Ufer {regionIn}, zwischen den Trümmern eures Schiffes.' },
   },
@@ -1074,7 +1076,7 @@ export const PREMISE_TEXT: Record<string, PremiseTpl> = {
     intro: { en: 'The prison wagon lies on its side, one wheel still turning. The guards are gone, the lock is broken, and for the first time in weeks nobody is telling you where to go.', de: 'Der Gefangenenwagen liegt auf der Seite, ein Rad dreht sich noch. Die Wachen sind fort, das Schloss ist aufgesprungen, und zum ersten Mal seit Wochen sagt euch niemand, wohin ihr zu gehen habt.' },
   },
   festival: {
-    startIn: 'town',
+    startIn: 'town', hour: 19,
     opening: "{town} is in the middle of its biggest festival of the year, and the heroes came for it: the square is full of stalls, music, contests and strangers. Open in the middle of the celebration at dusk and give each hero a moment of fun. Then, in the first or second scene, let something go badly wrong in front of everyone, tied to the region's main trouble: a theft, a kidnapping or an attack out of the dark. The town will look to whoever acts first.",
     intro: { en: '{town} is celebrating. Lanterns hang over the square, the music is loud, and for one evening nobody is thinking about trouble.', de: '{town} feiert. Laternen hängen über dem Platz, die Musik ist laut, und für einen Abend denkt niemand an Ärger.' },
   },

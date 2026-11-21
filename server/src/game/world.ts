@@ -8,7 +8,7 @@ import type { Siting, TerrainStyle } from '../data/regions';
 import { WORLD_HEIGHT, WORLD_WIDTH, type RegionDef, type SeedLocation, type StageDef } from '../data/world';
 import type { Lang } from '../../../shared/i18n';
 import type { Rng } from './dice';
-import { campaignRegion, classicRegion, openingFor, premiseTheme, randomRegion, resolvePremise } from './region';
+import { PREMISE_HOURS, campaignRegion, classicRegion, openingFor, premiseTheme, randomRegion, resolvePremise } from './region';
 import type { CampaignDigest } from '../campaign/library';
 
 import type { SecretState, TimelineEvent } from './timeline';
@@ -99,6 +99,8 @@ export interface SettingState {
   custom: string;
   /** The AI has reworded the rolled descriptions for this table. */
   fleshedOut?: boolean;
+  /** When the adventure began, in minutes from the start of day 1: the time of day the opening plays at. */
+  startMinutes?: number;
   /** The campaign book this table plays, with a copy of its digest so play goes on if the book leaves the shelf. */
   campaign?: CampaignState;
 }
@@ -258,6 +260,27 @@ export interface NewWorld {
   setting: SettingState;
 }
 
+/** Words for a time of day, in English and German, and the hour the clock is set to for each. Earlier words in a text win. */
+const HOUR_WORDS: [RegExp, number][] = [
+  [/\b(midnight|mitternacht)/i, 0],
+  [/\b(dawn|daybreak|sunrise|first light|morgengrauen|morgendämmerung|sonnenaufgang|tagesanbruch)/i, 6],
+  [/\b(morning|morgen(?!s?\s*grauen)|vormittag)/i, 8],
+  [/\b(noon|midday|mittag)/i, 12],
+  [/\b(afternoon|nachmittag)/i, 15],
+  [/\b(dusk|sunset|twilight|evening|abend|abenddämmerung|sonnenuntergang|dämmerung)/i, 19],
+  [/\b(night|nacht|nachts)/i, 22],
+];
+
+/** The hour a text says its scene plays at ("at dusk", "one evening"), or null when it does not say. */
+export function hourIn(text: string): number | null {
+  let best: { at: number; hour: number } | null = null;
+  for (const [re, hour] of HOUR_WORDS) {
+    const m = re.exec(text);
+    if (m && (!best || m.index < best.at)) best = { at: m.index, hour };
+  }
+  return best?.hour ?? null;
+}
+
 /**
  * Build the world a table starts in. Everything comes from `start.seed` through its own
  * streams of random numbers, so the same seed, region and premise always give the same map,
@@ -299,6 +322,9 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en', book?: { i
       intro: lang === 'de' ? `Eure Geschichte beginnt in ${region.tokens.town}.` : `Your story begins in ${region.tokens.town}.`,
     }
     : openingFor(premiseId, start.custom, region, lang);
+  // The clock starts at the time of day the opening plays at, so the story and the clock agree from the first scene.
+  const hour = book ? book.digest.startHour ?? hourIn(book.digest.opening) : PREMISE_HOURS[premiseId] ?? (premiseId === 'custom' ? hourIn(start.custom) : null);
+  const startMinutes = (hour ?? 8) * 60;
   const outside = opening.startIn === 'wild' || opening.startIn === 'shore'
     ? wildStart(home, opening.startIn === 'shore', region.locations, cells, width, height, seedStream(seed, 'opening'))
     : null;
@@ -312,7 +338,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en', book?: { i
   }));
   const world: WorldState = {
     seed: hashSeed(seed), width, height, terrain: cells.join(''), explored: '0'.repeat(width * height),
-    party: outside ?? { q: home.q, r: home.r }, minutes: 8 * 60, placeId: outside ? null : indoors, locations,
+    party: outside ?? { q: home.q, r: home.r }, minutes: startMinutes, placeId: outside ? null : indoors, locations,
   };
   reveal(world, world.party, 2);
   const memory: MemoryState = {
@@ -333,7 +359,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en', book?: { i
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';
   const setting: SettingState = {
     name: region.name, premise: region.premise.replace('{dist}', dist), ...(region.plot ? { plot: region.plot } : {}), opening: opening.opening, intro: opening.intro,
-    seed, region: start.region, premiseId, custom: premiseId === 'custom' ? start.custom.trim() : '',
+    startMinutes, seed, region: start.region, premiseId, custom: premiseId === 'custom' ? start.custom.trim() : '',
     ...(book ? { campaign: { id: book.id, title: book.digest.title, digest: book.digest, focus: null, read: [] } } : {}),
   };
   return { world, memory, setting };

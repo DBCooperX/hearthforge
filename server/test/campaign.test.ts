@@ -145,6 +145,8 @@ describe('the shelf and a table that plays a book', () => {
     expect(g.s.table.start.campaign).toEqual({ id, title: 'The Sunken Bell' });
     g.addCharacter('acct_host', 'fighter', 'Brann');
     g.start();
+    // The book's opening plays "for the third night": the clock starts at night, not at 08:00.
+    expect(g.world.minutes).toBe(22 * 60);
     const home = g.world.locations.find((l) => l.id === 'home')!;
     expect(home).toMatchObject({ name: 'Wrenmoor', kind: 'village' });
     expect(g.world.locations.find((l) => l.name === 'The Lantern and Oar')?.parentId).toBe('home');
@@ -236,3 +238,34 @@ describe('campaign texts', () => {
   });
 });
 
+
+describe('the clock at the start', () => {
+  it('reads the time of day from an opening, in English and German', async () => {
+    const { hourIn } = await import('../src/game/world');
+    expect(hourIn('The heroes arrive in Wrenmoor one evening as the bell rings.')).toBe(19);
+    expect(hourIn('At dawn the party wakes; by evening they reach the lake.')).toBe(6);
+    expect(hourIn('Ihr erreicht das Dorf in der Abenddämmerung.')).toBe(19);
+    expect(hourIn('Im Morgengrauen bricht ihr auf.')).toBe(6);
+    expect(hourIn('The party meets the mayor.')).toBeNull();
+  });
+
+  it('starts a festival at dusk and a shipwreck at dawn, and tells the Dungeon Master so', async () => {
+    const { generateWorld } = await import('../src/game/world');
+    const at = (premise: string, custom = '') => generateWorld({ region: 'random', premise, custom, seed: 'CLOCK-1' }).world.minutes;
+    expect(at('festival')).toBe(19 * 60);
+    expect(at('shipwreck')).toBe(6 * 60);
+    expect(at('arrival')).toBe(8 * 60);
+    expect(at('custom', 'We crash a wedding at midnight.')).toBe(0);
+    const book = (opening: string, startHour?: number | null) => generateWorld({ region: 'random', premise: 'surprise', custom: '', seed: 'CLOCK-1' }, 'en', { id: 'b', digest: cleanDigest({ ...DIGEST, opening, start_hour: startHour }, { title: 'B', pages: 1, sections: [] }, {}) }).world.minutes;
+    expect(book('The heroes arrive one evening.')).toBe(19 * 60);
+    expect(book('The heroes arrive one evening.', 14)).toBe(14 * 60);
+    expect(book('The heroes meet the mayor.')).toBe(8 * 60);
+    const g = new Game('clock');
+    g.upsertPlayer('host', 'Host', true);
+    g.setStart('host', { region: 'random', premise: 'festival', seed: 'CLOCK-1' });
+    g.addCharacter('host', 'fighter', 'Brann');
+    g.start();
+    expect(g.world.minutes).toBe(19 * 60);
+    expect(describeTable(g) + (await import('../src/game/timeline')).describeTimeline(g).join('\n')).toMatch(/The adventure begins now, on Day 1 at 19:00/);
+  });
+});

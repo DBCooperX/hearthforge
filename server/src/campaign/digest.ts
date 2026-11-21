@@ -80,7 +80,7 @@ Opening pages:
 ${bookText(opening)}
 
 Answer with one JSON object and nothing else, in this shape:
-{"title": "...", "levels": "1-3", "blurb": "...", "system": "", "theme": "vale", "region": "...", "overview": "...", "opening": "...",
+{"title": "...", "levels": "1-3", "blurb": "...", "system": "", "theme": "vale", "region": "...", "overview": "...", "opening": "...", "start_hour": 19,
  "town": {"name": "...", "kind": "town", "description": {"en": "...", "de": "..."}},
  "places": [{"name": "...", "kind": "cave", "in_town": false, "known": true, "description": {"en": "...", "de": "..."}}],
  "people": [{"name": "...", "gender": "female", "disposition": "friendly", "place": "...", "role": {"en": "...", "de": "..."}, "description": {"en": "...", "de": "..."}}],
@@ -93,6 +93,7 @@ Answer with one JSON object and nothing else, in this shape:
 - "region": the region's name as the book gives it, or "".
 - "overview": for the Dungeon Master only, at most 250 words in English: what is really going on, who is behind it and why, the big secrets and twists, and how the adventure can end.
 - "opening": at most 120 words in English: where the heroes are when the book starts, what draws them in, and the first scene.
+- "start_hour": the hour of the day the first scene plays at, 0 to 23 (for example 19 for an evening arrival), or null if the book does not say.
 - "town": the settlement where the adventure starts or which serves as its home base. If there is none, invent a fitting small one and say so in its description. "kind" is "town" or "village".
 - "places": up to 8 important places beside the town, in the order the party will likely meet them. "kind" one of ${KINDS.join(', ')}. "in_town": true for a tavern, shop or temple inside the home settlement. "known": true if the heroes know of it at the start. Descriptions one or two sentences, what the heroes would see or hear of it, no secrets.
 - "people": up to 8 important people the heroes can meet early, with "place" the name of the town or of one of the places above. "gender" female, male or "". "disposition" friendly, neutral, wary or hostile. Role a few words; description one or two sentences without secrets.
@@ -116,6 +117,7 @@ export function cleanDigest(raw: Record<string, unknown>, book: Book, gists: Rec
     region: line(raw.region, 60),
     overview: line(raw.overview, 2400),
     opening: line(raw.opening, 1200),
+    startHour: Number.isInteger(raw.start_hour) && (raw.start_hour as number) >= 0 && (raw.start_hour as number) <= 23 ? raw.start_hour as number : null,
     town: { name: line(town.name, 60), kind: town.kind === 'village' ? 'village' : 'town', description: both(town.description, 400) },
     places: list(raw.places).slice(0, 8).map((p: Record<string, unknown>) => ({
       name: line(p?.name, 60), kind: KINDS.includes(String(p?.kind)) ? String(p.kind) : 'landmark',

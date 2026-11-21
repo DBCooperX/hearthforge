@@ -35,6 +35,8 @@ export interface SecretState {
 
 /** Every new adventure starts at 08:00 on day 1. */
 export const ADVENTURE_START = 8 * 60;
+/** When this table's adventure began: the time of day its opening plays at, on day 1. */
+export const startOf = (g: Game) => g.s.setting?.startMinutes ?? ADVENTURE_START;
 const MAX_EVENTS = 80;
 const MAX_SECRETS = 30;
 const HOUR = 60, DAY = 1440;
@@ -190,13 +192,14 @@ export function secret(g: Game, input: { action?: string; text?: string; after?:
 export function describeTimeline(g: Game): string[] {
   const mem = g.s.memory, now = g.world.minutes;
   const lines: string[] = [];
-  lines.push(now - ADVENTURE_START < 5 ? 'The adventure begins now, on Day 1 at 08:00.' : `The adventure began ${span(now - ADVENTURE_START)} ago, on Day 1 at 08:00.`);
+  const start = startOf(g), began = formatTime(start).replace(', ', ' at ');
+  lines.push(now - start < 5 ? `The adventure begins now, on ${began}.` : `The adventure began ${span(now - start)} ago, on ${began}.`);
   const past = mem.timeline.filter((e) => e.at <= now);
   const ahead = mem.timeline.filter((e) => e.at > now);
   if (past.length || ahead.length) {
     lines.push('Timeline: when things happened. Every date here is fixed; whoever mentions an event agrees with it, and you count from it (add new ones with log_event):');
     // The oldest backstory stays; of the rest, the newest matter most.
-    const shown = [...past.filter((e) => e.by === 'story' && e.at < ADVENTURE_START).slice(0, 12), ...past.filter((e) => !(e.by === 'story' && e.at < ADVENTURE_START)).slice(-24)];
+    const shown = [...past.filter((e) => e.by === 'story' && e.at < start).slice(0, 12), ...past.filter((e) => !(e.by === 'story' && e.at < start)).slice(-24)];
     for (const e of shown) {
       const due = e.planned && now - e.at < DAY ? 'DUE (it was planned for then; let it happen now, or say why it did not)' : e.planned ? 'planned for then' : '';
       lines.push(`- ${stamp(e.at)}, ${since(e.at, now)}${due ? `, ${due}` : ''}: ${e.what}${e.where ? ` Where: ${e.where}.` : ''}${e.knownBy ? ` Known by: ${e.knownBy}.` : ''}`);
