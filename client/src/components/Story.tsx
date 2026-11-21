@@ -16,6 +16,8 @@ import { Icon } from '../ui/icons';
 import { ReadAloud } from '../narrator';
 import { MicButton } from '../dictation';
 import { useLang } from '../i18n';
+import { CharcoalReveal, REVEAL_MS } from '../ui/charcoal';
+import { SFX_DOM_EVENT } from '../../../shared/sfx';
 
 // ------------------------------------------------------------- entities
 
@@ -261,17 +263,77 @@ function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; ani
   }
 }
 
-/** The hand-drawn picture of a big moment, or a note while it is being painted. A click shows it large. */
+/** Pictures already drawn in this page, so a picture is not drawn a second time when the feed re-renders. */
+const drawnPictures = new Set<string>();
+const prefersReducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * The hand-drawn picture of a big moment, or a note while it is being painted. It is drawn stroke by stroke on aged paper
+ * when it comes into view (dark outlines, then shading, then the light tones). A click while it draws shows it at once;
+ * a click afterwards shows it large. With reduced motion the picture just appears.
+ */
 function ScenePicture({ scene }: { scene: SceneMeta }) {
   const t = useT();
   const [large, setLarge] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  if (!scene.imageId) return <div className="scene-picture painting" aria-live="polite"><span>{t('The Dungeon Master is drawing this moment…')}</span></div>;
-  const src = `/pictures/${scene.imageId}`;
+  const id = scene.imageId;
+  const [drawing, setDrawing] = useState(false);
+  const [settled, setSettled] = useState(() => !id || drawnPictures.has(id) || prefersReducedMotion());
+  const box = useRef<HTMLButtonElement>(null);
+  const img = useRef<HTMLImageElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const skip = useRef<(() => void) | null>(null);
+
+  // Wait until the picture is loaded and on screen, then draw it.
+  useEffect(() => {
+    if (!id || settled || drawing || !loaded || !box.current) return;
+    const el = box.current;
+    const go = () => setDrawing(true);
+    if (typeof IntersectionObserver === 'undefined') { go(); return; }
+    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { io.disconnect(); go(); } }, { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [id, settled, drawing, loaded]);
+
+  useEffect(() => {
+    if (!drawing || !id) return;
+    const cv = canvas.current, im = img.current, el = box.current;
+    if (!cv || !im || !el || !im.naturalWidth) { drawnPictures.add(id); setSettled(true); return; }
+    const k = Math.min(window.devicePixelRatio || 1, 1.5);
+    cv.width = Math.max(64, Math.min(1200, Math.round(el.clientWidth * k)));
+    cv.height = Math.max(64, Math.min(900, Math.round(el.clientHeight * k)));
+    let reveal: CharcoalReveal;
+    try { reveal = new CharcoalReveal(cv, im); } catch { drawnPictures.add(id); setSettled(true); return; }
+    let raf = 0, stopped = false, lastScratch = -1e9;
+    const t0 = performance.now();
+    const finish = () => {
+      if (stopped) return;
+      stopped = true;
+      cancelAnimationFrame(raf);
+      reveal.finish();
+      drawnPictures.add(id);
+      setDrawing(false);
+      setSettled(true);
+    };
+    skip.current = finish;
+    const tick = (now: number) => {
+      if (stopped) return;
+      const ms = now - t0;
+      if (ms - lastScratch > 280 && ms < REVEAL_MS - 300) { lastScratch = ms; window.dispatchEvent(new CustomEvent(SFX_DOM_EVENT, { detail: 'scratch' })); }
+      if (reveal.frame(ms)) finish(); else raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { stopped = true; cancelAnimationFrame(raf); skip.current = null; };
+  }, [drawing, id]);
+
+  if (!id) return <div className="scene-picture painting" aria-live="polite"><span>{t('The Dungeon Master is drawing this moment…')}</span></div>;
+  const src = `/pictures/${id}`;
+  const cls = ['scene-picture', loaded && settled ? 'shown' : '', drawing ? 'drawing' : ''].filter(Boolean).join(' ');
   return (
     <>
-      <button type="button" className={loaded ? 'scene-picture shown' : 'scene-picture'} onClick={() => setLarge(true)} title={t('Show larger')}>
-        <img src={src} alt={scene.title} onLoad={() => setLoaded(true)} />
+      <button ref={box} type="button" className={cls} onClick={() => { if (drawing && skip.current) skip.current(); else setLarge(true); }} title={drawing ? undefined : t('Show larger')}>
+        <img ref={img} src={src} alt={scene.title} onLoad={() => setLoaded(true)} />
+        {drawing && <canvas ref={canvas} className="charcoal-canvas" aria-hidden="true" />}
       </button>
       {large && (
         <div className="picture-lightbox" role="dialog" aria-label={scene.title} onClick={() => setLarge(false)}>
