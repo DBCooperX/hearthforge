@@ -2059,6 +2059,7 @@ export const DE: Record<string, string> = {
   'Edge scrolling in fights': 'Randscrollen im Kampf',
   'End turn reminder': 'Erinnerung ans Zugende',
   'Your turn': 'Du bist dran',
+  'Now acting': 'Am Zug',
   'Nothing left to do?': 'Nichts mehr zu tun?',
   'Still there?': 'Noch da?',
   'End your turn when you are done.': 'Beende deinen Zug, wenn du fertig bist.',
