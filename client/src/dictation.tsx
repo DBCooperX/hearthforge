@@ -38,7 +38,8 @@ export const dictationLang = (lang: Lang) => (lang === 'de' ? 'de-CH' : 'en-GB')
 /** Swiss spelling, as everywhere else in the game. */
 export const swiss = (text: string, lang: Lang) => (lang === 'de' ? text.replace(/ß/g, 'ss') : text);
 
-export type DictationError = 'denied' | 'no_speech' | 'failed' | null;
+export { dictationError, dictationLangs, type DictationError } from './dictationCodes';
+import { dictationError, dictationLangs, type DictationError } from './dictationCodes';
 
 /**
  * Speech recognition for one text box. `onText` gets the box's whole new text: what was there when listening began,
@@ -51,12 +52,15 @@ export function useDictation(lang: Lang, base: () => string, onText: (text: stri
   const keep = useRef({ base, onText });
   keep.current = { base, onText };
 
+  // How far down dictationLangs() this browser had to go. Remembered while the page is open.
+  const langStep = useRef(0);
   const stop = useCallback(() => { rec.current?.stop(); }, []);
   const start = useCallback(() => {
     const Ctor = recognitionCtor();
     if (!Ctor || rec.current) return;
     const r = new Ctor();
-    r.lang = dictationLang(lang);
+    const langs = dictationLangs(lang);
+    r.lang = langs[Math.min(langStep.current, langs.length - 1)];
     r.continuous = true;
     r.interimResults = true;
     const before = keep.current.base().trim();
@@ -71,16 +75,19 @@ export function useDictation(lang: Lang, base: () => string, onText: (text: stri
       heard = swiss(`${final}${interim}`.replace(/\s+/g, ' ').trim(), lang);
       if (heard) keep.current.onText(`${before ? `${before} ` : ''}${heard.charAt(0).toUpperCase()}${heard.slice(1)}`.slice(0, 500));
     };
+    let retry = false;
     r.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setError('denied');
-      else if (e.error === 'no-speech') setError('no_speech');
-      else if (e.error !== 'aborted') setError('failed');
+      // The real reason, for anyone who opens the browser console.
+      console.warn(`[voice input] ${e.error} (${r.lang})`);
+      if (e.error === 'language-not-supported' && langStep.current < langs.length - 1) { langStep.current++; retry = true; return; }
+      setError(dictationError(e.error));
     };
-    r.onend = () => { rec.current = null; setListening(false); };
+    r.onend = () => { rec.current = null; setListening(false); if (retry) start(); };
     rec.current = r;
     setError(null);
     try { r.start(); setListening(true); } catch { rec.current = null; setError('failed'); }
   }, [lang]);
+  useEffect(() => { langStep.current = 0; }, [lang]);
 
   useEffect(() => () => rec.current?.abort(), []);
   return { listening, error, start, stop };
@@ -116,7 +123,12 @@ export function MicButton({ lang, text, setText, disabled }: { lang: Lang; text:
   }, [blocker, start, stop]);
 
   if (blocker) return null;
-  const message = error === 'denied' ? t('The browser does not allow the microphone. Allow it in the address bar.') : error === 'no_speech' ? t('Nothing was heard. Try again a little closer to the microphone.') : error ? t('Voice input did not work this time.') : null;
+  const message = error === 'denied' ? t('The browser does not allow the microphone. Allow it in the address bar.')
+    : error === 'service' ? t('Speech recognition is switched off on this device. On a Mac, turn on Dictation under System Settings → Keyboard.')
+    : error === 'no_speech' ? t('Nothing was heard. Try again a little closer to the microphone.')
+    : error === 'no_mic' ? t('No microphone was found. Check that one is connected and chosen in your system settings.')
+    : error === 'network' ? t('The browser could not reach its speech service. Brave, Chromium and some privacy settings leave it out; Chrome, Edge or Safari work.')
+    : error ? t('Voice input did not work this time.') : null;
   return (
     <>
       <button
