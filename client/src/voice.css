@@ -54,3 +54,20 @@
 .mixer p { margin: 0; }
 .setting.setting-mix { align-items: flex-start; }
 .setting-mix .mixer { width: 300px; }
+
+/* Master volume on top, larger; each sound's own slider folds away under "Each sound". */
+.mix-row.master { grid-template-columns: 34px 1fr; row-gap: 2px; padding-bottom: 10px; border-bottom: 1px solid #3a332b; }
+.mix-row.master > button { grid-row: span 2; }
+.mix-pop { width: 340px; }
+.mix-channels .mix-row { grid-template-columns: 30px 1fr 84px; }
+.setting-mix .mixer { width: 340px; }
+.mix-row.master .mix-label { font-family: var(--font-display, inherit); letter-spacing: 0.04em; font-size: 15px; }
+.mix-row.master input[type='range']::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(90deg, #8d6420, #e6b765); border-color: #6b4a22; }
+.mix-row.master input[type='range']::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -6px; }
+.mix-more { display: flex; align-items: center; gap: 10px; width: 100%; padding: 4px 6px; background: none; border: none; box-shadow: none; color: var(--muted); font-size: 13px; text-align: left; }
+.mix-more:hover, .mix-more[aria-expanded='true'] { color: var(--gold); background: none; }
+.mix-more-icons { display: inline-flex; gap: 6px; margin-left: auto; opacity: 0.75; }
+.mix-more-icons svg { width: 14px; height: 14px; }
+.mix-caret { width: 12px; text-align: center; }
+.mix-channels { display: grid; gap: 8px; padding: 6px 0 2px 12px; border-left: 2px solid #3a332b; margin-left: 14px; }
+.mix-hint { margin: 0; }

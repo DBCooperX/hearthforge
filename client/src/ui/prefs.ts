@@ -9,6 +9,11 @@ export interface Prefs {
   sounds: boolean;
   /** 0 to 1. */
   soundVolume: number;
+  /** Master volume, 0 to 1: scales every sound of the game (music, ambient, effects, narrator, interface). */
+  master: number;
+  masterMuted: boolean;
+  /** The sound menu shows each sound's own slider, not only the master volume. */
+  mixerOpen: boolean;
   textSize: TextSize;
   invSort: InvSort;
   invFilter: InvFilter;
@@ -19,7 +24,7 @@ export interface Prefs {
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {
@@ -35,6 +40,17 @@ function apply() {
 apply();
 
 export const getPrefs = () => current;
+
+/** What every sound is multiplied by: the master volume, or 0 when it is muted. */
+export const masterLevel = (p: Prefs = current) => (p.masterMuted ? 0 : Math.min(1, Math.max(0, p.master)));
+
+/** Calls `fn` whenever the master level changes. Returns the unsubscribe. */
+export function onMasterChange(fn: () => void): () => void {
+  let last = masterLevel();
+  const check = () => { const now = masterLevel(); if (now !== last) { last = now; fn(); } };
+  listeners.add(check);
+  return () => void listeners.delete(check);
+}
 
 export function setPrefs(patch: Partial<Prefs>) {
   current = { ...current, ...patch };
