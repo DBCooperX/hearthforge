@@ -1615,6 +1615,7 @@ export const DE: Record<string, string> = {
   'The story goes on.': 'Die Geschichte geht weiter.',
   'Master volume': 'Gesamtlautstärke',
   'Each sound': 'Einzelne Klänge',
+  'Table talk chime': 'Ton bei Tischgespräch',
   'Each slider is a share of the master volume.': 'Jeder Regler ist ein Anteil der Gesamtlautstärke.',
   'Enter': 'Eingabe',
   'Let it go': 'Ziehen lassen',
