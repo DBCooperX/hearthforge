@@ -33,6 +33,10 @@ services:
       HEARTHFORGE_NARRATOR: ${HEARTHFORGE_NARRATOR:-on}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      # Story illustrations: the key of the picture service picked in the Innkeeper (or type it in there).
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      FAL_KEY: ${FAL_KEY:-}
+      REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
     volumes:
       - hearthforge-data:/data
 

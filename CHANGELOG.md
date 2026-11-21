@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Story illustrations
+- **Hand-drawn pictures of the big moments.** When a boss steps out, a hard fight is won or a big secret comes out, the Dungeon Master can have the moment painted in ink and watercolour; the picture appears above that scene for the whole table and opens large with a click. Off by default: the Innkeeper switches it on under Art → Story illustrations and picks the service (Google Gemini by default, FLUX on fal.ai or Replicate, OpenAI), the model, the style, which moments, and limits per table, per day and per month. Keys go under Art → Switches and keys and work without a restart. Pictures go on the player credits as their own column. Heroes and people are drawn from the looks the game keeps, and earlier pictures of the table go along so they stay recognisable. See README → Story illustrations.
+
 ### Combat
 - **End turn reminder.** On your turn in a fight, after 20 seconds with nothing happening, the End turn button starts to glow and a reminder appears; a few seconds after your action and movement are used up it comes sooner. The turn never ends by itself. Set the delay (off, 20, 45 or 90 seconds) in Settings → Game.
 - **"Your turn" in the middle of the map.** When one of your heroes comes up in a fight, a large "Your turn" banner (German "Du bist dran") appears in the middle of the battle map for a moment, with a short bell; if you play several heroes it names the one whose turn it is. The end turn reminder ("Still there?") appears there too, large and in the middle.

@@ -53,7 +53,7 @@ You run Hearthforge as one Docker container on your own server. You and your fri
 
 ## Contents
 
-[What's in the game](#whats-in-the-game) · [Install](#install-on-proxmox) · [Configuration](#configuration) · [The Innkeeper](#the-innkeeper) · [Art and music](#art-and-music) · [Voice and HTTPS](#voice-and-https) · [Playing together](#playing-together) · [Where the adventure starts](#where-the-adventure-starts) · [How to play](#how-to-play) · [Development](#development) · [Credits](#credits-and-licenses)
+[What's in the game](#whats-in-the-game) · [Install](#install-on-proxmox) · [Configuration](#configuration) · [The Innkeeper](#the-innkeeper) · [Art and music](#art-and-music) · [Story illustrations](#story-illustrations) · [Voice and HTTPS](#voice-and-https) · [Playing together](#playing-together) · [Where the adventure starts](#where-the-adventure-starts) · [How to play](#how-to-play) · [Development](#development) · [Credits](#credits-and-licenses)
 
 ## What's in the game
 
@@ -160,7 +160,8 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
 | `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Assets → Narrator. |
-| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | Only for hosted narrator voices. See [Voice and HTTPS](#voice-and-https). |
+| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | For hosted narrator voices (OpenAI also for story illustrations). See [Voice and HTTPS](#voice-and-https). |
+| `GEMINI_API_KEY`, `FAL_KEY`, `REPLICATE_API_TOKEN` | empty | For story illustrations; can also be typed in the Innkeeper. See [Story illustrations](#story-illustrations). |
 | `COMPOSE_PROFILES=https`, `HEARTHFORGE_DOMAIN`, `HEARTHFORGE_LOCAL_HOSTS`, `HEARTHFORGE_DNS_PROVIDER`, `HEARTHFORGE_DNS_TOKEN`, `HEARTHFORGE_ACME_EMAIL` | off | HTTPS through Caddy (`.env` only). See [HTTPS](#https). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
 | `HEARTHFORGE_ADMIN_PASSWORD` | generated | First password of the `innkeeper` account; only read on the very first start (`.env` only). |
@@ -222,6 +223,24 @@ docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}"
 ```
 
 Browsers only allow sound after the first click, so music starts when a player first touches the page. A scene with no track is silent, and a failed download never breaks the game.
+
+## Story illustrations
+
+At the big moments of an adventure (a boss steps out, a hard fight is won, a big secret comes out) the Dungeon Master can have a hand-drawn picture painted. It appears above that scene for everyone at the table, fades in when it is ready (a few seconds to half a minute), and opens large with a click. It is off until the Innkeeper switches it on under **Innkeeper → Art → Story illustrations**, where you choose:
+
+- **Who paints.** Google Gemini ("Nano Banana", the default), FLUX on fal.ai or Replicate, or OpenAI GPT Image, and the model. Each service needs its key under **Art → Switches and keys**; these keys work as soon as they are saved, without a restart. OpenAI shares its key with the narrator.
+- **The style**: ink and watercolour (default), painted storybook, old woodcut, or your own words. **Paint a sample** makes a test picture in the current style, on your own costs.
+- **Which moments** may get a picture: boss, victory and reveal by default; the opening scene, a first sight of a grand place, and deaths or partings can be ticked on.
+- **Limits**: pictures per table and day (4), minutes between two pictures at one table (20), and a monthly budget for the whole server in dollars (10). A table whose players are out of credit gets no pictures; the story goes on as usual.
+
+| Service | Key | Default model | List price per picture (Nov 2026) |
+| --- | --- | --- | --- |
+| Google Gemini | `GEMINI_API_KEY` | `gemini-3.1-flash-image` (Nano Banana 2) | about $0.067; Lite $0.034, Pro $0.134 |
+| fal.ai | `FAL_KEY` | `fal-ai/flux-2` | about $0.015; FLUX.2 pro $0.03 |
+| Replicate | `REPLICATE_API_TOKEN` | `black-forest-labs/flux-2-pro` | about $0.03 |
+| OpenAI | `OPENAI_API_KEY` | `gpt-image-2.5-flare`, medium quality | about $0.02 |
+
+Each picture is billed to the player credits like the rest of the AI, shared among the players at the table (column **Pictures** under Costs and credits). The price can be set per model where your invoice differs from the list. To keep the heroes recognisable, every picture is described from the fixed looks the game keeps (species, class, skin, hair, beard, colours, the hero's own appearance text, and the appearance fixed for each person the party meets), and models that take reference images get the table's last pictures along. Pictures are kept in `/data/pictures` (not in backups, like the art packs) and the Innkeeper can delete any of them; they are made on your own account with the service and never mirrored.
 
 ## Voice and HTTPS
 
