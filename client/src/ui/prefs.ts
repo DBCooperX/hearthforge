@@ -21,10 +21,12 @@ export interface Prefs {
   creatorDetailed: boolean;
   /** In a fight, the pointer at the edge of the battle map moves the view. */
   edgeScroll: boolean;
+  /** In a fight, seconds without doing anything on your turn before End turn reminds you. 0 is off. */
+  turnReminder: number;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20 };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {
