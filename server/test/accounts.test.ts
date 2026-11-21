@@ -282,3 +282,51 @@ describe('seats from before accounts', () => {
     expect(s.seats['old-browser-of-jonas']).toBeUndefined();
   });
 });
+
+describe('renaming and clearing stats', () => {
+  const hero = { table: 't1', tableTitle: 'Table', id: 'h1', name: 'Mira', classId: 'wizard', level: 2 };
+
+  it('renames an account, keeps names unique and tells the seats', () => {
+    const a = new Accounts(dir(), { HEARTHFORGE_ADMIN_PASSWORD: 'secret-one' });
+    const told: string[] = [];
+    a.onRenamed = (id, name) => told.push(`${id}:${name}`);
+    const first = a.list()[0];
+    const { account } = a.create('Jonas', 'player');
+    expect(a.rename(account.id, 'Jonas B').username).toBe('Jonas B');
+    expect(told).toEqual([`${account.id}:Jonas B`]);
+    expect(code(() => a.rename(account.id, 'innkeeper'))).toBe('name_taken');
+    expect(code(() => a.rename(account.id, 'x'))).toBe('bad_name');
+    // Only the case changes: allowed, since it is the same account.
+    expect(code(() => a.rename(account.id, 'jonas b'))).toBe('ok');
+    // The default Innkeeper can be renamed, and still signs in.
+    a.rename(first.id, 'Hearthkeeper');
+    expect(code(() => a.login('hearthkeeper', 'secret-one', false, 'ip'))).toBe('ok');
+    expect(code(() => a.login('innkeeper', 'secret-one', false, 'ip'))).toBe('wrong_login');
+  });
+
+  it('clears all stats, the hero list, or one hero', () => {
+    const a = new Accounts(dir(), {});
+    const { account } = a.create('Jonas', 'player');
+    a.credit(account.id, { kills: 3, gold: 10 }, [hero, { ...hero, id: 'h2', name: 'Bran' }]);
+    a.clearStats(account.id, 'hero', 't1/h1');
+    expect(a.profile(account.id)).toMatchObject({ stats: { kills: 3, gold: 10 }, heroes: [{ heroId: 'h2' }] });
+    expect(code(() => a.clearStats(account.id, 'hero', 't1/nope'))).toBe('not_found');
+    a.clearStats(account.id, 'heroes');
+    expect(a.profile(account.id)?.heroes).toEqual([]);
+    expect(a.profile(account.id)?.stats.kills).toBe(3);
+    a.credit(account.id, { kills: 1 }, [hero]);
+    a.clearStats(account.id, 'all');
+    expect(a.profile(account.id)).toMatchObject({ stats: { kills: 0, gold: 0 }, heroes: [] });
+  });
+
+  it('the owner reset file finds a renamed first Innkeeper', () => {
+    const d = dir();
+    const a = new Accounts(d, { HEARTHFORGE_ADMIN_PASSWORD: 'secret-one' });
+    a.rename(a.list()[0].id, 'Hearthkeeper');
+    a.flush();
+    writeFileSync(join(d, 'innkeeper-reset'), '');
+    const again = new Accounts(d, {});
+    expect(again.list().map((x) => x.username)).toEqual(['Hearthkeeper']);
+    expect(existsSync(join(d, 'innkeeper-reset'))).toBe(false);
+  });
+});

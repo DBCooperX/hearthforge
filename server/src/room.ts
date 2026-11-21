@@ -191,6 +191,14 @@ export class Room {
     return true;
   }
 
+  /** The account behind a seat has a new name. */
+  renamePlayer(id: string, name: string): boolean {
+    if (this.closed || !this.game.renamePlayer(id, name)) return false;
+    this.flush();
+    this.saveNow();
+    return true;
+  }
+
   /** Give the table another name. Everyone sees it at once. */
   rename(title: string) {
     this.game.s.table.title = title;

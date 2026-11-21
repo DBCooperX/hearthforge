@@ -117,6 +117,21 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       case '/join': return send(200, accounts.redeem(body.code, body.username, body.password, !!body.remember, ip));
       case '/logout': accounts.logout(token); return send(200, null);
       case '/password': accounts.changePassword(token, String(body.current ?? ''), body.next, ip); return send(200, null);
+      case '/rename': {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        const next = accounts.rename(me.id, body.username);
+        if (next.username !== me.username) console.log(`[accounts] ${me.username} is now called ${next.username}.`);
+        return send(200, accounts.profile(me.id));
+      }
+      case '/stats': {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        const what = body.what === 'hero' ? 'hero' : body.what === 'heroes' ? 'heroes' : 'all';
+        accounts.clearStats(me.id, what, typeof body.hero === 'string' ? body.hero : undefined);
+        return send(200, accounts.profile(me.id));
+      }
+
       case '/bin': {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });

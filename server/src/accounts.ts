@@ -84,6 +84,8 @@ export class Accounts {
   private first: string | null = null;
   /** Told when an account is deleted, so its connections can be closed. */
   onDeleted?: (id: string) => void;
+  /** Told when an account gets a new name, so the seats at the tables can follow. */
+  onRenamed?: (id: string, username: string) => void;
 
   constructor(dataDir: string, env: NodeJS.ProcessEnv, private now: () => number = Date.now) {
     this.file = join(dataDir, 'accounts.json');
@@ -125,7 +127,8 @@ export class Accounts {
    * the account "innkeeper" (made again if it is gone) a new password, once, at the next start.
    */
   private rescue(flag: string) {
-    let a = this.byName(FIRST_USERNAME);
+    // The owner may have renamed the account since: the oldest Innkeeper is the one meant.
+    let a = this.byName(FIRST_USERNAME) ?? this.s.accounts.filter((x) => x.role === 'innkeeper').sort((x, y) => x.createdAt - y.createdAt)[0];
     if (!a) { a = this.make(FIRST_USERNAME, 'innkeeper', '', true); this.s.accounts.push(a); }
     const plain = randomBytes(9).toString('base64url');
     a.password = hashPassword(plain);
@@ -136,7 +139,7 @@ export class Accounts {
     this.first = plain;
     this.save();
     rmSync(flag, { force: true });
-    console.log(`[accounts] The account "${FIRST_USERNAME}" got a new password because of the innkeeper-reset file.`);
+    console.log(`[accounts] The account "${a.username}" got a new password because of the innkeeper-reset file.`);
   }
 
   private make(username: string, role: Role, password: string, mustChange: boolean): Account {
@@ -146,7 +149,8 @@ export class Accounts {
 
   /** The made-up first password and where it is kept, for the server log. */
   get firstPasswordNote(): { username: string; password: string; file: string } | null {
-    return this.first && existsSync(this.firstFile) ? { username: FIRST_USERNAME, password: this.first, file: this.firstFile } : null;
+    const who = this.s.accounts.find((a) => a.role === 'innkeeper' && a.mustChange);
+    return this.first && who && existsSync(this.firstFile) ? { username: who.username, password: this.first, file: this.firstFile } : null;
   }
 
   /** True while an Innkeeper still signs in with a password they did not choose. */
@@ -260,7 +264,7 @@ export class Accounts {
     if (this.recent(ip).length >= TRIES) throw new AccountsError('too_many');
     if (!verify(String(current ?? ''), a.password)) { this.failed(ip); throw new AccountsError('wrong_login'); }
     a.password = hashPassword(this.checkPassword(next));
-    const wasFirst = a.mustChange && a.username === FIRST_USERNAME;
+    const wasFirst = a.mustChange && a.role === 'innkeeper';
     a.mustChange = false;
     const key = sha(token);
     this.s.sessions = Object.fromEntries(Object.entries(this.s.sessions).filter(([k, s]) => s.account !== a.id || k === key));
@@ -337,11 +341,17 @@ export class Accounts {
     this.save();
   }
 
-  rename(id: string, username: unknown) {
+  /** A new name for an account: the Innkeeper may rename any, a player their own (the caller checks who). Sessions stay. */
+  rename(id: string, username: unknown): AccountView {
     const a = this.get(id);
     if (!a) throw new AccountsError('not_found');
-    a.username = this.checkName(username, id);
-    this.save();
+    const name = this.checkName(username, id);
+    if (name !== a.username) {
+      a.username = name;
+      this.save();
+      this.onRenamed?.(id, name);
+    }
+    return this.view(a);
   }
 
   /** A forgotten password: a made-up one replaces it, and every session of the account ends. */
@@ -386,6 +396,26 @@ export class Accounts {
       add(row);
     }
     this.saveSoon();
+  }
+
+  /**
+   * Clear stats. With no hero, the account's totals and every hero entry start again from zero.
+   * With a hero (its "table/id" key), just that entry goes; the totals stay, as they are a lifetime count.
+   * "heroes" drops all hero entries and keeps the totals.
+   */
+  clearStats(id: string, what: 'all' | 'heroes' | 'hero', hero?: string) {
+    const a = this.get(id);
+    if (!a) throw new AccountsError('not_found');
+    if (what === 'hero') {
+      if (typeof hero !== 'string' || !(hero in a.heroes)) throw new AccountsError('not_found');
+      delete a.heroes[hero];
+    } else if (what === 'heroes') {
+      a.heroes = {};
+    } else {
+      a.stats = emptyPlayStats();
+      a.heroes = {};
+    }
+    this.flush();
   }
 
   /** A table is deleted: its heroes leave every profile, and come back here so a restore can return them. */

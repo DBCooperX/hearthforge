@@ -796,6 +796,16 @@ export class Game {
     return true;
   }
 
+  /** An account got a new name: its seat follows, unless someone at the table already goes by it. */
+  renamePlayer(id: string, name: string): boolean {
+    const p = this.player(id);
+    const next = cleanName(name);
+    if (!p || !next || p.name === next) return false;
+    if (this.s.players.some((o) => o.id !== id && o.name.toLocaleLowerCase() === next.toLocaleLowerCase())) return false;
+    p.name = next;
+    return true;
+  }
+
   setConnected(id: string, connected: boolean) {
     const p = this.s.players.find((p) => p.id === id);
     if (p) p.connected = connected;
