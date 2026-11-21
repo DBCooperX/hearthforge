@@ -26,6 +26,7 @@ import { ART_TABS, INN_MISC, INN_SECTIONS, INN_TABS, SERVER_TABS, SOUND_TABS, KE
 import { sfx } from './sound';
 import { SfxLibrary } from './SfxLibrary';
 import { NarratorLibrary } from './NarratorLibrary';
+import { PictureLibrary } from './PictureLibrary';
 import { SoundLibrary } from './SoundLibrary';
 import { TabBar, Window } from './Window';
 import { ask } from './Confirm';
@@ -43,7 +44,10 @@ const SOUND_SECTIONS = [
   { title: INN_SECTIONS.switches, keys: ['HEARTHFORGE_MUSIC', 'HEARTHFORGE_SFX', 'HEARTHFORGE_NARRATOR'] },
   { title: INN_SECTIONS.soundKeys, keys: ['FREESOUND_API_KEY', 'ELEVENLABS_API_KEY', 'OPENAI_API_KEY'] },
 ];
-const ART_SECTIONS = [{ title: INN_SECTIONS.art, keys: ['HEARTHFORGE_ART', 'HEARTHFORGE_AUTO_ASSETS', 'HEARTHFORGE_ART_UPLOADS'] }];
+const ART_SECTIONS = [
+  { title: INN_SECTIONS.art, keys: ['HEARTHFORGE_ART', 'HEARTHFORGE_AUTO_ASSETS', 'HEARTHFORGE_ART_UPLOADS'] },
+  { title: INN_SECTIONS.pictureKeys, keys: ['GEMINI_API_KEY', 'FAL_KEY', 'REPLICATE_API_TOKEN', 'OPENAI_API_KEY'] },
+];
 const SERVER_SECTIONS = [{ title: INN_SECTIONS.server, keys: ['HEARTHFORGE_AUTO_UPDATE', 'HEARTHFORGE_TRUST_PROXY'] }];
 type Section = { title: string; keys: string[] };
 
@@ -140,10 +144,12 @@ function Overview({ fail, say, go, firstPassword }: PaneProps & { go: (tab: Tab)
 // ---------------------------------------------------------------------------- assets
 
 /** A section with its own row of tabs, filling the pane: sound, art and the server. */
-function SubTabs<K extends string>({ tabs, children }: { tabs: Record<K, string>; children: (tab: K) => ReactNode }) {
+function SubTabs<K extends string>({ tabs, children, value, onChange }: { tabs: Record<K, string>; children: (tab: K) => ReactNode; value?: K; onChange?: (tab: K) => void }) {
   const t = useT();
   const ids = Object.keys(tabs) as K[];
-  const [sub, setSub] = useState<K>(ids[0]);
+  const [own, setOwn] = useState<K>(ids[0]);
+  const sub = value ?? own;
+  const setSub = (k: K) => { setOwn(k); onChange?.(k); };
   return (
     <div className="assets-pane">
       <TabBar tabs={ids.map((id) => ({ id, label: t(tabs[id]) }))} value={sub} onChange={setSub} />
@@ -161,7 +167,12 @@ function SoundPane(pane: PaneProps & { go: (tab: Tab) => void }) {
 }
 
 function ArtPane(pane: PaneProps & { go: (tab: Tab) => void }) {
-  return <SubTabs tabs={ART_TABS}>{(sub) => sub === 'art' ? <ArtWindow embedded /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}</SubTabs>;
+  const [sub, setSub] = useState<keyof typeof ART_TABS>('art');
+  return (
+    <SubTabs tabs={ART_TABS} value={sub} onChange={setSub}>
+      {(tab) => tab === 'art' ? <ArtWindow embedded /> : tab === 'pictures' ? <PictureLibrary onKeys={() => setSub('settings')} /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}
+    </SubTabs>
+  );
 }
 
 function ServerTabs(pane: PaneProps & { go: (tab: Tab) => void; firstPassword: boolean; onPassword: () => void }) {
@@ -463,7 +474,7 @@ function SettingRow({ def, value, draft, onDraft, onReset }: { def: SettingDef; 
       <span className="inn-setting-text">
         <span>{t(def.label)} <Info text={t(def.help)} /></span>
         <small className="inn-source">
-          {t(SOURCE_LABELS[value.source])}{value.pending && ` · ${t('applies after a restart')}`}
+          {t(SOURCE_LABELS[value.source])}{value.pending && ` · ${t('applies after a restart')}`}{def.live && value.set && ` · ${t('in use')}`}
           {value.source === 'panel' && <button type="button" className="link" onClick={onReset}>{t('Reset')}</button>}
         </small>
       </span>
@@ -484,7 +495,8 @@ function SettingsBlock({ fail, say, go, sections }: PaneProps & { go: (tab: Tab)
     try {
       setData(await inn('/env', { body: { values } }));
       setDraft((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !(k in values))));
-      say(t('Saved. The change applies after a restart.'));
+      const live = Object.keys(values).every((k) => SETTINGS.find((d) => d.key === k)?.live);
+      say(live ? t('Saved. It is used at once.') : t('Saved. The change applies after a restart.'));
     } catch (err) { fail(err); }
   };
   const runTest = async () => {
@@ -781,7 +793,7 @@ function CreditsPane({ fail, say }: PaneProps) {
         <button type="submit" disabled={!draft}>{t('Save')}</button>
       </form>
       <table className="inn-table">
-        <thead><tr><th>{t('Account')}</th><th className="num">{t('Left')}</th><th className="num">{t('Paid in')}</th><th className="num">{t('Dungeon Master')}</th><th className="num">{t('Narrator')}</th><th className="num">{t('Last 30 days')}</th><th>{t('Free')}</th><th /></tr></thead>
+        <thead><tr><th>{t('Account')}</th><th className="num">{t('Left')}</th><th className="num">{t('Paid in')}</th><th className="num">{t('Dungeon Master')}</th><th className="num">{t('Narrator')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Last 30 days')}</th><th>{t('Free')}</th><th /></tr></thead>
         <tbody>
           {r.rows.map((a) => (
             <Fragment key={a.id}>
@@ -791,12 +803,13 @@ function CreditsPane({ fail, say }: PaneProps) {
                 <td className="num">{chf(a.paid)}</td>
                 <td className="num">{chf(a.spentClaude)}</td>
                 <td className="num">{chf(a.spentVoice)}</td>
+                <td className="num">{chf(a.spentImages ?? 0)}</td>
                 <td className="num">{chf(a.last30)}</td>
                 <td>{a.role === 'innkeeper' ? <span className="muted">—</span> : <input type="checkbox" checked={a.free} aria-label={t('Free')} onChange={(e) => void act({ do: 'free', id: a.id, free: e.target.checked })} />}</td>
                 <td className="inn-actions"><button type="button" onClick={() => setTopUp({ id: a.id, chf: '', note: '' })}>{t('Top up')}</button></td>
               </tr>
               {topUp?.id === a.id && (
-                <tr className="inn-subrow"><td colSpan={8}>
+                <tr className="inn-subrow"><td colSpan={9}>
                   <form className="inn-topup" onSubmit={book}>
                     <label>{t('Amount (CHF)')}<input autoFocus inputMode="decimal" value={topUp.chf} onChange={(e) => setTopUp({ ...topUp, chf: e.target.value })} placeholder="10.00" /></label>
                     <label>{t('Note')}<input value={topUp.note} maxLength={80} onChange={(e) => setTopUp({ ...topUp, note: e.target.value })} placeholder={t('for example: TWINT, 20 Nov')} /></label>
@@ -807,7 +820,7 @@ function CreditsPane({ fail, say }: PaneProps) {
                 </td></tr>
               )}
               {open === a.id && (
-                <tr className="inn-subrow"><td colSpan={8}>
+                <tr className="inn-subrow"><td colSpan={9}>
                   {a.topUps.length === 0 ? <span className="muted">{t('Nothing paid in yet.')}</span> : (
                     <ul className="inn-list">{a.topUps.map((p, i) => <li key={i}><span>{new Date(p.at).toLocaleDateString(lang)}</span><b>{chf(p.chf)}</b><span className="muted">{p.note}</span></li>)}</ul>
                   )}
@@ -818,6 +831,7 @@ function CreditsPane({ fail, say }: PaneProps) {
         </tbody>
       </table>
       <p className="muted small">{t('Each call to the AI is shared equally among the accounts sitting at the table, at the list prices below and your rate of francs per dollar. Piper voices cost nothing. An estimate: your invoices from Anthropic and ElevenLabs are what count.')}</p>
+      <p className="muted small">{t('Story illustrations are billed per picture at the price shown under Art → Story illustrations.')}</p>
     </section>
   );
 }

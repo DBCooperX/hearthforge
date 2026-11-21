@@ -489,8 +489,10 @@ export interface SceneMeta {
   mood: Mood;
   /** Suggested next actions, shown as chips under the newest card. */
   actions: string[];
-  /** Reserved for phase 3: id of a generated image for this scene. */
+  /** Id of the illustration painted for this scene, or null. Loaded from /pictures/<id>. */
   imageId: string | null;
+  /** True while that illustration is being painted. */
+  painting?: boolean;
   /** Where the scene plays, such as "Zollhaus, upper floor". Missing in saves from before scene headers. */
   where?: string;
   /** Time of day when it played: dawn, morning, afternoon, evening or night. */

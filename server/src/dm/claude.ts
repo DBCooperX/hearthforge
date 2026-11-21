@@ -23,6 +23,7 @@ import { CAMPAIGN_TOOL_DESCRIPTION, campaignTool } from '../campaign/prompt';
 import { readCampaign } from '../campaign/digest';
 import type { Book } from '../campaign/read';
 import type { CampaignDigest } from '../campaign/library';
+import { askPicture, pictureState } from '../game/pictures';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -260,6 +261,11 @@ const STORY_TOOLS: Tool[] = [
     after: str('For hold: what must happen first, in plain words, for example "the party has found the ledger in the mill cellar". Empty string otherwise.'),
     not_before: str('For hold, when timing matters: the earliest moment, as "in 2 days", "tomorrow", "tonight" or "day 4". Empty string for no limit.'),
   }),
+  looseTool('illustrate', 'Ask for a hand-drawn picture of this moment, shown above the scene of this reply. Only for a moment the state lists as available for illustrations; the server refuses the rest. Call it at most once per reply, before scene.', {
+    moment: str('What kind of moment it is: "boss" (a boss or mighty foe steps out), "victory" (a hard fight is won), "reveal" (a big secret comes out), "opening" (the first scene of an adventure), "arrival" (the party first sees a grand place) or "farewell" (a death, a parting, the end of a quest).'),
+    picture: str('The picture in one to three sentences of English: who does what, where, in what light. One clear moment, as a painter would frame it. No text or letters in the picture.'),
+    who: str('The heroes and people in the picture by name, comma separated, so the server draws them as they look. Empty string for the whole party.'),
+  }),
   CAMPAIGN_TOOL,
   SCENE_TOOL,
 ];
@@ -487,6 +493,8 @@ export class ClaudeDM implements DungeonMaster {
             return logEvent(game, { what: String(i.what ?? ''), when: String(i.when ?? ''), where: String(i.where ?? ''), knownBy: String(i.known_by ?? '') });
           case 'campaign':
             return campaignTool(game, i);
+          case 'illustrate':
+            return askPicture(game, i);
           case 'secret':
             return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:
@@ -520,7 +528,8 @@ export class ClaudeDM implements DungeonMaster {
 
   /** The state of play right now, without what describeTable already says. */
   private situation(game: Game): string {
-    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : describeWorld(game, { live: true });
+    const pictures = game.s.phase === 'combat' ? null : pictureState(game);
+    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : `${describeWorld(game, { live: true })}${pictures ? `\n${pictures}` : ''}`;
     return game.s.testMode ? `TEST MODE: the table's host is playtesting and may set levels, hit points, items, gold, the clock and the place directly. Take the state below as the truth, and do not comment on sudden changes.\n${state}` : state;
   }
 

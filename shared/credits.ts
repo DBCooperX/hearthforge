@@ -50,6 +50,8 @@ export interface CreditRow extends CreditView {
   role: 'player' | 'innkeeper';
   spentClaude: number;
   spentVoice: number;
+  /** Story illustrations. */
+  spentImages: number;
   /** Spent in the last 30 days. */
   last30: number;
   topUps: TopUp[];

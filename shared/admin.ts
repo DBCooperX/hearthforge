@@ -17,6 +17,8 @@ export interface SettingDef {
   choices?: string[];
   min?: number;
   max?: number;
+  /** Used the moment it is saved, without a restart. */
+  live?: boolean;
 }
 
 export const MODEL_SUGGESTIONS = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-2'];
@@ -40,11 +42,14 @@ export const SETTINGS: SettingDef[] = [
   { key: 'HEARTHFORGE_SFX', group: 'play', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Sound effects', help: 'Sword hits, shots, spells, footsteps, coins and fanfares. Add the free Kenney CC0 recordings under Sound and voice → Sound effects; without them the browser makes the sounds itself. Off silences all effects for everyone.' },
   { key: 'FREESOUND_API_KEY', group: 'play', kind: 'secret', fallback: '', label: 'Freesound API key', help: 'Free from freesound.org/apiv2/apply. With it the server fetches CC0 ambient loops (crowd, town, forest, cave) by itself, and the Ambient tab gets a button for more.' },
   { key: 'HEARTHFORGE_NARRATOR', group: 'voice', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Narrator', help: 'Reads the Dungeon Master\'s story aloud. Choose the voice under Sound and voice → Narrator; each player can mute it or turn it down. Off removes it for everyone.' },
-  { key: 'OPENAI_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'OpenAI API key', help: 'Only for the narrator, if you pick an OpenAI voice. From platform.openai.com. A few cents per evening of play.' },
+  { key: 'OPENAI_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'OpenAI API key', help: 'For the narrator, if you pick an OpenAI voice, and for story illustrations, if you pick OpenAI there. From platform.openai.com. A few cents per evening of play.' },
   { key: 'ELEVENLABS_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'ElevenLabs API key', help: 'Only for the narrator, if you pick an ElevenLabs voice. From elevenlabs.io; the free plan covers a short session a month.' },
   { key: 'HEARTHFORGE_ART', group: 'art', kind: 'choice', fallback: 'generated', choices: ['generated', 'kenney', '0x72'], label: 'Starting art pack', help: 'Only used until a pack is chosen under Art → Art packs.' },
   { key: 'HEARTHFORGE_AUTO_ASSETS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Fetch free art by itself', help: 'On downloads the freely licensed item icons (game-icons.net) the first time the server starts. Music has its own switch.' },
   { key: 'HEARTHFORGE_ART_UPLOADS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Art pack changes', help: 'Off locks the art library, also for the Innkeeper.' },
+  { key: 'GEMINI_API_KEY', group: 'art', kind: 'secret', fallback: '', live: true, label: 'Google Gemini API key', help: 'For story illustrations with Nano Banana. From aistudio.google.com, with billing switched on. A few cents per picture. Works at once, without a restart.' },
+  { key: 'FAL_KEY', group: 'art', kind: 'secret', fallback: '', live: true, label: 'fal.ai API key', help: 'For story illustrations with FLUX on fal.ai. From fal.ai/dashboard/keys. Works at once, without a restart.' },
+  { key: 'REPLICATE_API_TOKEN', group: 'art', kind: 'secret', fallback: '', live: true, label: 'Replicate API token', help: 'For story illustrations with FLUX on Replicate. From replicate.com/account/api-tokens. Works at once, without a restart.' },
   { key: 'HEARTHFORGE_AUTO_UPDATE', group: 'server', kind: 'choice', fallback: 'off', choices: ['off', 'on'], label: 'Automatic updates', help: 'Installs a new version by itself while nobody is playing.' },
   { key: 'HEARTHFORGE_TRUST_PROXY', group: 'server', kind: 'choice', fallback: 'off', choices: ['off', 'on'], label: 'Behind a reverse proxy', help: 'On reads the address of a player from the X-Forwarded-For header. Switch it on only behind a proxy you run.' },
 ];

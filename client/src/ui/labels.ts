@@ -6,6 +6,7 @@ import { MUSIC_ERRORS } from '../../../shared/music';
 import { SFX_ERRORS, SFX_PACKS } from '../../../shared/sfx';
 import { PIPER_VOICES, PROVIDER_LABELS, VOICE_ERRORS } from '../../../shared/voice';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
+import { PICTURE_ERRORS, PICTURE_MODELS, PICTURE_MOMENT_LABELS, PICTURE_PROVIDER_LABELS, PICTURE_STYLE_LABELS } from '../../../shared/illustrations';
 import { ACCOUNT_ERRORS } from '../../../shared/accounts';
 import { SHOP_BLURBS, SHOP_NAMES } from '../../../shared/trade';
 import { TROPHIES } from '../../../shared/achievements';
@@ -79,11 +80,11 @@ export const INN_TABS = {
   sound: 'Sound and voice', art: 'Art', server: 'Server',
 } as const;
 export const SOUND_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
-export const ART_TABS = { art: 'Art packs', settings: 'Switches' } as const;
+export const ART_TABS = { art: 'Art packs', pictures: 'Story illustrations', settings: 'Switches and keys' } as const;
 export const SERVER_TABS = { server: 'Updates and restart', backups: 'Backups', logs: 'Log' } as const;
 export const INN_SECTIONS = {
   ai: 'AI and models', newTables: 'New tables start with', timing: 'Timing at the table', switches: 'On and off for everyone',
-  soundKeys: 'Keys for sound services', art: 'Art settings', server: 'Server settings',
+  soundKeys: 'Keys for sound services', art: 'Art settings', pictureKeys: 'Keys for picture services', server: 'Server settings',
 } as const;
 export const SOURCE_LABELS = { panel: 'Set here', env: 'From the installer', default: 'Default' } as const;
 export const PHASE_LABELS: Record<string, string> = { lobby: 'Gathering', explore: 'Exploring', combat: 'In a fight', defeat: 'Defeated' };
@@ -107,6 +108,7 @@ export const TRADE_MOODS = ['Prices are 10% worse today', 'Prices are 10% better
 
 export const ALL_LABELS: string[] = [
   ...Object.values(SETTINGS_TABS),
+  ...Object.values(PICTURE_ERRORS), ...Object.values(PICTURE_PROVIDER_LABELS), ...Object.values(PICTURE_MOMENT_LABELS), ...Object.values(PICTURE_STYLE_LABELS), ...Object.values(PICTURE_MODELS).flat().map((m) => m.label),
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOUND_TABS), ...Object.values(ART_TABS), ...Object.values(SERVER_TABS), ...Object.values(INN_SECTIONS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(ACCOUNT_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),

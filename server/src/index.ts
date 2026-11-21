@@ -32,7 +32,8 @@ import { testKey } from './admin/keytest';
 import { Logs } from './admin/logs';
 import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
-import { Credits } from './credits';
+import { Credits, type CostKind } from './credits';
+import { Illustrator, PictureError } from './illustrations';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -92,6 +93,8 @@ const MIME: Record<string, string> = {
 
 const store = new Store(DATA_DIR);
 const narrator = new Narrator(VOICE_DIR, env);
+// Picture keys are read as they are saved in the Innkeeper, so a new key works without a restart.
+const illustrator = new Illustrator(env.PICTURES_DIR ?? join(DATA_DIR, 'pictures'), (key) => config.next(key));
 const claude = createDM(env, (sample) => {
   usage.record(sample);
   const usd = sampleCost(sample);
@@ -160,7 +163,7 @@ function payersAt(table: string): string[] {
 }
 
 /** Book what the AI cost at a table, and tell the players charged how much credit is left. */
-function bill(table: string, usd: number, kind: 'claude' | 'voice') {
+function bill(table: string, usd: number, kind: CostKind) {
   // Reading a campaign book is paid by whoever brought it; books from the list for everyone are on the house.
   if (table.startsWith('campaign:')) {
     const owner = campaigns.info(table.slice(9))?.owner;
@@ -196,6 +199,21 @@ const hooks: RoomHooks = {
   mayAsk: (playerId) => {
     const a = isAccountId(playerId) ? creditAccount(playerId) : null;
     return !a || credits.mayPlay(a) ? null : OUT_OF_CREDIT;
+  },
+  pictures: {
+    gate: (room, moment) => {
+      const why = illustrator.gate(room.name, moment);
+      if (why) return why;
+      // A picture is not started for players whose credit is used up; the story itself goes on.
+      const broke = payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
+      return broke ? 'credit' : null;
+    },
+    paint: (room, entryId, ask) => {
+      const scene = room.game.s.log.find((l) => l.id === entryId)?.scene;
+      illustrator.paint({ table: room.name, tableTitle: room.game.s.table.title, entry: entryId, ask, where: scene?.where, time: scene?.time }, (usd) => bill(room.name, usd, 'images'))
+        .then((p) => { if (room.game.setPicture(entryId, p.id)) room.flush(); })
+        .catch(() => { if (room.game.setPicture(entryId, null)) room.flush(); });
+    },
   },
 };
 
@@ -544,6 +562,40 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** Story illustrations: the pictures themselves for anyone with the link, the setup for the Innkeeper. */
+async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, illustrator.library());
+    if (req.method === 'POST' && url.pathname === '/api/pictures/action') {
+      const body = JSON.parse((await readRaw(req, 16 * 1024, () => new PictureError('bad_request'))).toString('utf8') || '{}') as Record<string, unknown>;
+      if (body.do === 'sample') {
+        // The Innkeeper trying a style pays for it like anyone else: it shows in their own costs.
+        const me = accounts.account(req.headers[SESSION_HEADER]);
+        const picture = await illustrator.sample((usd) => { if (me) credits.charge([me.id], usd, 'images'); });
+        return json(200, { ...illustrator.library(), sample: picture });
+      }
+      const done = illustrator.action(body);
+      const room = done.removed ? rooms.get(done.removed.table) : null;
+      if (room && done.removed) {
+        const entry = room.game.s.log.find((l) => l.id === done.removed!.entry);
+        if (entry?.scene) { entry.scene.imageId = null; room.flush(); }
+      }
+      return json(200, illustrator.library());
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof PictureError) return json(err.code === 'failed' ? 502 : 400, { error: err.code });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[pictures]', err instanceof Error ? err.message : err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname === '/api/health') {
@@ -593,6 +645,17 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
     res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
+    return;
+  }
+  if (url.pathname.startsWith('/pictures/')) {
+    const found = illustrator.file(url.pathname.slice(10));
+    if (!found) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Not found'); return; }
+    res.writeHead(200, { 'content-type': found.mime, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+    createReadStream(found.path).pipe(res);
+    return;
+  }
+  if (url.pathname.startsWith('/api/pictures/')) {
+    void picturesApi(req, res, url);
     return;
   }
   if (url.pathname === '/api/voice' || url.pathname.startsWith('/api/voice/')) {
@@ -789,6 +852,8 @@ server.listen(PORT, () => {
   console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
   console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   const voice = narrator.manifest();
+  const pics = illustrator.library();
+  console.log(`Story illustrations: ${!pics.config.on ? 'off (switch them on in Innkeeper → Art)' : !pics.keys[pics.config.provider] ? `${pics.config.provider} has no key yet` : `${pics.config.provider} ${pics.config.models[pics.config.provider]}`}.`);
   console.log(`Narrator: ${!narrator.enabled ? 'off (HEARTHFORGE_NARRATOR)' : voice.provider === 'off' ? 'off (chosen in the Innkeeper)' : voice.provider === 'piper' && !narrator.piperReady ? 'Piper is not in this image' : `${voice.provider}${voice.langs.length ? `, reads ${voice.langs.join(' and ')}` : ', voices are still being fetched'}`}. Kept in ${VOICE_DIR}`);
   if (!claude) console.log('Dungeon Master: scripted fallback (set ANTHROPIC_API_KEY to enable the AI DM)');
   else if (claude.models.forced) console.log(`Dungeon Master: Claude, every call on ${claude.models.forced} (HEARTHFORGE_DM_FORCE_MODEL)`);
