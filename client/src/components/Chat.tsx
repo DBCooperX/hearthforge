@@ -100,19 +100,36 @@ export function ChatPanel({ state, conn, onClose }: Props) {
 
 const POS_KEY = 'hf.chatPos';
 type Pos = { x: number; y: number };
+const SIZE_KEY = 'hf.chatSize';
+type Size = { w: number; h: number };
+const MIN: Size = { w: 280, h: 220 };
+const loadSize = (): Size | null => { try { const p = JSON.parse(localStorage.getItem(SIZE_KEY) ?? 'null'); return p && Number.isFinite(p.w) && Number.isFinite(p.h) ? p : null; } catch { return null; } };
 const loadPos = (): Pos | null => { try { const p = JSON.parse(localStorage.getItem(POS_KEY) ?? 'null'); return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null; } catch { return null; } };
 
 /** Table talk as a floating window: drag it by the title bar; it stays where you left it. */
 export function ChatWindow(props: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<Pos | null>(loadPos);
+  const [size, setSize] = useState<Size | null>(loadSize);
+  /** A size that fits the window: never below the minimum, never past the screen edge. */
+  const fit = (z: Size, at: Pos | null): Size => {
+    const left = at?.x ?? Math.max(0, window.innerWidth - 12 - z.w);
+    const top = at?.y ?? 52;
+    return {
+      w: Math.round(Math.max(Math.min(MIN.w, window.innerWidth - 24), Math.min(window.innerWidth - left - 8, z.w))),
+      h: Math.round(Math.max(Math.min(MIN.h, window.innerHeight - 24), Math.min(window.innerHeight - top - 8, z.h))),
+    };
+  };
   const keep = (p: Pos): Pos => {
     const w = ref.current?.offsetWidth ?? 360;
     return { x: Math.max(0, Math.min(window.innerWidth - Math.min(w, 120), p.x)), y: Math.max(0, Math.min(window.innerHeight - 40, p.y)) };
   };
   // Keep it reachable when the browser window gets smaller.
   useEffect(() => {
-    const onResize = () => setPos((p) => (p ? keep(p) : p));
+    const onResize = () => {
+      setPos((p) => (p ? keep(p) : p));
+      setSize((z) => (z ? fit(z, ref.current ? { x: ref.current.getBoundingClientRect().left, y: ref.current.getBoundingClientRect().top } : null) : z));
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -133,11 +150,33 @@ export function ChatWindow(props: Props) {
     window.addEventListener('pointerup', up);
     e.preventDefault();
   };
+  const t = useT();
+  const grow = (e: RPointerEvent<HTMLDivElement>) => {
+    const box = ref.current?.getBoundingClientRect();
+    if (!box) return;
+    // From here the window is anchored by its top left corner, so the grip follows the pointer.
+    const at: Pos = { x: box.left, y: box.top };
+    setPos(at);
+    const sx = e.clientX, sy = e.clientY;
+    let last: Size = { w: box.width, h: box.height };
+    const move = (ev: PointerEvent) => { last = fit({ w: box.width + ev.clientX - sx, h: box.height + ev.clientY - sy }, at); setSize(last); };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try { localStorage.setItem(POS_KEY, JSON.stringify(at)); localStorage.setItem(SIZE_KEY, JSON.stringify(last)); } catch { /* private mode: not remembered */ }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+    e.stopPropagation();
+  };
   return (
-    <div ref={ref} className="chat-float panel" style={pos ? { left: pos.x, top: pos.y, right: 'auto' } : undefined}>
-      <div className="chat-drag" onPointerDown={down} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('.chat > header')) return; try { localStorage.removeItem(POS_KEY); } catch { /* ignore */ } setPos(null); }}>
+    <div ref={ref} className={`chat-float panel${size ? ' sized' : ''}`}
+      style={{ ...(pos ? { left: pos.x, top: pos.y, right: 'auto' } : {}), ...(size ? { width: size.w, height: size.h } : {}) }}>
+      <div className="chat-drag" onPointerDown={down} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('.chat > header')) return; try { localStorage.removeItem(POS_KEY); localStorage.removeItem(SIZE_KEY); } catch { /* ignore */ } setPos(null); setSize(null); }}>
         <ChatPanel {...props} />
       </div>
+      <div className="chat-grip" onPointerDown={grow} role="separator" aria-label={t('Resize window')} title={t('Resize window')} />
     </div>
   );
 }

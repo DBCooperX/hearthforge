@@ -7,7 +7,7 @@
 - **Solo and multiplayer tables are listed apart.** The lobby groups tables into Multiplayer and Solo, each with the most recently played first.
 - **Tidy names.** Place names on the zone map no longer overlap: long names are cut short, each name takes a free spot around its place, and one that still finds no room shows when you point at the place. Long hero names are cut with a dot-dot-dot in the party panel and on the battle nameplate, which shows the first name.
 - **Table talk chime.** A soft two-note chime plays when another player writes in table talk (never for your own messages). It has its own switch and volume in the sound menu, under Each sound.
-- **Table talk is a window.** Drag it by its title bar; it stays where you left it (double-click the title bar to put it back).
+- **Table talk is a window.** Drag it by its title bar; pull the grip in its bottom right corner to make it bigger or smaller. Position and size are remembered (double-click the title bar to put it back), and it always stays on screen.
 - **Two-weapon fighting.** A light melee weapon (dagger, shortsword, scimitar, handaxe) can go in the off hand next to another light weapon. After attacking, the new Off-hand attack button spends the bonus action on a second strike without the ability modifier.
 - **Splitting stacks.** Click a stack, then Split… to take some out into a new stack or hand them to another hero; hold Shift while dropping a stack on a hero tab to hand over part of it.
 - **Ready-made heroes in German.** Appearance and backstory of the ready-made heroes show in the table's language.
