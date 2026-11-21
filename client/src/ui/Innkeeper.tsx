@@ -10,6 +10,7 @@ import { CLASS_INFO } from '../../../shared/content';
 import { chf, type CreditConfig, type CreditReport } from '../../../shared/credits';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
+import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
 import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
@@ -421,17 +422,35 @@ function PlayersPane({ fail, say }: PaneProps) {
 
 // ---------------------------------------------------------------------------- settings
 
+/** Names for the values of choice settings, so the select shows "Heroic" and not "heroic". */
+const CHOICE_NAMES: Record<string, Record<string, { en: string; de: string }>> = {
+  HEARTHFORGE_DM_TONE: Object.fromEntries(TONE_INFO.map((x) => [x.id, x.label])),
+  HEARTHFORGE_DM_RATING: Object.fromEntries(RATING_INFO.map((x) => [x.id, x.label])),
+  HEARTHFORGE_DM_RULES: Object.fromEntries(RULES_INFO.map((x) => [String(x.value), { en: `${x.value} · ${x.label.en}`, de: `${x.value} · ${x.label.de}` }])),
+  HEARTHFORGE_DM_EFFORT: {
+    low: { en: 'Low', de: 'Niedrig' }, medium: { en: 'Medium', de: 'Mittel' }, high: { en: 'High', de: 'Hoch' },
+    xhigh: { en: 'Very high', de: 'Sehr hoch' }, max: { en: 'Maximum', de: 'Maximum' },
+  },
+  HEARTHFORGE_ART: {
+    generated: { en: 'Hearthforge pixel art (built in)', de: 'Hearthforge-Pixelgrafik (eingebaut)' },
+    kenney: { en: 'Tiny Dungeon (Kenney)', de: 'Tiny Dungeon (Kenney)' }, '0x72': { en: 'DungeonTileset II (0x72)', de: 'DungeonTileset II (0x72)' },
+  },
+};
+
 interface KeyResult { ok: boolean; reason?: keyof typeof KEY_RESULTS; detail?: string; missing?: string[] }
 
 function SettingRow({ def, value, draft, onDraft, onReset }: { def: SettingDef; value: SettingValue; draft: string | undefined; onDraft: (v: string | undefined) => void; onReset: () => void }) {
   const t = useT();
+  const { lang } = useLang();
   const current = draft ?? (def.kind === 'secret' ? '' : value.value);
+  const names = CHOICE_NAMES[def.key];
   let control: ReactNode;
   if (def.kind === 'choice' && def.choices!.join() === 'on,off' || def.choices?.join() === 'off,on') {
     const on = current === 'on';
     control = <button type="button" role="switch" aria-checked={on} className={on ? 'switch on' : 'switch'} onClick={() => { onDraft(on ? 'off' : 'on'); sfx('tab'); }}>{on ? t('On') : t('Off')}</button>;
-  } else if (def.kind === 'choice') {
-    control = <select value={current} onChange={(e) => onDraft(e.target.value)}>{def.choices!.map((c) => <option key={c} value={c}>{c}</option>)}</select>;
+  } else if (def.kind === 'choice' || (def.kind === 'number' && names)) {
+    const choices = def.choices ?? Object.keys(names!);
+    control = <select value={current} onChange={(e) => onDraft(e.target.value)}>{choices.map((c) => <option key={c} value={c}>{names?.[c]?.[lang] ?? c}</option>)}</select>;
   } else if (def.kind === 'number') {
     control = <input type="number" min={def.min} max={def.max} value={current} onChange={(e) => onDraft(e.target.value)} />;
   } else if (def.kind === 'secret') {
@@ -967,7 +986,7 @@ export function Innkeeper({ account, onClose }: { account: AccountView; onClose:
             {message && <div className={message.bad ? 'inn-flash is-bad' : 'inn-flash'} role="status">{message.text}</div>}
             {tab === 'overview' && <Overview {...pane} go={setTab} firstPassword={first} />}
             {tab === 'tables' && <Tables {...pane} />}
-            {tab === 'players' && <><AccountsPane {...pane} me={account.id} /><PlayersPane {...pane} /></>}
+            {tab === 'players' && <div className="inn-stack"><AccountsPane {...pane} me={account.id} /><PlayersPane {...pane} /></div>}
             {tab === 'costs' && <div className="inn-stack"><CreditsPane {...pane} /><UsagePane {...pane} /></div>}
             {tab === 'dm' && <SettingsBlock {...pane} go={setTab} sections={DM_SECTIONS} />}
             {tab === 'sound' && <SoundPane {...pane} go={setTab} />}

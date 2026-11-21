@@ -613,7 +613,7 @@
 .inn-keytest .is-good { color: #a9d68a; }
 .inn-keytest .is-bad, .inn-state.is-bad { color: #f1b3a8; }
 .inn-state.is-busy { color: #f0c877; }
-.inn-savebar { position: sticky; bottom: -22px; display: flex; gap: 10px; padding: 12px 0 14px; background: linear-gradient(transparent, var(--panel) 30%); }
+.inn-savebar { position: sticky; bottom: -22px; z-index: 2; display: flex; gap: 10px; margin-top: 8px; padding: 12px 0 14px; border-top: 1px solid var(--line); background: var(--panel); box-shadow: 0 -18px 14px -6px var(--panel); }
 .inn-form { display: grid; gap: 8px; max-width: 360px; }
 .inn-form label, .inn-check { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .inn-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }

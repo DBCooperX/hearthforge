@@ -1099,7 +1099,7 @@ export const DE: Record<string, string> = {
   'Language': 'Sprache', 'Interface language': 'Sprache der Oberfläche', 'The language of the story is chosen by the host of the table.': 'Die Sprache der Geschichte legt der Gastgeber des Tisches fest.',
   'Sound': 'Ton', 'Music is switched off on this server.': 'Die Musik ist auf diesem Server abgeschaltet.',
   'Interface sounds': 'Klänge der Oberfläche', 'Quiet sounds for windows, pages and gear.': 'Leise Klänge für Fenster, Buchseiten und Ausrüstung.',
-  'On': 'An', 'Off': 'Aus',
+  'On': 'An', 'Available': 'Verfügbar', 'Off': 'Aus',
   'Reading': 'Lesen', 'Text size': 'Schriftgrösse', 'For the story, the journal and item descriptions.': 'Für die Geschichte, das Tagebuch und Gegenstandsbeschreibungen.',
   'Normal': 'Normal', 'Larger': 'Grösser',
   'Keyboard': 'Tastatur', 'Players and invites': 'Spieler und Einladungen',

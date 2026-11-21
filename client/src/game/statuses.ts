@@ -4,7 +4,7 @@ import { ABILITIES } from '../../../shared/content';
 import { CONDITION_HELP, type HeroEffect } from '../../../shared/conditions';
 import { SPELL_BUFFS, SPELL_CONDITIONS } from '../../../shared/spells';
 import { glyphKeys } from '../../../shared/glyphs';
-import type { Lang } from '../../../shared/i18n';
+import { metric, type Lang } from '../../../shared/i18n';
 import type { Character, GameState, MonsterView } from '../../../shared/types';
 import { conditionHelp } from './util';
 
@@ -80,7 +80,7 @@ export function heroStatuses(c: Character, state: GameState, t: T, lang: Lang): 
     const by = b.by && b.by !== c.id ? name(b.by) : '';
     out.push({
       key: `buff:${b.id}`, glyph: glyphKeys('spell', b.spell || b.id, ab?.school), emoji: ab?.icon ?? '✨',
-      name: lang === 'de' ? def.de : def.chip, text: def.text[lang] ?? def.text.en,
+      name: lang === 'de' ? def.de : def.chip, text: lang === 'de' ? metric(def.text.de ?? def.text.en) : def.text.en,
       ends: [by ? t('Cast by {name}.', { name: by }) : '', t(BUFF_ENDS[def.lasts] ?? '')].filter(Boolean).join(' '),
       badge: def.lasts === 'turn' ? 1 : undefined, tone: 'good',
     });
