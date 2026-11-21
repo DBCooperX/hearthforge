@@ -570,7 +570,7 @@ export class ClaudeDM implements DungeonMaster {
       acted.add(id);
       return actor(id, intent);
     };
-    const prompt = this.turn(game, `It is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. ${monsterTacticsText(game.s.table.style)} When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text. You have no scene tool in this call and need none: your plain-text passage is delivered as it is. Never mention tools.`, { state: describeCombat(game, { live: true }), recent: 16 });
+    const prompt = this.turn(game, `It is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. ${monsterTacticsText(game.s.table.style)} When you have the results, narrate the most striking moment of the heroes' latest actions and the monsters' turns in at most two short sentences of plain text (a critical hit, someone going down, a clever move); never retell every action, the players see them on the map. You have no scene tool in this call and need none: your plain-text passage is delivered as it is. Never mention tools.`, { state: describeCombat(game, { live: true }), recent: 16 });
     let text: string | null = null;
     try {
       const out = await this.converse(game, 'monsters', tierForMonsters(game, block), prompt, [MONSTER_TOOL], async (name, input) => {

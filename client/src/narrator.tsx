@@ -7,7 +7,8 @@ import type { VoiceManifest } from '../../shared/voice';
 import { SESSION_HEADER, accountSession } from './account';
 import { useT } from './i18n';
 import { music } from './music';
-import { masterLevel, onMasterChange } from './ui/prefs';
+import { addToQueue, speaksBattleLine, takeFromQueue } from '../../shared/battleNarration';
+import { getPrefs, masterLevel, onMasterChange } from './ui/prefs';
 
 const KEY = 'hearthforge.narrator';
 /** At most this many story entries wait to be read. In a busy fight the oldest are dropped. */
@@ -30,7 +31,7 @@ function storedSettings(): Settings {
   return { muted: false, volume: 0.85 };
 }
 
-interface Job { table: string; entry: number }
+interface Job { table: string; entry: number; /** A line of a fight: only the newest waits, and it goes stale. */ battle: boolean; at: number }
 
 export class NarratorPlayer {
   private settings = storedSettings();
@@ -75,10 +76,9 @@ export class NarratorPlayer {
   speaks(lang: string) { return this.manifest.enabled && this.manifest.langs.includes(lang as never) && !this.settings.muted; }
 
   /** Read a new story entry after whatever is being read now. */
-  enqueue(table: string, entry: number) {
+  enqueue(table: string, entry: number, battle = false) {
     if (this.queue.some((j) => j.entry === entry && j.table === table) || this.current?.job.entry === entry) return;
-    this.queue.push({ table, entry });
-    if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE);
+    this.queue = addToQueue(this.queue, { table, entry, battle, at: Date.now() }, MAX_QUEUE);
     if (!this.current) void this.next();
   }
 
@@ -86,7 +86,7 @@ export class NarratorPlayer {
   toggle(table: string, entry: number) {
     if (this.current?.job.entry === entry) return this.stop();
     this.stop();
-    this.queue = [{ table, entry }];
+    this.queue = [{ table, entry, battle: false, at: Date.now() }];
     this.blocked = false;
     void this.next();
   }
@@ -122,7 +122,9 @@ export class NarratorPlayer {
 
   private async next(): Promise<void> {
     if (this.current || this.blocked) return;
-    const job = this.queue.shift();
+    // Fight lines that waited too long are dropped: the fight has moved on.
+    const { job, rest } = takeFromQueue(this.queue, Date.now());
+    this.queue = rest;
     if (!job) { music.duck(false); this.emit(); return; }
     const me = { job, audio: null as HTMLAudioElement | null, cancelled: false };
     this.current = me;
@@ -175,7 +177,12 @@ export function useNarrator(state: GameState | null) {
     // A new table, a reload or a first look is not news: nothing old is read out.
     if (!prev || prev.room !== state.room) { if (prev) narrator.stop(); return; }
     if (!narrator.speaks(state.language)) return;
-    for (const l of state.log) if (l.id > prev.last && l.kind === 'dm') narrator.enqueue(state.room, l.id);
+    const mode = getPrefs().battleNarration;
+    for (const l of state.log) {
+      if (l.id <= prev.last || l.kind !== 'dm') continue;
+      if (l.battle && !speaksBattleLine(mode, l.battle)) continue;
+      narrator.enqueue(state.room, l.id, !!l.battle);
+    }
   }, [state]);
 }
 
