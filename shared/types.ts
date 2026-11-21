@@ -584,6 +584,17 @@ export interface TableSummary {
   lastPlayed: number;
 }
 
+/** One signed-in account that is here right now, as the lobby lists it. */
+export interface OnlineEntry {
+  id: string;
+  name: string;
+  /** The table they sit at; null while they look at the list of tables, or when the viewer may not know which table. */
+  table: string | null;
+  tableTitle: string | null;
+  /** At a table, whether or not the viewer may see which one. */
+  seated: boolean;
+}
+
 /** A line of table talk between players. The Dungeon Master never sees it. */
 export interface ChatMessage {
   id: number;
@@ -816,7 +827,7 @@ export type ClientMessage =
   | { t: 'lobby'; session?: string }
   | { t: 'test'; do: TestAction }
   | { t: 'join'; room: string; session: string; code?: string }
-  | { t: 'create_table'; session: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
+  | { t: 'create_table'; session: string; title: string; language: Lang; maxPlayers: number; locked?: boolean }
   | { t: 'leave_table' }
   /** From the list of tables, host only: delete a table. `confirm` must be the table's name, typed out. */
   | { t: 'delete_table'; session: string; room: string; confirm: string }
@@ -870,7 +881,8 @@ export type ServerMessage =
   | { t: 'hello'; build: string }
   | { t: 'state'; state: GameState }
   | { t: 'moved'; id: string; path: { x: number; y: number }[] }
-  | { t: 'tables'; tables: TableSummary[] }
+  /** `online` is who is here now: players only learn the table of those who sit at one of their own, the Innkeeper sees every table. */
+  | { t: 'tables'; tables: TableSummary[]; online?: OnlineEntry[] }
   | { t: 'chat'; messages: ChatMessage[]; replace?: boolean }
   | { t: 'typing'; playerId: string; where: TypingWhere | null }
   /** The player no longer sits at the table and goes back to the lobby. */
@@ -898,6 +910,7 @@ export const JOIN_ERRORS = {
   wrongCode: 'That invite code is not right.',
   noCode: 'No table uses that invite code.',
   seatTaken: 'That seat belongs to another player.',
+  soloClosed: 'This is a solo table. Only its owner can play here.',
   titleNeeded: 'Give the table a name.',
   signIn: 'You are signed out. Sign in again.',
   notHost: 'Only the host of a table can do that.',

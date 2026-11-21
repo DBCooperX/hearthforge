@@ -7,7 +7,7 @@ import { sfx } from './sfx';
 import { narrator } from './narrator';
 import { CLOSED_REASONS } from './ui/labels';
 import { accountSession, signedOut } from './account';
-import { JOIN_ERRORS, type ChatMessage, type ClientMessage, type GameState, type ServerMessage, type TableSummary, type TestMonster, type TypingWhere } from '../../shared/types';
+import { JOIN_ERRORS, type ChatMessage, type ClientMessage, type GameState, type ServerMessage, type OnlineEntry, type TableSummary, type TestMonster, type TypingWhere } from '../../shared/types';
 import type { CreditView } from '../../shared/credits';
 
 function makeId(bytes = 16): string {
@@ -77,13 +77,15 @@ function hasDraft(): boolean {
 }
 
 export type MoveListener = (id: string, path: { x: number; y: number }[]) => void;
-export interface NewTable { title: string; language: Lang; maxPlayers: number; locked: boolean }
+export interface NewTable { title: string; language: Lang; maxPlayers: number; locked?: boolean }
 
 export interface Connection {
   state: GameState | null;
   connected: boolean;
   /** The tables the lobby lists. Null until the server has answered. */
   tables: TableSummary[] | null;
+  /** Who is here now, with the table they sit at where the server lets this account know it. */
+  online: OnlineEntry[];
   /** Table talk this player may read, oldest first. */
   chat: ChatMessage[];
   /** Who is typing right now, by player id. */
@@ -118,6 +120,7 @@ export function useConnection(): Connection {
   const [connected, setConnected] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
   const [tables, setTables] = useState<TableSummary[] | null>(null);
+  const [online, setOnline] = useState<OnlineEntry[]>([]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [typing, setTyping] = useState<Record<string, TypingWhere>>({});
   const [testCatalog, setTestCatalog] = useState<TestMonster[]>([]);
@@ -196,7 +199,7 @@ export function useConnection(): Connection {
             setJoinError(null);
             setLinkedTable(msg.state.room);
             break;
-          case 'tables': setTables(msg.tables); break;
+          case 'tables': setTables(msg.tables); setOnline(msg.online ?? []); break;
           case 'test_catalog': setTestCatalog(msg.monsters); break;
           case 'moved': listeners.current.forEach((fn) => fn(msg.id, msg.path)); break;
           case 'chat': setChat((c) => (msg.replace ? msg.messages : [...c, ...msg.messages].slice(-200))); break;
@@ -283,7 +286,7 @@ export function useConnection(): Connection {
     return () => void listeners.current.delete(fn);
   }, []);
 
-  return { state, connected, tables, chat, typing, testCatalog, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast, credit };
+  return { state, connected, tables, online, chat, typing, testCatalog, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast, credit };
 }
 
 /**

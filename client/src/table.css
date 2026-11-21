@@ -30,6 +30,8 @@
 .who { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 10px; background: rgba(60, 35, 10, 0.14); color: var(--ink-soft); }
 .who::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #9a8468; }
 .who.here { color: var(--ink); }
+.online-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 14px; }
+.online-list .who.lobby::before { background: #c9a24a; box-shadow: none; }
 .who.here::before { background: #3f9a3f; box-shadow: 0 0 5px #5fd05f; }
 .table-join { grid-column: 2; grid-row: 2 / span 2; display: grid; gap: 6px; justify-items: end; }
 .table-join input { text-transform: uppercase; letter-spacing: 0.14em; text-align: center; }

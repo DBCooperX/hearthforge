@@ -689,6 +689,8 @@ export class Game {
       return mine;
     }
     if (!name) throw new JoinError(JOIN_ERRORS.noName);
+    // A solo table belongs to the one who opened it: nobody else sits down there, code or not.
+    if (s.table.maxPlayers <= 1 && (s.hostId || s.players.length)) throw new JoinError(JOIN_ERRORS.soloClosed);
     if (s.table.code && String(code ?? '').trim().toUpperCase() !== s.table.code) throw new JoinError(JOIN_ERRORS.wrongCode);
     if (s.players.length >= s.table.maxPlayers) throw new JoinError(JOIN_ERRORS.full);
     if (clash(name)) throw new JoinError(JOIN_ERRORS.nameTaken);
