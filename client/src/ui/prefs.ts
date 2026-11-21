@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import type { InvFilter, InvSort } from '../../../shared/inventory';
 
+import { DEFAULT_BATTLE_NARRATION, type BattleNarrationMode } from '../../../shared/battleNarration';
 import type { TextSize } from './labels';
 
 export interface Prefs {
@@ -27,10 +28,12 @@ export interface Prefs {
   chatChime: boolean;
   /** 0 to 1, a share of the master volume. */
   chatChimeVolume: number;
+  /** How much of a fight the narrator reads aloud: nothing, the big moments, or every comment. */
+  battleNarration: BattleNarrationMode;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5 };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5, battleNarration: DEFAULT_BATTLE_NARRATION };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {

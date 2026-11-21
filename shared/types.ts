@@ -543,6 +543,8 @@ export interface LogEntry {
   scene?: SceneMeta;
   roll?: RollInfo;
   levelUp?: LevelUpInfo;
+  /** Set on the Dungeon Master's words during a fight: a big moment, or a passing comment. See battleNarration.ts. */
+  battle?: 'key' | 'note';
 }
 
 export type Phase = 'lobby' | 'explore' | 'combat' | 'defeat';

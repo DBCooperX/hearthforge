@@ -3,7 +3,8 @@ import type { WebSocket } from 'ws';
 import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
-import { Game, GameError, type Beat, type InternalState } from './game/engine';
+import { battleLineFor, highlightOf } from '../../shared/battleNarration';
+import { Game, GameError, type Beat, type MonsterActResult, type InternalState } from './game/engine';
 import { monsterCatalog, playtest } from './game/playtest';
 import { newSeed } from '../../shared/start';
 import { tagged } from '../../shared/i18n';
@@ -91,6 +92,8 @@ export class Room {
   private queue: Promise<void> = Promise.resolve();
   /** Serialises narration and DM chat so they never block movement. */
   private narration: Promise<void> = Promise.resolve();
+  /** The fight in progress: monster rounds so far and how many monsters were alive after the last one. */
+  private battle: { round: number; alive: number } | null = null;
   private dmBusy = 0;
   private epoch = 0;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -595,9 +598,16 @@ export class Room {
       try {
         await this.narration; // let the scene-setting land before the monsters move
         if (epoch !== this.epoch) return;
-        const text = await this.dm.runMonsters(g, block, this.monsterActor(epoch));
+        const alive = g.s.monsters.filter((m) => m.alive).length;
+        if (!this.battle || g.s.phase !== 'combat') this.battle = { round: 0, alive };
+        let highlight = false;
+        const text = await this.dm.runMonsters(g, block, this.monsterActor(epoch, (r) => { highlight ||= highlightOf(r); }));
         if (epoch !== this.epoch) return;
-        if (text) g.log('dm', text);
+        // Only the big moments and an occasional comment are written down; the rest is on the battle map.
+        const line = battleLineFor({ highlight, monsterDown: alive < this.battle.alive, round: ++this.battle.round });
+        this.battle.alive = g.s.monsters.filter((m) => m.alive).length;
+        if (text && line) g.log('dm', text, { battle: line });
+        if (g.s.phase !== 'combat') this.battle = null;
         g.finishMonsterBlock(block);
       } finally {
         this.dmBusy--;
@@ -608,7 +618,7 @@ export class Room {
   }
 
   /** Plays a monster's turn for the Dungeon Master, pausing while a player decides on an opportunity attack. */
-  private monsterActor(epoch: number): MonsterActor {
+  private monsterActor(epoch: number, seen?: (r: MonsterActResult) => void): MonsterActor {
     const g = this.game;
     return async (id, intent) => {
       let result = g.monsterAct(id, intent);
@@ -620,6 +630,7 @@ export class Room {
         if (!next) break;
         result = next;
       }
+      seen?.(result);
       this.flush();
       await sleep(this.timing.actionDelayMs);
       return result;
@@ -661,11 +672,14 @@ export class Room {
   }
 
   private narrateLater(beats: Beat[]) {
+    // A spell cast in a fight is seen on the map; it is not narrated again.
+    if (this.game.s.phase === 'combat') beats = beats.filter((b) => b.kind !== 'spell');
     if (!beats.length) return;
     const epoch = this.epoch;
+    const battle = beats.some((b) => b.kind === 'combat_start' || b.kind === 'combat_end');
     this.background(async () => {
       const scene = await this.dm.narrate(this.game, beats, async () => this.flush());
-      if (scene && epoch === this.epoch) this.game.addScene(scene);
+      if (scene && epoch === this.epoch) this.game.addScene(scene, { battle });
     });
   }
 

@@ -538,7 +538,7 @@ export class Game {
   get width() { return this.s.rows[0]?.length ?? 0; }
   get height() { return this.s.rows.length; }
 
-  log(kind: LogKind, text: string, extra: Partial<Pick<LogEntry, 'speaker' | 'scene' | 'roll' | 'levelUp'>> = {}) {
+  log(kind: LogKind, text: string, extra: Partial<Pick<LogEntry, 'speaker' | 'scene' | 'roll' | 'levelUp' | 'battle'>> = {}) {
     this.s.log.push({ id: ++this.s.logSeq, kind, text, ...extra });
     if (this.s.log.length > MAX_LOG) this.s.log.splice(0, this.s.log.length - MAX_LOG);
   }
@@ -5266,14 +5266,15 @@ export class Game {
   }
 
   /** Narration shown to the players as a scene card, headed by where it plays, when, and who is there. */
-  addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }) {
+  addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }, opts: { battle?: boolean } = {}) {
     this.spoilsOpen = false;
     const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
     const ask = this.pictureAsk;
     this.pictureAsk = null;
     if (ask && this.pictures) meta.painting = true;
-    this.log('dm', scene.text.trim(), { scene: meta });
+    // The opening and the end of a fight, and answers during one, are big moments.
+    this.log('dm', scene.text.trim(), { scene: meta, ...(opts.battle || this.s.phase === 'combat' ? { battle: 'key' as const } : {}) });
     if (ask && this.pictures) this.pictures.paint(this.s.logSeq, ask);
   }
 

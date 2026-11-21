@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { LangSwitch, useT } from '../i18n';
 import { SoundMixer } from '../music';
+import { BATTLE_NARRATION_MODES, type BattleNarrationMode } from '../../../shared/battleNarration';
 import { Info } from './Hint';
 import { SETTINGS_TABS, SHORTCUTS, SIZE_LABELS, TEXT_SIZES } from './labels';
 import { setPrefs, usePrefs } from './prefs';
@@ -18,6 +19,8 @@ type Tab = keyof typeof SETTINGS_TABS;
 
 /** Choices for the end turn reminder, in seconds; 0 is off. */
 const TURN_REMINDERS = [0, 20, 45, 90];
+
+const BATTLE_NARRATION_LABELS: Record<BattleNarrationMode, string> = { off: 'Off', key: 'Key moments', all: 'Every comment' };
 
 export function Settings({ onClose }: Props) {
   const t = useT();
@@ -53,7 +56,17 @@ export function Settings({ onClose }: Props) {
             </div>
           </>
         )}
-        {tab === 'sound' && <div className="setting setting-mix"><span>{t('Sound')} <Info text={t('Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.')} /></span><SoundMixer /></div>}
+        {tab === 'sound' && (
+          <>
+            <div className="setting setting-mix"><span>{t('Sound')} <Info text={t('Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.')} /></span><SoundMixer /></div>
+            <div className="setting">
+              <span>{t('Narrator in fights')} <Info text={t('Key moments: the narrator reads only the big ones, such as the start and the end of a fight, a creature or hero going down, or a critical hit. Every comment: also the short remarks in between, which come every few rounds. A line that is out of date by the time it would be read is skipped.')} /></span>
+              <span className="pick">
+                {BATTLE_NARRATION_MODES.map((m) => <button key={m} type="button" className={prefs.battleNarration === m ? 'on' : ''} aria-pressed={prefs.battleNarration === m} onClick={() => { setPrefs({ battleNarration: m }); sfx('tab'); }}>{t(BATTLE_NARRATION_LABELS[m])}</button>)}
+              </span>
+            </div>
+          </>
+        )}
         {tab === 'keys' && (
           <ul className="shortcuts">
             {SHORTCUTS.map((s) => (
