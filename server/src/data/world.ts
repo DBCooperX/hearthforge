@@ -158,6 +158,11 @@ export interface RegionDef {
   nameIn: string;
   /** What the Dungeon Master knows about the region. "{dist}" is filled in once the map exists. */
   premise: string;
+  /**
+   * What the Dungeon Master knows about the quests and the hidden twist of a rolled region.
+   * English. Kept apart from the premise so the pre-game rewording cannot shorten it away.
+   */
+  plot?: string;
   /** The home settlement. */
   startId: string;
   tavernId: string | null;
