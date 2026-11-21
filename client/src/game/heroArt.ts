@@ -4,7 +4,7 @@
 // actually carries. One picture serves the picker, the party panel, the
 // character sheet and the battle map. Original generated art, CC0.
 
-import { HAIR_COLORS, OUTFITS, SKINS, heroArtKey, heroGear, heroLook, type HeroArt, type HeroLook } from '../../../shared/heroLook';
+import { HAIR_COLORS, OUTFITS, SKINS, heroArtKey, heroGear, heroLook, weaponKind, type HeroArt, type HeroGear, type HeroLook } from '../../../shared/heroLook';
 import { ITEMS } from '../../../shared/content';
 import { itemDef } from '../../../shared/items';
 import { buildSheet, type Draft } from '../../../shared/build';
@@ -40,6 +40,51 @@ const STANCE: Record<ClassId, Stance> = {
 const SPELL: Partial<Record<ClassId, string>> = { wizard: '#6fc3ff', sorcerer: '#ff9a3a', warlock: '#b46aff', druid: '#7ee07a' };
 
 const hashStr = (s: string) => [...s].reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 17) >>> 0;
+
+type WeaponPose = { along: (t: number, side?: number) => P; handR: P; k: number; spell: RGB | null; feet: number };
+/** A weapon drawn into a hero's right hand: the same pictures serve the drawn heroes and the overlay on painted ones. */
+function paintWeapon(g: Ink, weapon: HeroGear['weapon'], { along, handR, k, spell, feet }: WeaponPose) {
+  const gear = { weapon };
+    const blade = mix(STEEL, WHITE, 0.2);
+    switch (gear.weapon) {
+      case 'sword': case 'greatsword': case 'dagger': {
+        const len = gear.weapon === 'greatsword' ? 0.56 : gear.weapon === 'dagger' ? 0.15 : 0.35, bw = gear.weapon === 'greatsword' ? 0.018 : gear.weapon === 'dagger' ? 0.011 : 0.014;
+        g.mat = 'leather'; g.seg(along(-0.04), along(0.035), 0.024, WOOD);
+        g.mat = 'metal'; g.ell(...along(-0.05), 0.014, 0.014, GOLD);
+        g.poly([along(0.05, bw), along(len, bw * 0.75), along(len + 0.035), along(len, -bw * 0.75), along(0.05, -bw)], blade);
+        g.fine(along(0.06), along(len - 0.01), 0.003, mix(STEEL, BLACK, 0.3), 0.6);
+        g.seg(along(0.04, 0.045), along(0.04, -0.045), 0.02, GOLD);
+        break;
+      }
+      case 'axe':
+        g.mat = 'wood'; g.seg(along(-0.08), along(0.4), 0.022, WOOD);
+        g.mat = 'metal'; g.blob([along(0.29, 0.005), along(0.27, 0.06), along(0.25, 0.1), along(0.35, 0.115), along(0.45, 0.1), along(0.43, 0.06), along(0.41, 0.005)], blade);
+        break;
+      case 'mace':
+        g.mat = 'wood'; g.seg(along(-0.06), along(0.3), 0.022, WOOD);
+        g.mat = 'metal'; for (const s of [-1, 1]) g.tri(along(0.29, s * 0.03), along(0.39, s * 0.03), along(0.34, s * 0.06), STEEL);
+        g.ell(...along(0.34), 0.04, 0.046, STEEL);
+        break;
+      case 'spear':
+        g.mat = 'wood'; g.seg(along(-0.3), along(0.62), 0.02, WOOD);
+        g.mat = 'metal'; g.poly([along(0.6, 0.022), along(0.76), along(0.6, -0.022), along(0.58)], blade);
+        break;
+      case 'staff': {
+        g.mat = 'wood'; g.curve([along(-0.5), along(-0.1, 0.006), along(0.25, -0.004), along(0.44)], 0.024, WOOD);
+        const tip = along(0.47);
+        g.mat = 'plain'; g.ell(tip[0], tip[1], 0.026, 0.028, spell ? mix(spell, BLACK, 0.3) : hex('#4ab8d8'));
+        g.glow(tip[0], tip[1], spell ?? hex('#6fe3ff'), 3);
+        break;
+      }
+      case 'bow': {
+        const y0 = Math.max(0.05, handR[1] - 0.3 * k), y1 = Math.min(feet - 0.02, handR[1] + 0.28 * k), mid = (y0 + y1) / 2, hx = handR[0];
+        g.seg([hx - 0.02, y0], [hx - 0.02, y1], 0.006, BONE, false);
+        g.mat = 'wood'; g.curve([[hx - 0.02, y0], [hx + 0.035, (y0 + mid) / 2], [hx + 0.055, mid], [hx + 0.035, (mid + y1) / 2], [hx - 0.02, y1]], 0.022, WOOD);
+        break;
+      }
+      default: break;
+    }
+}
 
 /** The hero alone on a transparent background, S pixels square, and where the head is (in parts of the picture). */
 type View = { x: number; y: number; size: number };
@@ -161,47 +206,7 @@ function draw(a: HeroArt, S: number, weight: number, view?: (head: { r: number; 
   const leftAcross = stance === 'guard' && gear.shield;
   
   // --- weapons carried behind the body (over the shoulder)
-  const drawWeapon = () => {
-    const blade = mix(STEEL, WHITE, 0.2);
-    switch (gear.weapon) {
-      case 'sword': case 'greatsword': case 'dagger': {
-        const len = gear.weapon === 'greatsword' ? 0.56 : gear.weapon === 'dagger' ? 0.15 : 0.35, bw = gear.weapon === 'greatsword' ? 0.018 : gear.weapon === 'dagger' ? 0.011 : 0.014;
-        g.mat = 'leather'; g.seg(along(-0.04), along(0.035), 0.024, WOOD);
-        g.mat = 'metal'; g.ell(...along(-0.05), 0.014, 0.014, GOLD);
-        g.poly([along(0.05, bw), along(len, bw * 0.75), along(len + 0.035), along(len, -bw * 0.75), along(0.05, -bw)], blade);
-        g.fine(along(0.06), along(len - 0.01), 0.003, mix(STEEL, BLACK, 0.3), 0.6);
-        g.seg(along(0.04, 0.045), along(0.04, -0.045), 0.02, GOLD);
-        break;
-      }
-      case 'axe':
-        g.mat = 'wood'; g.seg(along(-0.08), along(0.4), 0.022, WOOD);
-        g.mat = 'metal'; g.blob([along(0.29, 0.005), along(0.27, 0.06), along(0.25, 0.1), along(0.35, 0.115), along(0.45, 0.1), along(0.43, 0.06), along(0.41, 0.005)], blade);
-        break;
-      case 'mace':
-        g.mat = 'wood'; g.seg(along(-0.06), along(0.3), 0.022, WOOD);
-        g.mat = 'metal'; for (const s of [-1, 1]) g.tri(along(0.29, s * 0.03), along(0.39, s * 0.03), along(0.34, s * 0.06), STEEL);
-        g.ell(...along(0.34), 0.04, 0.046, STEEL);
-        break;
-      case 'spear':
-        g.mat = 'wood'; g.seg(along(-0.3), along(0.62), 0.02, WOOD);
-        g.mat = 'metal'; g.poly([along(0.6, 0.022), along(0.76), along(0.6, -0.022), along(0.58)], blade);
-        break;
-      case 'staff': {
-        g.mat = 'wood'; g.curve([along(-0.5), along(-0.1, 0.006), along(0.25, -0.004), along(0.44)], 0.024, WOOD);
-        const tip = along(0.47);
-        g.mat = 'plain'; g.ell(tip[0], tip[1], 0.026, 0.028, spell ? mix(spell, BLACK, 0.3) : hex('#4ab8d8'));
-        g.glow(tip[0], tip[1], spell ?? hex('#6fe3ff'), 3);
-        break;
-      }
-      case 'bow': {
-        const y0 = Math.max(0.05, handR[1] - 0.3 * k), y1 = Math.min(feet - 0.02, handR[1] + 0.28 * k), mid = (y0 + y1) / 2, hx = handR[0];
-        g.seg([hx - 0.02, y0], [hx - 0.02, y1], 0.006, BONE, false);
-        g.mat = 'wood'; g.curve([[hx - 0.02, y0], [hx + 0.035, (y0 + mid) / 2], [hx + 0.055, mid], [hx + 0.035, (mid + y1) / 2], [hx - 0.02, y1]], 0.022, WOOD);
-        break;
-      }
-      default: break;
-    }
-  };
+  const drawWeapon = () => paintWeapon(g, gear.weapon, { along, handR, k, spell, feet });
   if (stance === 'guard' && (gear.weapon === 'greatsword' || gear.weapon === 'axe')) drawWeapon();
 
   // --- torso, tapering from the shoulders to the waist, with the hero's colour on it
@@ -507,4 +512,64 @@ export function artOfDraft(d: Draft): HeroArt | null {
   const def = (id?: string | null) => (id ? ITEMS[id] : null);
   const look: HeroLook = heroLook({ ...who, look: d.look });
   return { ...who, look, gear: heroGear(def(eq.armor), def(eq.mainHand), def(eq.offHand)) };
+}
+
+// --- Weapons on painted figures ------------------------------------------------------------------------------------
+// A painted figure is one fixed picture, so what the hero holds is drawn on top of it: the weapon in the right hand,
+// a shield or a second weapon on the left, at the same size as the drawn heroes carry them.
+
+/** The weapon in the off hand, if it is one (dual wielding), for the overlay. */
+export function offWeaponOf(c: Character, items?: Record<string, ItemDef>): HeroGear['weapon'] {
+  const o = c.equipment.offHand;
+  return o ? weaponKind(itemDef(items, o.defId)) : 'none';
+}
+
+const armed = new Map<string, HTMLCanvasElement>();
+
+/** The painted figure with the hero's weapon, shield and off-hand weapon drawn into its hands. */
+export function armedFigure(id: string, fig: HTMLCanvasElement, a: HeroArt, off: HeroGear['weapon'] = 'none'): HTMLCanvasElement {
+  const { weapon, shield } = a.gear;
+  if (weapon === 'none' && !shield && off === 'none') return fig;
+  const key = `${id}|${a.classId}|${a.look.color}|${a.look.skin}|${weapon}|${shield ? 1 : 0}|${off}`;
+  const got = armed.get(key);
+  if (got) return got;
+  const W = fig.width, H = fig.height;
+  const side = H / 0.84; // a hero stands 0.84 of the drawn square: the figure's height is that
+  const px = 512;
+  const g = new Ink(px, 1, 1);
+  const feet = 0.955, hip = 0.607, sy = 0.334;
+  const reach = Math.min(0.2, (W / 2) * 0.95 / side);
+  const spell = SPELL[a.classId] ? hex(SPELL[a.classId]!) : null;
+  const skin = hex(SKINS[a.look.skin] ?? SKINS.fair);
+  const pose = (hand: P, dir: P, k: number): WeaponPose => {
+    const dl = Math.hypot(dir[0], dir[1]), d: P = [dir[0] / dl, dir[1] / dl], n: P = [-d[1], d[0]];
+    return { along: (t, s = 0) => [hand[0] + d[0] * t * k + n[0] * s, hand[1] + d[1] * t * k + n[1] * s], handR: hand, k, spell, feet };
+  };
+  // Long weapons are kept short enough to stay inside the picture, so the figure keeps its size on the map.
+  const kOf = (w: HeroGear['weapon']) => (w === 'staff' || w === 'spear' || w === 'greatsword' ? 0.62 : 0.9);
+  const grip = (hand: P) => { g.mat = 'skin'; g.ell(hand[0], hand[1] + 0.004, 0.02, 0.019, skin); };
+  if (weapon !== 'none') {
+    const hand: P = [0.5 + reach, hip];
+    paintWeapon(g, weapon, pose(hand, weapon === 'bow' ? [0, -1] : [0.12, -1], kOf(weapon)));
+    grip(hand);
+  }
+  if (off !== 'none') {
+    const hand: P = [0.5 - reach, hip];
+    paintWeapon(g, off, pose(hand, [-0.12, -1], kOf(off)));
+    grip(hand);
+  } else if (shield) {
+    const cloth = mix(hex(OUTFITS[a.look.color] ?? OUTFITS.red), hex('#6a5a48'), 0.15);
+    const cx = 0.5 - reach - 0.005, cy = (sy + hip) / 2 + 0.03, sx = 0.1, sh = 0.125;
+    g.mat = 'metal'; g.blob([[cx - sx, cy - sh * 0.85], [cx, cy - sh], [cx + sx, cy - sh * 0.85], [cx + sx * 0.9, cy + sh * 0.15], [cx, cy + sh], [cx - sx * 0.9, cy + sh * 0.15]], mix(STEEL, BLACK, 0.15), true, 0.7);
+    g.mat = 'wood'; g.blob([[cx - sx * 0.8, cy - sh * 0.7], [cx, cy - sh * 0.82], [cx + sx * 0.8, cy - sh * 0.7], [cx + sx * 0.72, cy + sh * 0.12], [cx, cy + sh * 0.8], [cx - sx * 0.72, cy + sh * 0.12]], cloth, false, 0.7);
+    g.mat = 'metal'; g.ell(cx, cy - sh * 0.25, 0.022, 0.022, GOLD);
+  }
+  g.outline(OUTLINE);
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const c = out.getContext('2d')!;
+  c.drawImage(fig, 0, 0);
+  c.drawImage(g.canvas(), W / 2 - side / 2, H - feet * side, side, side);
+  armed.set(key, out);
+  return out;
 }

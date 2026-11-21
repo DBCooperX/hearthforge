@@ -166,7 +166,7 @@ export function heroFigurePrompt(c: Character): { prompt: string; key: FigureKey
     prompt: [
       `Style: ${FIGURE_STYLE}`,
       `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
-      'The attached image is this hero\'s painted portrait. Paint the very same person, now standing at full length: the same face, skin, hair, beard, build, colours and clothes, with the gear of the class (armour, robes, holy symbol, bow, staff) held ready but not covering the face. Standing upright on both feet, in a calm, ready stance.',
+      'The attached image is this hero\'s painted portrait. Paint the very same person, now standing at full length: the same face, skin, hair, beard, build, colours and clothes, wearing their armour or robes, but with both hands empty and relaxed at their sides: no weapon, staff, bow or shield in the picture, which are added separately. Standing upright on both feet, in a calm, ready stance.',
       figureBackdrop(key),
     ].join('\n\n'),
   };

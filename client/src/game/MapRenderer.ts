@@ -11,7 +11,7 @@ import { TILE, packSprites, spriteCanvas } from './sprites';
 import { tileWalkable } from '../../../shared/battlemap';
 import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { monsterCanvas, monsterFigure, monsterVariant } from './monsterArt';
-import { artOfCharacter, heroCanvas, heroStanding } from './heroArt';
+import { armedFigure, artOfCharacter, heroCanvas, heroStanding, offWeaponOf } from './heroArt';
 import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
@@ -522,8 +522,12 @@ export class MapRenderer {
     for (const c of state.characters) {
       if (c.dead) continue;
       const art = artOfCharacter(c, state.items);
-      const painted = paintedFigure(c.figureId);
-      const heroTexture = painted && c.figureId ? flatFigureTex(c.figureId, painted, 'pc') : heroTex(art);
+      // The painting is fixed, so the weapon and shield the hero holds now are drawn onto it.
+      const off = offWeaponOf(c, state.items);
+      const base = paintedFigure(c.figureId);
+      const figKey = `${c.figureId}|${art.gear.weapon}|${art.gear.shield ? 1 : 0}|${off}`;
+      const painted = base && c.figureId ? armedFigure(c.figureId, base, art, off) : null;
+      const heroTexture = painted ? flatFigureTex(figKey, painted, 'pc') : heroTex(art);
       const e = place(c.id, 'pc', c.name, heroTexture, c.x, c.y, c.hp, c.maxHp);
       const down = c.hp <= 0;
       e.down = down;
@@ -532,7 +536,7 @@ export class MapRenderer {
       e.root.alpha = down ? 0.75 : 1;
       e.root.zIndex = down ? 0 : 2;
       if (this.tilt) {
-        const key = painted ? `f|${c.figureId}` : `h|${heroArtKey(art)}`;
+        const key = painted ? `f|${figKey}` : `h|${heroArtKey(art)}`;
         this.standFor(e, key, () => figureTex(key, () => painted ?? heroStanding(art)), c.maxHp, false);
       }
     }

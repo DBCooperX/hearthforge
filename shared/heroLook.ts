@@ -100,10 +100,11 @@ export interface HeroGear {
 interface GearItem { id: string; kind: string; weapon?: { ranged?: unknown; twoHanded?: boolean }; armor?: { category: string }; story?: { baseId?: string | null } }
 
 /** Reads the picture's gear from the items in the armor, main hand and off hand slots. */
-export function heroGear(armor?: GearItem | null, mainHand?: GearItem | null, offHand?: GearItem | null): HeroGear {
-  const id = (mainHand?.story?.baseId ?? mainHand?.id ?? '').toLowerCase();
-  const w = mainHand?.weapon;
-  const weapon: HeroGear['weapon'] = !w ? 'none'
+/** Which drawn weapon an item is held as, or 'none' for something that is not a weapon. */
+export function weaponKind(item?: GearItem | null): HeroGear['weapon'] {
+  const id = (item?.story?.baseId ?? item?.id ?? '').toLowerCase();
+  const w = item?.weapon;
+  return !w ? 'none'
     : w.ranged && !/dagger|axe|spear|javelin/.test(id) ? 'bow'
     : /staff/.test(id) ? 'staff'
     : /dagger/.test(id) ? 'dagger'
@@ -111,8 +112,11 @@ export function heroGear(armor?: GearItem | null, mainHand?: GearItem | null, of
     : /mace|hammer|club|morning|flail/.test(id) ? 'mace'
     : /spear|javelin|pike|halberd|glaive/.test(id) ? 'spear'
     : w.twoHanded ? 'greatsword' : 'sword';
+}
+
+export function heroGear(armor?: GearItem | null, mainHand?: GearItem | null, offHand?: GearItem | null): HeroGear {
   const cat = armor?.armor?.category;
-  return { armor: cat === 'heavy' || cat === 'medium' || cat === 'light' ? cat : 'none', weapon, shield: offHand?.kind === 'shield' };
+  return { armor: cat === 'heavy' || cat === 'medium' || cat === 'light' ? cat : 'none', weapon: weaponKind(mainHand), shield: offHand?.kind === 'shield' };
 }
 
 export interface HeroArt extends Who { look: HeroLook; gear: HeroGear; /** A painted portrait on the server (/pictures/<id>), shown instead of the drawn bust once it has loaded. */ portrait?: string | null }
