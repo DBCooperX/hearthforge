@@ -10,6 +10,21 @@ import { useLang, useT } from '../i18n';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { ask } from './Confirm';
 import { sfx } from './sound';
+import { cutOut } from '../game/paintedFigures';
+
+/** A battle figure as it stands on the map: its key-colour background taken out, on a dark ground. */
+function FigureImg({ url, alt }: { url: string; alt: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const img = new Image();
+    img.onload = () => { if (!live) return; try { setSrc(cutOut(img)?.toDataURL() ?? url); } catch { setSrc(url); } };
+    img.onerror = () => { if (live) setSrc(url); };
+    img.src = url;
+    return () => { live = false; };
+  }, [url]);
+  return src ? <img className="picture-figure" src={src} alt={alt} loading="lazy" /> : <span className="picture-figure" aria-label={alt} />;
+}
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -31,7 +46,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
   const [draft, setDraft] = useState<PictureConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'save' | 'sample' | null>(null);
-  const [sample, setSample] = useState<(PictureInfo & { portrait: boolean }) | null>(null);
+  const [sample, setSample] = useState<(PictureInfo & { kind: 'scene' | 'portrait' | 'figure' }) | null>(null);
   const [open, setOpen] = useState<PictureInfo | null>(null);
 
   useEffect(() => { api<Library>('/api/pictures/library').then(setLib).catch(() => setError('failed')); }, []);
@@ -41,7 +56,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
     try {
       const next = await api<Library & { sample?: PictureInfo }>('/api/pictures/action', body);
       setLib(next);
-      if (next.sample) setSample({ ...next.sample, portrait: body.do === 'sample_portrait' });
+      if (next.sample) setSample({ ...next.sample, kind: body.do === 'sample_portrait' ? 'portrait' : body.do === 'sample_figure' ? 'figure' : 'scene' });
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed');
@@ -115,7 +130,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample')}</button>
           <span className="muted small">{draft ? t('Save first, then paint a sample.') : t('A test picture in this style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
         </div>
-        {sample && !sample.portrait && <figure className="picture-sample-img"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+        {sample?.kind === 'scene' && <figure className="picture-sample-img"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
       </section>
 
       <section>
@@ -129,7 +144,22 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_portrait' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample portrait')}</button>
           <span className="muted small">{t('A dwarf fighter in the portrait style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
         </div>
-        {sample?.portrait && <figure className="picture-sample-img portrait"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+        {sample?.kind === 'portrait' && <figure className="picture-sample-img portrait"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+      </section>
+
+      <section>
+        <h3>{t('Battle figures')}</h3>
+        <label className="inn-switch">
+          <input type="checkbox" checked={c.figures} onChange={(e) => edit({ figures: e.target.checked })} />
+          <span><b>{t('Paint the figures on the battle map')}</b><br /><span className="muted small">{t('Every hero with a painted portrait gets a matching painted figure, paid by the player whose hero it is. Every kind of monster is painted once, the first time it shows up, and then used at every table of this server: a goblin costs one picture, however many goblins come. Until a figure is ready, and when this is off, the drawn figures stay. Works in the 2.5D and the flat battle view.')}</span></span>
+        </label>
+        {num(t('New figures per day for the whole server'), c.figuresPerDay, '1', (n) => edit({ figuresPerDay: n }))}
+        <div className="picture-sample">
+          <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_figure' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample figure')}</button>
+          <span className="muted small">{t('A goblin as it would stand on the battle map, about {price}. It goes on your own costs and is not used in play.', { price: usd(price) })}</span>
+        </div>
+        {sample?.kind === 'figure' && <figure className="picture-sample-img figure"><FigureImg url={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+        <p className="muted small">{t('Not happy with a figure? Delete it below, and it is painted anew the next time it is needed.')}</p>
       </section>
 
       <section>
@@ -160,10 +190,10 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <ul className="picture-grid">
             {lib.recent.map((p) => (
               <li key={p.id}>
-                <button type="button" className="picture-thumb" onClick={() => setOpen(p)} title={p.caption}><img src={p.url} alt={p.caption} loading="lazy" /></button>
-                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
+                <button type="button" className={`picture-thumb${p.moment === 'figure' ? ' figure' : ''}`} onClick={() => setOpen(p)} title={p.caption}>{p.moment === 'figure' ? <FigureImg url={p.url} alt={p.caption} /> : <img src={p.url} alt={p.caption} loading="lazy" />}</button>
+                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' || p.moment === 'figure' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : p.moment === 'figure' ? t('Battle figure') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
                 <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
-                <button type="button" className="link danger" onClick={() => { void ask(t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
+                <button type="button" className="link danger" onClick={() => { void ask(p.moment === 'figure' ? t('Delete this battle figure? The drawn one stands in until it is painted anew.') : t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
               </li>
             ))}
           </ul>
@@ -171,7 +201,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
       </section>
       {open && (
         <div className="picture-lightbox" role="dialog" aria-label={open.caption} onClick={() => setOpen(null)}>
-          <figure><img src={open.url} alt={open.caption} /><figcaption>{open.caption}</figcaption></figure>
+          <figure>{open.moment === 'figure' ? <FigureImg url={open.url} alt={open.caption} /> : <img src={open.url} alt={open.caption} />}<figcaption>{open.caption}</figcaption></figure>
         </div>
       )}
     </div>

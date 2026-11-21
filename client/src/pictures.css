@@ -45,3 +45,10 @@
 .scene-picture.drawing { cursor: pointer; }
 .scene-picture .charcoal-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .scene-picture.shown img { transition: none; }
+
+/* Battle figures: the cut-out figure on the dark ground of the battle map. */
+.picture-sample-img.figure { max-width: 220px; }
+.picture-sample-img.figure .picture-figure { width: 100%; aspect-ratio: 2 / 3; object-fit: contain; background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); border-radius: 4px; border: 1px solid rgba(120, 96, 60, 0.55); display: block; }
+.picture-thumb.figure { background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }
+.picture-thumb.figure img { object-fit: contain; object-position: center bottom; }
+.picture-lightbox .picture-figure { max-height: 80vh; background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }

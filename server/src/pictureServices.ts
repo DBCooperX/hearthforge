@@ -10,7 +10,12 @@ export interface PaintRequest {
   refs: { mime: string; data: Buffer }[];
   /** A square picture (a portrait) instead of the wide 3:2 scene. */
   square?: boolean;
+  /** A tall 2:3 picture (a standing battle figure). Wins over `square`. */
+  tall?: boolean;
 }
+
+/** The shape asked for, as an aspect ratio. */
+const ratio = (req: PaintRequest) => (req.tall ? '2:3' : req.square ? '1:1' : '3:2');
 
 export interface Painted { data: Buffer; mime: string }
 
@@ -45,7 +50,7 @@ async function gemini(fetchFn: Fetch, model: string, key: string, req: PaintRequ
   const send = (imageConfig: boolean) => call(fetchFn, url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], ...(imageConfig ? { imageConfig: { aspectRatio: req.square ? '1:1' : '3:2' } } : {}) } }),
+    body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], ...(imageConfig ? { imageConfig: { aspectRatio: ratio(req) } } : {}) } }),
   }, 'Gemini');
   let res: Response;
   try {
@@ -71,8 +76,8 @@ async function fal(fetchFn: Fetch, model: string, key: string, req: PaintRequest
   const edit = req.refs.length > 0;
   const endpoint = edit ? (flux3 ? model.replace(/text-to-image$/, 'edit-image') : `${model}/edit`) : model;
   const body: Record<string, unknown> = { prompt: req.prompt, num_images: 1, output_format: 'png' };
-  if (flux3) Object.assign(body, { aspect_ratio: req.square ? '1:1' : '3:2', resolution: '1k' });
-  else body.image_size = req.square ? 'square_hd' : 'landscape_4_3';
+  if (flux3) Object.assign(body, { aspect_ratio: ratio(req), resolution: '1k' });
+  else body.image_size = req.tall ? 'portrait_4_3' : req.square ? 'square_hd' : 'landscape_4_3';
   if (edit) body.image_urls = req.refs.map(dataUri);
   const res = await call(fetchFn, `https://fal.run/${endpoint}`, {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: `Key ${key}` }, body: JSON.stringify(body),
@@ -90,7 +95,7 @@ async function fal(fetchFn: Fetch, model: string, key: string, req: PaintRequest
 /** Replicate: a prediction that waits for its result, polled a little longer if it is not done yet. */
 async function replicate(fetchFn: Fetch, model: string, key: string, req: PaintRequest): Promise<Painted> {
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${key}`, prefer: 'wait=60' };
-  const input: Record<string, unknown> = { prompt: req.prompt, aspect_ratio: req.square ? '1:1' : '3:2', output_format: 'webp' };
+  const input: Record<string, unknown> = { prompt: req.prompt, aspect_ratio: ratio(req), output_format: 'webp' };
   if (req.refs.length) input.input_images = req.refs.map(dataUri);
   const res = await call(fetchFn, `https://api.replicate.com/v1/models/${model}/predictions`, { method: 'POST', headers, body: JSON.stringify({ input }) }, 'Replicate');
   let p = await res.json() as { status?: string; output?: unknown; error?: string; urls?: { get?: string } };
@@ -107,7 +112,7 @@ async function replicate(fetchFn: Fetch, model: string, key: string, req: PaintR
 
 /** OpenAI: generations without earlier pictures, edits with them. Both answer with base64. */
 async function openai(fetchFn: Fetch, model: string, key: string, req: PaintRequest): Promise<Painted> {
-  const common = { model, prompt: req.prompt, size: req.square ? '1024x1024' : '1536x1024', quality: 'medium', output_format: 'webp', n: 1 };
+  const common = { model, prompt: req.prompt, size: req.tall ? '1024x1536' : req.square ? '1024x1024' : '1536x1024', quality: 'medium', output_format: 'webp', n: 1 };
   const edit = req.refs.length > 0;
   const body = edit ? { ...common, images: req.refs.map((r) => ({ image_url: dataUri(r) })) } : common;
   const res = await call(fetchFn, `https://api.openai.com/v1/images/${edit ? 'edits' : 'generations'}`, {

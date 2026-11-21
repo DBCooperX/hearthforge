@@ -21,6 +21,7 @@ import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
 import { JoinError } from './game/engine';
 import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
+import { MONSTERS } from './data/monsters';
 import type { AdminConnection } from '../../shared/admin';
 import { AdminApi } from './admin/api';
 import { Auth } from './admin/auth';
@@ -34,7 +35,7 @@ import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
-import { portraitKey } from './game/pictures';
+import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, portraitKey, tallBody } from './game/pictures';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -229,8 +230,53 @@ const hooks: RoomHooks = {
         })
         .catch(() => {});
     },
+    figure: (subject) => illustrator.figure(subject),
+    figures: (room) => paintFigures(room),
   },
 };
+
+/** Tables showing a figure get it as soon as it is painted; a monster's figure is shared by every table. */
+function figureArrived(subject: string) {
+  for (const r of rooms.values()) {
+    const s = r.game.s;
+    const here = s.characters.some((c) => heroFigureSubject(c) === subject)
+      || s.monsters.some((m) => m.alive && monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === subject);
+    if (here && s.players.some((p) => p.connected)) r.flush();
+  }
+}
+
+/**
+ * Paint what this table's battle map still lacks: a figure for each hero with a portrait, paid by the player whose
+ * hero it is, and one for each kind of monster on the map, paid by the table. Once painted, a figure is kept for good.
+ */
+function paintFigures(room: Room) {
+  const s = room.game.s;
+  for (const c of s.characters) {
+    const subject = heroFigureSubject(c);
+    if (!subject || c.dead || illustrator.figureGate(subject)) continue;
+    const owner = creditAccount(c.ownerId);
+    if (!owner || !credits.mayPlay(owner)) continue;
+    const { prompt, key } = heroFigurePrompt(c);
+    illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: c.name, prompt, key, tall: true, portraitId: c.portraitId!, account: owner.id },
+      (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
+      .then(() => figureArrived(subject)).catch(() => {});
+  }
+  const broke = () => payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
+  const asked = new Set<string>();
+  for (const m of s.monsters) {
+    if (!m.alive) continue;
+    const def = MONSTERS[m.defId];
+    if (!def) continue;
+    const look = m.look ?? def.look;
+    const subject = monsterFigureSubject(m.defId, look);
+    if (asked.has(subject) || illustrator.figureGate(subject)) continue;
+    asked.add(subject);
+    if (broke()) return;
+    const { prompt, key } = monsterFigurePrompt(def.name, def.type, look);
+    illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: def.name, prompt, key, tall: tallBody(look) }, (usd) => bill(room.name, usd, 'images'))
+      .then(() => figureArrived(subject)).catch(() => {});
+  }
+}
 
 const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
 // Every saved table is listed in the lobby. A table costs nothing until somebody sits down at it.
@@ -588,14 +634,17 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
     if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, illustrator.library());
     if (req.method === 'POST' && url.pathname === '/api/pictures/action') {
       const body = JSON.parse((await readRaw(req, 16 * 1024, () => new PictureError('bad_request'))).toString('utf8') || '{}') as Record<string, unknown>;
-      if (body.do === 'sample' || body.do === 'sample_portrait') {
+      if (body.do === 'sample' || body.do === 'sample_portrait' || body.do === 'sample_figure') {
         // The Innkeeper trying a style pays for it like anyone else: it shows in their own costs.
         const me = accounts.account(req.headers[SESSION_HEADER]);
         const pay = (usd: number) => { usage.recordExtra('Innkeeper samples', 'images', usd); if (me) credits.charge([me.id], usd, 'images'); };
-        const picture = body.do === 'sample' ? await illustrator.sample(pay) : await illustrator.samplePortrait(pay);
+        const picture = body.do === 'sample' ? await illustrator.sample(pay) : body.do === 'sample_figure' ? await illustrator.sampleFigure(pay) : await illustrator.samplePortrait(pay);
         return json(200, { ...illustrator.library(), sample: picture });
       }
+      const gone = body.do === 'delete' ? illustrator.info(String(body.id)) : null;
       const done = illustrator.action(body);
+      // A deleted battle figure leaves the drawn one at once; the next time it is needed it is painted anew.
+      if (gone?.moment === 'figure' && gone.subject) figureArrived(gone.subject);
       // A deleted portrait leaves its hero with the drawn bust until the look changes.
       if (body.do === 'delete') {
         for (const r of rooms.values()) {
