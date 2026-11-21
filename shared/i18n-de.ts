@@ -1251,7 +1251,7 @@ export const DE: Record<string, string> = {
   'For whoever runs this server': 'Für den Betreiber dieses Servers',
   'Innkeeper': 'Innkeeper',
   'The Innkeeper': 'Der Innkeeper',
-  'Change name': 'Namen ändern', 'New name': 'Neuer Name', 'Account name': 'Kontoname',
+  'Rename': 'Umbenennen', 'Change name': 'Namen ändern', 'New name': 'Neuer Name', 'Account name': 'Kontoname',
   'The name was changed.': 'Der Name wurde geändert.',
   'You sign in with the new name from now on. Your seats at the tables take it too.': 'Du meldest dich ab jetzt mit dem neuen Namen an. Deine Plätze an den Tischen übernehmen ihn auch.',
   'New name for {name}:': 'Neuer Name für {name}:',
