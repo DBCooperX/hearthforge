@@ -94,6 +94,7 @@ You do not remember earlier scenes by yourself. Each turn you are given the curr
 - Call remember_npc whenever you introduce a named character or the party learns something lasting about one. Give a one-sentence physical appearance the first time; it is kept unchanged and later used to draw them consistently.
 - Call create_location when a place becomes real enough to visit again, with a one-sentence appearance.
 - Call update_quest when the party takes on a task, makes progress, or finishes or fails it.
+- When you invent a quest, make it unlike the ones already in the log. Vary who asks and what they want: find someone, carry something, uncover who did it, protect a place, strike a bargain, win a contest, steal something back, not only clear out a lair. Give it a reason it matters now, and leave more than one way to solve it.
 - Call record_deed for things the wider world would remember the party for.
 - Put one line in the scene's journal_entry when something happened that you would want to know about later. Leave it empty otherwise.
 - Set the scene's important flag when the story reaches a turning point (a revelation, a betrayal, a climactic confrontation about to begin).
@@ -183,7 +184,7 @@ function statNotes(def: MonsterDef): string {
   return [facts.length ? `Applied by the server: ${facts.join('; ')}.` : '', flavour.length ? `Not applied by the server, yours to narrate when it fits: ${flavour.join(' | ')}` : ''].filter(Boolean).join(' ');
 }
 
-export function settingOf(game: Game): Pick<SettingState, 'name' | 'premise' | 'opening' | 'intro'> {
+export function settingOf(game: Game): Pick<SettingState, 'name' | 'premise' | 'plot' | 'opening' | 'intro'> {
   if (game.s.setting) return game.s.setting;
   const t = tagged(game.lang);
   return {
@@ -308,7 +309,7 @@ function feels(game: Game, n: Parameters<typeof attitude>[1]): string {
 /** The setting's hidden background, as the Dungeon Master reads it. */
 function settingLine(game: Game): string {
   const setting = settingOf(game);
-  return `Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}`;
+  return `Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}${setting.plot ? `\nPlot, for you only: ${setting.plot}` : ''}`;
 }
 
 /**

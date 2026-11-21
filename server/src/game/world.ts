@@ -84,6 +84,8 @@ export interface SettingState {
   name: string;
   /** What the Dungeon Master knows about the region. English. */
   premise: string;
+  /** The quests' real stakes and the region's hidden twist, for the Dungeon Master. English. Missing for the classic region and older saves. */
+  plot?: string;
   /** How the story opens, for the Dungeon Master. English. */
   opening: string;
   /** How the story opens, for the players, when no AI tells it. */
@@ -308,10 +310,10 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
     timeline: [],
     secrets: [],
   };
-  const lair = region.locations.find((l) => l.questId);
+  const lair = region.locations.find((l) => l.id === 'lair') ?? region.locations.find((l) => l.questId);
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';
   const setting: SettingState = {
-    name: region.name, premise: region.premise.replace('{dist}', dist), opening: opening.opening, intro: opening.intro,
+    name: region.name, premise: region.premise.replace('{dist}', dist), ...(region.plot ? { plot: region.plot } : {}), opening: opening.opening, intro: opening.intro,
     seed, region: start.region, premiseId, custom: premiseId === 'custom' ? start.custom.trim() : '',
   };
   return { world, memory, setting };
