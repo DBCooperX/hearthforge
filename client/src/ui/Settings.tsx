@@ -16,6 +16,9 @@ interface Props {
 
 type Tab = keyof typeof SETTINGS_TABS;
 
+/** Choices for the end turn reminder, in seconds; 0 is off. */
+const TURN_REMINDERS = [0, 20, 45, 90];
+
 export function Settings({ onClose }: Props) {
   const t = useT();
   const prefs = usePrefs();
@@ -35,6 +38,12 @@ export function Settings({ onClose }: Props) {
               <span>{t('Edge scrolling in fights')} <Info text={t('When the battle map is zoomed in, pointing at its edge moves the view that way. Dragging the map and Shift with the arrow keys work too.')} /></span>
               <button type="button" role="switch" aria-checked={prefs.edgeScroll} className={prefs.edgeScroll ? 'switch on' : 'switch'}
                 onClick={() => { setPrefs({ edgeScroll: !prefs.edgeScroll }); sfx('tab'); }}>{prefs.edgeScroll ? t('On') : t('Off')}</button>
+            </div>
+            <div className="setting">
+              <span>{t('End turn reminder')} <Info text={t('On your turn in a fight, the End turn button glows and a short note appears when you have done nothing for this long, and soon after you have used up your action and movement. The turn never ends by itself.')} /></span>
+              <span className="pick">
+                {TURN_REMINDERS.map((s) => <button key={s} type="button" className={prefs.turnReminder === s ? 'on' : ''} aria-pressed={prefs.turnReminder === s} onClick={() => { setPrefs({ turnReminder: s }); sfx('tab'); }}>{s ? t('{n} s', { n: s }) : t('Off')}</button>)}
+              </span>
             </div>
             <div className="setting">
               <span>{t('Text size')} <Info text={t('For the story, the journal and item descriptions.')} /></span>

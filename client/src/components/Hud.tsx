@@ -9,6 +9,7 @@ import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
 import { dice } from './Guide';
 import { Hint } from '../ui/Hint';
+import { usePrefs } from '../ui/prefs';
 import { AbilityGlyph, Glyph } from '../ui/Glyph';
 import {
   HOTBAR_DRAG, HOTBAR_ROW, abilityRef, itemRef, loadHotbar, parseRef, placeOnHotbar, removeFromHotbar, saveHotbar, syncHotbar,
@@ -98,6 +99,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
   const me = hero ?? actor;
   const canAct = !!actor && !!me && actor.id === me.id && actor.hp > 0;
   const actionUsed = !!combat?.actionUsed;
+  const nudge = useTurnNudge(canAct, combat, state.log.length);
   const [book, setBook] = useState(false);
   const [castAt, setCastAt] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -352,8 +354,9 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
         </div>
         <div className="hb-end">
           <OpportunitySwitch actor={c} conn={conn} />
+          {nudge && <div className="hb-nudge" role="status">{nudge === 'spent' ? t('Nothing left to do? End your turn.') : t('Still there? End your turn when you are done.')}<em>{t('Space')}</em></div>}
           <Hint title={t('End turn')} text={<>{t('Hand the turn to the next in the initiative order.')}<em>{t('Space')}</em></>}>
-            <button className="hb-endturn" aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
+            <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
               <Glyph keys={['action:end_turn']} emoji="⏭️" />
               <span>{t('End turn')}</span>
             </button>
@@ -362,6 +365,25 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       </div>
     </div>
   );
+}
+
+/**
+ * A gentle reminder to end the turn: after the player's chosen delay without doing anything on
+ * their turn, or soon after the action and movement are used up. It never ends the turn.
+ */
+function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): 'idle' | 'spent' | null {
+  const { turnReminder } = usePrefs();
+  const [nudge, setNudge] = useState<'idle' | 'spent' | null>(null);
+  const spent = !!combat && combat.actionUsed && combat.attacksLeft <= 0 && combat.movementLeft <= 0;
+  // Anything that happens on the turn (a step, an attack, a new line in the story) starts the wait again.
+  const activity = combat ? `${combat.round}:${combat.turnIndex}:${combat.movementLeft}:${combat.actionUsed}:${combat.attacksLeft}:${combat.bonusUsed}:${logLength}` : '';
+  useEffect(() => {
+    setNudge(null);
+    if (!canAct || !combat || !turnReminder) return;
+    const timer = window.setTimeout(() => setNudge(spent ? 'spent' : 'idle'), spent ? Math.min(4, turnReminder) * 1000 : turnReminder * 1000);
+    return () => window.clearTimeout(timer);
+  }, [canAct, activity, turnReminder, spent]);
+  return nudge;
 }
 
 interface SlotProps {
