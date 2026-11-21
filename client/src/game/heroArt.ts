@@ -480,19 +480,24 @@ function photo(id: string): HTMLImageElement | null {
   return null;
 }
 
+/** A painted portrait (/pictures/<id>) in the round brass frame, or null while it is still loading or when there is none. */
+export function paintedPortraitUrl(id: string | null | undefined, size = 160): string | null {
+  const img = id ? photo(id) : null;
+  if (!img) return null;
+  return cached(`photo|${size}|${id}`, () => {
+    // The painting fills the round brass frame every portrait has.
+    const S = Math.max(img.naturalWidth, img.naturalHeight, size);
+    const square = document.createElement('canvas');
+    square.width = square.height = S;
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    square.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+    return framed(square, size, 'hero', { x: 0.03, y: 0.02, size: 0.94 }).toDataURL();
+  });
+}
+
 export function heroPortraitUrl(a: HeroArt, size = 160): string {
-  const img = a.portrait ? photo(a.portrait) : null;
-  if (img) {
-    return cached(`photo|${size}|${a.portrait}`, () => {
-      // The painting fills the round brass frame every hero portrait has.
-      const S = Math.max(img.naturalWidth, img.naturalHeight, size);
-      const square = document.createElement('canvas');
-      square.width = square.height = S;
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      square.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
-      return framed(square, size, 'hero', { x: 0.03, y: 0.02, size: 0.94 }).toDataURL();
-    });
-  }
+  const painted = paintedPortraitUrl(a.portrait, size);
+  if (painted) return painted;
   return cached(`bust|${size}|${heroArtKey(a)}`, () => {
     return framed(bust(a), size, 'hero', { x: 0, y: 0, size: 1 }).toDataURL();
   });

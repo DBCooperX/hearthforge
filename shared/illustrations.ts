@@ -126,6 +126,10 @@ export interface PictureConfig {
   portraits: boolean;
   /** At most this many portraits per account and day, so trying looks does not run up a bill. */
   portraitsPerDay: number;
+  /** Paint a small portrait of each named person the party meets, billed to the table. */
+  npcPortraits: boolean;
+  /** At most this many such portraits per table and day. */
+  npcPortraitsPerDay: number;
   /** Paint battle figures for heroes (from their portraits) and for each kind of monster. */
   figures: boolean;
   /** At most this many new battle figures per day for the whole server. */
@@ -148,6 +152,8 @@ export const DEFAULT_PICTURE_CONFIG: PictureConfig = {
   customStyle: '',
   portraits: true,
   portraitsPerDay: 3,
+  npcPortraits: true,
+  npcPortraitsPerDay: 6,
   figures: true,
   figuresPerDay: 20,
   moments: { boss: true, victory: true, reveal: true, opening: false, place: true, farewell: false },
@@ -176,7 +182,7 @@ export interface PictureInfo {
   table: string;
   tableTitle: string;
   entry: number;
-  moment: PictureMoment | 'sample' | 'portrait' | 'figure';
+  moment: PictureMoment | 'sample' | 'portrait' | 'npc' | 'figure';
   /** For a battle figure: what it shows ("h:<hero>|<portrait>" or "m:<monster>|<look>"). */
   subject?: string;
   /** For a battle figure: the flat colour it was painted on, which the browser takes out. */

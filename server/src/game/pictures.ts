@@ -10,7 +10,7 @@ import { anatomyOf } from '../data/monsterAnatomy';
 import { LOOK_NAMES, heroLook } from '../../../shared/heroLook';
 import { SPECIES } from '../../../shared/rules';
 import type { Game } from './engine';
-import type { Character } from '../../../shared/types';
+import type { Character, Npc } from '../../../shared/types';
 import { ITEMS } from '../../../shared/content';
 
 /** What the Dungeon Master asked to be shown. */
@@ -93,7 +93,10 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
   // A picture of the party with no names shows every hero who is still standing.
   const who = names.length ? names : game.s.characters.filter((c) => !c.dead).map((c) => c.name);
   const lower = who.map((n) => n.toLocaleLowerCase());
-  const portraits = game.s.characters.filter((c) => c.portraitId && lower.includes(c.name.toLocaleLowerCase())).map((c) => c.portraitId!);
+  const portraits = [
+    ...game.s.characters.filter((c) => c.portraitId && lower.includes(c.name.toLocaleLowerCase())).map((c) => c.portraitId!),
+    ...(game.s.memory?.npcs ?? []).filter((n) => n.portraitId && lower.includes(n.name.toLocaleLowerCase())).map((n) => n.portraitId!),
+  ];
   game.pictureAsk = { moment, picture, cast: castOf(game, who), ...(portraits.length ? { portraits } : {}) };
   if (moment === 'place') game.newPlace = null; // this arrival has its picture
   return { painted: true, note: 'The picture is painted while the players read your scene, and shown above it. Do not mention it in the narration.' };
@@ -137,6 +140,27 @@ export function portraitPrompt(style: string, c: Character): string {
   ].join('\n\n');
 }
 
+type NpcLook = Pick<Npc, 'name' | 'role' | 'description' | 'visual'>;
+
+/** What an NPC's looks are painted from: the appearance fixed when they were first described, else their description. */
+const npcLooks = (n: NpcLook) => clean(n.visual?.description || n.description, 300);
+
+/** What an NPC's portrait is painted from. Empty: nothing to paint from yet. A changed appearance gets a new portrait. */
+export function npcPortraitKey(n: NpcLook): string {
+  const looks = npcLooks(n);
+  return looks ? createHash('sha1').update(`${n.name}|${looks}`).digest('hex').slice(0, 10) : '';
+}
+
+/** The prompt for the portrait of someone the party met, in the style the hero portraits share. */
+export function npcPortraitPrompt(style: string, n: NpcLook): string {
+  const role = clean(n.role, 80);
+  return [
+    `Style: ${style}`,
+    `Subject: ${n.name}${role ? `, ${role}` : ''}. Looks: ${npcLooks(n)}`,
+    'An ordinary person of this world, not a hero: dressed and equipped as their trade and station suggest, with an expression that fits who they are. No text, no letters, no frame, no border, no watermark, no signature.',
+  ].join('\n\n');
+}
+
 /**
  * For the result of moving the party: when it has just come to a place for the first time and a picture of a new place
  * may be painted now, a hint telling the Dungeon Master so. Nothing otherwise, so revisits never ask.
@@ -164,6 +188,30 @@ export const HERO_FIGURE_VERSION = 'v2';
 function heldGear(c: Character): string[] {
   const names = (['mainHand', 'offHand'] as const).map((slot) => c.equipment?.[slot]).filter((i) => !!i).map((i) => ITEMS[i!.defId]?.name ?? i!.defId);
   return [...new Set(names)];
+}
+
+/**
+ * What the battle figure of a named person is painted from: their portrait and what they carry. They are painted in
+ * the stance of a monster, armed as the fight's look says, so the drawn figure shows nothing on top of them.
+ */
+export function npcFigureSubject(n: Pick<Npc, 'id' | 'portraitId'>, look: MonsterLook): string | null {
+  return n.portraitId ? `n:${n.id}|${n.portraitId}|${look.weapon ?? 'none'}|${look.armor ?? 'none'}|v1` : null;
+}
+
+/** The prompt for the battle figure of a named person, with their portrait as the only reference. */
+export function npcFigurePrompt(n: NpcLook, look: MonsterLook): { prompt: string; key: FigureKey } {
+  const key = keyFor(look.color);
+  const carried = [look.weapon ? `a ${look.weapon}` : '', look.armor ? `${look.armor === 'plate' ? 'heavy plate' : 'leather'} armour` : ''].filter(Boolean);
+  return {
+    key,
+    prompt: [
+      `Style: ${FIGURE_STYLE}`,
+      `Subject: ${n.name}${n.role ? `, ${clean(n.role, 80)}` : ''}. ${npcLooks(n)}`,
+      'The attached image is this person\'s painted portrait. Use it ONLY as a reference for the face, skin, hair, beard, build, colours and clothes. Paint the very same person, now standing at full length, upright on both feet, turned toward the viewer and ready for a fight.',
+      carried.length ? `They carry only: ${carried.join(' and ')}. Nothing else is held or worn on the back.` : 'Both hands are empty. They hold and carry nothing.',
+      figureBackdrop(key),
+    ].join('\n\n'),
+  };
 }
 
 /** A monster's figure is shared by every monster of the same kind and look, on every table of the server. */

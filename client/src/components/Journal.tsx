@@ -37,7 +37,11 @@ interface Entry {
 }
 
 /** A portrait stand-in until the game draws people: a wax seal with their initial, ringed in the colour of how they feel about the party. */
-function Seal({ name, disposition, large }: { name: string; disposition: Disposition; large?: boolean }) {
+function Seal({ name, disposition, large, portraitId }: { name: string; disposition: Disposition; large?: boolean; portraitId?: string | null }) {
+  // Once the game has painted them, their portrait takes the seal's place inside the same coloured ring.
+  if (portraitId && /^[a-f0-9]{18}$/.test(portraitId)) {
+    return <span className={['seal', 'painted', disposition, large && 'large'].filter(Boolean).join(' ')} aria-hidden="true"><img src={`/pictures/${portraitId}`} alt="" loading="lazy" /></span>;
+  }
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) % 360;
   return (
@@ -83,7 +87,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
       mark: <span className={`quest-pip ${m.solved ? 'completed' : 'active'}`} />,
     }));
     const people = [...npcs].sort((a, b) => a.name.localeCompare(b.name)).map((n): Entry => ({
-      id: n.id, title: n.name, sub: n.role, mark: <Seal name={n.name} disposition={n.disposition} />,
+      id: n.id, title: n.name, sub: n.role, mark: <Seal name={n.name} disposition={n.disposition} portraitId={n.portraitId} />,
     }));
     const top = w.locations.filter((l) => !l.parentId);
     const places = top.flatMap((l) => [l, ...w.locations.filter((x) => x.parentId === l.id)]).map((l): Entry => ({
@@ -168,7 +172,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
     return (
       <article className="entry" key={n.id}>
         <header className="entry-head">
-          <Seal name={n.name} disposition={n.disposition} large />
+          <Seal name={n.name} disposition={n.disposition} portraitId={n.portraitId} large />
           <div>
             <h2>{n.name}</h2>
             <p className="byline">{n.role}</p>
@@ -221,7 +225,7 @@ export function Journal({ state, onClose, onShowMap }: Props) {
               {here.map((n) => (
                 <li key={n.id}>
                   <button type="button" className="inklink" onClick={() => { setTab('people'); remembered.entry = { ...picked, people: n.id }; setPicked(remembered.entry); sfx('page'); }}>
-                    <Seal name={n.name} disposition={n.disposition} /> {n.name}
+                    <Seal name={n.name} disposition={n.disposition} portraitId={n.portraitId} /> {n.name}
                   </button>
                   <small>{n.role}</small>
                 </li>

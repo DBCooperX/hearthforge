@@ -13,7 +13,7 @@
 .slot img.hero-art { width: 44px; height: 44px; border-radius: 50%; }
 .hero-detail img.hero-art { width: 84px; height: 84px; border-radius: 50%; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)); }
 
-.hovercard.hero .hc-portrait, .hovercard.monster .hc-portrait { width: 52px; height: 52px; background: none; border: none; }
+.hovercard.hero .hc-portrait, .hovercard.monster .hc-portrait, .hovercard.npc .hc-portrait:has(img.hero-art) { width: 52px; height: 52px; background: none; border: none; }
 .hc-portrait img.hero-art { width: 52px; height: 52px; border-radius: 50%; }
 
 /* Whole figures (sheet, inventory, creator, level-up) stand on a faint pool of firelight. */

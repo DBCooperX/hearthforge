@@ -82,7 +82,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
-import { heroFigureSubject, monsterFigureSubject, type PictureAsk, type PictureHooks } from './pictures';
+import { heroFigureSubject, monsterFigureSubject, npcFigureSubject, type PictureAsk, type PictureHooks } from './pictures';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
@@ -5864,10 +5864,19 @@ export class Game {
     return id ? { ...c, figureId: id } : c;
   }
 
+  /** The person the party met who this monster is, by name, when they have a painted portrait. */
+  npcOfMonster(m: Pick<Monster, 'name'>): NpcState | null {
+    const name = m.name.toLocaleLowerCase();
+    return this.s.memory.npcs.find((n) => n.portraitId && n.name.toLocaleLowerCase() === name) ?? null;
+  }
+
   /** A monster's look as players see it: with the painted figure of its kind, when there is one. */
   private figureLook(m: Monster): MonsterLook {
     const look = m.look ?? MONSTERS[m.defId].look;
-    const id = this.pictures?.figure?.(monsterFigureSubject(m.defId, look)) ?? null;
+    const own = this.npcOfMonster(m);
+    const npcSubject = own ? npcFigureSubject(own, look) : null;
+    // A named person with a portrait fights as themselves; until their figure is painted the kind's own one stands in.
+    const id = (npcSubject && this.pictures?.figure?.(npcSubject)) || this.pictures?.figure?.(monsterFigureSubject(m.defId, look)) || null;
     return id ? { ...look, imageId: id } : look;
   }
 

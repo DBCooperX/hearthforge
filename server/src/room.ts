@@ -4,6 +4,7 @@ import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary
 import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { battleLineFor, highlightOf } from '../../shared/battleNarration';
+import type { NpcState } from './game/world';
 import { Game, GameError, type Beat, type MonsterActResult, type InternalState } from './game/engine';
 import { monsterCatalog, playtest } from './game/playtest';
 import { newSeed } from '../../shared/start';
@@ -12,7 +13,7 @@ import { parseOoc } from '../../shared/ooc';
 import type { PlayStats } from '../../shared/accounts';
 import type { HeroRef } from './accounts';
 import { hashToken } from './http';
-import { portraitKey, type PictureAsk, type PictureHooks } from './game/pictures';
+import { npcPortraitKey, portraitKey, type PictureAsk, type PictureHooks } from './game/pictures';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -66,6 +67,8 @@ export interface RoomHooks {
     paint(room: Room, entryId: number, ask: PictureAsk): void;
     /** A hero has no portrait for their current look yet: paint one if the server may. */
     portrait?(room: Room, hero: Character): void;
+    /** Someone the party met has no portrait for their current looks yet: paint one if the server may. */
+    npcPortrait?(room: Room, npc: NpcState): void;
     /** Battle figures: the painted one for a subject, if any. */
     figure?(subject: string): string | null;
     /** Paint the battle figures this table still lacks, if the server may. */
@@ -395,6 +398,12 @@ export class Room {
     const moves = this.game.takeMoves();
     const portrait = this.hooks.pictures?.portrait;
     if (portrait) for (const c of this.game.s.characters) if (!c.dead && c.portraitKey !== portraitKey(c)) portrait(this, c);
+    const npcPortrait = this.hooks.pictures?.npcPortrait;
+    if (npcPortrait) {
+      // People the DM made up are painted when first met; those the region starts with when the party is where they are.
+      const here = this.game.s.world?.placeId;
+      for (const n of this.game.s.memory.npcs) { const look = npcPortraitKey(n); if (look && n.met && n.portraitKey !== look && (n.origin === 'dm' || n.locationId === here)) npcPortrait(this, n); }
+    }
     this.hooks.pictures?.figures?.(this);
     this.game.checkTrophies();
     this.creditGold();

@@ -4,7 +4,7 @@ import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl, monsterVariant } from '../game/monsterArt';
-import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl, paintedPortraitUrl } from '../game/heroArt';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
 import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
@@ -27,6 +27,8 @@ export interface Entity {
   kind: 'npc' | 'place' | 'item' | 'hero' | 'monster';
   icon: string;
   image?: string;
+  /** The painted portrait (/pictures/<id>) of a person; shown in the brass frame once it has loaded. */
+  portraitId?: string | null;
   subtitle: string;
   description: string;
   facts: string[];
@@ -42,7 +44,8 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
     const facts = [`${t('Disposition')}: ${t(n.disposition)}`];
     const at = placeName(n.locationId);
     if (at) facts.push(`${t('Last seen')}: ${at}`);
-    out.push({ name: n.name, kind: 'npc', icon: '🧑', subtitle: n.role || t('Someone you have met'), description: n.description, facts: [...facts, ...n.notes] });
+    paintedPortraitUrl(n.portraitId, 104); // starts loading it now, so the card has it when hovered
+    out.push({ name: n.name, kind: 'npc', icon: '🧑', portraitId: n.portraitId, subtitle: n.role || t('Someone you have met'), description: n.description, facts: [...facts, ...n.notes] });
   }
   for (const l of w?.locations ?? []) {
     const d = hexDistance(w!.party, l);
@@ -122,13 +125,14 @@ export function EntityProvider({ state, children }: { state: GameState; children
     hide: () => setCard(null),
   }), []);
   const value = useMemo(() => ({ entities, pattern, hover }), [entities, pattern, hover]);
+  const image = card ? card.entity.image ?? paintedPortraitUrl(card.entity.portraitId, 104) ?? undefined : undefined;
   return (
     <HoverContext.Provider value={value}>
       {children}
       {card && (
         <div className={`hovercard ${card.entity.kind}`} style={{ left: card.x, top: card.y, transform: card.below ? undefined : 'translateY(-100%)' }}>
           <div className="hc-head">
-            <span className="hc-portrait">{card.entity.image ? <img className={card.entity.kind === 'hero' || card.entity.kind === 'monster' ? 'hero-art' : card.entity.image.endsWith('.svg') ? '' : 'pixel'} src={card.entity.image} alt="" /> : card.entity.icon}</span>
+            <span className="hc-portrait">{image ? <img className={card.entity.kind === 'hero' || card.entity.kind === 'monster' || card.entity.portraitId ? 'hero-art' : image.endsWith('.svg') ? '' : 'pixel'} src={image} alt="" /> : card.entity.icon}</span>
             <div>
               <b>{card.entity.name}</b>
               <small>{card.entity.subtitle}</small>
