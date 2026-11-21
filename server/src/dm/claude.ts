@@ -18,6 +18,10 @@ import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
 import { RECONCILE_SYSTEM, applyFindings, parseFindings, reconcilePrompt, type TurnRecord } from './reconcile';
 import type { UsageSample } from '../admin/usage';
 import { logEvent, secret } from '../game/timeline';
+import { CAMPAIGN_TOOL_DESCRIPTION, campaignTool } from '../campaign/prompt';
+import { readCampaign } from '../campaign/digest';
+import type { Book } from '../campaign/read';
+import type { CampaignDigest } from '../campaign/library';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -262,6 +266,16 @@ interface SceneInput {
 /** The DM's tools, exported so tests can keep the strict set within the API's grammar limit. */
 export const DM_TOOLS: Tool[] = [MONSTER_TOOL, ...STORY_TOOLS];
 
+/** Only tables that play a campaign book get the tool to read it, so other tables keep their tool list and its cache. */
+const CAMPAIGN_TOOL = looseTool('campaign', CAMPAIGN_TOOL_DESCRIPTION, {
+  section: str('Id of the section to read, for example "s4", or an empty string.'),
+  search: str('Words to look for in the book, or an empty string.'),
+});
+/** The story tools for this table: the scene tool stays last. */
+function storyTools(game: Game): Tool[] {
+  return game.s.setting?.campaign ? [...STORY_TOOLS.slice(0, -1), CAMPAIGN_TOOL, STORY_TOOLS[STORY_TOOLS.length - 1]] : STORY_TOOLS;
+}
+
 export class ClaudeDM implements DungeonMaster {
   readonly mode = 'claude' as const;
   readonly model: string;
@@ -470,6 +484,8 @@ export class ClaudeDM implements DungeonMaster {
             return game.equipItem(String(i.character_id ?? ''), String(i.item ?? ''));
           case 'log_event':
             return logEvent(game, { what: String(i.what ?? ''), when: String(i.when ?? ''), where: String(i.where ?? ''), knownBy: String(i.known_by ?? '') });
+          case 'campaign':
+            return campaignTool(game, i);
           case 'secret':
             return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:
@@ -530,7 +546,7 @@ export class ClaudeDM implements DungeonMaster {
     if (!beats.length) return null;
     const prompt = this.turn(game, `Narrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`);
     try {
-      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
+      const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, storyTools(game), this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
     } catch (err) {
       this.report(err);
@@ -586,7 +602,7 @@ export class ClaudeDM implements DungeonMaster {
     this.turns.delete(game);
     const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {
-      const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : STORY_TOOLS;
+      const tools = inCombat ? STORY_TOOLS.filter((t) => ['skill_check', 'scene'].includes(t.name)) : storyTools(game);
       const out = await this.converse(game, 'reply', inCombat ? tierForReply(game) : storyTier(this.models, tierForReply(game)), prompt, tools, this.storyHandler(game, onUpdate, record ?? undefined));
       const scene = this.finish(game, out);
       if (record && scene) this.turns.set(game, { ...record, narration: scene.text });
@@ -622,7 +638,8 @@ export class ClaudeDM implements DungeonMaster {
    */
   async prepare(game: Game): Promise<void> {
     const s = game.s, setting = s.setting, world = s.world;
-    if (!setting || !world || setting.region !== 'random' || setting.fleshedOut) return;
+    // A campaign book's places and people already have the book's own words.
+    if (!setting || !world || setting.region !== 'random' || setting.fleshedOut || setting.campaign) return;
     const places = world.locations.filter((l) => l.origin === 'seed');
     const brief = {
       places: places.map((l) => ({ id: l.id, name: l.name, kind: l.kind, description: l.description })),
@@ -666,6 +683,24 @@ Answer with one JSON object and nothing else, in this shape:
       if (err instanceof SyntaxError) console.warn('[dm] The world flavour came back malformed; keeping the rolled descriptions.');
       else this.report(err);
     }
+  }
+
+  /**
+   * Read a campaign book once, as it arrives on the shelf: the cheapest model takes notes part by
+   * part, then the standard model writes the digest the Dungeon Master keeps all adventure.
+   */
+  async readCampaign(id: string, book: Book, progress: (p: number) => void): Promise<CampaignDigest | null> {
+    const table = `campaign:${id}`;
+    const ask = async (tier: Tier, system: string, prompt: string) => {
+      try {
+        const out = await this.converse({ s: { room: table } } as Game, 'campaign', tier, prompt, [], async () => null, system);
+        return out.text;
+      } catch (err) {
+        this.report(err);
+        return null;
+      }
+    };
+    return readCampaign(book, ask, progress);
   }
 
   /**

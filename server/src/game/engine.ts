@@ -75,6 +75,7 @@ import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollDie, rollMode, signed, type Rng, type RollMode } from './dice';
 import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZES, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
+import { campaignShelf, viewer } from '../campaign/registry';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
 import { RESTOCK_DAYS, MAX_SHOPS, SHELVES, rollStock, shopKindOf } from '../data/shops';
 import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type Mood as HaggleMood, type ShopKind, type ShopStock, type ShopView } from '../../../shared/trade';
@@ -498,6 +499,16 @@ export class Game {
     }
     if (patch.custom !== undefined) start.custom = String(patch.custom ?? '').replace(/\s+/g, ' ').trim().slice(0, CUSTOM_MAX);
     if (patch.seed !== undefined) start.seed = normalizeSeed(patch.seed) || newSeed();
+    if (patch.campaign !== undefined) {
+      const id = patch.campaign && typeof patch.campaign === 'object' ? String((patch.campaign as { id?: unknown }).id ?? '') : String(patch.campaign ?? '');
+      if (!id) start.campaign = null;
+      else {
+        const shelf = campaignShelf();
+        const info = shelf?.info(id);
+        if (!shelf || !info || !shelf.mayUse(id, viewer(playerId)) || !shelf.book(id)?.digest) throw new GameError(this.t`That campaign book is not on this server`);
+        start.campaign = { id, title: info.title };
+      }
+    }
   }
 
   /** The host sets how the Dungeon Master runs the table. Allowed at any time, also during play: the next turn follows it. */
@@ -935,7 +946,10 @@ export class Game {
     if (!this.s.characters.length) throw new GameError(this.t`Add at least one hero first`);
     const s = this.s;
     // The room gives every table a seed to show and share; a bare engine (tests, scripts) builds one fixed world.
-    const { world, memory, setting } = generateWorld({ ...s.table.start, seed: s.table.start.seed || 'HEARTH' }, this.lang);
+    // A campaign book that has since left the shelf: the table falls back to its own region.
+    const pick = s.table.start.campaign;
+    const digest = pick ? campaignShelf()?.book(pick.id)?.digest : null;
+    const { world, memory, setting } = generateWorld({ ...s.table.start, seed: s.table.start.seed || 'HEARTH' }, this.lang, pick && digest ? { id: pick.id, digest } : undefined);
     s.world = world;
     s.memory = memory;
     s.setting = setting;

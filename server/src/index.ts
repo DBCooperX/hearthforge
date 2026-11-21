@@ -34,6 +34,9 @@ import { Usage, sampleCost } from './admin/usage';
 import { Credits } from './credits';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
+import { CampaignError, CampaignLibrary } from './campaign/library';
+import { setShelf } from './campaign/registry';
+import { CAMPAIGN_MAX_BYTES, CAMPAIGN_SOURCES } from '../../shared/campaign';
 
 import pkg from '../../package.json';
 import { buildOf } from '../../shared/update';
@@ -94,6 +97,13 @@ const claude = createDM(env, (sample) => {
   if (usd) bill(sample.table, usd, 'claude');
 });
 const dm = claude ?? new ScriptedDM();
+// Campaign books: read once by the AI when they arrive, then looked up section by section in play.
+const campaigns = new CampaignLibrary(DATA_DIR);
+if (claude) campaigns.reader = (id, book, progress) => claude.readCampaign(id, book, progress);
+setShelf(campaigns, (playerId) => {
+  const a = isAccountId(playerId) ? accounts.get(playerId) : null;
+  return a ? { id: a.id, innkeeper: a.role === 'innkeeper' } : null;
+});
 const rooms = new Map<string, Room>();
 /** Connections looking at the list of tables. */
 const lobby = new Set<WebSocket>();
@@ -150,6 +160,12 @@ function payersAt(table: string): string[] {
 
 /** Book what the AI cost at a table, and tell the players charged how much credit is left. */
 function bill(table: string, usd: number, kind: 'claude' | 'voice') {
+  // Reading a campaign book is paid by whoever brought it; books from the list for everyone are on the house.
+  if (table.startsWith('campaign:')) {
+    const owner = campaigns.info(table.slice(9))?.owner;
+    if (owner && accounts.get(owner)) tellCredits(credits.charge([owner], usd, kind));
+    return;
+  }
   tellCredits(credits.charge(payersAt(table), usd, kind));
 }
 
@@ -356,6 +372,48 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** Campaign books: every signed-in player may bring one; the Innkeeper sees and manages them all. */
+async function campaignApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  const me = accounts.account(req.headers[SESSION_HEADER]);
+  const viewer = me ? { id: me.id, innkeeper: me.role === 'innkeeper' } : null;
+  const shelf = () => ({ books: campaigns.list(viewer), ai: !!claude });
+  try {
+    if (!viewer) { req.resume(); return json(401, { error: 'signed_out' }); }
+    if (req.method === 'GET' && url.pathname === '/api/campaigns') return json(200, shelf());
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (url.pathname === '/api/campaigns/upload') {
+      if (!claude) { req.resume(); return json(400, { error: 'no_dm' }); }
+      const body = await readBody(req, CAMPAIGN_MAX_BYTES);
+      campaigns.add(String(url.searchParams.get('name') ?? 'campaign.pdf').slice(0, 160), new Uint8Array(body), viewer.id);
+      return json(200, shelf());
+    }
+    if (url.pathname === '/api/campaigns/action') {
+      const m = JSON.parse((await readBody(req, 4 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
+      const id = String(m.id ?? '');
+      if (m.do === 'fetch') {
+        if (!claude) return json(400, { error: 'no_dm' });
+        if (!CAMPAIGN_SOURCES.some((x) => x.id === m.source)) throw new CampaignError('bad_request');
+        await campaigns.fetchSource(String(m.source), viewer.id);
+      } else if (m.do === 'remove') campaigns.remove(id, viewer);
+      else if (m.do === 'retry') campaigns.retry(id, viewer);
+      else if (m.do === 'share') campaigns.share(id, viewer, m.everyone === true);
+      else throw new CampaignError('bad_request');
+      return json(200, shelf());
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof CampaignError) return json(err.code === 'not_found' ? 404 : err.code === 'forbidden' ? 403 : 400, { error: err.code });
+    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[campaign]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 /** The music library belongs to the owner of the server: it is changed from the Innkeeper. */
 async function musicApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   const json = (status: number, body: unknown) => {
@@ -531,6 +589,10 @@ const server = createServer((req, res) => {
       'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     });
     createReadStream(file).pipe(res);
+    return;
+  }
+  if (url.pathname === '/api/campaigns' || url.pathname.startsWith('/api/campaigns/')) {
+    void campaignApi(req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/music/')) {

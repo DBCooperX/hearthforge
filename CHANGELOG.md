@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Story
+- **Play a published adventure.** Under Where, pick a campaign book instead of a rolled region: drop in a PDF, text or Markdown file of an adventure you own, or take one from a short list of free adventures (Peril in Pinebrook downloads with one click straight from Wizards of the Coast; for A Most Potent Brew, The Wild Sheep Chase, Intro to Stormwreck Isle, Frozen Sick, the One Page Dungeon Contest and the Basic Fantasy modules, "Get it here" opens the source and you drop the file). The server reads the book once into sections and a digest, starts the map with the book's town, places, people and first quest, and the Dungeon Master follows the book's plot while reading only the section the party is in. See README → Campaign books.
+
 ### Interface
 - **Esc opens a game menu**, as in any PC role-playing game: Resume, The adventure (story style, challenge, content, story language), Party and invites, Settings, Your account, Innkeeper, Art credits, Fullscreen, Leave the table and, for the host, New adventure. The same menu (with a menu button top right) works on the list of tables and in the table room. Windows opened from it lead back to it on Esc. The gear button and the language switch in the top bar are gone; the language is under Settings → Game.
 - **Settings has three tabs:** Game, Audio and Keyboard. The table, account and server entries moved into the menu.
