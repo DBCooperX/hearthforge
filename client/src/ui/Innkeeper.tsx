@@ -26,6 +26,7 @@ import { SfxLibrary } from './SfxLibrary';
 import { NarratorLibrary } from './NarratorLibrary';
 import { SoundLibrary } from './SoundLibrary';
 import { TabBar, Window } from './Window';
+import { ask } from './Confirm';
 
 type Tab = keyof typeof INN_TABS;
 const TAB_ICONS: Record<Tab, IconName> = { overview: 'innkeeper', tables: 'table', players: 'people', assets: 'inventory', settings: 'settings', server: 'up', usage: 'coin', logs: 'lore', backups: 'journal' };
@@ -164,14 +165,14 @@ function Tables({ fail, say }: PaneProps) {
             <button type="button" onClick={() => void act({ table: tb.id, do: tb.paused ? 'resume' : 'pause' })}>{tb.paused ? t('Resume') : t('Pause')}</button>
             {tb.testMode ? (
               <>
-                <button type="button" title={t('End test mode and keep what the tests changed.')} onClick={() => { if (window.confirm(t('End test mode at "{title}" and keep everything the tests changed?', { title: tb.title }))) void act({ table: tb.id, do: 'test_keep' }); }}>{t('Keep changes')}</button>
-                <button type="button" title={t('End test mode and put the story back to how it was before.')} onClick={() => { if (window.confirm(t('End test mode at "{title}" and undo everything the tests changed? The story goes back to how it was when test mode began.', { title: tb.title }))) void act({ table: tb.id, do: 'test_discard' }); }}>{t('Undo changes')}</button>
+                <button type="button" title={t('End test mode and keep what the tests changed.')} onClick={() => { void ask(t('End test mode at "{title}" and keep everything the tests changed?', { title: tb.title })).then((yes) => { if (yes) void act({ table: tb.id, do: 'test_keep' }); }); }}>{t('Keep changes')}</button>
+                <button type="button" title={t('End test mode and put the story back to how it was before.')} onClick={() => { void ask(t('End test mode at "{title}" and undo everything the tests changed? The story goes back to how it was when test mode began.', { title: tb.title }), { danger: true }).then((yes) => { if (yes) void act({ table: tb.id, do: 'test_discard' }); }); }}>{t('Undo changes')}</button>
               </>
             ) : (
-              <button type="button" title={t('Give the host a toolbox to start fights, level up, jump to places and more. The story can go back to how it was afterwards.')} onClick={() => { if (window.confirm(t('Switch test mode on at "{title}"? The table is saved as it is now, and the host gets a toolbox. When you end test mode you can keep the changes or go back.', { title: tb.title }))) void act({ table: tb.id, do: 'test_on' }); }}>{t('Test mode')}</button>
+              <button type="button" title={t('Give the host a toolbox to start fights, level up, jump to places and more. The story can go back to how it was afterwards.')} onClick={() => { void ask(t('Switch test mode on at "{title}"? The table is saved as it is now, and the host gets a toolbox. When you end test mode you can keep the changes or go back.', { title: tb.title })).then((yes) => { if (yes) void act({ table: tb.id, do: 'test_on' }); }); }}>{t('Test mode')}</button>
             )}
             <button type="button" onClick={() => innDownload(`/table?id=${encodeURIComponent(tb.id)}`).catch(fail)}>{t('Download')}</button>
-            <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the table "{title}"? Its story and heroes wait in the list of deleted tables, so you can bring it back.', { title: tb.title }))) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }}>{t('Delete')}</button>
+            <button type="button" className="link danger" onClick={() => { void ask(t('Delete the table "{title}"? Its story and heroes wait in the list of deleted tables, so you can bring it back.', { title: tb.title }), { danger: true }).then((yes) => { if (yes) void act({ table: tb.id, do: 'delete' }).then(() => say(t('The table was deleted.'))); }); }}>{t('Delete')}</button>
           </header>
           <dl>
             <div><dt>{t('Players')}</dt><dd>
@@ -179,7 +180,7 @@ function Tables({ fail, say }: PaneProps) {
               {tb.players.map((p) => (
                 <span key={p.id} className={p.connected ? 'inn-who here' : 'inn-who'} title={p.connected ? t('At the table') : t('Away')}>
                   {p.name}{p.id === tb.hostId && <i>{t('host')}</i>}
-                  <button type="button" className="inn-x" title={t('Send away from the table')} aria-label={t('Send away from the table')} onClick={() => { if (window.confirm(t('Send {name} away from this table?', { name: p.name }))) void act({ table: tb.id, do: 'remove', playerId: p.id }); }}>×</button>
+                  <button type="button" className="inn-x" title={t('Send away from the table')} aria-label={t('Send away from the table')} onClick={() => { void ask(t('Send {name} away from this table?', { name: p.name }), { danger: true }).then((yes) => { if (yes) void act({ table: tb.id, do: 'remove', playerId: p.id }); }); }}>×</button>
                 </span>
               ))}
               <span className="muted small">{t('{n} of {m} seats', { n: tb.players.length, m: tb.maxPlayers })}</span>
@@ -260,9 +261,9 @@ function AccountsPane({ fail, say, me }: PaneProps & { me: string }) {
                 <td className="inn-actions">
                   <button type="button" onClick={() => { const next = window.prompt(t('New name for {name}:', { name: a.username }), a.username); if (next && next.trim() !== a.username) void act({ do: 'rename', id: a.id, username: next }).then((ok) => ok && say(t('The name was changed.'))); }}>{t('Rename')}</button>
                   {a.id !== me && <>
-                    <button type="button" onClick={() => { if (window.confirm(t('Clear the stats of {name}? Their numbers and hero list start again from zero.', { name: a.username }))) void act({ do: 'stats', id: a.id, what: 'all' }).then((ok) => ok && say(t('The stats were cleared.'))); }}>{t('Clear')}</button>
-                    <button type="button" onClick={() => { if (window.confirm(t('Give {name} a new password? They are signed out everywhere.', { name: a.username }))) void act({ do: 'reset', id: a.id }).then((out) => out?.password && setShown({ kind: 'password', who: a.username, value: out.password })); }}>{t('New password')}</button>
-                    <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Delete the account {name}? Their heroes stay at the tables, but nobody can sign in as them any more.', { name: a.username }))) void act({ do: 'delete', id: a.id }).then((ok) => ok && say(t('The account was deleted.'))); }}>{t('Delete')}</button>
+                    <button type="button" onClick={() => { void ask(t('Clear the stats of {name}? Their numbers and hero list start again from zero.', { name: a.username })).then((yes) => { if (yes) void act({ do: 'stats', id: a.id, what: 'all' }).then((ok) => ok && say(t('The stats were cleared.'))); }); }}>{t('Clear')}</button>
+                    <button type="button" onClick={() => { void ask(t('Give {name} a new password? They are signed out everywhere.', { name: a.username })).then((yes) => { if (yes) void act({ do: 'reset', id: a.id }).then((out) => out?.password && setShown({ kind: 'password', who: a.username, value: out.password })); }); }}>{t('New password')}</button>
+                    <button type="button" className="link danger" onClick={() => { void ask(t('Delete the account {name}? Their heroes stay at the tables, but nobody can sign in as them any more.', { name: a.username }), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: a.id }).then((ok) => ok && say(t('The account was deleted.'))); }); }}>{t('Delete')}</button>
                   </>}
                 </td>
               </tr>
@@ -355,7 +356,7 @@ function PlayersPane({ fail, say }: PaneProps) {
                 <td title={c.agent}>{[browser(c.agent), system(c.agent)].filter(Boolean).join(', ')}</td>
                 <td className="inn-actions">
                   <button type="button" onClick={() => void act({ do: 'disconnect', id: c.id })}>{t('Disconnect')}</button>
-                  <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Ban the address {ip}? Nobody can connect from it until you lift the ban.', { ip: c.ip }))) void act({ do: 'ban', ip: c.ip, note: c.name }).then(() => say(t('The address was banned.'))); }}>{t('Ban address')}</button>
+                  <button type="button" className="link danger" onClick={() => { void ask(t('Ban the address {ip}? Nobody can connect from it until you lift the ban.', { ip: c.ip }), { danger: true }).then((yes) => { if (yes) void act({ do: 'ban', ip: c.ip, note: c.name }).then(() => say(t('The address was banned.'))); }); }}>{t('Ban address')}</button>
                 </td>
               </tr>
             ))}
@@ -456,7 +457,7 @@ function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void })
                         {!!test.missing?.length && ` ${t('But it cannot use: {models}', { models: test.missing.join(', ') })}`}
                       </span>
                     )}
-                    {value.set && <button type="button" className="link danger" onClick={() => { if (window.confirm(t('Remove the API key? The tables then get the scripted Dungeon Master.'))) void save({ ANTHROPIC_API_KEY: '' }); }}>{t('Remove the key')}</button>}
+                    {value.set && <button type="button" className="link danger" onClick={() => { void ask(t('Remove the API key? The tables then get the scripted Dungeon Master.'), { danger: true }).then((yes) => { if (yes) void save({ ANTHROPIC_API_KEY: '' }); }); }}>{t('Remove the key')}</button>}
                   </div>
                 )}
               </div>
@@ -566,7 +567,7 @@ function HttpsSection({ fail, say }: PaneProps) {
             {first && <p className="muted small">{t('Each device trusts the local certificate once. Download it here and install it (on phones as a CA certificate):')} <a href={`http://${first}/hearthforge-ca.crt`}>http://{first}/hearthforge-ca.crt</a></p>}
             <div className="inn-row">
               <button type="submit" className="primary" disabled={working || (!form.domain.trim() && !form.local.trim()) || (lan && !!form.domain && (!form.dnsProvider || (!form.dnsToken && !h.dnsToken)))}>{h.on ? t('Save and restart Caddy') : t('Switch HTTPS on')}</button>
-              {h.on && <button type="button" disabled={working} onClick={() => { if (window.confirm(t('Switch HTTPS off? Voice input stops working until it is on again.'))) void send('off'); }}>{t('Switch HTTPS off')}</button>}
+              {h.on && <button type="button" disabled={working} onClick={() => { void ask(t('Switch HTTPS off? Voice input stops working until it is on again.')).then((yes) => { if (yes) void send('off'); }); }}>{t('Switch HTTPS off')}</button>}
             </div>
           </form>
           {h.log.length > 0 && <details open={h.state === 'failed'}><summary>{t('HTTPS log')}</summary><pre className="inn-log small">{h.log.join('\n')}</pre></details>}
@@ -613,7 +614,7 @@ function ServerPane({ fail, say, firstPassword, onPassword }: PaneProps & { firs
             </p>
             {u.behind > 0 && !busy && <Note kind="good"><span>{newVersion(u.behind, t)}</span></Note>}
             <div className="inn-row">
-              <button type="button" className="primary" disabled={busy || u.behind < 1} onClick={() => { if (window.confirm(t('Install the new version now? The game keeps running while it is built (a few minutes), then the server restarts once. Everyone is told, and every table is saved.'))) void server({ do: 'update' }, t('The update has started.')); }}>{t('Update now')}</button>
+              <button type="button" className="primary" disabled={busy || u.behind < 1} onClick={() => { void ask(t('Install the new version now? The game keeps running while it is built (a few minutes), then the server restarts once. Everyone is told, and every table is saved.')).then((yes) => { if (yes) void server({ do: 'update' }, t('The update has started.')); }); }}>{t('Update now')}</button>
               <button type="button" disabled={busy} onClick={() => void server({ do: 'check' })}>{t('Look for a new version')}</button>
               <span className="muted small">{u.checkedAt && t('Last looked: {when}', { when: new Date(u.checkedAt).toLocaleString(lang) })} · {t('Branch')} {u.branch}</span>
             </div>
@@ -633,7 +634,7 @@ function ServerPane({ fail, say, firstPassword, onPassword }: PaneProps & { firs
           ? <Note kind="warn"><span>{t('The server restarts in {time}.', { time: span(t, o.restartAt - o.now) })}</span><button type="button" onClick={() => void server({ do: 'cancel' })}>{t('Call it off')}</button></Note>
           : (
             <div className="inn-row">
-              <button type="button" onClick={() => { if (window.confirm(t('Restart the server now? Every table is saved, and the players are back within seconds.'))) void server({ do: 'restart', delay: 0 }, t('Restarting…')); }}>{t('Restart now')}</button>
+              <button type="button" onClick={() => { void ask(t('Restart the server now? Every table is saved, and the players are back within seconds.')).then((yes) => { if (yes) void server({ do: 'restart', delay: 0 }, t('Restarting…')); }); }}>{t('Restart now')}</button>
               <button type="button" onClick={() => void server({ do: 'restart', delay: 60 })}>{t('In 1 minute')}</button>
               <button type="button" onClick={() => void server({ do: 'restart', delay: 300 })}>{t('In 5 minutes')}</button>
             </div>
@@ -840,7 +841,7 @@ function BackupsPane({ fail, say }: PaneProps) {
   };
   const restored = (r: { restored?: number }) => t('{n} tables were put back.', { n: r.restored ?? 0 });
   const q = settings ? '&settings=1' : '';
-  const ask = () => window.confirm(t('Put the tables of this backup back? Tables with the same name are overwritten, and their players are sent to the list of tables. The current state is saved as a backup first.'));
+  const askRestore = () => ask(t('Put the tables of this backup back? Tables with the same name are overwritten, and their players are sent to the list of tables. The current state is saved as a backup first.'), { danger: true });
   if (!list) return <p className="muted">{t('Loading…')}</p>;
   return (
     <div className="inn-stack">
@@ -848,7 +849,7 @@ function BackupsPane({ fail, say }: PaneProps) {
         <button type="button" className="primary" disabled={busy} onClick={() => void run(() => inn('/backup', { method: 'POST' }), () => t('Backup made.'))}>{t('Back up now')}</button>
         <button type="button" disabled={busy} onClick={() => innDownload('/backup').catch(fail)}>{t('Download a backup')}</button>
         <button type="button" disabled={busy} onClick={() => file.current?.click()}>{t('Restore from a file')}</button>
-        <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && ask()) void run(() => inn(`/restore?${q}`, { raw: f }), restored); }} />
+        <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void askRestore().then((yes) => { if (yes) void run(() => inn(`/restore?${q}`, { raw: f }), restored); }); }} />
       </div>
       <label className="inn-check"><input type="checkbox" checked={settings} onChange={(e) => setSettings(e.target.checked)} />{t('When restoring, also take the settings and bans of the backup')}</label>
       <p className="muted small">{t('A backup holds every table with its heroes, story and world, the settings and the bans. It never holds the API key or passwords, and not the art packs. The server makes one by itself every day and keeps the newest {n}.', { n: 14 })}</p>
@@ -864,8 +865,8 @@ function BackupsPane({ fail, say }: PaneProps) {
                 <td className="num">{b.sizeKb} kB</td>
                 <td className="inn-actions">
                   <button type="button" disabled={busy} onClick={() => innDownload(`/backup?name=${encodeURIComponent(b.name)}`).catch(fail)}>{t('Download')}</button>
-                  <button type="button" disabled={busy} onClick={() => { if (ask()) void run(() => inn(`/restore?name=${encodeURIComponent(b.name)}${q}`, { method: 'POST' }), restored); }}>{t('Restore')}</button>
-                  <button type="button" className="link danger" disabled={busy} onClick={() => { if (window.confirm(t('Delete this backup?'))) void run(() => inn('/backup/delete', { body: { name: b.name } })); }}>{t('Delete')}</button>
+                  <button type="button" disabled={busy} onClick={() => { void askRestore().then((yes) => { if (yes) void run(() => inn(`/restore?name=${encodeURIComponent(b.name)}${q}`, { method: 'POST' }), restored); }); }}>{t('Restore')}</button>
+                  <button type="button" className="link danger" disabled={busy} onClick={() => { void ask(t('Delete this backup?'), { danger: true }).then((yes) => { if (yes) void run(() => inn('/backup/delete', { body: { name: b.name } })); }); }}>{t('Delete')}</button>
                 </td>
               </tr>
             ))}

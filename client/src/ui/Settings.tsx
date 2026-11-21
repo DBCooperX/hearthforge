@@ -1,6 +1,6 @@
-// Settings: language, music, interface sounds, text size, the Dungeon Master's style, the keyboard
-// shortcuts and the table, sorted into tabs so that nothing needs scrolling.
-import { useState, type ReactNode } from 'react';
+// The player's own settings, opened from the game menu: the game (language, text size, voice input,
+// edge scrolling), the sound and the keyboard. What belongs to the table or the server is in the menu itself.
+import { useState } from 'react';
 import { LangSwitch, useT } from '../i18n';
 import { SoundMixer } from '../music';
 import { Info } from './Hint';
@@ -12,31 +12,21 @@ import { dictationBlocker } from '../dictation';
 
 interface Props {
   onClose: () => void;
-  /** Shown for the host only: abandon the adventure. */
-  onNewAdventure?: () => void;
-  onTable: () => void;
-  onArt: () => void;
-  /** Only for accounts with the Innkeeper role. */
-  onInnkeeper?: () => void;
-  onProfile: () => void;
-  /** The Dungeon Master's style for this table. */
-  children?: ReactNode;
 }
 
 type Tab = keyof typeof SETTINGS_TABS;
 
-export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper, onProfile, children }: Props) {
+export function Settings({ onClose }: Props) {
   const t = useT();
   const prefs = usePrefs();
   const [tab, setTab] = useState<Tab>('game');
-  const tabs = (Object.keys(SETTINGS_TABS) as Tab[]).filter((id) => id !== 'dm' || !!children).map((id) => ({ id, label: t(SETTINGS_TABS[id]) }));
+  const tabs = (Object.keys(SETTINGS_TABS) as Tab[]).map((id) => ({ id, label: t(SETTINGS_TABS[id]) }));
   return (
     <Window title={t('Settings')} icon="settings" size="small" className="settings" onClose={onClose} tabs={<TabBar tabs={tabs} value={tab} onChange={setTab} />}>
       <div className="settings-body">
         {tab === 'game' && (
           <>
             <div className="setting"><span>{t('Interface language')} <Info text={t('The language of the story is chosen by the host of the table.')} /></span><LangSwitch /></div>
-            <div className="setting setting-mix"><span>{t('Sound')} <Info text={t('Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.')} /></span><SoundMixer /></div>
             <div className="setting">
               <span>{t('Voice input')} <Info text={t('Hold the microphone beside the text box, or Ctrl+M, and speak. The words land in the box, so you can fix them before sending.')} /></span>
               <span className="muted small">{dictationBlocker() === 'insecure' ? t('Voice input needs a secure connection (https). Ask whoever runs this server to switch on HTTPS.') : dictationBlocker() === 'unsupported' ? t('This browser cannot turn speech into text. Chrome, Edge and Safari can.') : t('On')}</span>
@@ -54,22 +44,13 @@ export function Settings({ onClose, onNewAdventure, onTable, onArt, onInnkeeper,
             </div>
           </>
         )}
-        {tab === 'dm' && children}
+        {tab === 'sound' && <div className="setting setting-mix"><span>{t('Sound')} <Info text={t('Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.')} /></span><SoundMixer /></div>}
         {tab === 'keys' && (
           <ul className="shortcuts">
             {SHORTCUTS.map((s) => (
               <li key={s.text}><span className="keys">{s.keys.map((k, i) => <span key={k}>{i > 0 && (s.combo ? '+' : s.keys.length === 2 ? '–' : '')}<Kbd>{k}</Kbd></span>)}</span>{t(s.text)}</li>
             ))}
           </ul>
-        )}
-        {tab === 'table' && (
-          <>
-            <div className="setting"><span>{t('Table')}</span><button type="button" onClick={onTable}>{t('Players and invites')}</button></div>
-            <div className="setting"><span>{t('Art credits')} <Info text={t('Who made the art used on this server. Only the Innkeeper can change it.')} /></span><button type="button" onClick={onArt}>{t('Open')}</button></div>
-            <div className="setting"><span>{t('Your account')} <Info text={t('Your stats, your heroes and your password.')} /></span><button type="button" onClick={onProfile}>{t('Open')}</button></div>
-            {onInnkeeper && <div className="setting"><span>{t('Innkeeper')} <Info text={t('For whoever runs this server: tables, players, art packs, API key, updates and backups.')} /></span><button type="button" onClick={onInnkeeper}>{t('Open')}</button></div>}
-            {onNewAdventure && <div className="setting"><span>{t('New adventure')} <Info text={t('Ends this story for everyone at the table and starts a fresh one.')} /></span><button type="button" className="danger" onClick={onNewAdventure}>{t('New adventure')}</button></div>}
-          </>
         )}
       </div>
     </Window>

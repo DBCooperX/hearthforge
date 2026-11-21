@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Interface
+- **Esc opens a game menu**, as in any PC role-playing game: Resume, The adventure (tone, rules, content, story language), Party and invites, Settings, Your account, Innkeeper, Art credits, Fullscreen, Leave the table and, for the host, New adventure. The same menu (with a menu button top right) works on the list of tables and in the table room. Windows opened from it lead back to it on Esc. The gear button and the language switch in the top bar are gone; the language is under Settings → Game.
+- **Settings has three tabs:** Game, Audio and Keyboard. The table, account and server entries moved into the menu.
+- **The game's own confirm dialogs** replace the browser's pop-up boxes everywhere (removing a player, deleting a table, restarting the server, a new adventure…). Enter confirms, Esc cancels.
+- **Fullscreen** from the menu. In Chrome and Edge Esc still opens the menu while in fullscreen (hold Esc to leave it).
+- **Table talk no longer jumps.** The chat keeps a fixed height and only its own lines scroll, never the table room around it. If you scrolled up to read, it stays there and offers "New messages". Lines from the same person are grouped, with the time.
+
 ### Combat
 - **Smarter monster movement.** Archers and casters now pick where to stand: a square they can shoot their target from, out of arm's reach, behind a tree, rock or crate when there is one, instead of standing in the open or shooting point-blank with Disadvantage. Goblins slip out of reach with Nimble Escape before shooting. "Hold position" may still take a step or two into cover. Creatures backing off look for distance and cover. Melee monsters walk through their allies' squares (but never stop on them), so a creature stuck behind a friend in a doorway or corridor no longer just stands there; if its target is walled in, it goes for a hero it can reach, or at least closes in. Fliers such as bats, stirges and dragons move at their flying speed.
 - **Attack and spell animations always play.** The blow that ends a fight (a Fire Bolt on the last goblin) now plays on the battle map before the victory or defeat card rises, instead of the map being swapped out under it. A creature felled mid-fight stays until the hit reaches it, with its damage number, then fades. Saves against breath weapons, poisons, charms and holds show a ring too, not only spell saves that deal damage.

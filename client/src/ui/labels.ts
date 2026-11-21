@@ -35,7 +35,7 @@ export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
 };
 
 /** The tabs of the Settings window. */
-export const SETTINGS_TABS = { game: 'Game', dm: 'Dungeon Master', keys: 'Keyboard', table: 'Table & server' } as const;
+export const SETTINGS_TABS = { game: 'Game', sound: 'Audio', keys: 'Keyboard' } as const;
 
 export const TEXT_SIZES = ['normal', 'large', 'larger'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
@@ -48,7 +48,7 @@ export const SHORTCUTS: { keys: string[]; text: string; combo?: boolean }[] = [
   { keys: ['J'], text: 'Journal' },
   { keys: ['M'], text: 'Map' },
   { keys: ['T'], text: 'Trade, where there is a merchant' },
-  { keys: ['Esc'], text: 'Close a window or cancel; with nothing open, the settings' },
+  { keys: ['Esc'], text: 'Close a window or cancel; with nothing open, the game menu' },
   { keys: ['1', '4'], text: 'Switch hero or bookmark in an open window' },
   { keys: ['W', 'A', 'S', 'D'], text: 'Move in a fight' },
   { keys: ['Shift', '←↑→↓'], text: 'Look around the battle map (or drag it, or point at its edge)' },

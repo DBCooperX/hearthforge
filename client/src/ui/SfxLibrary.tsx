@@ -7,6 +7,7 @@ import { useT } from '../i18n';
 import { sfx as effects } from '../sfx';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { sfx } from './sound';
+import { ask } from './Confirm';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, [INNKEEPER_HEADER]: innkeeperSession() } });
@@ -60,7 +61,7 @@ export function SfxLibrary() {
             </div>
             <span className="art-pack-actions">
               {p.page && <a href={p.page} target="_blank" rel="noreferrer noopener">{t('Download from Kenney')}</a>}
-              {p.count > 0 && <button type="button" className="link danger" disabled={busy} onClick={() => { if (window.confirm(t('Delete "{title}" from the server?', { title: t(p.name) }))) void run(() => api<Library>('/api/sfx/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: p.id }) })); }}>{t('Remove')}</button>}
+              {p.count > 0 && <button type="button" className="link danger" disabled={busy} onClick={() => { void ask(t('Delete "{title}" from the server?', { title: t(p.name) }), { danger: true }).then((yes) => { if (yes) void run(() => api<Library>('/api/sfx/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: p.id }) })); }); }}>{t('Remove')}</button>}
             </span>
           </li>
         ))}

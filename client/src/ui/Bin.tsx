@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { BinItem } from '../../../shared/accounts';
 import { BIN_KEEP } from '../../../shared/accounts';
 import { useLang, useT } from '../i18n';
+import { ask } from './Confirm';
 
 interface Props {
   load: () => Promise<BinItem[]>;
@@ -52,7 +53,7 @@ export function DeletedTables({ load, act, onError, everyone, watch, always }: P
                 </div>
                 <span className="bin-acts">
                   <button type="button" className="primary" disabled={busy} onClick={() => void run('restore', b.id)}>{t('Bring back')}</button>
-                  <button type="button" className="link danger" disabled={busy} onClick={() => { if (window.confirm(t('Delete "{title}" for good? It cannot be brought back after that.', { title: b.title }))) void run('purge', b.id); }}>{t('Delete for good')}</button>
+                  <button type="button" className="link danger" disabled={busy} onClick={() => { void ask(t('Delete "{title}" for good? It cannot be brought back after that.', { title: b.title }), { danger: true }).then((yes) => { if (yes) void run('purge', b.id); }); }}>{t('Delete for good')}</button>
                 </span>
               </li>
             ))}

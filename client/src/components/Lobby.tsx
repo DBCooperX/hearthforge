@@ -6,7 +6,7 @@ import { ABILITY_KEYS, BACKGROUNDS, CLASSES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
-import { StyleSetup } from './StyleSetup';
+import { StoryLanguage, StyleSetup } from './StyleSetup';
 import { artOfCharacter, artOfDraft, heroPortraitUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, type Connection } from '../net';
 import type { AccountView } from '../../../shared/accounts';
@@ -18,15 +18,17 @@ import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
 import { Chip, Hint, Info } from '../ui/Hint';
 import { TabBar } from '../ui/Window';
 import { MusicControl } from '../music';
+import { MenuButton } from '../ui/GameMenu';
 import { DeletedTables } from '../ui/Bin';
 import { AccountFail, accountCall, accountSession } from '../account';
 import type { BinItem } from '../../../shared/accounts';
 import { classLabel, heroTitle } from '../game/util';
+import { ask } from '../ui/Confirm';
 
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
 export interface Me { account: AccountView; onProfile: () => void; onSignOut: () => void }
 
-export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; me: Me; onInnkeeper: () => void }) {
+export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Connection; me: Me; onInnkeeper: () => void; onMenu: () => void }) {
   const t = useT();
   const { lang } = useLang();
   const link = useMemo(linkedTable, []);
@@ -81,8 +83,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; 
     <div className="splash tavern">
       <Backdrop />
       <Embers />
-      <div className="splash-tools"><MusicControl /></div>
-      {who.account.role === 'innkeeper' && <button type="button" className="link innkeeper-door" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>}
+      <div className="splash-tools"><MusicControl /><MenuButton onClick={onMenu} /></div>
       <div className="panel lobby">
         <header className="join">
           <h1><Logo /></h1>
@@ -92,7 +93,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper }: { conn: Connection; 
         </header>
         <div className="account-bar">
           <span>{t('Signed in as')} <b>{name}</b></span>
-          {who.account.role === 'innkeeper' && <span className="role">{t('Innkeeper')}</span>}
+          {who.account.role === 'innkeeper' && <button type="button" className="role" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>}
           <Info text={t('Your seats and heroes belong to your account, so you can pick them up on any device.')} />
           <span className="spacer" />
           <button type="button" className="link" onClick={who.onProfile}>{t('Your account')}</button>
@@ -273,9 +274,9 @@ export function Players({ state, conn, pregame }: { state: GameState; conn: Conn
             )}
             {host && p.id !== playerId && (
               <span className="host-tools">
-                <button className="link" title={t('Hand the table over to this player')} onClick={() => { if (window.confirm(t('Make {name} the host of this table?', { name: p.name }))) conn.send({ t: 'make_host', playerId: p.id }); }}>{t('Make host')}</button>
+                <button className="link" title={t('Hand the table over to this player')} onClick={() => { void ask(t('Make {name} the host of this table?', { name: p.name })).then((yes) => { if (yes) conn.send({ t: 'make_host', playerId: p.id }); }); }}>{t('Make host')}</button>
                 <button className="link danger" title={pregame ? t('Their seat and their heroes are removed') : t('Their seat is freed and you take over their heroes')}
-                  onClick={() => { if (window.confirm(t('Remove {name} from the table?', { name: p.name }))) conn.send({ t: 'kick', playerId: p.id }); }}>{t('Remove')}</button>
+                  onClick={() => { void ask(t('Remove {name} from the table?', { name: p.name }), { danger: true }).then((yes) => { if (yes) conn.send({ t: 'kick', playerId: p.id }); }); }}>{t('Remove')}</button>
               </span>
             )}
           </li>
@@ -389,14 +390,7 @@ function AdventureSetup({ state, conn }: { state: GameState; conn: Connection })
             {open === 'world' ? <WorldSetup state={state} conn={conn} /> : (
               <>
                 <StyleSetup bare state={state} conn={conn} />
-                <div className="style-setup bare">
-                  <div className="field">
-                    <span>{t('Story language')} <Info text={host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')} /></span>
-                    <span className="pick">
-                      {LANGS.map((l) => <Chip key={l.id} on={state.language === l.id} disabled={!host} onClick={() => conn.send({ t: 'set_language', lang: l.id })}>{l.label}</Chip>)}
-                    </span>
-                  </div>
-                </div>
+                <div className="style-setup bare"><StoryLanguage state={state} conn={conn} /></div>
               </>
             )}
           </div>
@@ -407,7 +401,7 @@ function AdventureSetup({ state, conn }: { state: GameState; conn: Connection })
 }
 
 /** The table before the adventure: everyone picks a hero, says they are ready, and the host begins. */
-export function PartySetup({ state, conn }: { state: GameState; conn: Connection }) {
+export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Connection; onMenu: () => void }) {
   const t = useT();
   const { lang } = useLang();
   const [picked, setPicked] = useState<string | null>(null);
@@ -424,8 +418,8 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
   const shown = PREMADES.find((p) => p.id === picked);
   const addPremade = (id: string) => { conn.send({ t: 'add_premade', premadeId: id, name: '' }); setPicked(null); };
   const addRandom = () => { const p = free[Math.floor(Math.random() * free.length)]; if (p) addPremade(p.id); };
-  const begin = () => {
-    if (waiting.length && !window.confirm(t('Not everyone is ready yet ({names}). Begin anyway?', { names: waiting.map((p) => p.name).join(', ') }))) return;
+  const begin = async () => {
+    if (waiting.length && !(await ask(t('Not everyone is ready yet ({names}). Begin anyway?', { names: waiting.map((p) => p.name).join(', ') }), { ok: t('Begin the adventure') }))) return;
     // Quick start: with no hero chosen, the table gets one and the adventure begins with the settings as they are.
     if (!state.characters.length) addRandom();
     conn.send({ t: 'start' });
@@ -434,7 +428,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
     <div className="splash tavern">
       <Backdrop />
       <Embers count={14} />
-      <div className="splash-tools"><MusicControl /><LangSwitch /></div>
+      <div className="splash-tools"><MusicControl /><MenuButton onClick={onMenu} /></div>
       <div className={shared ? 'panel setup with-side' : 'panel setup'}>
         <header className="setup-head">
           <h1>{state.table.title}</h1>
@@ -505,7 +499,7 @@ export function PartySetup({ state, conn }: { state: GameState; conn: Connection
           {host ? (
             <>
               <Hint text={state.characters.length ? '' : t('Picks a hero for you and begins right away with the settings above.')}>
-                <button className="primary" onClick={begin}>{state.characters.length ? t('Begin the adventure') : `⚡ ${t('Quick start')}`}</button>
+                <button className="primary" onClick={() => void begin()}>{state.characters.length ? t('Begin the adventure') : `⚡ ${t('Quick start')}`}</button>
               </Hint>
               {many && <small className="muted">{waiting.length ? t('Still getting ready: {names}', { names: waiting.map((p) => p.name).join(', ') }) : t('Everyone is ready.')}</small>}
             </>

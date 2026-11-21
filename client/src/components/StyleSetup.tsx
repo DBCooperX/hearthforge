@@ -7,6 +7,8 @@ import type { GameState } from '../../../shared/types';
 import { useLang, useT } from '../i18n';
 import { playerId, type Connection } from '../net';
 import { Chip, Info } from '../ui/Hint';
+import { Window } from '../ui/Window';
+import { LANGS } from '../../../shared/i18n';
 
 export function StyleSetup({ state, conn, bare }: { state: GameState; conn: Connection; /** Without its own heading, for use inside another window. */ bare?: boolean }) {
   const t = useT();
@@ -41,5 +43,34 @@ export function StyleSetup({ state, conn, bare }: { state: GameState; conn: Conn
         </span>
       </div>
     </div>
+  );
+}
+
+/** The language the story is told in. The host picks it; everyone else sees it. */
+export function StoryLanguage({ state, conn }: { state: GameState; conn: Connection }) {
+  const t = useT();
+  const host = state.hostId === playerId;
+  return (
+    <div className="field">
+      <span>{t('Story language')} <Info text={host ? t('You host this table, so you choose the language the story is told in. Everyone picks their own interface language.') : t('The host chooses the language the story is told in.')} /></span>
+      <span className="pick">
+        {LANGS.map((l) => <Chip key={l.id} on={state.language === l.id} disabled={!host} onClick={() => conn.send({ t: 'set_language', lang: l.id })}>{l.label}</Chip>)}
+      </span>
+    </div>
+  );
+}
+
+/** "The adventure" from the game menu: how the Dungeon Master runs this table, changeable by the host during play. */
+export function AdventureWindow({ state, conn, onClose }: { state: GameState; conn: Connection; onClose: () => void }) {
+  const t = useT();
+  const host = state.hostId === playerId;
+  return (
+    <Window title={t('The adventure')} icon="quest" size="small" className="adventure-win" onClose={onClose}
+      subtitle={!host ? t('Set by the host') : undefined}>
+      <div className="settings-body">
+        <StyleSetup bare state={state} conn={conn} />
+        <div className="style-setup bare"><StoryLanguage state={state} conn={conn} /></div>
+      </div>
+    </Window>
   );
 }
