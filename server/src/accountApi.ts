@@ -3,7 +3,9 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isAccountId, type LegacySeat } from '../../shared/accounts';
+import type { CreditView } from '../../shared/credits';
 import { AccountsError, type Accounts } from './accounts';
+import { BinError, type TableBin } from './bin';
 import type { Room } from './room';
 
 export const SESSION_HEADER = 'x-hearthforge-session';
@@ -13,8 +15,12 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 export interface AccountApiContext {
   accounts: Accounts;
   rooms: Map<string, Room>;
+  bin: TableBin;
+  restoreTable(binId: number, by: { id: string; innkeeper: boolean }): { room: string; title: string };
   ipOf(req: IncomingMessage): string;
   tablesChanged(): void;
+  /** An account's AI credit. */
+  creditOf?(id: string): CreditView | null;
 }
 
 function readBody(req: IncomingMessage, max = 16 * 1024): Promise<Record<string, unknown>> {
@@ -86,7 +92,12 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       if (path === '/me') {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
-        return send(200, accounts.profile(me.id));
+        return send(200, { ...accounts.profile(me.id), credit: ctx.creditOf?.(me.id) ?? undefined });
+      }
+      if (path === '/bin') {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        return send(200, { tables: ctx.bin.list(me.id) });
       }
       return send(404, { error: 'bad_request' });
     }
@@ -120,6 +131,19 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
         accounts.clearStats(me.id, what, typeof body.hero === 'string' ? body.hero : undefined);
         return send(200, accounts.profile(me.id));
       }
+
+      case '/bin': {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        const by = { id: me.id, innkeeper: false };
+        const id = Math.round(Number(body.id));
+        if (body.do === 'restore') {
+          const out = ctx.restoreTable(id, by);
+          console.log(`[tables] ${me.username} brought the table "${out.title}" back from the bin.`);
+        } else if (body.do === 'purge') ctx.bin.purge(id, by);
+        else return send(400, { error: 'bad_request' });
+        return send(200, { tables: ctx.bin.list(me.id) });
+      }
       case '/claim': {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
@@ -137,6 +161,7 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       const status = err.code === 'too_many' ? 429 : err.code === 'signed_out' || err.code === 'wrong_login' ? 401 : 400;
       return send(status, { error: err.code });
     }
+    if (err instanceof BinError) return send(err.code === 'forbidden' ? 403 : 404, { error: err.code });
     console.error('[accounts]', err);
     send(500, { error: 'failed' });
   }

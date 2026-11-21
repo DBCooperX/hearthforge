@@ -4,7 +4,7 @@ import { styleText } from '../../../shared/style';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { BEAST_FORMS, CLASS_FEATURES, OPTIONS, hasFeature } from '../../../shared/classes';
 import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
-import { SLOT_IDS, type Character } from '../../../shared/types';
+import { SLOT_IDS, type Character, type LogEntry } from '../../../shared/types';
 import { HEX_MILES, TERRAIN, direction, formatTime, hexDistance, timeOfDay } from '../../../shared/hex';
 import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS, crValue, type MonsterDef } from '../data/monsters';
@@ -305,13 +305,29 @@ function feels(game: Game, n: Parameters<typeof attitude>[1]): string {
 }
 
 /** The world outside combat: where the party is, what it knows and what the DM remembers. */
-export function describeWorld(game: Game): string {
+/** The setting's hidden background, as the Dungeon Master reads it. */
+function settingLine(game: Game): string {
+  const setting = settingOf(game);
+  return `Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}`;
+}
+
+/**
+ * What stays the same from one turn to the next at a table: its language, its style and the setting's background.
+ * Sent ahead of everything that changes, so the Claude API can serve it from the prompt cache.
+ */
+export function describeTable(game: Game): string {
+  return [...languageNote(game), ...styleNote(game), settingLine(game)].join('\n');
+}
+
+/**
+ * The world as it is right now. `live` leaves out what describeTable already said, for prompts that send that
+ * first; without it the result stands on its own.
+ */
+export function describeWorld(game: Game, opts: { live?: boolean } = {}): string {
   const s = game.s, w = game.world, mem = s.memory;
-  const lines: string[] = [...languageNote(game), ...styleNote(game)];
+  const lines: string[] = opts.live ? [] : [...languageNote(game), ...styleNote(game), settingLine(game)];
   const place = game.place();
   const terrain = TERRAIN[trueTerrain(w, w.party)].name;
-  const setting = settingOf(game);
-  lines.push(`Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}`);
   lines.push(`Time: ${formatTime(w.minutes)} (${timeOfDay(w.minutes)}).`, ...describeTimeline(game));
   const top = w.locations.find((l) => !l.parentId && l.q === w.party.q && l.r === w.party.r);
   if (place) {
@@ -410,9 +426,9 @@ export function describeLook(l: MonsterLook): string {
 }
 
 /** The battle in progress, for narrating and playing monsters. */
-export function describeCombat(game: Game): string {
+export function describeCombat(game: Game, opts: { live?: boolean } = {}): string {
   const s = game.s;
-  const lines: string[] = [...languageNote(game), ...styleNote(game)];
+  const lines: string[] = opts.live ? [] : [...languageNote(game), ...styleNote(game)];
   const place = game.place();
   lines.push(`Combat, round ${s.combat?.round ?? 1}, ${place ? `at ${place.name}` : `in the wilderness (${TERRAIN[trueTerrain(game.world, game.world.party)].name})`}. Positions are tiles on the battle map; one tile is 5 feet.`);
   lines.push(`The battle map shows: ${s.biome ?? 'dungeon'}. Mud, undergrowth, rubble and shallow water are difficult terrain (double movement); trees, boulders and furniture give half cover (+2 AC) against shots. The server applies both; use them to colour the narration.`);
@@ -462,19 +478,33 @@ export function describeCombat(game: Game): string {
   return lines.join('\n');
 }
 
-/** The last stretch of play as the table saw it: narration, what players said, and what the server resolved. */
+/** How one log entry reads in the transcript. */
+function transcriptLine(l: LogEntry): string {
+  if (l.kind === 'dm') return `DM${l.scene ? ` [${l.scene.title}]` : ''}: ${l.text}`;
+  if (l.kind === 'chat') return `${l.speaker ?? 'Player'} (player): ${l.text}`;
+  if (l.kind === 'ask') return `${l.speaker ?? 'Player'} (out-of-character question to the DM): ${l.text}`;
+  if (l.kind === 'note') return `DM (out-of-character answer): ${l.text}`;
+  return `(${l.text})`;
+}
+
+/**
+ * The last stretch of play as the table saw it, one line per entry: narration, what players said, and what the
+ * server resolved. At least `max` entries, and at most half as many again: the window moves on in steps of half
+ * its size rather than by one entry each turn, so from one turn to the next the transcript only grows at the end
+ * and the part already sent is read from the prompt cache.
+ */
+export function transcriptLines(game: Game, max = 28): string[] {
+  const log = game.s.log;
+  if (!log.length) return [];
+  const last = log[log.length - 1].id;
+  const step = Math.max(1, Math.floor(max / 2));
+  const after = Math.max(0, Math.floor((last - max) / step) * step);
+  return log.filter((l) => l.id > after).map(transcriptLine);
+}
+
 export function transcript(game: Game, max = 28): string {
-  const recent = game.s.log.slice(-max);
-  if (!recent.length) return '(nothing yet)';
-  return recent
-    .map((l) => {
-      if (l.kind === 'dm') return `DM${l.scene ? ` [${l.scene.title}]` : ''}: ${l.text}`;
-      if (l.kind === 'chat') return `${l.speaker ?? 'Player'} (player): ${l.text}`;
-      if (l.kind === 'ask') return `${l.speaker ?? 'Player'} (out-of-character question to the DM): ${l.text}`;
-      if (l.kind === 'note') return `DM (out-of-character answer): ${l.text}`;
-      return `(${l.text})`;
-    })
-    .join('\n');
+  const lines = transcriptLines(game, max);
+  return lines.length ? lines.join('\n') : '(nothing yet)';
 }
 
 export function describeBeats(beats: Beat[], game?: Game): string {

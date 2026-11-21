@@ -8,6 +8,7 @@ import { narrator } from './narrator';
 import { CLOSED_REASONS } from './ui/labels';
 import { accountSession, signedOut } from './account';
 import { JOIN_ERRORS, type ChatMessage, type ClientMessage, type GameState, type ServerMessage, type TableSummary, type TestMonster, type TypingWhere } from '../../shared/types';
+import type { CreditView } from '../../shared/credits';
 
 function makeId(bytes = 16): string {
   // crypto.randomUUID needs a secure context, and LAN installs are usually plain http.
@@ -106,6 +107,8 @@ export interface Connection {
   leave: () => void;
   onMoved: (fn: MoveListener) => () => void;
   toast: (text: string, notice?: boolean) => void;
+  /** This account's AI credit, once the server has said. */
+  credit: CreditView | null;
 }
 
 type Session = { room: string; name: string; code?: string };
@@ -121,6 +124,7 @@ export function useConnection(): Connection {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; text: string; notice?: boolean }[]>([]);
+  const [credit, setCredit] = useState<CreditView | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const session = useRef<Session | null>(null);
   const listeners = useRef(new Set<MoveListener>());
@@ -212,6 +216,7 @@ export function useConnection(): Connection {
             if (msg.reason === 'restored') toast('This table was restored from a backup. Sit down again to carry on.');
             break;
           case 'notice': toast(msg.text, true); break;
+          case 'credits': setCredit(msg.credit); break;
           case 'error':
             if (msg.join && msg.message === JOIN_ERRORS.signIn) { toLobby(); signedOut(); }
             else if (msg.join) { toLobby(); setJoinError(msg.message); }
@@ -278,7 +283,7 @@ export function useConnection(): Connection {
     return () => void listeners.current.delete(fn);
   }, []);
 
-  return { state, connected, tables, chat, typing, testCatalog, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast };
+  return { state, connected, tables, chat, typing, testCatalog, joinError, joining, updateReady, reload, toasts, send: raw, join, create, leave, onMoved, toast, credit };
 }
 
 /**

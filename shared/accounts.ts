@@ -2,6 +2,8 @@
 // Innkeeper creates accounts or sends invite links, and decides who else may be an Innkeeper.
 // Heroes, seats and saves belong to the account, so a player picks up their hero on any device.
 
+import type { CreditView } from './credits';
+
 export type Role = 'player' | 'innkeeper';
 export const ROLES: Role[] = ['player', 'innkeeper'];
 
@@ -46,6 +48,8 @@ export interface Profile {
   account: AccountView;
   stats: PlayStats;
   heroes: HeroStats[];
+  /** What the AI has cost this account, and how much credit is left. */
+  credit?: CreditView;
 }
 
 /** An account as the Innkeeper lists it. */
@@ -97,3 +101,22 @@ export const isAccountId = (id: string) => id.startsWith(ACCOUNT_PREFIX);
 export const cleanUsername = (raw: unknown) => String(raw ?? '').replace(/\s+/g, ' ').trim();
 export const usernameOk = (name: string) => /^[\p{L}\p{N} _.-]{3,24}$/u.test(name);
 export const PASSWORD_MIN = 8;
+
+/** A deleted table waiting in the bin, as the lists show it. */
+export interface BinItem {
+  id: number;
+  /** The account that hosted the table. Only they and the Innkeeper can bring it back. */
+  owner: string;
+  ownerName: string;
+  title: string;
+  language: string;
+  deletedAt: number;
+  /** Who deleted it, by name. */
+  deletedBy: string;
+  players: string[];
+  heroes: string[];
+  playing: boolean;
+}
+
+/** How many deleted tables each host keeps in the bin. The oldest one goes when an eleventh arrives. */
+export const BIN_KEEP = 10;

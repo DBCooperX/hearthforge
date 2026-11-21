@@ -10,7 +10,7 @@ import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type Ab
 import { MONSTERS } from '../data/monsters';
 import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
 import type { Beat, Game, Monster, MonsterIntent, Opening } from '../game/engine';
-import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeWorld, fightBudget, genderRoster, transcript } from './context';
+import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeTable, describeWorld, fightBudget, genderRoster, transcriptLines } from './context';
 import { resolveModels, storyTier, tierForBeats, tierForMonsters, tierForReply, type ModelConfig, type Tier } from './models';
 import { defaultActions, scriptedScene } from './scripted';
 import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
@@ -20,6 +20,7 @@ import { logEvent, secret } from '../game/timeline';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
+type Block = Anthropic.Beta.BetaTextBlockParam;
 type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /** Models that accept the server-side refusal fallback parameter. */
@@ -273,9 +274,12 @@ export class ClaudeDM implements DungeonMaster {
   private strictOff = false;
 
   private onUsage?: (sample: UsageSample) => void;
+  /** How long the system prompt and tools stay cached. */
+  private cacheTtl: '5m' | '1h';
 
-  constructor(opts: { models?: ModelConfig; model?: string; effort: Effort; apiKey?: string; onUsage?: (sample: UsageSample) => void }) {
+  constructor(opts: { models?: ModelConfig; model?: string; effort: Effort; apiKey?: string; onUsage?: (sample: UsageSample) => void; cacheTtl?: '5m' | '1h' }) {
     this.onUsage = opts.onUsage;
+    this.cacheTtl = opts.cacheTtl ?? '1h';
     this.models = opts.models ?? { background: opts.model!, standard: opts.model!, key: opts.model!, forced: opts.model! };
     this.model = this.models.standard;
     this.effort = opts.effort;
@@ -291,7 +295,7 @@ export class ClaudeDM implements DungeonMaster {
     game: Game,
     purpose: string,
     tier: Tier,
-    user: string,
+    user: string | Block[],
     tools: Tool[],
     handle: (name: string, input: unknown) => Promise<unknown>,
     system = DM_SYSTEM_PROMPT,
@@ -300,11 +304,17 @@ export class ClaudeDM implements DungeonMaster {
     console.log(`[dm] ${purpose}: tier=${tier} model=${model}`);
     const messages: Msg[] = [{ role: 'user', content: user }];
     const useFallbacks = FALLBACK_MODELS.includes(model);
+    // Only the Dungeon Master's own turns are cached: they share the long system prompt and tools, and run a tool
+    // loop that sends the same turn again after every tool call. One-off background calls would only pay for writes.
+    const cached = system === DM_SYSTEM_PROMPT;
     for (let turn = 0; turn < 8; turn++) {
       const request = () => this.client.beta.messages.create({
         model,
         max_tokens: 8000,
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+        // Tools and the system prompt are the same all evening: they keep for an hour, so a quiet spell or a rare
+        // key-moment model does not pay to write them again. The rest of the turn keeps for the usual five minutes.
+        system: cached ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral', ttl: this.cacheTtl } }] : system,
+        ...(cached ? { cache_control: { type: 'ephemeral' as const } } : {}),
         output_config: { effort: this.effort },
         ...(tools.length ? { tools: this.strictOff ? tools.map(({ strict: _strict, ...t }) => t) : tools } : {}),
         ...(useFallbacks ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const } : {}),
@@ -323,7 +333,7 @@ export class ClaudeDM implements DungeonMaster {
       }
       // Every call is counted, whatever comes of it: it was paid for.
       const u = response.usage;
-      this.onUsage?.({ table: game.s.room, model: response.model || model, input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.cache_read_input_tokens ?? 0, cacheWrite: u?.cache_creation_input_tokens ?? 0 });
+      this.onUsage?.({ table: game.s.room, model: response.model || model, input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.cache_read_input_tokens ?? 0, cacheWrite: u?.cache_creation_input_tokens ?? 0, cacheWrite1h: u?.cache_creation?.ephemeral_1h_input_tokens ?? 0 });
       if (response.stop_reason === 'refusal') {
         console.warn('[dm] request declined:', response.stop_details?.category ?? 'unknown');
         return { text: null, scene: null };
@@ -490,14 +500,34 @@ export class ClaudeDM implements DungeonMaster {
     return out.text ? { title: place?.name ?? 'The wilds', mood: 'calm', text: out.text, actions: defaultActions(game) } : null;
   }
 
+  /** The state of play right now, without what describeTable already says. */
   private situation(game: Game): string {
-    const state = game.s.phase === 'combat' ? describeCombat(game) : describeWorld(game);
+    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : describeWorld(game, { live: true });
     return game.s.testMode ? `TEST MODE: the table's host is playtesting and may set levels, hit points, items, gold, the clock and the place directly. Take the state below as the truth, and do not comment on sudden changes.\n${state}` : state;
+  }
+
+  /**
+   * One turn for the Dungeon Master, laid out for the prompt cache: first what stays the same all adventure (the
+   * table's language, style and setting), then the transcript, which only grows at the end, one block per entry,
+   * and last the state of play and the request, which change every time. A breakpoint after the fixed part and one
+   * after the transcript let the next turn read both from the cache; the tool loop caches the rest as it goes.
+   */
+  private turn(game: Game, ask: string, opts: { state?: string; recent?: number } = {}): Block[] {
+    const mark = { type: 'ephemeral' as const };
+    const blocks: Block[] = [{ type: 'text', text: `About this table:\n${describeTable(game)}\n`, cache_control: mark }];
+    const lines = transcriptLines(game, opts.recent ?? 28);
+    if (lines.length) {
+      blocks.push({ type: 'text', text: 'Recent play, oldest first:\n' });
+      for (const line of lines) blocks.push({ type: 'text', text: `${line}\n` });
+      blocks[blocks.length - 1].cache_control = mark;
+    } else blocks.push({ type: 'text', text: 'Recent play: (nothing yet)\n' });
+    blocks.push({ type: 'text', text: `\nCurrent state:\n${opts.state ?? this.situation(game)}\n\n${ask}` });
+    return blocks;
   }
 
   async narrate(game: Game, beats: Beat[], onUpdate: () => Promise<void>): Promise<Scene | null> {
     if (!beats.length) return null;
-    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nNarrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`;
+    const prompt = this.turn(game, `Narrate this now:\n${describeBeats(beats, game)}\n\nSave anything new you introduce with your memory tools, then call scene.`);
     try {
       const out = await this.converse(game, `narrate ${beats.map((b) => b.kind).join('+')}`, storyTier(this.models, tierForBeats(beats)), prompt, STORY_TOOLS, this.storyHandler(game, onUpdate));
       return this.finish(game, out) ?? scriptedScene(game, beats);
@@ -513,7 +543,7 @@ export class ClaudeDM implements DungeonMaster {
       acted.add(id);
       return actor(id, intent);
     };
-    const prompt = `Current state:\n${describeCombat(game)}\n\nRecent play, oldest first:\n${transcript(game, 16)}\n\nIt is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`;
+    const prompt = this.turn(game, `It is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`, { state: describeCombat(game, { live: true }), recent: 16 });
     let text: string | null = null;
     try {
       const out = await this.converse(game, 'monsters', tierForMonsters(game, block), prompt, [MONSTER_TOOL], async (name, input) => {
@@ -551,7 +581,7 @@ export class ClaudeDM implements DungeonMaster {
     const directed = hints.length
       ? `PLAYTEST DIRECTION from the table's host (no hero knows of it, and no player sees this note): ${hints.map((h) => JSON.stringify(h.text)).join(' and ')}\n\nMake that happen in the story now, in a way that fits the place, the time and what the heroes were doing. Use your tools for whatever changes the world (a merchant, a person, a fight, a roll), then call scene. Never mention the note, the host or testing; narrate it as the world acting on its own.`
       : '';
-    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\n${[said.length ? ask : '', directed].filter(Boolean).join('\n\n')}`;
+    const prompt = this.turn(game, [said.length ? ask : '', directed].filter(Boolean).join('\n\n'));
     this.turns.delete(game);
     const record: TurnRecord | null = !inCombat && game.s.world ? { said, narration: '', startMinutes: game.world.minutes, calls: [] } : null;
     try {
@@ -574,7 +604,7 @@ export class ClaudeDM implements DungeonMaster {
   async answerQuestion(game: Game, asked: PlayerLine, onUpdate: () => Promise<void>): Promise<string | null> {
     const fixes = ['remember_npc', 'update_quest', 'change_gold', 'give_item', 'give_story_item', 'update_story_item', 'take_item', 'equip_item', 'note_clue', 'award_xp', 'record_deed'];
     const tools = game.s.phase === 'combat' ? [] : STORY_TOOLS.filter((t) => fixes.includes(t.name));
-    const prompt = `Current state:\n${this.situation(game)}\n\nRecent play, oldest first:\n${transcript(game)}\n\nOUT-OF-CHARACTER QUESTION from the player ${asked.player}${playerHeroes(game, asked.player)}: ${JSON.stringify(asked.text)}\n\nThey have stepped out of the story and ask you, the game master, directly. Nothing happens in the story: no scene, no roll, no time passes, and the world does not move on. Answer in one to four plain sentences, speaking as the Dungeon Master out of character, from what the state and the recent play show (rules, inventory, gold, quests, what the heroes know). Do not reveal secrets the heroes have not learned; if that is what they ask, say so kindly. If the question shows that the game state disagrees with the story (a missing coin or item, a forgotten reward, a wrong quest note), put it right with the matching tool and say what you changed. If you are not sure, say so. Reply in plain text, with no scene tool and no stage directions.`;
+    const prompt = this.turn(game, `OUT-OF-CHARACTER QUESTION from the player ${asked.player}${playerHeroes(game, asked.player)}: ${JSON.stringify(asked.text)}\n\nThey have stepped out of the story and ask you, the game master, directly. Nothing happens in the story: no scene, no roll, no time passes, and the world does not move on. Answer in one to four plain sentences, speaking as the Dungeon Master out of character, from what the state and the recent play show (rules, inventory, gold, quests, what the heroes know). Do not reveal secrets the heroes have not learned; if that is what they ask, say so kindly. If the question shows that the game state disagrees with the story (a missing coin or item, a forgotten reward, a wrong quest note), put it right with the matching tool and say what you changed. If you are not sure, say so. Reply in plain text, with no scene tool and no stage directions.`);
     try {
       const out = await this.converse(game, 'question', 'standard', prompt, tools, this.storyHandler(game, onUpdate));
       return out.text ?? out.scene?.narration?.trim() ?? null;
@@ -692,7 +722,8 @@ function playerHeroes(game: Game, playerName: string): string {
 export function createDM(env: NodeJS.ProcessEnv, onUsage?: (sample: UsageSample) => void): ClaudeDM | null {
   if (!env.ANTHROPIC_API_KEY) return null;
   const effort = (['low', 'medium', 'high', 'xhigh', 'max'] as const).find((e) => e === env.HEARTHFORGE_DM_EFFORT) ?? 'low';
-  return new ClaudeDM({ models: resolveModels(env), effort, apiKey: env.ANTHROPIC_API_KEY, onUsage });
+  const cacheTtl = env.HEARTHFORGE_DM_CACHE_TTL?.trim() === '5m' ? '5m' : '1h';
+  return new ClaudeDM({ models: resolveModels(env), effort, apiKey: env.ANTHROPIC_API_KEY, onUsage, cacheTtl });
 }
 
 /** What a start by surprise did, in the words the Dungeon Master narrates from. */

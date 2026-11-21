@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import type { UsageReport, UsageTotals } from '../../../shared/admin';
 import { readJson, writePrivate } from './config';
 
-/** Dollars per million tokens. Writing to the cache costs a quarter more than plain input. */
+/**
+ * Dollars per million tokens. Writing to the cache costs a quarter more than plain input when it keeps for five
+ * minutes, and twice as much when it keeps for an hour.
+ */
 const PRICES: { model: string; input: number; output: number; cacheRead: number }[] = [
   { model: 'claude-fable-5-2', input: 8, output: 40, cacheRead: 0.2 },
   { model: 'claude-opus-5-5', input: 4, output: 20, cacheRead: 0.2 },
@@ -22,9 +25,11 @@ export interface UsageSample {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /** The part of cacheWrite that keeps for an hour. */
+  cacheWrite1h?: number;
 }
 
-type Counts = [calls: number, input: number, output: number, cacheRead: number, cacheWrite: number];
+type Counts = [calls: number, input: number, output: number, cacheRead: number, cacheWrite: number, cacheWrite1h?: number];
 /** day -> table -> model -> counts */
 type Book = Record<string, Record<string, Record<string, Counts>>>;
 
@@ -33,7 +38,13 @@ const priceOf = (model: string) => PRICES.find((p) => model === p.model || model
 function costOf(model: string, c: Counts): number | null {
   const p = priceOf(model);
   if (!p) return null;
-  return (c[1] * p.input + c[2] * p.output + c[3] * p.cacheRead + c[4] * p.input * 1.25) / 1e6;
+  const long = c[5] ?? 0;
+  return (c[1] * p.input + c[2] * p.output + c[3] * p.cacheRead + (c[4] - long) * p.input * 1.25 + long * p.input * 2) / 1e6;
+}
+
+/** What one call cost in dollars, or null for a model without a known price. */
+export function sampleCost(u: UsageSample): number | null {
+  return costOf(u.model, [1, u.input || 0, u.output || 0, u.cacheRead || 0, u.cacheWrite || 0, u.cacheWrite1h || 0]);
 }
 
 const zero = (): UsageTotals => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
@@ -59,7 +70,7 @@ export class Usage {
   record(u: UsageSample) {
     const day = ((this.book[dayOf(this.now())] ??= {})[u.table] ??= {});
     const c = (day[u.model] ??= [0, 0, 0, 0, 0]);
-    c[0] += 1; c[1] += u.input || 0; c[2] += u.output || 0; c[3] += u.cacheRead || 0; c[4] += u.cacheWrite || 0;
+    c[0] += 1; c[1] += u.input || 0; c[2] += u.output || 0; c[3] += u.cacheRead || 0; c[4] += u.cacheWrite || 0; c[5] = (c[5] ?? 0) + (u.cacheWrite1h || 0);
     if (!this.timer) {
       this.timer = setTimeout(() => { this.timer = null; this.flush(); }, 5000);
       this.timer.unref?.();

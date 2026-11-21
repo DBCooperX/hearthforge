@@ -12,6 +12,7 @@ import type { LightKindId, LightLevel, LightSource, Senses } from './light';
 import type { FactionView, RumourView } from './reputation';
 import type { ZoneView } from './zone';
 import type { TrophyView } from './achievements';
+import type { CreditView } from './credits';
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export type Abilities = Record<AbilityKey, number>;
@@ -805,7 +806,10 @@ export type ClientMessage =
   | { t: 'join'; room: string; session: string; code?: string }
   | { t: 'create_table'; session: string; title: string; language: Lang; maxPlayers: number; locked: boolean }
   | { t: 'leave_table' }
-  | { t: 'close_table' }
+  /** From the list of tables, host only: delete a table. `confirm` must be the table's name, typed out. */
+  | { t: 'delete_table'; session: string; room: string; confirm: string }
+  /** From the list of tables, host only: give a table another name. */
+  | { t: 'rename_table'; session: string; room: string; title: string }
   | { t: 'ready'; ready: boolean }
   | { t: 'kick'; playerId: string }
   | { t: 'make_host'; playerId: string }
@@ -863,7 +867,9 @@ export type ServerMessage =
   /** `join` marks a refused attempt to sit down, so the lobby can show it next to the form. */
   | { t: 'error'; message: string; join?: boolean }
   /** The monsters the test toolbox can start a fight with. */
-  | { t: 'test_catalog'; monsters: TestMonster[] };
+  | { t: 'test_catalog'; monsters: TestMonster[] }
+  /** How much AI credit this account has left. Sent on sign-in and after each cost while credits can run out. */
+  | { t: 'credits'; credit: CreditView };
 
 /**
  * Reasons the server refuses a seat. They are sent in English and translated by the
@@ -879,6 +885,8 @@ export const JOIN_ERRORS = {
   seatTaken: 'That seat belongs to another player.',
   titleNeeded: 'Give the table a name.',
   signIn: 'You are signed out. Sign in again.',
+  notHost: 'Only the host of a table can do that.',
+  wrongName: 'The name you typed is not the name of the table.',
 } as const;
 
 export function abilityMod(score: number): number {

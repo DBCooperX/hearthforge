@@ -24,12 +24,16 @@ import type { AdminConnection } from '../../shared/admin';
 import { AdminApi } from './admin/api';
 import { Auth } from './admin/auth';
 import { Accounts } from './accounts';
+import { TableBin } from './bin';
 import { accountApi } from './accountApi';
 import { Config } from './admin/config';
 import { testKey } from './admin/keytest';
 import { Logs } from './admin/logs';
 import { Updater } from './admin/updater';
-import { Usage } from './admin/usage';
+import { Usage, sampleCost } from './admin/usage';
+import { Credits } from './credits';
+import { isAccountId } from '../../shared/accounts';
+import { OUT_OF_CREDIT } from '../../shared/credits';
 
 import pkg from '../../package.json';
 import { buildOf } from '../../shared/update';
@@ -49,6 +53,7 @@ const env = config.env;
 const accounts = new Accounts(DATA_DIR, env);
 const auth = new Auth(DATA_DIR);
 const usage = new Usage(DATA_DIR);
+const credits = new Credits(DATA_DIR);
 const updater = new Updater(DATA_DIR);
 const ART_DIR = env.ART_DIR ?? join(DATA_DIR, 'art');
 const art = new ArtStore(ART_DIR, env);
@@ -83,7 +88,11 @@ const MIME: Record<string, string> = {
 
 const store = new Store(DATA_DIR);
 const narrator = new Narrator(VOICE_DIR, env);
-const claude = createDM(env, (sample) => usage.record(sample));
+const claude = createDM(env, (sample) => {
+  usage.record(sample);
+  const usd = sampleCost(sample);
+  if (usd) bill(sample.table, usd, 'claude');
+});
 const dm = claude ?? new ScriptedDM();
 const rooms = new Map<string, Room>();
 /** Connections looking at the list of tables. */
@@ -121,18 +130,69 @@ function pushTables() {
   }, 150);
 }
 
+/** An account as credits need it. */
+function creditAccount(id: string) {
+  const a = accounts.get(id);
+  return a ? { id: a.id, username: a.username, role: a.role } : null;
+}
+
+/**
+ * The accounts a cost at a table is shared among: the players sitting there right now, or, when nobody is (memory
+ * kept up after everyone left), everyone with a seat. Seats from before accounts pay nothing.
+ */
+function payersAt(table: string): string[] {
+  const room = rooms.get(table);
+  if (!room) return [];
+  const seats = room.game.s.players.filter((p) => isAccountId(p.id) && accounts.get(p.id));
+  const here = seats.filter((p) => p.connected);
+  return (here.length ? here : seats).map((p) => p.id);
+}
+
+/** Book what the AI cost at a table, and tell the players charged how much credit is left. */
+function bill(table: string, usd: number, kind: 'claude' | 'voice') {
+  tellCredits(credits.charge(payersAt(table), usd, kind));
+}
+
+/** Send these accounts their credit, on every device they are signed in on. Only to those who can run out. */
+function tellCredits(ids: string[], always = false) {
+  for (const id of ids) {
+    const a = creditAccount(id);
+    if (!a) continue;
+    const credit = credits.view(a);
+    if (!credit.limited && !always) continue;
+    const payload = JSON.stringify({ t: 'credits', credit } satisfies ServerMessage);
+    for (const [ws, c] of conns) if (c.accountId === id && ws.readyState === ws.OPEN) ws.send(payload);
+  }
+}
+
+const bin = new TableBin(store, accounts);
+
 const hooks: RoomHooks = {
+  binned: (state, by) => { bin.add(state, by); },
+  renamed: (room) => accounts.retitle(room.name, room.game.s.table.title),
   changed: pushTables,
   detached: (ws) => void seated.delete(ws),
   closed: (room) => { rooms.delete(room.name); pushTables(); },
   newCode,
   paused: (room) => auth.paused(room.name),
   stats: (playerId, delta, heroes) => accounts.credit(playerId, delta, heroes),
+  mayAsk: (playerId) => {
+    const a = isAccountId(playerId) ? creditAccount(playerId) : null;
+    return !a || credits.mayPlay(a) ? null : OUT_OF_CREDIT;
+  },
 };
 
 const openRoom = (id: string) => new Room(id, dm, store, TIMING, hooks);
 // Every saved table is listed in the lobby. A table costs nothing until somebody sits down at it.
 for (const id of store.names()) rooms.set(id, openRoom(id));
+
+/** A table comes back from the bin and is listed again. */
+function restoreTable(binId: number, by: { id: string; innkeeper: boolean }) {
+  const out = bin.restore(binId, by, (id) => rooms.has(id), (code) => [...rooms.values()].some((r) => r.game.s.table.code === code));
+  rooms.set(out.room, openRoom(out.room));
+  pushTables();
+  return out;
+}
 
 const tableId = (raw: unknown) => String(raw ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32);
 
@@ -192,6 +252,7 @@ function connections(): AdminConnection[] {
 function restart() {
   for (const room of rooms.values()) room.saveNow();
   usage.flush();
+  credits.flush();
   accounts.flush();
   store.close();
   // Docker's restart policy starts the container again; the settings are read afresh on the way up.
@@ -207,11 +268,15 @@ const admin = new AdminApi({
   auth,
   accounts,
   usage,
+  credits,
+  creditsChanged: (ids) => tellCredits(ids, true),
   logs,
   updater,
   store,
   rooms,
   openRoom: (id) => openRoom(id),
+  bin,
+  restoreTable,
   tablesChanged: () => pushTables(),
   connections,
   disconnect: ({ id, ip }) => {
@@ -387,6 +452,8 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       const account = accounts.account(req.headers[SESSION_HEADER]);
       const room = rooms.get(tableId(url.searchParams.get('table')));
       if (!account || !room || !room.game.player(account.id)) return json(403, { error: 'forbidden' });
+      // A player whose credit is used up hears the story in silence; the others' narrator reads on.
+      if (!credits.mayPlay(account)) return json(402, { error: 'out_of_credit' });
       const id = Number(url.searchParams.get('entry'));
       const entry = room.game.s.log.find((l) => l.id === id);
       if (!entry || entry.kind !== 'dm') return json(404, { error: 'bad_request' });
@@ -394,9 +461,10 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       const part = Math.max(0, Math.floor(Number(url.searchParams.get('part')) || 0));
       if (part >= parts.length) return json(404, { error: 'bad_request' });
       const lang = langOf(room.game.s.language);
-      const audio = await narrator.speak(parts[part], lang);
+      const paid = (provider: 'openai' | 'elevenlabs', chars: number) => bill(room.name, credits.voiceCost(provider, chars), 'voice');
+      const audio = await narrator.speak(parts[part], lang, undefined, paid);
       // The next part is made while this one plays.
-      if (part + 1 < parts.length) void narrator.speak(parts[part + 1], lang).catch(() => {});
+      if (part + 1 < parts.length) void narrator.speak(parts[part + 1], lang, undefined, paid).catch(() => {});
       return sendAudio(req, res, audio.file, audio.type, { 'x-parts': String(parts.length), 'access-control-expose-headers': 'x-parts' });
     }
     if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
@@ -409,7 +477,9 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       const over: Record<string, unknown> = {};
       for (const k of ['provider', 'openai', 'elevenlabs', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
       if (url.searchParams.has('piper')) over.piper = { ...narrator.library().choice.piper, [lang]: url.searchParams.get('piper') };
-      const audio = await narrator.speak(sample, lang, over);
+      // The Innkeeper trying voices pays for it like anyone else: it shows in their own costs.
+      const me = accounts.account(req.headers[SESSION_HEADER]);
+      const audio = await narrator.speak(sample, lang, over, (provider, chars) => { if (me) credits.charge([me.id], credits.voiceCost(provider, chars), 'voice'); });
       return sendAudio(req, res, audio.file, audio.type);
     }
     if (req.method === 'POST' && url.pathname === '/api/voice/action') {
@@ -433,7 +503,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/account/')) {
-    void accountApi({ accounts, rooms, ipOf, tablesChanged: pushTables }, req, res, url);
+    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; } }, req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/admin/')) {
@@ -575,10 +645,32 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       const who = accounts.account(msg.session);
       const conn = conns.get(ws);
       if (who && conn) { conn.account = who.username; conn.accountId = who.id; }
+      if (who) tellCredits([who.id], true);
       seated.get(ws)?.leave(ws);
       seated.delete(ws);
       lobby.add(ws);
       return send(tableList());
+    }
+    if (msg.t === 'delete_table' || msg.t === 'rename_table') {
+      // Both are done from the list of tables, never from inside a game, by the host or the Innkeeper.
+      const account = accounts.account(msg.session);
+      const refuse = (message: string) => send({ t: 'error', message, join: true });
+      if (!account) return refuse(JOIN_ERRORS.signIn);
+      const room = rooms.get(tableId(msg.room));
+      if (!room) return refuse(JOIN_ERRORS.noTable);
+      if (room.game.s.hostId !== account.id && account.role !== 'innkeeper') return refuse(JOIN_ERRORS.notHost);
+      const title = room.game.s.table.title;
+      if (msg.t === 'delete_table') {
+        if (String(msg.confirm ?? '').trim() !== title) return refuse(JOIN_ERRORS.wrongName);
+        console.log(`[tables] ${account.username} deleted the table "${title}". It waits in the bin.`);
+        auth.setPaused(room.name, false);
+        room.close(account.username);
+      } else {
+        const next = String(msg.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (!next) return refuse(JOIN_ERRORS.titleNeeded);
+        room.rename(next);
+      }
+      return;
     }
     if (msg.t === 'join' || msg.t === 'create_table') {
       try {
@@ -587,6 +679,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         if (!account) throw new JoinError(JOIN_ERRORS.signIn);
         const conn = conns.get(ws);
         if (conn) { conn.account = account.username; conn.accountId = account.id; }
+        tellCredits([account.id], true);
         const playerId = account.id;
         const token = `account:${account.id}`;
         const before = seated.get(ws);
@@ -619,6 +712,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
 
 // A deleted account is sent away at once, from every table and device.
 accounts.onDeleted = (id) => {
+  credits.forget(id);
   for (const [ws, c] of conns) if (c.accountId === id) ws.close(4403, 'removed');
 };
 
@@ -655,6 +749,7 @@ server.listen(PORT, () => {
 function shutdown() {
   for (const room of rooms.values()) room.saveNow();
   usage.flush();
+  credits.flush();
   accounts.flush();
   store.close();
   process.exit(0);

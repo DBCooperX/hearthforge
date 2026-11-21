@@ -16,7 +16,10 @@ import { Config, ConfigError, mask } from '../src/admin/config';
 import { Logs } from '../src/admin/logs';
 import { Updater } from '../src/admin/updater';
 import { Usage } from '../src/admin/usage';
+import { Credits } from '../src/credits';
 import type { Store } from '../src/db';
+import { TableBin } from '../src/bin';
+import { MemoryStore } from './memoryStore';
 import { ScriptedDM } from '../src/dm/scripted';
 import type { InternalState } from '../src/game/engine';
 import { PAUSED_MESSAGE, Room } from '../src/room';
@@ -114,15 +117,6 @@ describe('the updater as the server sees it', () => {
 
 // ------------------------------------------------------------------------------ the API
 
-class MemoryStore {
-  saved = new Map<string, string>();
-  load(room: string) { const s = this.saved.get(room); return s ? (JSON.parse(s) as InternalState) : undefined; }
-  save(room: string, state: InternalState) { this.saved.set(room, JSON.stringify(state)); }
-  names() { return [...this.saved.keys()]; }
-  delete(room: string) { this.saved.delete(room); }
-  close() {}
-}
-
 function socket() {
   const sent: ServerMessage[] = [];
   const ws = { OPEN: 1, readyState: 1, send: (data: string) => { sent.push(JSON.parse(data)); } } as unknown as WebSocket;
@@ -140,12 +134,18 @@ async function rig(env: NodeJS.ProcessEnv = { HEARTHFORGE_ADMIN_PASSWORD: 'open 
   const config = new Config(dataDir, env);
   const auth = new Auth(dataDir);
   const accounts = new Accounts(dataDir, config.env);
-  const openRoom = (id: string): Room => new Room(id, new ScriptedDM(), store as unknown as Store, {}, { closed: (r) => void rooms.delete(r.name), paused: (r) => auth.paused(r.name) });
+  const bin = new TableBin(store, accounts);
+  const openRoom = (id: string): Room => new Room(id, new ScriptedDM(), store as unknown as Store, {}, { closed: (r) => void rooms.delete(r.name), paused: (r) => auth.paused(r.name), binned: (state, by) => { bin.add(state, by); } });
+  const restoreTable = (binId: number, by: { id: string; innkeeper: boolean }) => {
+    const out = bin.restore(binId, by, (id) => rooms.has(id), () => false);
+    rooms.set(out.room, openRoom(out.room));
+    return out;
+  };
   const out = { notices: [] as string[], restarts: 0, closed: [] as unknown[] };
   const ctx: AdminContext = {
     dataDir, version: '0.1.0', startedAt: Date.now() - 5000, env: config.env, config, auth, accounts,
-    usage: new Usage(dataDir), logs: new Logs(), updater: new Updater(dataDir),
-    store, rooms, openRoom, tablesChanged: () => {},
+    usage: new Usage(dataDir), credits: new Credits(dataDir), logs: new Logs(), updater: new Updater(dataDir),
+    store, rooms, openRoom, bin, restoreTable, tablesChanged: () => {},
     connections: (): AdminConnection[] => [{ id: 7, ip: '192.168.1.20', since: Date.now() - 60000, agent: 'Firefox/130', table: '', tableTitle: '', name: '', playerId: '', host: false }],
     disconnect: (target) => void out.closed.push(target),
     notice: (text) => void out.notices.push(text),
@@ -240,6 +240,14 @@ describe('innkeeper API', () => {
     expect(socks[0].sent.at(-1)).toEqual({ t: 'left', reason: 'closed' });
     expect(r.store.names()).toEqual([]);
     expect((await call(r, '/tables', { table: 'friday', do: 'delete' })).status).toBe(404);
+
+    // The deleted table waits in the bin, and the Innkeeper can bring it back.
+    const waiting = (await call(r, '/bin')).body.tables;
+    expect(waiting).toMatchObject([{ title: 'friday night', deletedBy: 'innkeeper' }]);
+    expect((await call(r, '/bin', { do: 'restore', id: waiting[0].id })).body.tables).toEqual([]);
+    expect(r.store.names()).toEqual(['friday']);
+    expect(r.rooms.get('friday')?.game.s.players.map((p) => p.name)).toEqual(['Chris']);
+    expect((await call(r, '/bin', { do: 'restore', id: waiting[0].id })).status).toBe(404);
   });
 
   it('shows who is connected and bans by address, but never the innkeeper\'s own', async () => {
@@ -312,6 +320,30 @@ describe('innkeeper API', () => {
     await call(r, '/notice', { text: '  Pizza   is here  ' });
     expect(r.notices).toEqual(['Pizza is here']);
     expect((await call(r, '/notice', { text: '   ' })).status).toBe(400);
+  });
+
+  it('books what players paid in, and switches credits on and off', async () => {
+    const r = await rig();
+    const told: string[][] = [];
+    r.ctx.creditsChanged = (ids) => void told.push(ids);
+    const mira = r.ctx.accounts.create('Mira', 'player').account;
+    let rep = (await call(r, '/credits')).body;
+    expect(rep.config).toMatchObject({ on: false, chfPerUsd: 0.85, warnChf: 2, voiceUsdPer1k: { elevenlabs: 0.04 } });
+    expect(rep.rows.map((x: { username: string }) => x.username)).toEqual(['innkeeper', 'Mira']);
+    rep = (await call(r, '/credits', { do: 'top_up', id: mira.id, chf: 10, note: 'TWINT' })).body;
+    expect(rep.rows[1]).toMatchObject({ paid: 10, limited: false, topUps: [{ chf: 10, note: 'TWINT' }] });
+    expect(told).toEqual([[mira.id]]);
+    rep = (await call(r, '/credits', { do: 'config', config: { on: true, warnChf: 3 } })).body;
+    expect(rep.config).toMatchObject({ on: true, warnChf: 3, chfPerUsd: 0.85 });
+    expect(rep.rows[1]).toMatchObject({ limited: true, balance: 10 });
+    expect(rep.rows[0]).toMatchObject({ limited: false });
+    expect((await call(r, '/credits', { do: 'config', config: { chfPerUsd: 'lots' } })).body).toEqual({ error: 'bad_value' });
+    expect((await call(r, '/credits', { do: 'top_up', id: 'acc_nobody', chf: 5 })).status).toBe(404);
+    rep = (await call(r, '/credits', { do: 'free', id: mira.id, free: true })).body;
+    expect(rep.rows[1]).toMatchObject({ free: true, limited: false });
+    // A backup keeps them.
+    const made = (await call(r, '/backup')).body;
+    expect(made.credits.accounts[mira.id].topUps[0].chf).toBe(10);
   });
 
   it('backs tables up and puts them back, without secrets', async () => {

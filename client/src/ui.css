@@ -537,6 +537,10 @@
 .innkeeper-door { position: fixed; left: 14px; bottom: 10px; font-size: 13px; opacity: 0.7; z-index: 2; }
 .innkeeper-door:hover { opacity: 1; }
 .toast.notice { background: #1e1b19; border-color: #d9a851; font-size: 15px; max-width: min(560px, 90vw); padding: 10px 16px; }
+.toast.credit-note { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; pointer-events: auto; background: #1e1b19; border-color: #d9a851; max-width: min(560px, 90vw); padding: 10px 16px; }
+.toast.credit-note.is-out { border-color: #d0483a; background: #2a1512; }
+.toast.credit-note b { flex-basis: 100%; font-family: var(--font-head); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #f0c877; }
+.toast.credit-note span { flex: 1; min-width: 0; }
 .toast.notice b { display: block; font-family: var(--font-head); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #f0c877; }
 .innkeeper .win-body { overflow: hidden; display: flex; min-height: 0; flex: 1; }
 .innkeeper .win-sub { margin-left: 10px; }
@@ -695,3 +699,17 @@
   .trade-list { overflow: visible; flex: none; }
   .trade-side + .trade-side { border-left: 0; border-top: 1px solid var(--edge); }
 }
+
+/* Player credits in the Innkeeper's "AI costs". */
+.inn-credits { display: grid; gap: 12px; }
+.inn-switch { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.inn-switch input, .inn-credits td input[type="checkbox"] { margin-top: 4px; width: auto; flex: none; }
+.inn-credit-config { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; align-items: end; }
+.inn-credit-config label, .inn-topup label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.inn-credit-config input, .inn-topup input { width: 100%; }
+.inn-topup { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+.inn-topup label:first-child { width: 120px; }
+.inn-topup label:nth-child(2) { flex: 1; min-width: 160px; }
+.inn-table tr.inn-subrow td { background: rgba(0, 0, 0, 0.16); padding: 8px 10px 10px; }
+.inn-table b.warn { color: #f0c877; }
+.inn-table b.bad { color: #e8705f; }
