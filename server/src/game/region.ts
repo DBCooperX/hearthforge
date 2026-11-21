@@ -266,6 +266,9 @@ export interface Opening {
   intro: string;
 }
 
+/** The hour each opening plays at, where it is not the usual 08:00. */
+export const PREMISE_HOURS: Record<string, number> = Object.fromEntries(Object.entries(PREMISE_TEXT).flatMap(([id, p]) => (p.hour === undefined ? [] : [[id, p.hour]])));
+
 /** Which premise a table opens with. 'surprise' is settled by the seed; an empty custom text falls back to the plain arrival. */
 export function resolvePremise(start: StartOptions): string {
   if (start.premise === SURPRISE) return pick(PREMISES, seedStream(start.seed, 'premise')).id;
