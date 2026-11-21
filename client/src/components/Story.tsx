@@ -278,7 +278,10 @@ function ScenePicture({ scene }: { scene: SceneMeta }) {
   const [loaded, setLoaded] = useState(false);
   const id = scene.imageId;
   const [drawing, setDrawing] = useState(false);
-  const [settled, setSettled] = useState(() => !id || drawnPictures.has(id) || prefersReducedMotion());
+  // Which picture has been drawn already; keyed by id because the card first shows "drawing this moment" and gets its picture later.
+  const [doneFor, setDoneFor] = useState<string | null>(null);
+  const [reduced] = useState(prefersReducedMotion);
+  const settled = !id || reduced || drawnPictures.has(id) || doneFor === id;
   const box = useRef<HTMLButtonElement>(null);
   const img = useRef<HTMLImageElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -298,12 +301,12 @@ function ScenePicture({ scene }: { scene: SceneMeta }) {
   useEffect(() => {
     if (!drawing || !id) return;
     const cv = canvas.current, im = img.current, el = box.current;
-    if (!cv || !im || !el || !im.naturalWidth) { drawnPictures.add(id); setSettled(true); return; }
+    if (!cv || !im || !el || !im.naturalWidth) { drawnPictures.add(id); setDoneFor(id); return; }
     const k = Math.min(window.devicePixelRatio || 1, 1.5);
     cv.width = Math.max(64, Math.min(1200, Math.round(el.clientWidth * k)));
     cv.height = Math.max(64, Math.min(900, Math.round(el.clientHeight * k)));
     let reveal: CharcoalReveal;
-    try { reveal = new CharcoalReveal(cv, im); } catch { drawnPictures.add(id); setSettled(true); return; }
+    try { reveal = new CharcoalReveal(cv, im); } catch { drawnPictures.add(id); setDoneFor(id); return; }
     let raf = 0, stopped = false, lastScratch = -1e9;
     const t0 = performance.now();
     const finish = () => {
@@ -313,7 +316,7 @@ function ScenePicture({ scene }: { scene: SceneMeta }) {
       reveal.finish();
       drawnPictures.add(id);
       setDrawing(false);
-      setSettled(true);
+      setDoneFor(id);
     };
     skip.current = finish;
     const tick = (now: number) => {
