@@ -78,6 +78,8 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
   if (picture.length < 20) throw new Error('Describe the picture in one to three sentences.');
   if (game.s.phase === 'lobby') return { painted: false, reason: 'The adventure has not begun.' };
   const gate = game.pictures ? game.pictures.gate(moment) : 'off';
+  // A picture of a place is for the first arrival only, never a revisit.
+  if (moment === 'place' && !game.newPlace) return { painted: false, reason: 'Only the first arrival at a new place gets a picture.', note: 'Carry on with the scene as usual.' };
   if (gate) return { painted: false, reason: PICTURE_GATES[gate], note: 'Carry on with the scene as usual.' };
   if (game.pictureAsk) return { painted: false, reason: 'This reply already has a picture.' };
   const names = String(raw.who ?? '').split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -86,6 +88,7 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
   const lower = who.map((n) => n.toLocaleLowerCase());
   const portraits = game.s.characters.filter((c) => c.portraitId && lower.includes(c.name.toLocaleLowerCase())).map((c) => c.portraitId!);
   game.pictureAsk = { moment, picture, cast: castOf(game, who), ...(portraits.length ? { portraits } : {}) };
+  if (moment === 'place') game.newPlace = null; // this arrival has its picture
   return { painted: true, note: 'The picture is painted while the players read your scene, and shown above it. Do not mention it in the narration.' };
 }
 
@@ -93,7 +96,7 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
 export function pictureState(game: Game): string | null {
   const hooks = game.pictures;
   if (!hooks) return null;
-  const allowed = PICTURE_MOMENTS.filter((m) => !hooks.gate(m));
+  const allowed = PICTURE_MOMENTS.filter((m) => !hooks.gate(m) && (m !== 'place' || game.newPlace));
   const gate = hooks.gate('boss');
   if (gate === 'off' || gate === 'no_key') return null;
   if (!allowed.length) return 'Illustrations: none available right now.';
@@ -125,4 +128,14 @@ export function portraitPrompt(style: string, c: Character): string {
     `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
     'Show the class through clothing and gear (armour, robes, holy symbol, bow, staff) without a weapon covering the face. No text, no letters, no frame, no border, no watermark, no signature.',
   ].join('\n\n');
+}
+
+/**
+ * For the result of moving the party: when it has just come to a place for the first time and a picture of a new place
+ * may be painted now, a hint telling the Dungeon Master so. Nothing otherwise, so revisits never ask.
+ */
+export function placePictureHint(game: Game): Record<string, string> {
+  const hooks = game.pictures;
+  if (!game.newPlace || !hooks || game.s.phase === 'combat' || hooks.gate('place')) return {};
+  return { picture_available: `The party is at ${game.newPlace.name} for the first time. You may call illustrate once with moment "place" to show it, before scene, with the place as the painter sees it from where the party stands.` };
 }

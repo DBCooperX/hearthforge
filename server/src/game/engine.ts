@@ -376,6 +376,8 @@ export class Game {
   pictures: PictureHooks | null = null;
   /** A picture the Dungeon Master asked for in the reply being written, for its scene. */
   pictureAsk: PictureAsk | null = null;
+  /** The place the party has just come to for the first time, until its picture is asked for or the party moves on (not saved). */
+  newPlace: { id: string; name: string } | null = null;
 
   constructor(room: string, rng: Rng = Math.random, saved?: InternalState) {
     this.rng = rng;
@@ -1032,6 +1034,7 @@ export class Game {
   /** Mark a place as visited and its people as met. */
   private settleIn(loc: LocationState): boolean {
     const first = !loc.visited;
+    this.newPlace = null;
     this.world.placeId = loc.id;
     delete this.s.stage; // a new place starts with its own scene
     loc.visited = true;
@@ -1050,6 +1053,7 @@ export class Game {
 
   private arriveAt(loc: LocationState, journey?: string) {
     const firstVisit = this.settleIn(loc);
+    this.newPlace = firstVisit ? { id: loc.id, name: loc.name } : null;
     this.beats.push({ kind: 'arrive', location: loc.name, firstVisit, major: MAJOR_KINDS.includes(loc.kind), journey });
   }
 

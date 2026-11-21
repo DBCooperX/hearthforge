@@ -2259,7 +2259,7 @@ export const DE: Record<string, string> = {
   'A hard fight is won': 'Ein harter Kampf ist gewonnen',
   'A big secret comes out': 'Ein grosses Geheimnis kommt ans Licht',
   'The opening scene of an adventure': 'Die erste Szene eines Abenteuers',
-  'The party first sees a grand place': 'Die Gruppe sieht zum ersten Mal einen eindrücklichen Ort',
+  'The party arrives at a new place for the first time': 'Die Gruppe erreicht zum ersten Mal einen neuen Ort',
   'A death, a parting or the end of a quest': 'Ein Tod, ein Abschied oder das Ende eines Auftrags',
   'Ink and watercolour, like a field journal': 'Tusche und Aquarell, wie ein Reisetagebuch',
   'Painted storybook, warm and soft': 'Gemaltes Bilderbuch, warm und weich',

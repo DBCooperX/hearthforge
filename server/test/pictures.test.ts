@@ -79,7 +79,9 @@ describe('the Innkeeper setup', () => {
 
   it('holds to the moments ticked, the limit per day, the gap and the monthly budget', async () => {
     const { ill, later } = illustrator({ perTableDay: 2, gapMinutes: 15, monthUsd: 0.2 });
-    expect(ill.gate('t1', 'arrival')).toBe('moment');
+    expect(ill.gate('t1', 'opening')).toBe('moment');
+    // A first arrival at a new place is on by default, also for a setup saved before that moment existed.
+    expect(ill.gate('t1', 'place')).toBeNull();
     expect(ill.gate('t1', 'boss')).toBeNull();
     let billed = 0;
     await ill.paint(job(), (usd) => { billed += usd; });
