@@ -115,5 +115,5 @@ export function heroGear(armor?: GearItem | null, mainHand?: GearItem | null, of
   return { armor: cat === 'heavy' || cat === 'medium' || cat === 'light' ? cat : 'none', weapon, shield: offHand?.kind === 'shield' };
 }
 
-export interface HeroArt extends Who { look: HeroLook; gear: HeroGear }
+export interface HeroArt extends Who { look: HeroLook; gear: HeroGear; /** A painted portrait on the server (/pictures/<id>), shown instead of the drawn bust once it has loaded. */ portrait?: string | null }
 export const heroArtKey = (a: HeroArt) => [a.speciesId, a.gender, a.classId, a.name ?? '', ...Object.values(a.look), ...Object.values(a.gear)].join('|');

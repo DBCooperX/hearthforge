@@ -1,6 +1,6 @@
 // A room is one table: a Game, the players sitting at it and its Dungeon Master.
 import type { WebSocket } from 'ws';
-import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
+import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat, type InternalState } from './game/engine';
@@ -11,6 +11,7 @@ import { parseOoc } from '../../shared/ooc';
 import type { PlayStats } from '../../shared/accounts';
 import type { HeroRef } from './accounts';
 import { hashToken } from './http';
+import { portraitKey, type PictureAsk, type PictureHooks } from './game/pictures';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -58,6 +59,13 @@ export interface RoomHooks {
   stats?(playerId: string, delta: Partial<PlayStats>, heroes: HeroRef[]): void;
   /** Why this player may not ask the AI for anything new right now (their credit is used up), or null. */
   mayAsk?(playerId: string): string | null;
+  /** Story illustrations: whether one may be painted at this table now, and painting it. */
+  pictures?: {
+    gate(room: Room, moment: Parameters<PictureHooks['gate']>[0]): ReturnType<PictureHooks['gate']>;
+    paint(room: Room, entryId: number, ask: PictureAsk): void;
+    /** A hero has no portrait for their current look yet: paint one if the server may. */
+    portrait?(room: Room, hero: Character): void;
+  };
 }
 
 /**
@@ -124,6 +132,10 @@ export class Room {
     if (!this.game.s.table.start.seed) this.game.s.table.start.seed = newSeed();
     this.lastGold = this.game.s.gold;
     this.lastPhase = this.game.s.phase;
+    const pictures = hooks.pictures;
+    if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask) };
+    // A picture that was being painted when the server stopped will not arrive.
+    for (const l of this.game.s.log) if (l.scene?.painting) delete l.scene.painting;
     this.game.tally = (heroId, what) => {
       const c = this.game.s.characters.find((x) => x.id === heroId);
       // What happens in test mode is the host trying things out, not the campaign.
@@ -367,6 +379,8 @@ export class Room {
   flush() {
     if (this.closed) return;
     const moves = this.game.takeMoves();
+    const portrait = this.hooks.pictures?.portrait;
+    if (portrait) for (const c of this.game.s.characters) if (!c.dead && c.portraitKey !== portraitKey(c)) portrait(this, c);
     this.game.checkTrophies();
     this.creditGold();
     const state: ServerMessage = {
@@ -469,6 +483,11 @@ export class Room {
       const began = this.attempt(ws, () => this.apply(playerId, msg)) && msg.t === 'start';
       this.flush();
       if (began) await this.prepareWorld();
+      // A hero who joins an adventure already under way gets a personal thread too, without holding up play.
+      else if ((msg.t === 'create_character' || msg.t === 'add_premade') && this.game.s.setting && this.dm.weaveThreads) {
+        const g = this.game, epoch = this.epoch;
+        void this.dm.weaveThreads(g).then(() => { if (epoch === this.epoch) this.flush(); });
+      }
       await this.pump();
     });
   }

@@ -13,8 +13,10 @@ interface Ledger {
   /** Francs spent, ever. */
   claude: number;
   voice: number;
-  /** Francs spent per day (YYYY-MM-DD): [claude, voice]. Kept for 90 days. */
-  days: Record<string, [number, number]>;
+  /** Story illustrations. Missing in ledgers from before them. */
+  images?: number;
+  /** Francs spent per day (YYYY-MM-DD): [claude, voice, illustrations]. Kept for 90 days. */
+  days: Record<string, [number, number, number?]>;
   free?: boolean;
 }
 
@@ -24,6 +26,9 @@ interface Saved {
 }
 
 export interface CreditAccount { id: string; username: string; role: 'player' | 'innkeeper' }
+
+/** What a cost was for. */
+export type CostKind = 'claude' | 'voice' | 'images';
 
 export class CreditsError extends Error {
   constructor(readonly code: 'bad_value' | 'not_found') { super(code); }
@@ -83,16 +88,17 @@ export class Credits {
    * Book a cost in dollars, shared equally among the accounts it was spent for. Returns the accounts charged, so
    * their players can be told how much is left.
    */
-  charge(ids: string[], usd: number, kind: 'claude' | 'voice'): string[] {
+  charge(ids: string[], usd: number, kind: CostKind): string[] {
     const who = [...new Set(ids)];
     if (!who.length || !(usd > 0)) return [];
     const share = (usd * this.s.config.chfPerUsd) / who.length;
     const day = dayOf(this.now());
     for (const id of who) {
       const l = this.ledger(id);
-      l[kind] = round(l[kind] + share);
-      const d = (l.days[day] ??= [0, 0]);
-      d[kind === 'claude' ? 0 : 1] = round(d[kind === 'claude' ? 0 : 1] + share);
+      l[kind] = round((l[kind] ?? 0) + share);
+      const d = (l.days[day] ??= [0, 0, 0]);
+      const i = kind === 'claude' ? 0 : kind === 'voice' ? 1 : 2;
+      d[i] = round((d[i] ?? 0) + share);
     }
     this.saveSoon();
     return who;
@@ -127,7 +133,7 @@ export class Credits {
   view(a: CreditAccount): CreditView {
     const l = this.s.accounts[a.id];
     const paid = round((l?.topUps ?? []).reduce((n, t) => n + t.chf, 0));
-    const spent = round((l?.claude ?? 0) + (l?.voice ?? 0));
+    const spent = round((l?.claude ?? 0) + (l?.voice ?? 0) + (l?.images ?? 0));
     const balance = round(paid - spent);
     const free = !!l?.free;
     const limited = this.s.config.on && a.role !== 'innkeeper' && !free;
@@ -144,8 +150,8 @@ export class Credits {
     const since = dayOf(this.now() - 30 * 86400000);
     const rows: CreditRow[] = accounts.map((a) => {
       const l = this.s.accounts[a.id];
-      const last30 = Object.entries(l?.days ?? {}).filter(([d]) => d >= since).reduce((n, [, v]) => n + v[0] + v[1], 0);
-      return { ...this.view(a), id: a.id, username: a.username, role: a.role, spentClaude: round(l?.claude ?? 0), spentVoice: round(l?.voice ?? 0), last30: round(last30), topUps: [...(l?.topUps ?? [])].reverse() };
+      const last30 = Object.entries(l?.days ?? {}).filter(([d]) => d >= since).reduce((n, [, v]) => n + v[0] + v[1] + (v[2] ?? 0), 0);
+      return { ...this.view(a), id: a.id, username: a.username, role: a.role, spentClaude: round(l?.claude ?? 0), spentVoice: round(l?.voice ?? 0), spentImages: round(l?.images ?? 0), last30: round(last30), topUps: [...(l?.topUps ?? [])].reverse() };
     });
     return { config: this.config, rows };
   }
@@ -178,7 +184,7 @@ export class Credits {
     let added = 0;
     for (const [id, l] of Object.entries(r.accounts)) {
       if (this.s.accounts[id] || !l || !Array.isArray(l.topUps)) continue;
-      this.s.accounts[id] = { topUps: l.topUps, claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, days: l.days ?? {}, ...(l.free ? { free: true } : {}) };
+      this.s.accounts[id] = { topUps: l.topUps, claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.free ? { free: true } : {}) };
       added++;
     }
     if (added) this.save();

@@ -82,6 +82,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
+import type { PictureAsk, PictureHooks } from './pictures';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
@@ -371,6 +372,10 @@ export class Game {
   rng: Rng;
   beats: Beat[] = [];
   moves: { id: string; path: Pt[] }[] = [];
+  /** Set by the room when the server can paint story illustrations. */
+  pictures: PictureHooks | null = null;
+  /** A picture the Dungeon Master asked for in the reply being written, for its scene. */
+  pictureAsk: PictureAsk | null = null;
 
   constructor(room: string, rng: Rng = Math.random, saved?: InternalState) {
     this.rng = rng;
@@ -5259,7 +5264,20 @@ export class Game {
     this.spoilsOpen = false;
     const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
+    const ask = this.pictureAsk;
+    this.pictureAsk = null;
+    if (ask && this.pictures) meta.painting = true;
     this.log('dm', scene.text.trim(), { scene: meta });
+    if (ask && this.pictures) this.pictures.paint(this.s.logSeq, ask);
+  }
+
+  /** An illustration arrived for a story entry (id null: it could not be painted). */
+  setPicture(entryId: number, id: string | null): boolean {
+    const entry = this.s.log.find((l) => l.id === entryId);
+    if (!entry?.scene) return false;
+    delete entry.scene.painting;
+    if (id) entry.scene.imageId = id;
+    return true;
   }
 
   /**

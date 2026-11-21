@@ -23,6 +23,7 @@ import { CAMPAIGN_TOOL_DESCRIPTION, campaignTool } from '../campaign/prompt';
 import { readCampaign } from '../campaign/digest';
 import type { Book } from '../campaign/read';
 import type { CampaignDigest } from '../campaign/library';
+import { askPicture, pictureState } from '../game/pictures';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -260,6 +261,11 @@ const STORY_TOOLS: Tool[] = [
     after: str('For hold: what must happen first, in plain words, for example "the party has found the ledger in the mill cellar". Empty string otherwise.'),
     not_before: str('For hold, when timing matters: the earliest moment, as "in 2 days", "tomorrow", "tonight" or "day 4". Empty string for no limit.'),
   }),
+  looseTool('illustrate', 'Ask for a hand-drawn picture of this moment, shown above the scene of this reply. Only for a moment the state lists as available for illustrations; the server refuses the rest. Call it at most once per reply, before scene.', {
+    moment: str('What kind of moment it is: "boss" (a boss or mighty foe steps out), "victory" (a hard fight is won), "reveal" (a big secret comes out), "opening" (the first scene of an adventure), "arrival" (the party first sees a grand place) or "farewell" (a death, a parting, the end of a quest).'),
+    picture: str('The picture in one to three sentences of English: who does what, where, in what light. One clear moment, as a painter would frame it. No text or letters in the picture.'),
+    who: str('The heroes and people in the picture by name, comma separated, so the server draws them as they look. Empty string for the whole party.'),
+  }),
   CAMPAIGN_TOOL,
   SCENE_TOOL,
 ];
@@ -487,6 +493,8 @@ export class ClaudeDM implements DungeonMaster {
             return logEvent(game, { what: String(i.what ?? ''), when: String(i.when ?? ''), where: String(i.where ?? ''), knownBy: String(i.known_by ?? '') });
           case 'campaign':
             return campaignTool(game, i);
+          case 'illustrate':
+            return askPicture(game, i);
           case 'secret':
             return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:
@@ -520,7 +528,8 @@ export class ClaudeDM implements DungeonMaster {
 
   /** The state of play right now, without what describeTable already says. */
   private situation(game: Game): string {
-    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : describeWorld(game, { live: true });
+    const pictures = game.s.phase === 'combat' ? null : pictureState(game);
+    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : `${describeWorld(game, { live: true })}${pictures ? `\n${pictures}` : ''}`;
     return game.s.testMode ? `TEST MODE: the table's host is playtesting and may set levels, hit points, items, gold, the clock and the place directly. Take the state below as the truth, and do not comment on sudden changes.\n${state}` : state;
   }
 
@@ -638,6 +647,66 @@ export class ClaudeDM implements DungeonMaster {
    * places on the map, quests and rewards stay exactly as rolled; only wording changes.
    */
   async prepare(game: Game): Promise<void> {
+    await this.fleshOut(game);
+    await this.weaveThreads(game);
+  }
+
+  /**
+   * Draw one personal thread for each hero from the backstory their player wrote, tied to the people,
+   * places and quests of this region or campaign book. One short call on the cheapest model; the threads
+   * go into the Dungeon Master's notes about the table, which the prompt cache serves.
+   */
+  async weaveThreads(game: Game): Promise<void> {
+    const s = game.s, setting = s.setting;
+    if (!setting) return;
+    const kept = (setting.threads ?? []).filter((t) => s.characters.some((c) => c.id === t.characterId && c.backstory === t.backstory));
+    const heroes = s.characters.filter((c) => c.backstory?.trim() && !kept.some((t) => t.characterId === c.id));
+    if (!heroes.length) return;
+    const book = setting.campaign?.digest;
+    const story = book
+      ? `The table plays the published adventure "${book.title}". What is really going on: ${book.overview}${book.chapters.length ? `\nChapters: ${book.chapters.map((ch) => `${ch.title}: ${ch.summary}`).join(' / ')}` : ''}`
+      : `Region: ${setting.name}\nWhat is going on: ${setting.premise}${setting.plot ? `\nPlot: ${setting.plot}` : ''}\nHow the story opens: ${setting.opening}`;
+    const brief = {
+      people: s.memory.npcs.map((n) => ({ name: n.name, role: n.role })),
+      places: (game.world?.locations ?? []).filter((l) => !l.parentId).map((l) => l.name),
+      quests: s.memory.quests.map((q) => q.title),
+      heroes: heroes.map((c) => ({ id: c.id, name: c.name, class: c.className, backstory: c.backstory })),
+    };
+    const prompt = `A Dungeons & Dragons campaign is about to begin, or a new hero has joined it. Give each hero listed below one personal story thread drawn from the backstory their player wrote.
+
+${story}
+
+The pieces, as JSON:
+${JSON.stringify(brief)}
+
+Answer with one JSON object and nothing else, mapping each hero id to their thread: {"<hero id>": "..."}
+
+- A thread is one to three sentences in English, for the Dungeon Master only, at most 400 characters: who or what from this hero's past turns up in this story, why it matters now, and how it can come to a head.
+- Tie every thread to at least one person, place or quest from the lists, by its exact name${book ? ", or to the book's own people, places and events. Do not invent new villains or storylines for the book" : ''}.
+- Never contradict the backstory. Build on what the player wrote and keep what they left open open.
+- Give each hero a different kind of thread (a person, a debt, an object, a place, a secret), and none bigger than the main story. No markdown.`;
+    try {
+      const call = this.converse(game, 'world', 'background', prompt, [], async () => null, 'You are a story assistant for a Dungeons & Dragons game. You answer with exactly the JSON you are asked for.');
+      const out = await Promise.race([call, new Promise<null>((r) => setTimeout(() => r(null), 45_000).unref?.())]);
+      const raw = out?.text ?? '';
+      const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+      if (!json) return;
+      const hooks = JSON.parse(json) as Record<string, unknown>;
+      // A new adventure may have begun while the model was writing.
+      if (game.s !== s || s.setting !== setting) return;
+      const made = heroes.flatMap((c) => {
+        const h = hooks[c.id];
+        return typeof h === 'string' && h.trim().length >= 20 ? [{ characterId: c.id, backstory: c.backstory, hook: h.replace(/\s+/g, ' ').trim().slice(0, 500) }] : [];
+      });
+      setting.threads = [...kept, ...made];
+    } catch (err) {
+      if (err instanceof SyntaxError) console.warn('[dm] The hero threads came back malformed; the Dungeon Master will find its own.');
+      else this.report(err);
+    }
+  }
+
+  /** Reword a freshly rolled region before the first scene. */
+  private async fleshOut(game: Game): Promise<void> {
     const s = game.s, setting = s.setting, world = s.world;
     // A campaign book's places and people already have the book's own words.
     if (!setting || !world || setting.region !== 'random' || setting.fleshedOut || setting.campaign) return;

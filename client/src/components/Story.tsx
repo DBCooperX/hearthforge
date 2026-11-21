@@ -232,6 +232,7 @@ function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; ani
           )}
           <ReadAloud table={table} entry={entry.id} lang={lang} />
           {entry.scene?.where && <SceneStage scene={entry.scene} />}
+          {entry.scene && (entry.scene.imageId || entry.scene.painting) && <ScenePicture scene={entry.scene} />}
           {entry.text.split(/\n{2,}/).map((p, i) => <p key={i}><RichText text={p} /></p>)}
         </article>
       );
@@ -258,6 +259,27 @@ function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; ani
     default:
       return <p className="line system"><RichText text={entry.text} /></p>;
   }
+}
+
+/** The hand-drawn picture of a big moment, or a note while it is being painted. A click shows it large. */
+function ScenePicture({ scene }: { scene: SceneMeta }) {
+  const t = useT();
+  const [large, setLarge] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  if (!scene.imageId) return <div className="scene-picture painting" aria-live="polite"><span>{t('The Dungeon Master is drawing this moment…')}</span></div>;
+  const src = `/pictures/${scene.imageId}`;
+  return (
+    <>
+      <button type="button" className={loaded ? 'scene-picture shown' : 'scene-picture'} onClick={() => setLarge(true)} title={t('Show larger')}>
+        <img src={src} alt={scene.title} onLoad={() => setLoaded(true)} />
+      </button>
+      {large && (
+        <div className="picture-lightbox" role="dialog" aria-label={scene.title} onClick={() => setLarge(false)}>
+          <figure><img src={src} alt={scene.title} /><figcaption>{scene.title}</figcaption></figure>
+        </div>
+      )}
+    </>
+  );
 }
 
 /** Where a scene plays, when, and who is there besides the heroes: the line under a scene card's title. */

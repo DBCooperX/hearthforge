@@ -45,6 +45,11 @@ export interface DungeonMaster {
    */
   prepare?(game: Game): Promise<void>;
   /**
+   * Give heroes who joined after the start, or whose backstory changed, a personal story thread.
+   * Touches only the Dungeon Master's notes. Never throws.
+   */
+  weaveThreads?(game: Game): Promise<void>;
+  /**
    * After a reply has reached the players: bring the game in line with anything the reply narrated
    * without the matching tool, such as walking to town or handing over a coin. Never throws.
    */
