@@ -1,6 +1,7 @@
 // The AI Dungeon Master, backed by the Claude API.
 // The server stays authoritative: Claude proposes through tools, the engine
 // validates and resolves with real dice, and Claude narrates the result.
+import { monsterTacticsText } from '../../../shared/style';
 import Anthropic from '@anthropic-ai/sdk';
 import { BIOMES } from '../../../shared/battlemap';
 import { LOOK_HELP, applyLookTokens } from '../../../shared/monsterLook';
@@ -543,7 +544,7 @@ export class ClaudeDM implements DungeonMaster {
       acted.add(id);
       return actor(id, intent);
     };
-    const prompt = this.turn(game, `It is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`, { state: describeCombat(game, { live: true }), recent: 16 });
+    const prompt = this.turn(game, `It is now the monsters' turn, in this order: ${block.map((m) => `${m.name} [${m.id}]`).join(', ')}. Call monster_action once for each of them. ${monsterTacticsText(game.s.table.style)} When you have the results, narrate the heroes' latest actions and the monsters' turns together as one short passage in plain text.`, { state: describeCombat(game, { live: true }), recent: 16 });
     let text: string | null = null;
     try {
       const out = await this.converse(game, 'monsters', tierForMonsters(game, block), prompt, [MONSTER_TOOL], async (name, input) => {

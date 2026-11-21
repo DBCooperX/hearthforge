@@ -3,10 +3,14 @@
 ## Unreleased
 
 ### Interface
-- **Esc opens a game menu**, as in any PC role-playing game: Resume, The adventure (tone, rules, content, story language), Party and invites, Settings, Your account, Innkeeper, Art credits, Fullscreen, Leave the table and, for the host, New adventure. The same menu (with a menu button top right) works on the list of tables and in the table room. Windows opened from it lead back to it on Esc. The gear button and the language switch in the top bar are gone; the language is under Settings → Game.
+- **Esc opens a game menu**, as in any PC role-playing game: Resume, The adventure (story style, challenge, content, story language), Party and invites, Settings, Your account, Innkeeper, Art credits, Fullscreen, Leave the table and, for the host, New adventure. The same menu (with a menu button top right) works on the list of tables and in the table room. Windows opened from it lead back to it on Esc. The gear button and the language switch in the top bar are gone; the language is under Settings → Game.
 - **Settings has three tabs:** Game, Audio and Keyboard. The table, account and server entries moved into the menu.
 - **The game's own confirm dialogs** replace the browser's pop-up boxes everywhere (removing a player, deleting a table, restarting the server, a new adventure…). Enter confirms, Esc cancels.
 - **Fullscreen** from the menu. In Chrome and Edge Esc still opens the menu while in fullscreen (hold Esc to leave it).
+- **New tables in two simple steps.** The lobby asks only how many players and opens the table. In the table room, "Your adventure" shows five cards, always visible: Where, How it begins, Story style, Challenge and Content, each with its choice and a line saying what it means. A click opens a picker with the full descriptions. The table's name, story language, invite-only and world seed sit under "Table details". The old chip bar, "Customize", its two tabs and the lobby's "More options" are gone. Players who do not host see the same cards, read-only.
+- **Challenge explained on screen.** The rules slider is now a five-step "Challenge" picker with a table under it that shows, for every level, what changes: check difficulty, warnings, failed checks, rules hints, how enemies fight and how likely a hero's death is. The chosen level is lit.
+- **Challenge changes how monsters fight.** On Coaching and Gentle monsters spread their attacks over the healthiest heroes; on Firm and Strict they gang up on the most wounded one they can reach. The Dungeon Master is told so before every monster turn, and the server follows it when the Dungeon Master names no target. Heroes at 0 hit points are never attacked, as before.
+- In the game, the menu's "The adventure" shows the same cards (story style, challenge, content, story language).
 - **Table talk no longer jumps.** The chat keeps a fixed height and only its own lines scroll, never the table room around it. If you scrolled up to read, it stays there and offers "New messages". Lines from the same person are grouped, with the time.
 
 ### Combat

@@ -83,7 +83,6 @@
 .hero-detail .hero-actions button { flex: none; padding: 7px 16px; font-size: 14px; }
 .hero-detail .hero-actions button.link { color: var(--ink-soft, #6a5236); margin-left: auto; }
 
-.adventure { background: rgba(0, 0, 0, 0.22); border: 1px solid #37332e; border-radius: 8px; padding: 10px 12px; }
 .adventure-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .sum-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .sum-chip { padding: 3px 10px; border-radius: 14px; font-size: 13.5px; background: rgba(0, 0, 0, 0.3); border-color: #4a443e; box-shadow: none; color: var(--text); }

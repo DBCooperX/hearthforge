@@ -26,6 +26,7 @@ import './test.css';
 import './art.css';
 import './voice.css';
 import './menu.css';
+import './adventure.css';
 import './ui/prefs';
 
 // Art packs are optional; never wait long for them.

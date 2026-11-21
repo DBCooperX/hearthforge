@@ -2,6 +2,7 @@
 // The engine is synchronous and deterministic for a given RNG; the AI Dungeon
 // Master only chooses monster intents and narrates what the engine resolved.
 
+import { targetHabit, type TargetHabit } from '../../../shared/style';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
 import {
@@ -3022,7 +3023,8 @@ export class Game {
     const pathTo = (t: Character) => { if (!paths.has(t.id)) paths.set(t.id, pathToAdjacent(t)); return paths.get(t.id)!; };
     const byPath = () => targets.map((t) => { const p = pathTo(t); return { t, d: p ? this.pathCost(p) : 999 }; })
       .sort((a, b) => a.d - b.d || this.mdist(m, a.t) - this.mdist(m, b.t));
-    if (!target) target = byPath()[0].t;
+    // No target named: whom the monster picks depends on the table's challenge level.
+    if (!target) target = pickByHabit(targetHabit(this.s.table.style.rules), byPath(), speed);
     const tactic = (['engage', 'hold_position', 'retreat', 'disengage'] as const).find((x) => x === intent.tactic) ?? 'engage';
     const backOff = tactic === 'retreat' || tactic === 'disengage';
     let meleePath = pathTo(target);
@@ -5835,3 +5837,20 @@ export class Game {
 }
 
 export type { MonsterDef };
+
+/**
+ * Whom a monster goes for when the Dungeon Master names nobody. `list` is every hero it could
+ * attack, nearest first, with the movement (in squares) it takes to get next to them.
+ * Low challenge spreads the blows over the healthiest heroes, high challenge piles onto the most
+ * wounded, and the middle simply takes the nearest.
+ */
+export function pickByHabit<T extends { hp: number; maxHp: number; ac?: number }>(habit: TargetHabit, list: { t: T; d: number }[], speed: number): T {
+  const near = list.filter((x) => x.d <= speed);
+  const pool = near.length ? near : list.slice(0, 1);
+  if (habit === 'sensible' || pool.length === 1) return pool[0].t;
+  const share = (c: T) => c.hp / Math.max(1, c.maxHp);
+  const sorted = [...pool].sort((a, b) => habit === 'focus'
+    ? a.t.hp - b.t.hp || (a.t.ac ?? 0) - (b.t.ac ?? 0) || a.d - b.d
+    : share(b.t) - share(a.t) || a.d - b.d);
+  return sorted[0].t;
+}

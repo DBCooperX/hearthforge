@@ -398,7 +398,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
           <GameMenu title={state.table.title} onClose={() => setOverlay(null)} groups={[
             [
               { id: 'resume', label: t('Resume'), icon: 'resume', onClick: () => setOverlay(null) },
-              { id: 'adventure', label: t('The adventure'), icon: 'quest', note: state.hostId === playerId ? t('Tone, rules, content, language') : t('How the host set up the story'), onClick: () => setOverlay('adventure') },
+              { id: 'adventure', label: t('The adventure'), icon: 'quest', note: state.hostId === playerId ? t('Story style, challenge, content, language') : t('How the host set up the story'), onClick: () => setOverlay('adventure') },
               ...(state.table.maxPlayers > 1 ? [{ id: 'table', label: t('Party and invites'), icon: 'table' as const, onClick: () => setOverlay('table') }] : []),
             ],
             ...common((o) => setOverlay(o), () => setOverlay(null)),

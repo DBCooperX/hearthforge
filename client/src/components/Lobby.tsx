@@ -4,9 +4,8 @@ import { buildSheet, type Draft } from '../../../shared/build';
 import { PREMADES, type Premade } from '../../../shared/premades';
 import { ABILITY_KEYS, BACKGROUNDS, CLASSES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
-import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
 import { Creator } from './Creator';
-import { StoryLanguage, StyleSetup } from './StyleSetup';
+import { AdventureCards } from './AdventureSetup';
 import { artOfCharacter, artOfDraft, heroPortraitUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, type Connection } from '../net';
 import type { AccountView } from '../../../shared/accounts';
@@ -14,9 +13,7 @@ import { ChatPanel } from './Chat';
 import { Backdrop, Embers, Logo } from '../ui/Brand';
 import { LangSwitch, useLang, useT } from '../i18n';
 import { LANGS } from '../../../shared/i18n';
-import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
-import { Chip, Hint, Info } from '../ui/Hint';
-import { TabBar } from '../ui/Window';
+import { Hint, Info } from '../ui/Hint';
 import { MusicControl } from '../music';
 import { MenuButton } from '../ui/GameMenu';
 import { DeletedTables } from '../ui/Bin';
@@ -38,11 +35,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   const [asking, setAsking] = useState<string | null>(null);
   const [code, setCode] = useState(link.code);
   const [anyCode, setAnyCode] = useState('');
-  const [opening, setOpening] = useState(false);
-  const [title, setTitle] = useState('');
-  const [language, setLanguage] = useState(lang);
   const [seats, setSeats] = useState(MAX_SEATS);
-  const [locked, setLocked] = useState(false);
   const me = name.replace(/\s+/g, ' ').trim();
   const tables = conn.tables ?? [];
   /** The table being renamed or deleted from this list, and what has been typed so far. */
@@ -76,7 +69,8 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   };
   const open = (e: React.FormEvent) => {
     e.preventDefault();
-    conn.create(me, { title: title.trim() || t("{name}'s table", { name: me }), language, maxPlayers: seats, locked });
+    // Name, story language and invite-only are set in the table room, under "Table details".
+    conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: false });
   };
 
   return (
@@ -182,26 +176,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                 {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} title={n === 1 ? undefined : t('{n} players', { n })} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
               </span>
               <button className="primary" disabled={!ready} title={!me ? t('Enter your name first.') : undefined}>{t('Open the table')}</button>
-              <button type="button" className="link" aria-expanded={opening} onClick={() => setOpening(!opening)}>{opening ? '▴' : '▾'} {t('More options')}</button>
             </div>
-            {opening && (
-              <div className="open-more">
-                <label>
-                  {t('Name of the table')}
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder={me ? t("{name}'s table", { name: me }) : ''} autoFocus />
-                </label>
-                <div className="field">
-                  <span>{t('Story language')}</span>
-                  <span className="pick">
-                    {LANGS.map((l) => <button type="button" key={l.id} className={language === l.id ? 'on' : ''} onClick={() => setLanguage(l.id)}>{l.label}</button>)}
-                  </span>
-                </div>
-                <label className="check">
-                  <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
-                  <span>{t('Only with an invite code')} <Info text={t('The table is listed for everyone, but only people you give the code or the invite link to can sit down.')} /></span>
-                </label>
-              </div>
-            )}
           </form>
           <form className="by-code" onSubmit={(e) => { e.preventDefault(); if (anyCode.trim()) conn.join('', me, anyCode.trim()); }}>
             <input value={anyCode} onChange={(e) => setAnyCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} aria-label={t('Invite code')} />
@@ -283,120 +258,6 @@ export function Players({ state, conn, pregame }: { state: GameState; conn: Conn
         );
       })}
     </ul>
-  );
-}
-
-/** Where and how the adventure begins: the region, the premise and the world seed. The host chooses; everyone sees it. */
-function WorldSetup({ state, conn }: { state: GameState; conn: Connection }) {
-  const t = useT();
-  const { lang } = useLang();
-  const host = state.hostId === playerId;
-  const start = state.table.start;
-  const set = (patch: Partial<StartOptions>) => conn.send({ t: 'set_start', start: patch });
-  // The seed and the host's own premise are typed locally and sent when the host is done with the field.
-  const [seed, setSeed] = useState(start.seed);
-  const [custom, setCustom] = useState(start.custom);
-  const [copied, setCopied] = useState(false);
-  const seedField = useRef<HTMLInputElement>(null);
-  useEffect(() => setSeed(start.seed), [start.seed]);
-  useEffect(() => setCustom(start.custom), [start.custom]);
-  return (
-    <div className="world-setup bare">
-      <div className="field">
-        <span>{t('Region')}</span>
-        <span className="pick">
-          <Chip on={start.region === 'random'} disabled={!host} onClick={() => set({ region: 'random' })}
-            hint={t('Its own country, towns, people and troubles, rolled from the seed. Nobody at the table knows it yet.')}>🎲 {t('A new region')}</Chip>
-          <Chip on={start.region === 'classic'} disabled={!host} onClick={() => set({ region: 'classic' })}
-            hint={t('The handcrafted valley around Emberfall and the Old Hearthforge. Only its wilderness changes with the seed.')}>🔥 {t('Classic: the Emberfall Vale')}</Chip>
-        </span>
-      </div>
-      <div className="field">
-        <span>{t('How it begins')}</span>
-        <span className="pick">
-          <Chip on={start.premise === SURPRISE} disabled={!host} onClick={() => set({ premise: SURPRISE })}
-            hint={t('The seed picks one of the openings. You find out when the story begins.')}>✨ {t('Surprise us')}</Chip>
-          {PREMISES.map((p) => (
-            <Chip key={p.id} on={start.premise === p.id} disabled={!host} hint={loc(p.blurb, lang)} onClick={() => set({ premise: p.id })}>{p.icon} {loc(p.label, lang)}</Chip>
-          ))}
-          <Chip on={start.premise === CUSTOM} disabled={!host} onClick={() => set({ premise: CUSTOM })}
-            hint={t('Describe in a sentence or two how the story opens. The Dungeon Master builds the first scene around it.')}>✒️ {t('Our own idea')}</Chip>
-        </span>
-        {start.premise === CUSTOM && (
-          <textarea className="field-wide" value={custom} maxLength={CUSTOM_MAX} rows={2} disabled={!host} placeholder={t('For example: We are a travelling circus, and last night our bear went missing.')}
-            onChange={(e) => setCustom(e.target.value)} onBlur={() => { if (custom !== start.custom) set({ custom }); }} />
-        )}
-      </div>
-      <div className="field">
-        <span>{t('World seed')} <Info text={host
-          ? t('The same seed with the same region and opening builds the same map, places, people and quests again. Type in a seed a friend gave you, or share yours. The Dungeon Master still tells the story anew each time.')
-          : t('The host chooses the world. The same seed with the same region and opening builds the same map, places, people and quests again.')} /></span>
-        <span className="seed-row">
-          <input ref={seedField} className="code" value={seed} maxLength={SEED_MAX} readOnly={!host} spellCheck={false} aria-label={t('World seed')}
-            onChange={(e) => setSeed(e.target.value.toUpperCase())}
-            onBlur={() => { if (normalizeSeed(seed) !== start.seed) set({ seed }); else setSeed(start.seed); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
-          {host && <button type="button" onClick={() => set({ seed: '' })} title={t('Roll a new seed')}>🎲 {t('New seed')}</button>}
-          <button type="button" onClick={() => { setCopied(copyText(start.seed, seedField.current)); setTimeout(() => setCopied(false), 2000); }}>{copied ? t('Copied') : t('Copy')}</button>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-type AdventureTab = 'world' | 'dm';
-
-/**
- * Everything the host may decide about the adventure, folded into one line: what is set shows as chips,
- * and the choices themselves open on demand. A new table is ready to start without opening it.
- */
-function AdventureSetup({ state, conn }: { state: GameState; conn: Connection }) {
-  const t = useT();
-  const { lang } = useLang();
-  const [open, setOpen] = useState<AdventureTab | null>(null);
-  const host = state.hostId === playerId;
-  const { start, style } = state.table;
-  const premise = PREMISES.find((p) => p.id === start.premise);
-  const tone = TONE_INFO.find((x) => x.id === style.tone);
-  const rules = RULES_INFO.find((x) => x.value === style.rules);
-  const rating = RATING_INFO.find((x) => x.id === style.rating);
-  const chips: { tab: AdventureTab; label: string; text: string }[] = [
-    { tab: 'world', label: t('Region'), text: start.region === 'random' ? `🎲 ${t('A new region')}` : `🔥 ${t('Classic: the Emberfall Vale')}` },
-    { tab: 'world', label: t('How it begins'), text: premise ? `${premise.icon} ${loc(premise.label, lang)}` : start.premise === CUSTOM ? `✒️ ${t('Our own idea')}` : `✨ ${t('Surprise us')}` },
-    ...(tone ? [{ tab: 'dm' as const, label: t('Tone'), text: `${tone.icon} ${loc(tone.label, lang)}` }] : []),
-    ...(rules ? [{ tab: 'dm' as const, label: t('Rules'), text: `⚖️ ${loc(rules.label, lang)}` }] : []),
-    ...(rating ? [{ tab: 'dm' as const, label: t('Content rating'), text: `${rating.icon} ${loc(rating.label, lang)}` }] : []),
-    { tab: 'dm', label: t('Story language'), text: `💬 ${LANGS.find((l) => l.id === state.language)?.label ?? state.language}` },
-  ];
-  return (
-    <section className={open ? 'adventure open' : 'adventure'}>
-      <div className="adventure-bar">
-        <h2>{t('The adventure')}</h2>
-        <span className="sum-chips">
-          {chips.map((c) => (
-            <Hint key={c.label} text={c.label}>
-              <button type="button" className={open === c.tab ? 'sum-chip on' : 'sum-chip'} onClick={() => setOpen(c.tab)}>{c.text}</button>
-            </Hint>
-          ))}
-        </span>
-        <button type="button" className="adventure-toggle" aria-expanded={!!open} onClick={() => setOpen(open ? null : 'world')}>
-          {open ? `▴ ${t('Hide options')}` : `▾ ${host ? t('Customize') : t('Show details')}`}
-        </button>
-      </div>
-      {open && (
-        <>
-          <TabBar tabs={[{ id: 'world', label: t('The world') }, { id: 'dm', label: t('The Dungeon Master') }]} value={open} onChange={setOpen} />
-          <div className="adventure-body">
-            {open === 'world' ? <WorldSetup state={state} conn={conn} /> : (
-              <>
-                <StyleSetup bare state={state} conn={conn} />
-                <div className="style-setup bare"><StoryLanguage state={state} conn={conn} /></div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </section>
   );
 }
 
@@ -482,7 +343,10 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
                   onAdd={() => addPremade(shown.id)} onCustomize={() => setCreating({ ...shown.spec, premadeId: undefined, backstory: loc(shown.bio, lang) })} />
               )}
             </section>
-            <AdventureSetup state={state} conn={conn} />
+            <section className="adventure">
+              <h2>{t('Your adventure')} {host ? null : <small className="muted">· {t('Set by the host')}</small>}</h2>
+              <AdventureCards state={state} conn={conn} world />
+            </section>
           </div>
           {shared && (
             <aside className="setup-side">
