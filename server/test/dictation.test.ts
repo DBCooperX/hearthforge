@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dictationError, dictationLangs } from '../../client/src/dictation';
+import { dictationError, dictationLangs } from '../../client/src/dictationCodes';
 
 describe('voice input errors', () => {
   it('names the reason instead of a general failure', () => {
