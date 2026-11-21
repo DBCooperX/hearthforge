@@ -267,6 +267,14 @@ In the table room the host chooses the world:
 
 With an API key, one short call to the background model rewords a rolled region before the first scene so it fits the opening. It never changes names, the map, quests or rewards.
 
+### Campaign books
+
+Under **Where**, the host can also pick a published adventure for the Dungeon Master to run. Drop a PDF, a `.txt` or a Markdown file (up to 64 MB) into the picker, or take one from the list of free adventures. A book from the list is fetched by your server straight from its source when you press Download; where the source needs a sign-in (DMs Guild, D&D Beyond, itch.io), "Get it here" opens its page, and you drop the file you downloaded there. Hearthforge itself hosts no adventures.
+
+The server reads a book once when it arrives. It splits the text into sections along the PDF's bookmarks (or every two pages), the background model takes notes part by part, and the standard model writes a digest: the hidden story, how it opens, the home town, the first places, people and quest (in English and German), and the chapters. Reading a short adventure costs a few cents, a whole campaign book more; the cost goes to the credit of the player who brought it. During play the Dungeon Master gets the digest and the index of sections with every turn, and reads the section the party is in with a `campaign` tool; that section stays in the cached part of the prompt until the party moves on, so the book is never sent whole. The table's map starts with the book's town, places and people on it, and the Dungeon Master adds the rest as the story gets there.
+
+A book you upload is visible to you and the Innkeeper only. Scanned PDFs without a text layer cannot be read. Books are kept in `/data/campaigns` and are not part of the backups; a table keeps its own copy of the digest, so a game goes on if its book is removed.
+
 ## How to play
 
 1. Enter your name, then open a table or sit down at one.

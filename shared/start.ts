@@ -1,6 +1,7 @@
 // How a table's adventure begins: which region, which premise and which world seed.
 // The host chooses in the table room before the adventure starts.
 import type { Lang } from './i18n';
+import type { CampaignPick } from './campaign';
 
 type L = Record<Lang, string>;
 
@@ -16,6 +17,8 @@ export interface StartOptions {
   custom: string;
   /** The world seed as shown and shared. The same seed, region and premise rebuild the same starting world. */
   seed: string;
+  /** A campaign book from the server's library. While set, the book decides where and how the story begins. */
+  campaign?: CampaignPick | null;
 }
 
 export interface PremiseInfo {

@@ -28,6 +28,7 @@ export const spellRulesText = (id: string, max = 1400) => { const r = SPELL_RULE
 import { trueTerrain, type SettingState } from '../game/world';
 import { describeTimeline } from '../game/timeline';
 import { describeZone } from '../game/zone';
+import { campaignNote } from '../campaign/prompt';
 
 export const DM_SYSTEM_PROMPT = `You are the Dungeon Master of Hearthforge, a self-hosted Dungeons & Dragons 5th edition game played in a web browser by one or more players who share a party of heroes.
 
@@ -317,7 +318,7 @@ function settingLine(game: Game): string {
  * Sent ahead of everything that changes, so the Claude API can serve it from the prompt cache.
  */
 export function describeTable(game: Game): string {
-  return [...languageNote(game), ...styleNote(game), settingLine(game)].join('\n');
+  return [...languageNote(game), ...styleNote(game), settingLine(game), ...campaignNote(game)].join('\n');
 }
 
 /**

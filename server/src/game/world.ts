@@ -8,7 +8,8 @@ import type { Siting, TerrainStyle } from '../data/regions';
 import { WORLD_HEIGHT, WORLD_WIDTH, type RegionDef, type SeedLocation, type StageDef } from '../data/world';
 import type { Lang } from '../../../shared/i18n';
 import type { Rng } from './dice';
-import { classicRegion, openingFor, premiseTheme, randomRegion, resolvePremise } from './region';
+import { campaignRegion, classicRegion, openingFor, premiseTheme, randomRegion, resolvePremise } from './region';
+import type { CampaignDigest } from '../campaign/library';
 
 import type { SecretState, TimelineEvent } from './timeline';
 
@@ -98,6 +99,18 @@ export interface SettingState {
   custom: string;
   /** The AI has reworded the rolled descriptions for this table. */
   fleshedOut?: boolean;
+  /** The campaign book this table plays, with a copy of its digest so play goes on if the book leaves the shelf. */
+  campaign?: CampaignState;
+}
+
+export interface CampaignState {
+  id: string;
+  title: string;
+  digest: CampaignDigest;
+  /** The section of the book the party is playing through now; its text goes with every turn. */
+  focus: string | null;
+  /** Sections the Dungeon Master has read so far, in order. */
+  read: string[];
 }
 
 export const hexIndex = (w: WorldState, h: Hex) => h.r * w.width + h.q;
@@ -250,10 +263,10 @@ export interface NewWorld {
  * streams of random numbers, so the same seed, region and premise always give the same map,
  * places, people and quests, and changing the premise does not redraw the map.
  */
-export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld {
+export function generateWorld(start: StartOptions, lang: Lang = 'en', book?: { id: string; digest: CampaignDigest }): NewWorld {
   const { seed } = start;
-  const premiseId = resolvePremise(start);
-  const region = start.region === 'random' ? randomRegion(seed, lang, premiseTheme(premiseId)) : classicRegion(lang);
+  const premiseId = book ? 'campaign' : resolvePremise(start);
+  const region = book ? campaignRegion(book.digest, seed, lang) : start.region === 'random' ? randomRegion(seed, lang, premiseTheme(premiseId)) : classicRegion(lang);
   const width = WORLD_WIDTH, height = WORLD_HEIGHT;
   const cells = generateTerrain(width, height, seedStream(seed, `terrain|${start.region}`), region.terrain);
   const idx = (h: Hex) => h.r * width + h.q;
@@ -279,7 +292,13 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
     if (loc.kind === 'village') for (const h of route.slice(0, -1)) if (cells[idx(h)] !== 'm') cells[idx(h)] = 'r';
   }
 
-  const opening = openingFor(premiseId, start.custom, region, lang);
+  const opening = book
+    ? {
+      premiseId, startIn: 'town' as const,
+      opening: `This table plays the published adventure "${book.digest.title}". Open the story the way the book opens, adapted to these heroes: ${book.digest.opening}`,
+      intro: lang === 'de' ? `Eure Geschichte beginnt in ${region.tokens.town}.` : `Your story begins in ${region.tokens.town}.`,
+    }
+    : openingFor(premiseId, start.custom, region, lang);
   const outside = opening.startIn === 'wild' || opening.startIn === 'shore'
     ? wildStart(home, opening.startIn === 'shore', region.locations, cells, width, height, seedStream(seed, 'opening'))
     : null;
@@ -315,6 +334,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en'): NewWorld 
   const setting: SettingState = {
     name: region.name, premise: region.premise.replace('{dist}', dist), ...(region.plot ? { plot: region.plot } : {}), opening: opening.opening, intro: opening.intro,
     seed, region: start.region, premiseId, custom: premiseId === 'custom' ? start.custom.trim() : '',
+    ...(book ? { campaign: { id: book.id, title: book.digest.title, digest: book.digest, focus: null, read: [] } } : {}),
   };
   return { world, memory, setting };
 }

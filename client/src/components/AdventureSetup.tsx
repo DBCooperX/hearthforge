@@ -13,6 +13,7 @@ import { playerId, type Connection } from '../net';
 import { accountSession } from '../account';
 import { Window } from '../ui/Window';
 import { sfx } from '../ui/sound';
+import { WherePicker } from './CampaignShelf';
 
 type Pick = 'where' | 'begin' | 'tone' | 'challenge' | 'rating' | 'language' | 'details';
 
@@ -46,10 +47,15 @@ export function AdventureCards({ state, conn, world }: { state: GameState; conn:
 
   const pick = <T extends Option>(list: T[], id: string) => list.find((o) => o.id === id) ?? list[0];
   const premise = pick(begin, start.premise);
-  const cards: { id: Pick; label: string; o: Option; line?: string }[] = [
+  const book = start.campaign ?? null;
+  const bookWhere: Option | null = book ? { id: 'campaign', icon: '📖', label: book.title, blurb: t('A campaign book. Its places, people and plot shape the world.') } : null;
+  const bookBegin: Option = { id: 'campaign', icon: '📖', label: t('As the book begins'), blurb: t('The Dungeon Master opens the story the way the book does.') };
+  const cards: { id: Pick; label: string; o: Option; line?: string; fixed?: boolean }[] = [
     ...(world ? [
-      { id: 'where' as const, label: t('Where'), o: pick(where, start.region) },
-      { id: 'begin' as const, label: t('How it begins'), o: premise, line: start.premise === CUSTOM && start.custom ? start.custom : undefined },
+      { id: 'where' as const, label: t('Where'), o: bookWhere ?? pick(where, start.region) },
+      book
+        ? { id: 'begin' as const, label: t('How it begins'), o: bookBegin, fixed: true }
+        : { id: 'begin' as const, label: t('How it begins'), o: premise, line: start.premise === CUSTOM && start.custom ? start.custom : undefined },
     ] : []),
     { id: 'tone', label: t('Story style'), o: pick(tones, style.tone) },
     { id: 'challenge', label: t('Challenge'), o: pick(levels, String(style.rules)) },
@@ -66,13 +72,18 @@ export function AdventureCards({ state, conn, world }: { state: GameState; conn:
               <span className="adv-label">{c.label}</span>
               <span className="adv-value"><span className="adv-icon" aria-hidden>{c.o.icon}</span>{c.o.label}</span>
               <span className="adv-line">{c.line ?? c.o.blurb}</span>
-              <span className="adv-change">{host ? t('Change') : t('Details')}</span>
+              <span className="adv-change">{host && !c.fixed ? t('Change') : t('Details')}</span>
             </button>
           </li>
         ))}
       </ul>
-      {open === 'where' && <Choice title={t('Where')} options={where} value={start.region} host={host} onPick={(id) => setStart({ region: id as StartOptions['region'] })} onClose={close} />}
-      {open === 'begin' && (
+      {open === 'where' && (
+        <WherePicker options={where} region={start.region} campaign={book?.id ?? null} host={host} onClose={close}
+          onRegion={(id) => setStart({ region: id as StartOptions['region'], ...(book ? { campaign: null } : {}) })}
+          onCampaign={(b) => setStart({ campaign: b ? { id: b.id, title: b.title } : null })} />
+      )}
+      {open === 'begin' && book && <Choice title={t('How it begins')} options={[bookBegin]} value="campaign" host={host} onPick={() => undefined} onClose={close} />}
+      {open === 'begin' && !book && (
         <Choice title={t('How it begins')} options={begin} value={start.premise} host={host} wide onPick={(id) => setStart({ premise: id })} onClose={close} keepOpen={(id) => id === CUSTOM}>
           {start.premise === CUSTOM && <CustomPremise state={state} host={host} onSave={(custom) => setStart({ custom })} />}
         </Choice>

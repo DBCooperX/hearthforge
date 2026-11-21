@@ -6,12 +6,14 @@ import { CUSTOM, PREMISES, SURPRISE, seedStream, type StartOptions } from '../..
 import {
   AUTHORITY_TEXT, ERRANDS, FIRST_NAMES, INNKEEPER, KEEPER_TEXT, LOOKS, MINOR_LOOT, MINOR_SITES, PREMISE_TEXT, QUEST_REWARD, ROOTS, SANCTUARIES,
   SETTLEMENT_ENDINGS, SIDE_REWARD, STAGE_LOOT, SURNAMES, TAVERNS, TAVERN_TEXT, THEMES, THREATS, TOWNS, TWISTS, VILLAGES,
-  type Gender, type L, type MonsterGroup, type Pair, type PlaceName, type PremiseTpl, type QuestTpl, type StageTpl,
+  type Gender, type L, type MonsterGroup, type Pair, type PlaceName, type PremiseTpl, type QuestTpl, type Siting, type StageTpl,
 } from '../data/regions';
 import {
   SEED_LOCATIONS, SEED_NPCS, SEED_QUESTS, SETTING_NAME, SETTING_PREMISE, START_LOCATION,
   type GroupSpec, type RegionDef, type SeedLocation, type SeedNpc, type StageDef,
 } from '../data/world';
+import type { LocationKind } from '../../../shared/types';
+import type { CampaignDigest } from '../campaign/library';
 import type { Rng } from './dice';
 
 const fill = (tpl: string, tokens: Record<string, string>) => tpl.replace(/\{(\w+)\}/g, (m, k: string) => tokens[k] ?? m);
@@ -275,4 +277,81 @@ export function openingFor(premiseId: string, custom: string, region: RegionDef,
   const tpl = PREMISE_TEXT[premiseId] ?? PREMISE_TEXT.arrival;
   const tokens = { ...region.tokens, custom: JSON.stringify(custom.trim()) };
   return { premiseId, startIn: tpl.startIn, opening: fill(tpl.opening, tokens), intro: fill(tpl.intro[lang], tokens) };
+}
+
+// ------------------------------------------------------------ campaign books
+
+const BOOK_KINDS: Record<string, LocationKind> = {
+  town: 'town', city: 'town', village: 'village', hamlet: 'village', tavern: 'tavern', inn: 'tavern', shop: 'shop', temple: 'temple', church: 'temple',
+  chapel: 'temple', shrine: 'shrine', camp: 'camp', dungeon: 'dungeon', lair: 'dungeon', ruin: 'ruin', ruins: 'ruin', castle: 'ruin', tower: 'ruin',
+  cave: 'cave', caves: 'cave', mine: 'cave', landmark: 'landmark',
+};
+const IN_TOWN: LocationKind[] = ['tavern', 'shop', 'temple', 'shrine'];
+const SITES: Partial<Record<LocationKind, Siting>> = {
+  village: { dist: [4, 7], prefer: 'p' }, dungeon: { dist: [3, 6], prefer: 'hf' }, cave: { dist: [3, 6], prefer: 'hm' }, ruin: { dist: [3, 7], prefer: 'hf' },
+  camp: { dist: [2, 5], prefer: 'f' }, landmark: { dist: [2, 6] }, temple: { dist: [3, 7], prefer: 'h' }, shrine: { dist: [3, 7], prefer: 'f' },
+};
+const slug = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'place';
+
+/**
+ * The starting region of a table that plays a campaign book: the book's home town, the places
+ * and people it names and its opening quest, put on a map rolled from the seed. The Dungeon
+ * Master adds whatever else the book needs as the story gets there.
+ */
+export function campaignRegion(d: CampaignDigest, seed: string, lang: Lang): RegionDef {
+  const text = (l: { en: string; de: string }) => (lang === 'de' && l.de ? l.de : l.en);
+  const theme = THEMES.find((t) => t.id === d.theme) ?? THEMES[0];
+  const townName = d.town.name || (lang === 'de' ? 'Ausgangsort' : 'The starting town');
+  const regionName = d.region || townName;
+  const locations: SeedLocation[] = [{
+    id: 'home', name: townName, kind: d.town.kind === 'village' ? 'village' : 'town', q: 0, r: 0, terrain: 'p', known: true,
+    description: text(d.town.description) || townName, appearance: 'A small medieval settlement of timber and stone, smoke rising from its chimneys.', site: { dist: [0, 0] },
+  }];
+  const used = new Set(['home']);
+  let tavernId: string | null = null;
+  for (const p of d.places.slice(0, 10)) {
+    const kind = BOOK_KINDS[p.kind.toLowerCase()] ?? 'landmark';
+    if (kind === 'town' || !p.name.trim() || p.name === townName) continue;
+    let id = slug(p.name);
+    while (used.has(id)) id = `${id}_`;
+    used.add(id);
+    const inside = p.inTown && IN_TOWN.includes(kind);
+    if (inside && kind === 'tavern' && !tavernId) tavernId = id;
+    locations.push({
+      id, name: p.name.trim().slice(0, 60), kind, q: 0, r: 0, known: inside || p.known,
+      description: text(p.description).slice(0, 400), appearance: `${kind} — ${p.description.en}`.slice(0, 300),
+      ...(inside ? { parentId: 'home' } : { site: SITES[kind] ?? { dist: [3, 7] } }),
+      ...(kind === 'village' ? { terrain: 'p' as const } : {}),
+    });
+  }
+  if (!tavernId) {
+    const name = lang === 'de' ? 'Die Schenke' : 'The Tavern';
+    tavernId = 'tavern';
+    locations.push({ id: 'tavern', name, kind: 'tavern', q: 0, r: 0, parentId: 'home', known: true, description: name, appearance: 'A low-beamed tavern common room with a stone hearth.' });
+  }
+  const rng = seedStream(seed, 'people');
+  const folk = people(rng, Math.min(10, d.people.length));
+  const placeOf = (name: string) => locations.find((l) => name && l.name.toLowerCase() === name.trim().toLowerCase())?.id ?? 'home';
+  const npcs: SeedNpc[] = d.people.slice(0, 10).map((p, i) => {
+    const who = folk[i];
+    const gi = p.gender === 'female' ? 0 : p.gender === 'male' ? 1 : who.gi;
+    const base = who.appearance('clothes that fit their station');
+    const appearance = gi === who.gi ? base : base.replace(/\b(wo)?man\b/, gi === 0 ? 'woman' : 'man');
+    const disposition = (['friendly', 'neutral', 'wary', 'hostile'] as const).find((x) => x === p.disposition) ?? 'neutral';
+    return {
+      id: `${slug(p.name)}_${i}`, name: p.name.trim().slice(0, 60), role: text(p.role).slice(0, 80), description: text(p.description).slice(0, 400),
+      appearance,
+      disposition, locationId: placeOf(p.place),
+    };
+  });
+  const premise = [
+    fill(theme.about, { Region: upperFirst(regionName), region: regionName }),
+    `The table plays the published adventure "${d.title}". Its home base is ${townName}.`,
+  ].join(' ');
+  return {
+    name: regionName, nameIn: lang === 'de' ? `in ${regionName}` : `in ${regionName}`, premise, startId: 'home', tavernId, locations, npcs,
+    quests: d.quest.title.en ? [{ id: 'main', title: text(d.quest.title).slice(0, 80), summary: text(d.quest.summary).slice(0, 400), ...QUEST_REWARD }] : [],
+    terrain: theme.terrain, placed: false,
+    tokens: { town: townName, tavern: locations.find((l) => l.id === tavernId)!.name, region: regionName, regionIn: `in ${regionName}` },
+  };
 }
