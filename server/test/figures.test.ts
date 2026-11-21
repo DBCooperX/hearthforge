@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PICTURE_CONFIG, type PictureConfig } from '../../shared/illustrations';
 import { baseLook } from '../../shared/monsterLook';
 import { Game } from '../src/game/engine';
-import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, tallBody } from '../src/game/pictures';
+import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, tallFigure } from '../src/game/pictures';
 import { Illustrator, cleanConfig } from '../src/illustrations';
 import { MONSTERS } from '../src/data/monsters';
 import { Room } from '../src/room';
@@ -41,16 +41,16 @@ function game() {
 
 describe('battle figure prompts', () => {
   it('ask for one full figure on a flat key colour, green for pink and purple ones', () => {
-    const goblin = monsterFigurePrompt('Goblin', 'humanoid', baseLook('humanoid', 'small', 'green', { weapon: 'sword' }));
+    const goblin = monsterFigurePrompt(MONSTERS.goblin);
     expect(goblin.key).toBe('magenta');
     expect(goblin.prompt).toContain('miniature figure');
     expect(goblin.prompt).toContain('#FF00FF');
     expect(goblin.prompt).toContain('a Goblin (humanoid)');
     expect(goblin.prompt).toContain('wielding a sword');
     expect(goblin.prompt).toMatch(/no cast shadow/i);
-    expect(monsterFigurePrompt('Ooze', 'ooze', baseLook('ooze', 'large', 'pink')).key).toBe('green');
-    expect(tallBody(baseLook('humanoid', 'small', 'green'))).toBe(true);
-    expect(tallBody(baseLook('dragon', 'huge', 'red'))).toBe(false);
+    expect(monsterFigurePrompt(MONSTERS.gray_ooze, baseLook('ooze', 'large', 'pink')).key).toBe('green');
+    expect(tallFigure(MONSTERS.goblin)).toBe(true);
+    expect(tallFigure(MONSTERS.adult_red_dragon)).toBe(false);
   });
 
   it('paint a hero as the same person as in the portrait', () => {
@@ -100,7 +100,7 @@ describe('the illustrator paints figures', () => {
     const { ill, later } = setup({ figuresPerDay: 1 });
     const look = MONSTERS.goblin.look;
     const goblin = monsterFigureSubject('goblin', look);
-    const { prompt, key } = monsterFigurePrompt('Goblin', 'humanoid', look);
+    const { prompt, key } = monsterFigurePrompt(MONSTERS.goblin, look);
     await ill.paintFigure({ table: 'figs', tableTitle: 'Figs', subject: goblin, caption: 'Goblin', prompt, key, tall: true }, () => {});
     const wolf = monsterFigureSubject('wolf', MONSTERS.wolf.look);
     expect(ill.figureGate(wolf)).toBe('day');
@@ -120,7 +120,7 @@ describe('the illustrator paints figures', () => {
   it('does not pay twice for a figure the service refused', async () => {
     const { ill } = setup({}, 400);
     const subject = monsterFigureSubject('goblin', MONSTERS.goblin.look);
-    const { prompt, key } = monsterFigurePrompt('Goblin', 'humanoid', MONSTERS.goblin.look);
+    const { prompt, key } = monsterFigurePrompt(MONSTERS.goblin);
     await expect(ill.paintFigure({ table: 'figs', tableTitle: 'Figs', subject, caption: 'Goblin', prompt, key, tall: true }, () => {})).rejects.toMatchObject({ code: 'refused' });
     expect(ill.figureGate(subject)).toBe('busy');
   });

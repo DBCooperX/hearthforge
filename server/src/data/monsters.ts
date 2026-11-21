@@ -9,6 +9,7 @@ import type { AbilityKey } from '../../../shared/types';
 import { ABILITY_KEYS } from '../../../shared/rules';
 import srd from './srd/monsters.json';
 import { MONSTER_SPELLS } from './monsterSpells';
+import { fixLook } from './monsterAnatomy';
 
 export interface Dmg {
   dice: string;
@@ -759,7 +760,7 @@ function fromSrd(m: SrdMonster, legacy?: Legacy): MonsterDef {
   const handy = ['humanoid', 'giant'].includes(m.look.body);
   return {
     id: m.id, name: m.name, sprite: legacy?.sprite ?? m.id, type: m.type as CreatureType, size: m.size as Size, cr: m.cr, xp: m.xp,
-    look: legacy?.look ?? m.look, ac: m.ac, hp: m.hp, speed: m.speed,
+    look: legacy?.look ?? fixLook(m.id, m.look), ac: m.ac, hp: m.hp, speed: m.speed,
     ...(m.fly ? { fly: m.fly } : {}), ...(m.swim ? { swim: m.swim } : {}), ...(m.climb ? { climb: m.climb } : {}), ...(m.burrow ? { burrow: m.burrow } : {}),
     dexMod: mod(m.abilities[1]), saves, attacks, specials,
     perception: m.perception ?? 10 + mod(m.abilities[4]), stealth: m.stealth ?? mod(m.abilities[1]),

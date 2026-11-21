@@ -3,7 +3,10 @@
 // described from the fixed facts the game keeps (a hero's species, class and looks; a person's appearance), so the
 // heroes look the same from one picture to the next even before earlier pictures are passed along.
 import { FIGURE_STYLE, PICTURE_GATES, PICTURE_MOMENTS, figureBackdrop, type FigureKey, type PictureMoment } from '../../../shared/illustrations';
+import { createHash } from 'node:crypto';
 import { lookKey, type MonsterLook } from '../../../shared/monsterLook';
+import { MONSTERS, type MonsterDef } from '../data/monsters';
+import { anatomyOf } from '../data/monsterAnatomy';
 import { LOOK_NAMES, heroLook } from '../../../shared/heroLook';
 import { SPECIES } from '../../../shared/rules';
 import type { Game } from './engine';
@@ -152,7 +155,11 @@ export function heroFigureSubject(c: Pick<Character, 'id' | 'portraitId'>): stri
 
 /** A monster's figure is shared by every monster of the same kind and look, on every table of the server. */
 export function monsterFigureSubject(defId: string, look: MonsterLook): string {
-  return `m:${defId}|${lookKey(look)}`;
+  const def = MONSTERS[defId];
+  // The prompt is part of the subject: when how a creature is described changes, its old figure is no longer used and
+  // a new one is painted, so a wrongly drawn creature does not stay wrong for good.
+  const version = def ? `|${createHash('sha1').update(monsterFigurePrompt(def, look).prompt).digest('hex').slice(0, 8)}` : '';
+  return `m:${defId}|${lookKey(look)}${version}`;
 }
 
 /** Green is the key colour for figures that are pink or purple themselves, magenta for the rest. */
@@ -172,33 +179,38 @@ export function heroFigurePrompt(c: Character): { prompt: string; key: FigureKey
   };
 }
 
-const LOOK_WORDS = {
-  heads: (n: number) => (n > 1 ? `${n} heads` : ''),
-  arms: (n: number) => (n > 2 ? `${n} arms` : ''),
-};
-
-/** A monster's look in words for the image model. */
-function describeLook(l: MonsterLook): string {
-  const bits = [
-    LOOK_WORDS.heads(l.heads), LOOK_WORDS.arms(l.arms), l.horns ? 'horns' : '', l.tail ? 'a tail' : '',
-    l.wings ? `${l.wings === 'bat' ? 'leathery bat' : 'feathered'} wings` : '', l.eyes ? `glowing ${l.eyes} eyes` : '',
-    l.armor ? `${l.armor === 'plate' ? 'heavy plate' : 'leather'} armour` : '', l.weapon ? `wielding a ${l.weapon}` : '',
-    l.aura ? `a faint ${l.aura} aura close around it` : '', l.mutation ? `${l.mutation} body` : '',
-  ].filter(Boolean);
-  return `${l.size} ${l.body === 'humanoid' ? 'humanoid' : l.body} build, mostly ${l.color}${bits.length ? `, with ${bits.join(', ')}` : ''}`;
+/** What the figure of a creature shows: its true anatomy, plus what its look adds. */
+function describeFigure(def: Pick<MonsterDef, 'id' | 'name' | 'look'>, l: MonsterLook): string {
+  const natural = def.look;
+  const a = anatomyOf(def.id, def.name, natural);
+  const bits: string[] = [];
+  // Natural features are already in the anatomy; only what the Dungeon Master changed is added.
+  if (l.heads !== natural.heads && l.heads > 1) bits.push(`${l.heads} heads`);
+  if (l.arms !== natural.arms && l.arms > 2) bits.push(`${l.arms} arms`);
+  if (l.horns && !natural.horns) bits.push('horns');
+  if (l.tail && !natural.tail) bits.push('a tail');
+  if (l.wings && l.wings !== natural.wings) bits.push(`${l.wings === 'bat' ? 'leathery bat' : 'feathered'} wings`);
+  if (l.eyes) bits.push(`glowing ${l.eyes} eyes`);
+  if (a.gear) {
+    if (l.armor) bits.push(`${l.armor === 'plate' ? 'heavy plate' : 'leather'} armour`);
+    if (l.weapon) bits.push(`wielding a ${l.weapon}`);
+  }
+  if (l.aura) bits.push(`a faint ${l.aura} aura close around it`);
+  if (l.mutation) bits.push(`${l.mutation} body`);
+  return `${a.form}; ${l.size} in size, mostly ${l.color}${bits.length ? `, with ${bits.join(', ')}` : ''}`;
 }
 
-/** Bodies that stand upright get a tall picture; the rest a square one. */
-export const tallBody = (l: MonsterLook) => ['humanoid', 'giant', 'ghost', 'elemental', 'construct'].includes(l.body);
+/** Whether a creature's figure is a tall picture: it stands upright. Everything else is painted square. */
+export const tallFigure = (def: Pick<MonsterDef, 'id' | 'name' | 'look'>, l: MonsterLook = def.look) => anatomyOf(def.id, def.name, l).tall;
 
-/** The prompt for a monster's battle figure, from its SRD name and its look. Its stats never change what is drawn. */
-export function monsterFigurePrompt(name: string, kind: string, l: MonsterLook): { prompt: string; key: FigureKey } {
+/** The prompt for a monster's battle figure, from its SRD anatomy and its look. Its stats never change what is drawn. */
+export function monsterFigurePrompt(def: Pick<MonsterDef, 'id' | 'name' | 'type' | 'look'>, l: MonsterLook = def.look): { prompt: string; key: FigureKey } {
   const key = keyFor(l.color);
   return {
     key,
     prompt: [
       `Style: ${FIGURE_STYLE}`,
-      `Subject: a ${name} (${kind}) from classic fantasy: ${describeLook(l)}. Menacing and full of character, in an attacking stance, turned toward the viewer.`,
+      `Subject: a ${def.name} (${def.type}) from classic fantasy, drawn as ${describeFigure(def, l)}. Draw exactly this creature with the body shape described, and nothing else: no rider and no extra creatures, and carrying only what is named. Menacing and full of character, ready to attack, turned toward the viewer.`,
       figureBackdrop(key),
     ].join('\n\n'),
   };
