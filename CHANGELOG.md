@@ -5,6 +5,7 @@
 ### Combat
 - **End turn reminder.** On your turn in a fight, after 20 seconds with nothing happening, the End turn button starts to glow and a reminder appears; a few seconds after your action and movement are used up it comes sooner. The turn never ends by itself. Set the delay (off, 20, 45 or 90 seconds) in Settings → Game.
 - **"Your turn" in the middle of the map.** When one of your heroes comes up in a fight, a large "Your turn" banner (German "Du bist dran") appears in the middle of the battle map for a moment, with a short bell; if you play several heroes it names the one whose turn it is. The end turn reminder ("Still there?") appears there too, large and in the middle.
+- **Whose turn it is, over the figure.** A bobbing tag with an arrow floats above whoever is acting on the battle map, in 2.5D and flat: a bright brass "Your turn" ("Du bist dran") over your own hero, brass "Now acting" ("Am Zug") over other heroes, red over monsters. It sits above any status icons.
 
 ### Fixes
 - **The clock matches the opening.** An adventure no longer always starts at 08:00 on day 1: a festival opens at dusk (19:00), a shipwreck at dawn (06:00), your own opening and a campaign book's start at the time of day they name ("one evening", "im Morgengrauen"), and books read from now on note the hour their first scene plays at. The Dungeon Master is told when the adventure began and, at book tables, to move the clock with the story instead of saying it is evening while the map shows morning.

@@ -146,7 +146,9 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
         const rect = r?.tokenRect(el.dataset.token ?? '');
         if (!rect) { el.style.visibility = 'hidden'; continue; }
         el.style.visibility = '';
-        el.style.transform = `translate(${Math.round(rect.left + rect.size / 2)}px, ${Math.round(rect.top - rect.size * 0.12)}px) translate(-50%, -100%)`;
+        // The turn marker rides above the status icons when there are any.
+        const lift = Number(el.dataset.lift ?? 0);
+        el.style.transform = `translate(${Math.round(rect.left + rect.size / 2)}px, ${Math.round(rect.top - rect.size * 0.12 - lift)}px) translate(-50%, -100%)`;
       }
       frame = requestAnimationFrame(place);
     };
@@ -159,6 +161,14 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     ...state.characters.filter((c) => !c.dead).map((c) => ({ id: c.id, list: heroStatuses(c, state, t, lang) })),
     ...state.monsters.filter((m) => m.alive && !view.unseenIds.has(m.id)).map((m) => ({ id: m.id, list: monsterStatuses(m, state, t, lang) })),
   ].filter((x) => x.list.length > 0) : [];
+  // Whose turn it is, spelled out over their figure: brass for heroes (brighter for your own), red for monsters.
+  const activeId = state.phase === 'combat' ? view.activeId : null;
+  const activeHero = activeId ? state.characters.find((c) => c.id === activeId && !c.dead) : undefined;
+  const activeMonster = activeId && !activeHero ? state.monsters.find((m) => m.id === activeId && m.alive && !view.unseenIds.has(m.id)) : undefined;
+  const turn = activeHero || activeMonster ? {
+    id: activeId!, kind: activeHero ? 'hero' : 'monster', mine: !!activeHero && view.myIds.has(activeHero.id),
+    lift: statuses.some((s) => s.id === activeId) ? 30 : 0,
+  } : null;
   const names: Record<Biome, string> = {
     dungeon: t('Dungeon'), cave: t('Cave'), ruin: t('Ruins'), tavern: t('Tavern'), town: t('Town streets'), road: t('Road'), bridge: t('Bridge'),
     camp: t('Camp'), plains: t('Plains'), forest: t('Forest'), hills: t('Hills'), mountains: t('Mountains'), swamp: t('Swamp'),
@@ -177,6 +187,12 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
   return (
     <div className="map" ref={host}>
       <div className="token-statuses" ref={layer}>
+        {turn && (
+          <div key={`turn-${turn.id}`} className={`turn-marker ${turn.kind}${turn.mine ? ' mine' : ''}`} data-token={turn.id} data-lift={turn.lift} style={{ visibility: 'hidden' }} aria-hidden>
+            <span>{turn.mine ? t('Your turn') : t('Now acting')}</span>
+            <i />
+          </div>
+        )}
         {statuses.map(({ id, list }) => (
           <div key={id} className="token-status" data-token={id} style={{ visibility: 'hidden' }}>
             {list.slice(0, 5).map((s) => <StatusIcon key={s.key} status={s} />)}
