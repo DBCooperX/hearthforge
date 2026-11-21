@@ -638,6 +638,66 @@ export class ClaudeDM implements DungeonMaster {
    * places on the map, quests and rewards stay exactly as rolled; only wording changes.
    */
   async prepare(game: Game): Promise<void> {
+    await this.fleshOut(game);
+    await this.weaveThreads(game);
+  }
+
+  /**
+   * Draw one personal thread for each hero from the backstory their player wrote, tied to the people,
+   * places and quests of this region or campaign book. One short call on the cheapest model; the threads
+   * go into the Dungeon Master's notes about the table, which the prompt cache serves.
+   */
+  async weaveThreads(game: Game): Promise<void> {
+    const s = game.s, setting = s.setting;
+    if (!setting) return;
+    const kept = (setting.threads ?? []).filter((t) => s.characters.some((c) => c.id === t.characterId && c.backstory === t.backstory));
+    const heroes = s.characters.filter((c) => c.backstory?.trim() && !kept.some((t) => t.characterId === c.id));
+    if (!heroes.length) return;
+    const book = setting.campaign?.digest;
+    const story = book
+      ? `The table plays the published adventure "${book.title}". What is really going on: ${book.overview}${book.chapters.length ? `\nChapters: ${book.chapters.map((ch) => `${ch.title}: ${ch.summary}`).join(' / ')}` : ''}`
+      : `Region: ${setting.name}\nWhat is going on: ${setting.premise}${setting.plot ? `\nPlot: ${setting.plot}` : ''}\nHow the story opens: ${setting.opening}`;
+    const brief = {
+      people: s.memory.npcs.map((n) => ({ name: n.name, role: n.role })),
+      places: (game.world?.locations ?? []).filter((l) => !l.parentId).map((l) => l.name),
+      quests: s.memory.quests.map((q) => q.title),
+      heroes: heroes.map((c) => ({ id: c.id, name: c.name, class: c.className, backstory: c.backstory })),
+    };
+    const prompt = `A Dungeons & Dragons campaign is about to begin, or a new hero has joined it. Give each hero listed below one personal story thread drawn from the backstory their player wrote.
+
+${story}
+
+The pieces, as JSON:
+${JSON.stringify(brief)}
+
+Answer with one JSON object and nothing else, mapping each hero id to their thread: {"<hero id>": "..."}
+
+- A thread is one to three sentences in English, for the Dungeon Master only, at most 400 characters: who or what from this hero's past turns up in this story, why it matters now, and how it can come to a head.
+- Tie every thread to at least one person, place or quest from the lists, by its exact name${book ? ", or to the book's own people, places and events. Do not invent new villains or storylines for the book" : ''}.
+- Never contradict the backstory. Build on what the player wrote and keep what they left open open.
+- Give each hero a different kind of thread (a person, a debt, an object, a place, a secret), and none bigger than the main story. No markdown.`;
+    try {
+      const call = this.converse(game, 'world', 'background', prompt, [], async () => null, 'You are a story assistant for a Dungeons & Dragons game. You answer with exactly the JSON you are asked for.');
+      const out = await Promise.race([call, new Promise<null>((r) => setTimeout(() => r(null), 45_000).unref?.())]);
+      const raw = out?.text ?? '';
+      const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+      if (!json) return;
+      const hooks = JSON.parse(json) as Record<string, unknown>;
+      // A new adventure may have begun while the model was writing.
+      if (game.s !== s || s.setting !== setting) return;
+      const made = heroes.flatMap((c) => {
+        const h = hooks[c.id];
+        return typeof h === 'string' && h.trim().length >= 20 ? [{ characterId: c.id, backstory: c.backstory, hook: h.replace(/\s+/g, ' ').trim().slice(0, 500) }] : [];
+      });
+      setting.threads = [...kept, ...made];
+    } catch (err) {
+      if (err instanceof SyntaxError) console.warn('[dm] The hero threads came back malformed; the Dungeon Master will find its own.');
+      else this.report(err);
+    }
+  }
+
+  /** Reword a freshly rolled region before the first scene. */
+  private async fleshOut(game: Game): Promise<void> {
     const s = game.s, setting = s.setting, world = s.world;
     // A campaign book's places and people already have the book's own words.
     if (!setting || !world || setting.region !== 'random' || setting.fleshedOut || setting.campaign) return;
