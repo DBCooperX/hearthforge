@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { onPortraitLoaded } from './game/heroArt';
 import { ABILITIES } from '../../shared/content';
 import { sameHex, type Hex } from '../../shared/hex';
 import type { Character } from '../../shared/types';
@@ -68,6 +69,9 @@ export function App() {
 
 function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   const t = useT();
+  // A painted portrait that finished loading replaces the drawn bust everywhere at once.
+  const [, portraitsLoaded] = useState(0);
+  useEffect(() => onPortraitLoaded(() => portraitsLoaded((n) => n + 1)), []);
   const conn = useConnection();
   const [showProfile, setShowProfile] = useState(false);
   // Seats this browser had before accounts were moved to the account: say so once.

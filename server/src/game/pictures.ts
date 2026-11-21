@@ -6,6 +6,7 @@ import { PICTURE_GATES, PICTURE_MOMENTS, type PictureMoment } from '../../../sha
 import { LOOK_NAMES, heroLook } from '../../../shared/heroLook';
 import { SPECIES } from '../../../shared/rules';
 import type { Game } from './engine';
+import type { Character } from '../../../shared/types';
 
 /** What the Dungeon Master asked to be shown. */
 export interface PictureAsk {
@@ -14,6 +15,8 @@ export interface PictureAsk {
   picture: string;
   /** Fixed descriptions of the people in it, in English. */
   cast: string[];
+  /** The painted portraits of the heroes in it, to keep them recognisable. */
+  portraits?: string[];
 }
 
 /** What the room gives the game, so it can ask the server. */
@@ -30,7 +33,11 @@ const look = (k: string) => (LOOK_NAMES[k] ?? k).toLowerCase();
 /** How a hero looks, in one sentence for an image model. */
 function heroLine(game: Game, name: string): string | null {
   const c = game.s.characters.find((h) => h.name.toLocaleLowerCase() === name.toLocaleLowerCase());
-  if (!c) return null;
+  return c ? describeHero(c) : null;
+}
+
+/** A hero's looks as the creator set them, in words. */
+export function describeHero(c: Character): string {
   const l = heroLook(c);
   const species = SPECIES[c.speciesId]?.name ?? c.speciesId;
   const gender = c.gender === 'female' ? 'woman' : c.gender === 'male' ? 'man' : 'person';
@@ -76,7 +83,9 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
   const names = String(raw.who ?? '').split(/[,;]/).map((s) => s.trim()).filter(Boolean);
   // A picture of the party with no names shows every hero who is still standing.
   const who = names.length ? names : game.s.characters.filter((c) => !c.dead).map((c) => c.name);
-  game.pictureAsk = { moment, picture, cast: castOf(game, who) };
+  const lower = who.map((n) => n.toLocaleLowerCase());
+  const portraits = game.s.characters.filter((c) => c.portraitId && lower.includes(c.name.toLocaleLowerCase())).map((c) => c.portraitId!);
+  game.pictureAsk = { moment, picture, cast: castOf(game, who), ...(portraits.length ? { portraits } : {}) };
   return { painted: true, note: 'The picture is painted while the players read your scene, and shown above it. Do not mention it in the narration.' };
 }
 
@@ -98,7 +107,22 @@ export function picturePrompt(style: string, ask: Pick<PictureAsk, 'picture' | '
     `Scene: ${ask.picture}`,
     setting.where ? `Place: ${setting.where}${setting.time ? `, ${setting.time}` : ''}.` : '',
     ask.cast.length ? `People in the picture, drawn exactly as described:\n${ask.cast.map((c) => `- ${c}`).join('\n')}` : '',
-    setting.refs ? `The ${setting.refs === 1 ? 'image attached shows' : `${setting.refs} images attached show`} earlier moments of the same adventure. Keep every person who appears again looking the same (face, hair, build, clothes, gear), and keep the same drawing style. Do not copy the earlier compositions.` : '',
+    setting.refs ? `The ${setting.refs === 1 ? 'image attached shows' : `${setting.refs} images attached show`} the heroes' portraits or earlier moments of the same adventure. Keep every person who appears again looking the same (face, hair, build, clothes, gear), but draw them in the style above, not in the style of the attached images. Do not copy their compositions.` : '',
     'A wide landscape composition, one clear moment, fantasy tabletop adventure. No text, no letters, no captions, no frame, no border, no watermark, no signature.',
   ].filter(Boolean).join('\n\n');
+}
+
+/** What a portrait is painted from. A hero whose key changes gets a new portrait. */
+export function portraitKey(c: Character): string {
+  const l = heroLook(c);
+  return [c.speciesId, c.classId, c.gender, l.skin, l.hair, l.hairColor, l.beard, l.color, clean(c.appearance, 220)].join('|');
+}
+
+/** The prompt for a hero's portrait. */
+export function portraitPrompt(style: string, c: Character): string {
+  return [
+    `Style: ${style}`,
+    `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
+    'Show the class through clothing and gear (armour, robes, holy symbol, bow, staff) without a weapon covering the face. No text, no letters, no frame, no border, no watermark, no signature.',
+  ].join('\n\n');
 }

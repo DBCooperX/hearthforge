@@ -831,7 +831,7 @@ function CreditsPane({ fail, say }: PaneProps) {
         </tbody>
       </table>
       <p className="muted small">{t('Each call to the AI is shared equally among the accounts sitting at the table, at the list prices below and your rate of francs per dollar. Piper voices cost nothing. An estimate: your invoices from Anthropic and ElevenLabs are what count.')}</p>
-      <p className="muted small">{t('Story illustrations are billed per picture at the price shown under Art → Story illustrations.')}</p>
+      <p className="muted small">{t('Scene pictures and hero portraits are billed per picture at the price shown under Art → Illustrations. A portrait goes on the account of the player whose hero it is.')}</p>
     </section>
   );
 }

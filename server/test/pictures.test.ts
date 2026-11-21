@@ -8,8 +8,12 @@ import { DEFAULT_PICTURE_CONFIG, pictureUsd, type PictureConfig } from '../../sh
 import { Credits } from '../src/credits';
 import { DM_TOOLS } from '../src/dm/claude';
 import { Game } from '../src/game/engine';
-import { askPicture, castOf, picturePrompt, pictureState } from '../src/game/pictures';
+import { askPicture, castOf, picturePrompt, pictureState, portraitKey } from '../src/game/pictures';
 import { Illustrator, cleanConfig } from '../src/illustrations';
+import { Room } from '../src/room';
+import type { Store } from '../src/db';
+import { ScriptedDM } from '../src/dm/scripted';
+import { MemoryStore } from './memoryStore';
 
 const dir = () => mkdtempSync(join(tmpdir(), 'hf-pictures-'));
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
@@ -103,7 +107,7 @@ describe('the services', () => {
     expect(calls[0].body.generationConfig).toMatchObject({ responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '3:2' } });
     const parts = calls[0].body.contents[0].parts;
     expect(parts).toHaveLength(1);
-    expect(parts[0].text).toContain('ink and watercolour');
+    expect(parts[0].text).toContain('black charcoal and graphite');
     expect(parts[0].text).toContain('A troll bursts through the mill wall');
     expect(parts[0].text).toContain('Brann: a dwarf man');
     later(1);
@@ -231,4 +235,74 @@ it('keeps pictures in their own folder', async () => {
   await ill.paint(job(), () => {});
   expect(readdirSync(d).sort()).toEqual(expect.arrayContaining(['config.json', 'index.json']));
   expect(readdirSync(d).some((f) => f.endsWith('.png'))).toBe(true);
+});
+
+describe('hero portraits', () => {
+  it('paints each hero once per look, square and in the shared portrait style, and counts them per player', async () => {
+    const g = newGame();
+    const brann = g.s.characters[0];
+    const { ill, calls, later } = illustrator({ portraitsPerDay: 2 });
+    expect(ill.portraitGate('acc_mira', brann)).toBeNull();
+    let billed = 0;
+    const p = await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: brann }, (usd) => { billed += usd; });
+    expect(billed).toBeCloseTo(0.067);
+    expect(p.key).toBe(portraitKey(brann));
+    expect(p.moment).toBe('portrait');
+    expect(calls[0].body.generationConfig.imageConfig.aspectRatio).toBe('1:1');
+    const prompt = calls[0].body.contents[0].parts[0].text as string;
+    expect(prompt).toContain('Painted fantasy character portrait');
+    expect(prompt).toMatch(/Brann: a \w+ (man|woman|person), fighter/);
+    expect(calls[0].body.contents[0].parts).toHaveLength(1);
+    brann.portraitId = p.id; brann.portraitKey = p.key;
+    expect(ill.portraitGate('acc_mira', brann)).toBe('done');
+    // A new look asks again, until the player's portraits for the day are used up.
+    brann.look = { ...brann.look, hairColor: brann.look.hairColor === 'white' ? 'black' : 'white' };
+    expect(ill.portraitGate('acc_mira', brann)).toBeNull();
+    await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: brann }, () => {});
+    brann.look = { ...brann.look, beard: brann.look.beard === 'none' ? 'long' : 'none' };
+    expect(ill.portraitGate('acc_mira', brann)).toBe('day');
+    expect(ill.portraitGate('acc_jonas', g.s.characters[1])).toBeNull();
+    later(24 * 60);
+    expect(ill.portraitGate('acc_mira', brann)).toBeNull();
+    // Portraits do not count against the scene pictures of the table.
+    expect(ill.gate('pics', 'boss')).toBeNull();
+    ill.action({ do: 'config', config: { portraits: false } });
+    expect(ill.portraitGate('acc_mira', brann)).toBe('portraits');
+  });
+
+  it('does not pay twice for a portrait the service refused', async () => {
+    const g = newGame();
+    const { ill } = illustrator({}, () => new Response('{"error":"blocked"}', { status: 400 }));
+    await expect(ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: g.s.characters[0] }, () => {})).rejects.toMatchObject({ code: 'refused' });
+    expect(ill.portraitGate('acc_mira', g.s.characters[0])).toBe('busy');
+  });
+
+  it('passes the portraits of the heroes in a scene along first', async () => {
+    const g = newGame();
+    const { ill, calls, later } = illustrator({ gapMinutes: 0 });
+    const p = await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: g.s.characters[0] }, () => {});
+    g.s.characters[0].portraitId = p.id;
+    g.pictures = { gate: () => null, paint: () => {} };
+    askPicture(g, { moment: 'boss', picture: 'Brann holds the bridge against the troll.', who: 'Brann' });
+    expect(g.pictureAsk?.portraits).toEqual([p.id]);
+    later(1);
+    await ill.paint({ table: 'pics', tableTitle: 'Pics', entry: 1, ask: g.pictureAsk! }, () => {});
+    const parts = calls[1].body.contents[0].parts;
+    expect(parts).toHaveLength(2);
+    expect(parts[0].text).toContain("the heroes' portraits");
+    expect(calls[1].body.generationConfig.imageConfig.aspectRatio).toBe('3:2');
+  });
+});
+
+it('asks for a portrait of each hero whose look has none, from the room', () => {
+  const asked: string[] = [];
+  const room = new Room('t', new ScriptedDM(), new MemoryStore() as unknown as Store, {}, { pictures: { gate: () => null, paint: () => {}, portrait: (_r, hero) => asked.push(hero.name) } });
+  room.game.upsertPlayer('acc_mira', 'Mira', true);
+  room.game.addCharacter('acc_mira', 'wizard', 'Ilse');
+  room.flush();
+  expect(asked).toEqual(['Ilse']);
+  const ilse = room.game.s.characters[0];
+  ilse.portraitId = 'a1b2c3d4e5f6a7b8c9'; ilse.portraitKey = portraitKey(ilse);
+  room.flush();
+  expect(asked).toEqual(['Ilse']);
 });

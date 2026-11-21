@@ -31,7 +31,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
   const [draft, setDraft] = useState<PictureConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'save' | 'sample' | null>(null);
-  const [sample, setSample] = useState<PictureInfo | null>(null);
+  const [sample, setSample] = useState<(PictureInfo & { portrait: boolean }) | null>(null);
   const [open, setOpen] = useState<PictureInfo | null>(null);
 
   useEffect(() => { api<Library>('/api/pictures/library').then(setLib).catch(() => setError('failed')); }, []);
@@ -41,7 +41,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
     try {
       const next = await api<Library & { sample?: PictureInfo }>('/api/pictures/action', body);
       setLib(next);
-      if (next.sample) setSample(next.sample);
+      if (next.sample) setSample({ ...next.sample, portrait: body.do === 'sample_portrait' });
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed');
@@ -66,7 +66,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
 
   return (
     <div className="settings-body picture-lib">
-      <p className="muted small">{t('At the big moments of an adventure the Dungeon Master can have a hand-drawn picture painted, shown above the scene for everyone at the table. You choose the service, the style and how many. Each picture costs a few cents and goes on the credit of the players at the table.')}</p>
+      <p className="muted small">{t('At the big moments of an adventure the Dungeon Master can have a hand-drawn picture painted, shown above the scene for everyone at the table, and every new hero can get a painted portrait. You choose the service, the style and how many. Each picture costs a few cents and goes on the credit of the players.')}</p>
       {error && <p className="art-error" role="alert">{t(PICTURE_ERRORS[error as keyof typeof PICTURE_ERRORS] ?? PICTURE_ERRORS.failed)}</p>}
       {lib.error && !error && <p className="muted small">{t('Last problem: {text}', { text: lib.error })}</p>}
 
@@ -101,7 +101,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
       </section>
 
       <section>
-        <h3>{t('Style')}</h3>
+        <h3>{t('Style of the scene pictures')}</h3>
         <div className="setting">
           <span>{t('How the pictures look')}</span>
           <select value={c.style} onChange={(e) => edit({ style: e.target.value as PictureConfig['style'] })}>
@@ -115,7 +115,21 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample')}</button>
           <span className="muted small">{draft ? t('Save first, then paint a sample.') : t('A test picture in this style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
         </div>
-        {sample && <figure className="picture-sample-img"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+        {sample && !sample.portrait && <figure className="picture-sample-img"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
+      </section>
+
+      <section>
+        <h3>{t('Hero portraits')}</h3>
+        <label className="inn-switch">
+          <input type="checkbox" checked={c.portraits} onChange={(e) => edit({ portraits: e.target.checked })} />
+          <span><b>{t('Paint a portrait of every new hero')}</b><br /><span className="muted small">{t('From the choices in the character creator: species, class, skin, hair, beard and colours. Every hero gets the same painted look, in colour, made to sit in the round brass frame, whatever style the scenes use. A changed look gets a new portrait. Until it is ready, and without a key, the drawn portrait stays. Paid by the player whose hero it is.')}</span></span>
+        </label>
+        {num(t('Portraits per player and day'), c.portraitsPerDay, '1', (n) => edit({ portraitsPerDay: n }))}
+        <div className="picture-sample">
+          <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_portrait' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample portrait')}</button>
+          <span className="muted small">{t('A dwarf fighter in the portrait style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
+        </div>
+        {sample?.portrait && <figure className="picture-sample-img portrait"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
       </section>
 
       <section>
@@ -147,7 +161,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
             {lib.recent.map((p) => (
               <li key={p.id}>
                 <button type="button" className="picture-thumb" onClick={() => setOpen(p)} title={p.caption}><img src={p.url} alt={p.caption} loading="lazy" /></button>
-                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : t(PICTURE_MOMENT_LABELS[p.moment])}</span>
+                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : t(PICTURE_MOMENT_LABELS[p.moment])}</span>
                 <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
                 <button type="button" className="link danger" onClick={() => { void ask(t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
               </li>

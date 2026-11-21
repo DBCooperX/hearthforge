@@ -69,10 +69,11 @@ export const PICTURE_MOMENT_LABELS: Record<PictureMoment, string> = {
   farewell: 'A death, a parting or the end of a quest',
 };
 
-export const PICTURE_STYLES = ['ink', 'storybook', 'woodcut', 'custom'] as const;
+export const PICTURE_STYLES = ['charcoal', 'ink', 'storybook', 'woodcut', 'custom'] as const;
 export type PictureStyle = (typeof PICTURE_STYLES)[number];
 
 export const PICTURE_STYLE_LABELS: Record<PictureStyle, string> = {
+  charcoal: 'Black charcoal sketch on old paper, like a storybook of an old-school role-playing game',
   ink: 'Ink and watercolour, like a field journal',
   storybook: 'Painted storybook, warm and soft',
   woodcut: 'Old woodcut, black ink on parchment',
@@ -81,10 +82,17 @@ export const PICTURE_STYLE_LABELS: Record<PictureStyle, string> = {
 
 /** What each style asks the model for. In English: the models follow English best. */
 export const STYLE_PROMPTS: Record<Exclude<PictureStyle, 'custom'>, string> = {
+  charcoal: 'Hand-drawn illustration in black charcoal and graphite on warm, aged off-white paper: loose, confident, expressive strokes, smudged soft shadows rubbed in with a finger, bold dark accents on the focal point, sparse hatching, edges left unfinished and fading into the bare paper as a vignette. Monochrome black and grey, at most a faint sepia tint. In the manner of the storybook sketches that illustrate key scenes in classic isometric fantasy role-playing games.',
   ink: 'Hand-drawn illustration in ink and watercolour on warm off-white paper: confident loose pen lines with cross-hatching in the shadows, transparent washes of muted earthy colour with a few vivid accents, soft bleeding edges and visible paper texture, like a page from a fantasy explorer\'s field journal.',
   storybook: 'Painted storybook illustration in gouache: warm light, soft edges, rich but gentle colours, painterly brush texture, in the tradition of classic fantasy book plates.',
   woodcut: 'Old woodcut print: bold black ink lines and carved hatching on aged parchment, a single muted red accent at most, like an illustration in a sixteenth-century chronicle.',
 };
+
+/**
+ * Hero portraits always share one look, whatever style the story pictures use, so every party looks like one game:
+ * warm, painted, in colour, and sitting well inside Hearthforge's round brass frames.
+ */
+export const PORTRAIT_STYLE = 'Painted fantasy character portrait for a dark-fantasy tavern game: head and shoulders, three-quarter view, face fully visible and centred, looking just past the viewer. Painterly oil brushwork over a fine ink underdrawing, rich but muted colours in warm candlelit tones of amber, ember orange, deep brown and the character\'s own colours, soft rim light, a dark smoky background with a faint warm glow behind the head. Square format, the head in the middle third, nothing important near the corners because the picture is shown in a round frame.';
 
 /** How the Innkeeper set illustrations up. Kept in the data folder; changes apply at once. */
 export interface PictureConfig {
@@ -97,6 +105,10 @@ export interface PictureConfig {
   customStyle: string;
   /** Which moments may get a picture. */
   moments: Record<PictureMoment, boolean>;
+  /** Paint a portrait of each new hero from the choices made in the creator. */
+  portraits: boolean;
+  /** At most this many portraits per account and day, so trying looks does not run up a bill. */
+  portraitsPerDay: number;
   /** At most this many pictures per table and day (real days, counted from midnight). */
   perTableDay: number;
   /** At least this many minutes between two pictures at one table. */
@@ -111,8 +123,10 @@ export const DEFAULT_PICTURE_CONFIG: PictureConfig = {
   on: false,
   provider: 'gemini',
   models: { gemini: 'gemini-3.1-flash-image', fal: 'fal-ai/flux-2', replicate: 'black-forest-labs/flux-2-pro', openai: 'gpt-image-2.5-flare' },
-  style: 'ink',
+  style: 'charcoal',
   customStyle: '',
+  portraits: true,
+  portraitsPerDay: 3,
   moments: { boss: true, victory: true, reveal: true, opening: false, arrival: false, farewell: false },
   perTableDay: 4,
   gapMinutes: 20,
@@ -139,7 +153,7 @@ export interface PictureInfo {
   table: string;
   tableTitle: string;
   entry: number;
-  moment: PictureMoment | 'sample';
+  moment: PictureMoment | 'sample' | 'portrait';
   /** What the Dungeon Master asked to be shown, in English. */
   caption: string;
   provider: PictureProvider;

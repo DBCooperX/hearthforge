@@ -34,6 +34,7 @@ import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
+import { portraitKey } from './game/pictures';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -213,6 +214,18 @@ const hooks: RoomHooks = {
       illustrator.paint({ table: room.name, tableTitle: room.game.s.table.title, entry: entryId, ask, where: scene?.where, time: scene?.time }, (usd) => bill(room.name, usd, 'images'))
         .then((p) => { if (room.game.setPicture(entryId, p.id)) room.flush(); })
         .catch(() => { if (room.game.setPicture(entryId, null)) room.flush(); });
+    },
+    portrait: (room, hero) => {
+      // Paid by the player whose hero it is; seats from before accounts get the drawn bust.
+      const owner = creditAccount(hero.ownerId);
+      if (!owner || !credits.mayPlay(owner) || illustrator.portraitGate(owner.id, hero)) return;
+      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero }, (usd) => tellCredits(credits.charge([owner.id], usd, 'images')))
+        .then((p) => {
+          const now = room.game.s.characters.find((c) => c.id === hero.id);
+          // The look may have changed while it was painted; then the next flush asks for another.
+          if (now && portraitKey(now) === p.key) { now.portraitId = p.id; now.portraitKey = p.key; room.flush(); }
+        })
+        .catch(() => {});
     },
   },
 };
@@ -573,13 +586,21 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
     if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, illustrator.library());
     if (req.method === 'POST' && url.pathname === '/api/pictures/action') {
       const body = JSON.parse((await readRaw(req, 16 * 1024, () => new PictureError('bad_request'))).toString('utf8') || '{}') as Record<string, unknown>;
-      if (body.do === 'sample') {
+      if (body.do === 'sample' || body.do === 'sample_portrait') {
         // The Innkeeper trying a style pays for it like anyone else: it shows in their own costs.
         const me = accounts.account(req.headers[SESSION_HEADER]);
-        const picture = await illustrator.sample((usd) => { if (me) credits.charge([me.id], usd, 'images'); });
+        const pay = (usd: number) => { if (me) credits.charge([me.id], usd, 'images'); };
+        const picture = body.do === 'sample' ? await illustrator.sample(pay) : await illustrator.samplePortrait(pay);
         return json(200, { ...illustrator.library(), sample: picture });
       }
       const done = illustrator.action(body);
+      // A deleted portrait leaves its hero with the drawn bust until the look changes.
+      if (body.do === 'delete') {
+        for (const r of rooms.values()) {
+          const hero = r.game.s.characters.find((c) => c.portraitId === body.id);
+          if (hero) { hero.portraitId = null; r.flush(); }
+        }
+      }
       const room = done.removed ? rooms.get(done.removed.table) : null;
       if (room && done.removed) {
         const entry = room.game.s.log.find((l) => l.id === done.removed!.entry);

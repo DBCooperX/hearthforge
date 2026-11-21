@@ -452,7 +452,42 @@ export function heroUrl(a: HeroArt): string {
 }
 
 /** Head and shoulders in a round brass frame: for the party panel, the lobby and hero tabs. */
+/** Painted portraits from the server, once loaded. Until then the drawn bust stands in. */
+const photos = new Map<string, HTMLImageElement | 'loading' | 'failed'>();
+const photoListeners = new Set<() => void>();
+
+/** Called whenever a painted portrait has loaded, so the screens showing heroes can draw it. */
+export function onPortraitLoaded(fn: () => void): () => void {
+  photoListeners.add(fn);
+  return () => { photoListeners.delete(fn); };
+}
+
+function photo(id: string): HTMLImageElement | null {
+  const got = photos.get(id);
+  if (got instanceof HTMLImageElement) return got;
+  if (!got && /^[a-f0-9]{18}$/.test(id)) {
+    photos.set(id, 'loading');
+    const img = new Image();
+    img.onload = () => { photos.set(id, img); for (const fn of photoListeners) fn(); };
+    img.onerror = () => { photos.set(id, 'failed'); };
+    img.src = `/pictures/${id}`;
+  }
+  return null;
+}
+
 export function heroPortraitUrl(a: HeroArt, size = 160): string {
+  const img = a.portrait ? photo(a.portrait) : null;
+  if (img) {
+    return cached(`photo|${size}|${a.portrait}`, () => {
+      // The painting fills the round brass frame every hero portrait has.
+      const S = Math.max(img.naturalWidth, img.naturalHeight, size);
+      const square = document.createElement('canvas');
+      square.width = square.height = S;
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      square.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+      return framed(square, size, 'hero', { x: 0.03, y: 0.02, size: 0.94 }).toDataURL();
+    });
+  }
   return cached(`bust|${size}|${heroArtKey(a)}`, () => {
     return framed(bust(a), size, 'hero', { x: 0, y: 0, size: 1 }).toDataURL();
   });
@@ -461,7 +496,7 @@ export function heroPortraitUrl(a: HeroArt, size = 160): string {
 /** A hero in play: the stored look and whatever they have equipped right now. */
 export function artOfCharacter(c: Character, items?: Record<string, ItemDef>): HeroArt {
   const def = (slot: 'armor' | 'mainHand' | 'offHand') => (c.equipment[slot] ? itemDef(items, c.equipment[slot]!.defId) : null);
-  return { speciesId: c.speciesId, gender: c.gender, classId: c.classId, name: c.name, look: heroLook(c), gear: heroGear(def('armor'), def('mainHand'), def('offHand')) };
+  return { speciesId: c.speciesId, gender: c.gender, classId: c.classId, name: c.name, look: heroLook(c), gear: heroGear(def('armor'), def('mainHand'), def('offHand')), portrait: c.portraitId ?? null };
 }
 
 /** A hero still being made, or a premade: the look so far and the gear of the chosen kit. */

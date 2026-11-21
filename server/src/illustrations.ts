@@ -5,18 +5,19 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  DEFAULT_PICTURE_CONFIG, PICTURE_KEYS, PICTURE_MOMENTS, PICTURE_PROVIDERS, PICTURE_STYLES, STYLE_PROMPTS, pictureRefs, pictureUsd,
+  DEFAULT_PICTURE_CONFIG, PICTURE_KEYS, PORTRAIT_STYLE, PICTURE_MOMENTS, PICTURE_PROVIDERS, PICTURE_STYLES, STYLE_PROMPTS, pictureRefs, pictureUsd,
   type PictureConfig, type PictureGate, type PictureInfo, type PictureLibrary, type PictureMoment, type PictureProvider,
 } from '../../shared/illustrations';
 import { readJson, writePrivate } from './admin/config';
 import { PAINTERS, PictureFailure, type PaintRequest } from './pictureServices';
-import { picturePrompt, type PictureAsk } from './game/pictures';
+import { picturePrompt, portraitKey, portraitPrompt, type PictureAsk } from './game/pictures';
+import type { Character } from '../../shared/types';
 
 export class PictureError extends Error {
   constructor(readonly code: 'bad_request' | 'no_key' | 'refused' | 'failed' | 'busy' | 'not_found') { super(code); }
 }
 
-interface Stored extends Omit<PictureInfo, 'url'> { file: string; mime: string }
+interface Stored extends Omit<PictureInfo, 'url'> { file: string; mime: string; /** The account a portrait was made for. */ account?: string }
 
 const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const MAX_INDEX = 5000;
@@ -50,6 +51,8 @@ export class Illustrator {
   private readonly indexFile: string;
   /** Tables with a picture being painted right now. */
   private busy = new Set<string>();
+  /** Portraits that failed in this run, by hero and look, so a refusal is not paid for again and again. */
+  private failedPortraits = new Set<string>();
   private lastError = '';
 
   constructor(private dir: string, private keyOf: (name: string) => string, private fetchFn: typeof fetch = fetch, private now: () => number = Date.now) {
@@ -80,7 +83,7 @@ export class Illustrator {
     if (!this.key(c.provider)) return 'no_key';
     if (!c.moments[moment]) return 'moment';
     if (this.busy.has(table)) return 'busy';
-    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample');
+    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait');
     const today = dayOf(this.now());
     if (mine.filter((p) => dayOf(p.at) === today).length >= c.perTableDay) return 'day';
     const last = mine.reduce((n, p) => Math.max(n, p.at), 0);
@@ -95,12 +98,12 @@ export class Illustrator {
     return c.style === 'custom' && c.customStyle.trim() ? c.customStyle.trim() : STYLE_PROMPTS[c.style === 'custom' ? 'ink' : c.style];
   }
 
-  /** The newest pictures of this table, to keep its people looking the same. */
-  private refsFor(table: string, max: number): PaintRequest['refs'] {
+  /** The portraits of the heroes in the picture, then the newest scenes of this table, to keep its people looking the same. */
+  private refsFor(table: string, max: number, portraits: string[] = []): PaintRequest['refs'] {
     if (max <= 0) return [];
     const out: PaintRequest['refs'] = [];
-    for (const p of [...this.index].reverse()) {
-      if (p.table !== table) continue;
+    const ordered = [...portraits.map((id) => this.index.find((p) => p.id === id)).filter((p): p is Stored => !!p), ...[...this.index].reverse().filter((p) => p.table === table && p.moment !== 'portrait')];
+    for (const p of ordered) {
       const file = join(this.dir, p.file);
       try { out.push({ mime: p.mime, data: readFileSync(file) }); } catch { continue; }
       if (out.length >= max) break;
@@ -116,7 +119,7 @@ export class Illustrator {
     if (this.busy.has(job.table)) throw new PictureError('busy');
     this.busy.add(job.table);
     try {
-      const refs = this.refsFor(job.table, pictureRefs(provider, model));
+      const refs = this.refsFor(job.table, pictureRefs(provider, model), job.ask.portraits);
       const prompt = picturePrompt(this.styleText(), job.ask, { where: job.where, time: job.time, refs: refs.length });
       const started = this.now();
       let painted;
@@ -128,18 +131,11 @@ export class Illustrator {
         if (err instanceof PictureFailure) throw new PictureError(err.code);
         throw new PictureError('failed');
       }
-      const id = randomBytes(9).toString('hex');
-      const file = `${id}.${EXT[painted.mime] ?? 'png'}`;
-      writeFileSync(join(this.dir, file), painted.data);
-      const usd = pictureUsd(c, provider, model);
-      const stored: Stored = {
-        id, table: job.table, tableTitle: job.tableTitle, entry: job.entry, moment: job.table === 'sample' ? 'sample' : job.ask.moment,
-        caption: job.ask.picture, provider, model, usd, at: this.now(), file, mime: EXT[painted.mime] ? painted.mime : 'image/png',
-      };
-      this.index.push(stored);
-      if (this.index.length > MAX_INDEX) this.index.splice(0, this.index.length - MAX_INDEX);
-      this.save();
-      this.lastError = '';
+      const stored = this.keep(painted, {
+        table: job.table, tableTitle: job.tableTitle, entry: job.entry, moment: job.table === 'sample' ? 'sample' : job.ask.moment,
+        caption: job.ask.picture, provider, model, usd: pictureUsd(c, provider, model),
+      });
+      const id = stored.id, usd = stored.usd;
       console.log(`[pictures] painted ${id} for ${job.table} (${stored.moment}) with ${provider} ${model} in ${Math.round((this.now() - started) / 1000)} s`);
       bill(usd);
       return view(stored);
@@ -148,9 +144,74 @@ export class Illustrator {
     }
   }
 
+  /** Why no portrait may be painted for this hero now, or null. */
+  portraitGate(account: string, c: Character): PictureGate | 'portraits' | 'done' | null {
+    const cfg = this.config;
+    if (!cfg.on) return 'off';
+    if (!cfg.portraits) return 'portraits';
+    if (!this.key(cfg.provider)) return 'no_key';
+    const key = `${c.id}|${portraitKey(c)}`;
+    if (c.portraitKey === portraitKey(c)) return 'done';
+    if (this.busy.has(`portrait:${c.id}`) || this.failedPortraits.has(key)) return 'busy';
+    const today = dayOf(this.now());
+    if (this.index.filter((p) => p.moment === 'portrait' && p.account === account && dayOf(p.at) === today).length >= cfg.portraitsPerDay) return 'day';
+    if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
+    return null;
+  }
+
+  /** Paint a hero's portrait from the choices made in the creator, in the one portrait style every hero shares. */
+  async paintPortrait(job: { table: string; tableTitle: string; account: string; hero: Character }, bill: (usd: number) => void): Promise<PictureInfo & { key: string }> {
+    const cfg = this.config;
+    const provider = cfg.provider, model = this.model, key = this.key(provider);
+    const look = portraitKey(job.hero);
+    if (!key) throw new PictureError('no_key');
+    const busyKey = `portrait:${job.hero.id}`;
+    if (this.busy.has(busyKey)) throw new PictureError('busy');
+    this.busy.add(busyKey);
+    try {
+      let painted;
+      try {
+        painted = await PAINTERS[provider](this.fetchFn, model, key, { prompt: portraitPrompt(PORTRAIT_STYLE, job.hero), refs: [], square: true });
+      } catch (err) {
+        this.failedPortraits.add(`${job.hero.id}|${look}`);
+        this.lastError = err instanceof Error ? err.message : String(err);
+        console.warn(`[pictures] portrait of ${job.hero.name}: ${this.lastError}`);
+        throw new PictureError(err instanceof PictureFailure ? err.code : 'failed');
+      }
+      const stored = this.keep(painted, { table: job.table, tableTitle: job.tableTitle, entry: 0, moment: 'portrait', caption: job.hero.name, provider, model, usd: pictureUsd(cfg, provider, model), account: job.account });
+      console.log(`[pictures] painted the portrait of ${job.hero.name} (${stored.id}) with ${provider} ${model}`);
+      bill(stored.usd);
+      return { ...view(stored), key: look };
+    } finally {
+      this.busy.delete(busyKey);
+    }
+  }
+
+  /** Write a painted picture to disk and into the index. */
+  private keep(painted: { data: Buffer; mime: string }, info: Omit<Stored, 'id' | 'file' | 'mime' | 'at'>): Stored {
+    const id = randomBytes(9).toString('hex');
+    const file = `${id}.${EXT[painted.mime] ?? 'png'}`;
+    writeFileSync(join(this.dir, file), painted.data);
+    const stored: Stored = { ...info, id, at: this.now(), file, mime: EXT[painted.mime] ? painted.mime : 'image/png' };
+    this.index.push(stored);
+    if (this.index.length > MAX_INDEX) this.index.splice(0, this.index.length - MAX_INDEX);
+    this.save();
+    this.lastError = '';
+    return stored;
+  }
+
   /** A test picture in the current style, for the Innkeeper. */
   sample(bill: (usd: number) => void): Promise<PictureInfo> {
     return this.paint({ table: 'sample', tableTitle: '', entry: 0, ask: SAMPLE, where: 'A crypt under an old chapel', time: 'night' }, bill);
+  }
+
+  /** A test portrait in the shared portrait style, for the Innkeeper. */
+  async samplePortrait(bill: (usd: number) => void): Promise<PictureInfo> {
+    const hero = { id: 'sample', name: 'Brann', speciesId: 'dwarf', classId: 'fighter', className: 'Fighter', gender: 'male', look: { skin: 'tan', hair: 'short', hairColor: 'auburn', beard: 'braided', color: 'red' }, appearance: 'Broad-shouldered, a dented steel breastplate and a round shield on his back.', dead: false } as unknown as Character;
+    const p = await this.paintPortrait({ table: 'sample', tableTitle: '', account: '', hero }, bill);
+    const stored = this.index.find((x) => x.id === p.id);
+    if (stored) { stored.moment = 'sample'; this.save(); }
+    return { ...p, moment: 'sample' };
   }
 
   /** The file of a picture, for serving it. */
@@ -231,6 +292,8 @@ export function cleanConfig(raw: Partial<PictureConfig>, base: PictureConfig): P
     provider: PICTURE_PROVIDERS.includes(r.provider) ? r.provider : base.provider,
     models,
     style: PICTURE_STYLES.includes(r.style) ? r.style : base.style,
+    portraits: typeof r.portraits === 'boolean' ? r.portraits : base.portraits ?? true,
+    portraitsPerDay: bound(r.portraitsPerDay, 0, 20, base.portraitsPerDay ?? 3),
     customStyle: typeof r.customStyle === 'string' ? r.customStyle.replace(/\s+/g, ' ').trim().slice(0, 600) : base.customStyle,
     moments,
     perTableDay: bound(r.perTableDay, 0, 50, base.perTableDay),

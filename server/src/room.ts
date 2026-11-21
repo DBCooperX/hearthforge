@@ -1,6 +1,6 @@
 // A room is one table: a Game, the players sitting at it and its Dungeon Master.
 import type { WebSocket } from 'ws';
-import type { ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
+import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { Game, GameError, type Beat, type InternalState } from './game/engine';
@@ -11,7 +11,7 @@ import { parseOoc } from '../../shared/ooc';
 import type { PlayStats } from '../../shared/accounts';
 import type { HeroRef } from './accounts';
 import { hashToken } from './http';
-import type { PictureAsk, PictureHooks } from './game/pictures';
+import { portraitKey, type PictureAsk, type PictureHooks } from './game/pictures';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -63,6 +63,8 @@ export interface RoomHooks {
   pictures?: {
     gate(room: Room, moment: Parameters<PictureHooks['gate']>[0]): ReturnType<PictureHooks['gate']>;
     paint(room: Room, entryId: number, ask: PictureAsk): void;
+    /** A hero has no portrait for their current look yet: paint one if the server may. */
+    portrait?(room: Room, hero: Character): void;
   };
 }
 
@@ -377,6 +379,8 @@ export class Room {
   flush() {
     if (this.closed) return;
     const moves = this.game.takeMoves();
+    const portrait = this.hooks.pictures?.portrait;
+    if (portrait) for (const c of this.game.s.characters) if (!c.dead && c.portraitKey !== portraitKey(c)) portrait(this, c);
     this.game.checkTrophies();
     this.creditGold();
     const state: ServerMessage = {

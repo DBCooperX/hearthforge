@@ -80,7 +80,7 @@ export const INN_TABS = {
   sound: 'Sound and voice', art: 'Art', server: 'Server',
 } as const;
 export const SOUND_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
-export const ART_TABS = { art: 'Art packs', pictures: 'Story illustrations', settings: 'Switches and keys' } as const;
+export const ART_TABS = { art: 'Art packs', pictures: 'Illustrations', settings: 'Switches and keys' } as const;
 export const SERVER_TABS = { server: 'Updates and restart', backups: 'Backups', logs: 'Log' } as const;
 export const INN_SECTIONS = {
   ai: 'AI and models', newTables: 'New tables start with', timing: 'Timing at the table', switches: 'On and off for everyone',

@@ -234,6 +234,10 @@ export interface Character {
   resist: string[];
   /** How the hero is drawn in portraits and on the battle map. */
   look: HeroLook;
+  /** The painted portrait of this hero (/pictures/<id>), made from the look below. Missing: the drawn bust is used. */
+  portraitId?: string | null;
+  /** What the portrait was painted from, so a changed look gets a new one. */
+  portraitKey?: string;
   appearance: string;
   backstory: string;
   /** Level-up choices the player has not made yet. */
