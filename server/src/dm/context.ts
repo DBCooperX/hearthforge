@@ -10,7 +10,7 @@ import type { MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS, crValue, type MonsterDef } from '../data/monsters';
 import { partyBudget } from '../data/monsterSearch';
 import { buyPrice } from '../../../shared/trade';
-import { TIER_TEXT, tierOf } from '../../../shared/reputation';
+import { tierOf } from '../../../shared/reputation';
 import { attitude, factionOfNpc, rumoursHere } from '../game/reputation';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';

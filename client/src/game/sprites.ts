@@ -225,12 +225,6 @@ export function spriteCanvas(name: string): HTMLCanvasElement {
 
 const urlCache = new Map<string, string>();
 
-/** Sprite as a data URL, for portraits in the React UI. */
-export function spriteUrl(name: string): string {
-  let u = urlCache.get(name);
-  if (!u) { u = spriteCanvas(name).toDataURL(); urlCache.set(name, u); }
-  return u;
-}
 
 const TILE_SPRITES = /^(floor|wall)/;
 

@@ -3054,7 +3054,6 @@ export class Game {
     }
     const chosen = choice.rep;
 
-    const start = { x: m.x, y: m.y };
     let walked: Pt[] = [];
     const shooter = !!chosen?.ranged;
     if (tactic === 'engage' && !shooter) {

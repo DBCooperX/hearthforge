@@ -2,7 +2,7 @@
 // name, in English or German, and searches by name, type and challenge rating through a
 // tool, so the catalogue never has to be spelled out in a tool schema.
 
-import { tr, type Lang } from '../../../shared/i18n';
+import { tr } from '../../../shared/i18n';
 import { MONSTERS, crValue, type MonsterDef } from './monsters';
 
 const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -95,10 +95,3 @@ export function difficulty(xp: number, levels: number[]): Difficulty {
   return xp > b.low / 2 ? 'low' : 'trivial';
 }
 
-/** The highest challenge rating that is still a sensible single foe for these heroes. */
-export function soloCr(levels: number[]): number {
-  const high = partyBudget(levels).high;
-  let best = 0;
-  for (const d of Object.values(MONSTERS)) if (d.xp <= high) best = Math.max(best, crValue(d.cr));
-  return best;
-}

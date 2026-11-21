@@ -4,7 +4,6 @@ import { movementCosts } from '../../../shared/battlemap';
 import { SPECIES_DARKVISION, canSee, lightGrid, type LightLevel, type Senses } from '../../../shared/light';
 import { distToFootprint, nearestFootprintTile } from '../../../shared/monsterLook';
 import type { MonsterView } from '../../../shared/types';
-import { itemDef } from '../../../shared/items';
 import type { Character, GameState } from '../../../shared/types';
 
 export const key = (x: number, y: number) => `${x},${y}`;
@@ -107,14 +106,6 @@ export function heroTitle(c: { className: string; gender?: string; speciesId?: s
   return species ? t('{species} {class}', { species, class: classLabel(c, t) }) : classLabel(c, t);
 }
 
-export function weaponSummary(state: GameState, c: Character, t: (text: string) => string = (x) => x): string {
-  const it = c.equipment.mainHand;
-  const def = it ? itemDef(state.items, it.defId) : null;
-  if (!def?.weapon) return t('Unarmed strike');
-  // German dice notation uses W (Würfel) where English uses d.
-  const dice = t('d20') === 'W20' ? def.weapon.damage.replace(/d/g, 'W') : def.weapon.damage;
-  return `${t(def.name)} (${dice} ${t(`${def.weapon.damageType} damage`)})`;
-}
 
 /** What a condition on a hero does, for the tooltip of its chip. */
 export function conditionHelp(condition: string, t: (text: string) => string): string | undefined {

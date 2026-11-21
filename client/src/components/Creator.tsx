@@ -22,7 +22,7 @@ import { Backdrop } from '../ui/Brand';
 import { Hint, Info } from '../ui/Hint';
 import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
-import { Effects, FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
+import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 const STEPS: StepId[] = ['class', 'species', 'background', 'abilities', 'skills', 'talents', 'equipment', 'identity'];

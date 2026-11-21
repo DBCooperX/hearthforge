@@ -24,7 +24,6 @@ const SCENE_IDEAS = [
   'The local watch stops the party and asks questions.',
 ];
 
-const crNum = (cr: string) => { const [a, b] = cr.split('/').map(Number); return b ? a / b : a; };
 
 export function TestBadge({ state, onClick }: { state: GameState; onClick: () => void }) {
   const t = useT();

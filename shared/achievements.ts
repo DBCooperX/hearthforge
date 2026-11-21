@@ -52,7 +52,6 @@ export const TROPHIES: readonly TrophyDef[] = [
   { id: 'down_not_out', name: 'Down, Not Out', text: 'Wake up after a total defeat.', icon: '🕯️', need: 1, count: (c) => c.rescued },
 ];
 
-export const TROPHY_IDS = TROPHIES.map((t) => t.id);
 
 /** Counters the server keeps for the trophies that cannot be read from the game itself. */
 export interface Stats {

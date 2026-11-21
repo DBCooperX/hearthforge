@@ -40,7 +40,6 @@ export const LIGHT_KINDS = {
   glow: { bright: 0, dim: 10, carried: false },
 } as const satisfies Record<string, LightKind>;
 export type LightKindId = keyof typeof LIGHT_KINDS;
-export const isLightKind = (v: unknown): v is LightKindId => typeof v === 'string' && v in LIGHT_KINDS;
 
 /** Catalogue items a hero can light, best first, with the light each gives. */
 export const LIGHT_ITEMS: { itemId: string; kind: LightKindId }[] = [

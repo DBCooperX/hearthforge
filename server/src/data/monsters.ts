@@ -799,5 +799,3 @@ export function crValue(cr: string): number {
   return b ? a / b : a;
 }
 
-/** Every damaging or disabling thing a creature can do on its turn, by name. */
-export const actionNames = (d: MonsterDef): string[] => [...new Set([...d.attacks.map((a) => a.name), ...(d.specials ?? []).filter((s) => s.slot === 'action' || s.slot === 'bonus').map((s) => s.name)])];

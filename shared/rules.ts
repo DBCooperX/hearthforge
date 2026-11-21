@@ -9,7 +9,7 @@ import type { Lang } from './i18n';
 import { metric } from './units';
 import { SRD_SPELL_LISTS } from './spells';
 import { CASTING, GROUPS, OPTIONS, optionLine, CLASS_FEATURES, CLASS_IDS, EPIC_BOON_LEVEL, SUBCLASS_LEVEL, LEVEL_ABILITIES, SRD_CLASSES, featureLine, featuresAt, manaFor, maxSpellLevelFor, profBonusFor } from './classes';
-import type { Abilities, AbilityKey, BackgroundId, ClassId, FeatId, SlotId, SpeciesId } from './types';
+import type { AbilityKey, BackgroundId, ClassId, FeatId, SlotId, SpeciesId } from './types';
 
 /** The ability behind each skill. shared/content.ts has the same table; this copy avoids importing it here. */
 const SKILL_ABILITY: Record<string, AbilityKey> = {

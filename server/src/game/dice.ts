@@ -37,10 +37,6 @@ export function d20(rng: Rng, mode: RollMode = 'normal'): { value: number; rolls
   return { value: mode === 'advantage' ? Math.max(a, b) : Math.min(a, b), rolls: [a, b] };
 }
 
-export function fmtD20(r: { value: number; rolls: number[] }, mode: RollMode): string {
-  if (mode === 'normal') return `${r.value}`;
-  return `${r.value} (${mode}: ${r.rolls.join(', ')})`;
-}
 
 export function signed(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;

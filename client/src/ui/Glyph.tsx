@@ -19,7 +19,6 @@ export function AbilityGlyph({ def }: { def: Pick<AbilityDef, 'id' | 'icon' | 's
 }
 
 export const SkillGlyph = ({ skill }: { skill: string }) => <Glyph keys={glyphKeys('skill', skill)} emoji="🎯" />;
-export const FeatGlyph = ({ id, emoji }: { id: string; emoji?: ReactNode }) => <Glyph keys={glyphKeys('feat', id)} emoji={emoji} />;
 export const FeatureGlyph = ({ id, via, emoji }: { id: string; via?: string; emoji?: ReactNode }) => <Glyph keys={glyphKeys('feature', id, via)} emoji={emoji} />;
 /** A line of the features list of a character sheet. */
 export const LineGlyph = ({ line }: { line: string }) => <Glyph keys={featureLineKeys(line)} emoji="✦" />;
