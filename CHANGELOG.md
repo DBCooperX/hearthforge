@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Accounts
+- **Rename accounts.** Players rename themselves in their profile; the Innkeeper renames any account, the default "innkeeper" too, from Players → Accounts. Seats at tables follow the new name (unless someone there already has it), and sessions stay signed in. The password-recovery file now finds the owner even after a rename.
+- **Clear your stats.** In the profile: reset all numbers and the hero list, clear the whole list, or remove one hero's entry (the hero stays at the table). The Innkeeper can clear any account's stats.
+- **German says "Innkeeper"**, not "Wirt", for the owner's panel and role; the group panel heading is "Party".
+
 ### Costs
 - **Lower AI bills through prompt caching.** The Dungeon Master's prompt is now laid out so Claude can reuse most of it: the system prompt and tools stay cached for an hour, then come the table's fixed background, the recent story (which now only grows at the end, one entry at a time, and moves on in steps), and only then the live state and what the players did. Each follow-up call inside a turn (after every tool the DM uses) reads the whole turn from the cache instead of paying for it again. One-off background calls are no longer marked for caching. The cost report prices hour-long cache writes at twice the input price.
 - **Player credits.** Under Innkeeper → AI costs, book what each player has paid in, in francs. Every call to Claude and every sentence a paid narrator voice reads (ElevenLabs or OpenAI; Piper is free) is shared among the accounts sitting at the table and taken off their credit at your rate of francs per dollar. Players see their credit in their profile, get an early warning when it runs low, and once it is used up they cannot ask the Dungeon Master for anything new (a fight under way is finished) until you top it up. Credits are off by default; costs are counted per account either way. Innkeepers, and accounts you mark free, are never stopped.

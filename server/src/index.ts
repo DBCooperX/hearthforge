@@ -716,6 +716,14 @@ accounts.onDeleted = (id) => {
   for (const [ws, c] of conns) if (c.accountId === id) ws.close(4403, 'removed');
 };
 
+// A renamed account is renamed at its seats too.
+accounts.onRenamed = (id, username) => {
+  let seats = 0;
+  for (const c of conns.values()) if (c.accountId === id) c.account = username;
+  for (const room of rooms.values()) if (room.renamePlayer(id, username)) seats++;
+  if (seats) pushTables();
+};
+
 void art.start();
 narrator.onChange = () => announceAssets({ voice: true });
 void narrator.start();

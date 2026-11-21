@@ -32,6 +32,11 @@ the rest.
   name. Species and class together read "Kämpferin (Ork)", so the species needs no
   inflection.
 - Quests stay "Quest", not "Auftrag".
+- **English words that stay English** because they carry the tavern-and-dungeon vibe: **Innkeeper**
+  (the owner's panel and role, not "Wirt"; an *NPC* tavern keeper in the story is still a
+  Wirt/Wirtin), **Quest**, **Party** (the party panel heading; the group of heroes in running
+  text is still "Gruppe"). "Gastgeber" (host), "Spielleiter" (DM), "Tisch" (table) and
+  "Erzähler" (narrator) read naturally in German and stay.
 
 ## Glossary
 
@@ -73,6 +78,8 @@ the rest.
 | gp / XP | GM / EP |
 | d20 | W20 |
 | Dungeon Master | Spielleiter |
+| Innkeeper (owner role and panel) | Innkeeper |
+| Party (panel heading) | Party |
 
 **Damage types:** Säure, Wucht, Kälte, Feuer, Energie (force), Blitz, Nekrotisch, Stich,
 Gift, Psychisch, Gleissend (radiant), Hieb, Schall (thunder).
