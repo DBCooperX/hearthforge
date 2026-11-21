@@ -94,6 +94,7 @@ export function synth(ctx: BaseAudioContext, out: AudioNode, event: SfxEvent) {
     case 'level_up': k.arpeggio([523, 659, 784, 1047, 1319], 0.1, 0.6, 0.15, 'triangle'); k.tone(1568, 1568, 0.9, 0.08, 'sine', 0.5); break;
     case 'coins': for (let i = 0; i < 4; i++) { const f = jitter(2600, 0.25); k.tone(f, f * 0.98, 0.25, 0.12, 'sine', i * 0.07 + Math.random() * 0.03, 0.002); k.tone(f * 1.5, f * 1.5, 0.15, 0.05, 'sine', i * 0.07, 0.002); } break;
     case 'click': k.tone(jitter(1300, 0.05), 900, 0.04, 0.12, 'sine'); break;
+    case 'scratch': k.noise(0.3, 0.1, 'bandpass', jitter(2300, 0.3), jitter(1300, 0.3), 0, 0.9, 0.07); k.noise(0.22, 0.04, 'highpass', 5500, 7500, 0.02, 0.6, 0.05); break;
     case 'turn': k.tone(784, 784, 0.3, 0.12, 'sine'); k.tone(1047, 1047, 0.4, 0.1, 'sine', 0.12); break;
   }
 }

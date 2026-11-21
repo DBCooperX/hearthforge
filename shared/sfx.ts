@@ -4,7 +4,7 @@ import type { LogEntry, RollInfo } from './types';
 export const SFX_EVENTS = [
   'hit_slash', 'hit_pierce', 'hit_blunt', 'hit_crit', 'miss', 'shot', 'shot_hit',
   'spell_fire', 'spell_frost', 'spell_shock', 'spell_shadow', 'spell_holy', 'spell_arcane', 'spell_nature',
-  'hurt', 'heal', 'monster_death', 'hero_down', 'footstep', 'combat_start', 'victory', 'defeat', 'level_up', 'coins', 'click', 'turn',
+  'hurt', 'heal', 'monster_death', 'hero_down', 'footstep', 'combat_start', 'victory', 'defeat', 'level_up', 'coins', 'click', 'turn', 'scratch',
 ] as const;
 export type SfxEvent = (typeof SFX_EVENTS)[number];
 
