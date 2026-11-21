@@ -234,6 +234,10 @@ export interface Character {
   resist: string[];
   /** How the hero is drawn in portraits and on the battle map. */
   look: HeroLook;
+  /** The painted portrait of this hero (/pictures/<id>), made from the look below. Missing: the drawn bust is used. */
+  portraitId?: string | null;
+  /** What the portrait was painted from, so a changed look gets a new one. */
+  portraitKey?: string;
   appearance: string;
   backstory: string;
   /** Level-up choices the player has not made yet. */
@@ -489,8 +493,10 @@ export interface SceneMeta {
   mood: Mood;
   /** Suggested next actions, shown as chips under the newest card. */
   actions: string[];
-  /** Reserved for phase 3: id of a generated image for this scene. */
+  /** Id of the illustration painted for this scene, or null. Loaded from /pictures/<id>. */
   imageId: string | null;
+  /** True while that illustration is being painted. */
+  painting?: boolean;
   /** Where the scene plays, such as "Zollhaus, upper floor". Missing in saves from before scene headers. */
   where?: string;
   /** Time of day when it played: dawn, morning, afternoon, evening or night. */

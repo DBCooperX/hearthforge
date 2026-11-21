@@ -13,6 +13,7 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
       '/art': 'http://localhost:3000',
       '/music': 'http://localhost:3000',
+      '/pictures': 'http://localhost:3000',
     },
   },
 });

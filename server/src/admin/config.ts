@@ -101,7 +101,7 @@ export class Config {
   /** True when a saved change is waiting for a restart. */
   get pending(): boolean {
     const next = this.merged();
-    return SETTINGS.some((d) => (next[d.key] ?? '') !== (this.env[d.key] ?? ''));
+    return SETTINGS.some((d) => !d.live && (next[d.key] ?? '') !== (this.env[d.key] ?? ''));
   }
 
   list(): SettingValue[] {
@@ -115,7 +115,7 @@ export class Config {
         value: def.kind === 'secret' ? mask(raw) : value,
         source: own ? 'panel' : raw ? 'env' : 'default',
         set: !!raw,
-        pending: raw !== (this.env[def.key] ?? ''),
+        pending: !def.live && raw !== (this.env[def.key] ?? ''),
       };
     });
   }
