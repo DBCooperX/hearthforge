@@ -10,9 +10,9 @@ import {
 } from '../../shared/illustrations';
 import { readJson, writePrivate } from './admin/config';
 import { PAINTERS, PictureFailure, type PaintRequest } from './pictureServices';
-import { monsterFigurePrompt, picturePrompt, portraitKey, portraitPrompt, type PictureAsk } from './game/pictures';
+import { monsterFigurePrompt, npcPortraitKey, npcPortraitPrompt, picturePrompt, portraitKey, portraitPrompt, type PictureAsk } from './game/pictures';
 import { baseLook } from '../../shared/monsterLook';
-import type { Character } from '../../shared/types';
+import type { Character, Npc } from '../../shared/types';
 
 export class PictureError extends Error {
   constructor(readonly code: 'bad_request' | 'no_key' | 'refused' | 'failed' | 'busy' | 'not_found') { super(code); }
@@ -54,6 +54,8 @@ export class Illustrator {
   private busy = new Set<string>();
   /** Portraits that failed in this run, by hero and look, so a refusal is not paid for again and again. */
   private failedPortraits = new Set<string>();
+  /** The same for the portraits of people the party met, by table, person and look. */
+  private failedNpcs = new Set<string>();
   private lastError = '';
   /** The newest painted figure of each subject. */
   private figures = new Map<string, string>();
@@ -147,7 +149,7 @@ export class Illustrator {
     if (!this.key(c.provider)) return 'no_key';
     if (!c.moments[moment]) return 'moment';
     if (this.busy.has(table)) return 'busy';
-    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait' && p.moment !== 'figure');
+    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait' && p.moment !== 'npc' && p.moment !== 'figure');
     const today = dayOf(this.now());
     if (mine.filter((p) => dayOf(p.at) === today).length >= c.perTableDay) return 'day';
     const last = mine.reduce((n, p) => Math.max(n, p.at), 0);
@@ -166,7 +168,7 @@ export class Illustrator {
   private refsFor(table: string, max: number, portraits: string[] = []): PaintRequest['refs'] {
     if (max <= 0) return [];
     const out: PaintRequest['refs'] = [];
-    const ordered = [...portraits.map((id) => this.index.find((p) => p.id === id)).filter((p): p is Stored => !!p), ...[...this.index].reverse().filter((p) => p.table === table && p.moment !== 'portrait' && p.moment !== 'figure')];
+    const ordered = [...portraits.map((id) => this.index.find((p) => p.id === id)).filter((p): p is Stored => !!p), ...[...this.index].reverse().filter((p) => p.table === table && p.moment !== 'portrait' && p.moment !== 'npc' && p.moment !== 'figure')];
     for (const p of ordered) {
       const file = join(this.dir, p.file);
       try { out.push({ mime: p.mime, data: readFileSync(file) }); } catch { continue; }
@@ -244,6 +246,49 @@ export class Illustrator {
       }
       const stored = this.keep(painted, { table: job.table, tableTitle: job.tableTitle, entry: 0, moment: 'portrait', caption: job.hero.name, provider, model, usd: pictureUsd(cfg, provider, model), account: job.account });
       console.log(`[pictures] painted the portrait of ${job.hero.name} (${stored.id}) with ${provider} ${model}`);
+      bill(stored.usd);
+      return { ...view(stored), key: look };
+    } finally {
+      this.busy.delete(busyKey);
+    }
+  }
+
+  /** Why no portrait may be painted for this person now, or null. The limit is per table and day; the table pays. */
+  npcPortraitGate(table: string, n: Pick<Npc, 'id' | 'portraitKey'> & Parameters<typeof npcPortraitKey>[0]): PictureGate | 'npcs' | 'done' | null {
+    const cfg = this.config;
+    if (!cfg.on) return 'off';
+    if (!cfg.npcPortraits) return 'npcs';
+    if (!this.key(cfg.provider)) return 'no_key';
+    const look = npcPortraitKey(n);
+    if (!look || n.portraitKey === look) return 'done';
+    if (this.busy.has(`npc:${table}:${n.id}`) || this.failedNpcs.has(`${table}|${n.id}|${look}`)) return 'busy';
+    const today = dayOf(this.now());
+    if (this.index.filter((p) => p.moment === 'npc' && p.table === table && dayOf(p.at) === today).length >= cfg.npcPortraitsPerDay) return 'day';
+    if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
+    return null;
+  }
+
+  /** Paint the portrait of a person the party met, in the one portrait style the heroes share. */
+  async paintNpcPortrait(job: { table: string; tableTitle: string; npc: Npc }, bill: (usd: number) => void): Promise<PictureInfo & { key: string }> {
+    const cfg = this.config;
+    const provider = cfg.provider, model = this.model, key = this.key(provider);
+    const look = npcPortraitKey(job.npc);
+    if (!key) throw new PictureError('no_key');
+    const busyKey = `npc:${job.table}:${job.npc.id}`;
+    if (this.busy.has(busyKey)) throw new PictureError('busy');
+    this.busy.add(busyKey);
+    try {
+      let painted;
+      try {
+        painted = await PAINTERS[provider](this.fetchFn, model, key, { prompt: npcPortraitPrompt(PORTRAIT_STYLE, job.npc), refs: [], square: true });
+      } catch (err) {
+        this.failedNpcs.add(`${job.table}|${job.npc.id}|${look}`);
+        this.lastError = err instanceof Error ? err.message : String(err);
+        console.warn(`[pictures] portrait of ${job.npc.name}: ${this.lastError}`);
+        throw new PictureError(err instanceof PictureFailure ? err.code : 'failed');
+      }
+      const stored = this.keep(painted, { table: job.table, tableTitle: job.tableTitle, entry: 0, moment: 'npc', caption: job.npc.name, provider, model, usd: pictureUsd(cfg, provider, model) });
+      console.log(`[pictures] painted the portrait of ${job.npc.name} (${stored.id}) for ${job.table} with ${provider} ${model}`);
       bill(stored.usd);
       return { ...view(stored), key: look };
     } finally {
@@ -377,6 +422,8 @@ export function cleanConfig(raw: Partial<PictureConfig>, base: PictureConfig): P
     style: PICTURE_STYLES.includes(r.style) ? r.style : base.style,
     portraits: typeof r.portraits === 'boolean' ? r.portraits : base.portraits ?? true,
     portraitsPerDay: bound(r.portraitsPerDay, 0, 20, base.portraitsPerDay ?? 3),
+    npcPortraits: typeof r.npcPortraits === 'boolean' ? r.npcPortraits : base.npcPortraits ?? true,
+    npcPortraitsPerDay: bound(r.npcPortraitsPerDay, 0, 50, base.npcPortraitsPerDay ?? 6),
     figures: typeof r.figures === 'boolean' ? r.figures : base.figures ?? true,
     figuresPerDay: bound(r.figuresPerDay, 0, 200, base.figuresPerDay ?? 20),
     customStyle: typeof r.customStyle === 'string' ? r.customStyle.replace(/\s+/g, ' ').trim().slice(0, 600) : base.customStyle,

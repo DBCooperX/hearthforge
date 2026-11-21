@@ -148,6 +148,15 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
       </section>
 
       <section>
+        <h3>{t('Portraits of people')}</h3>
+        <label className="inn-switch">
+          <input type="checkbox" checked={c.npcPortraits} onChange={(e) => edit({ npcPortraits: e.target.checked })} />
+          <span><b>{t('Paint a portrait of every person the party meets')}</b><br /><span className="muted small">{t('When the Dungeon Master first introduces a named person, a small portrait is painted in the same style as the hero portraits. It shows on the hover card of their name and in the journal, goes along to every scene picture they are in, and is the model for their battle figure if they end up fighting. Paid by the table, like the scene pictures.')}</span></span>
+        </label>
+        {num(t('Portraits of people per table and day'), c.npcPortraitsPerDay, '1', (n) => edit({ npcPortraitsPerDay: n }))}
+      </section>
+
+      <section>
         <h3>{t('Battle figures')}</h3>
         <label className="inn-switch">
           <input type="checkbox" checked={c.figures} onChange={(e) => edit({ figures: e.target.checked })} />
@@ -191,7 +200,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
             {lib.recent.map((p) => (
               <li key={p.id}>
                 <button type="button" className={`picture-thumb${p.moment === 'figure' ? ' figure' : ''}`} onClick={() => setOpen(p)} title={p.caption}>{p.moment === 'figure' ? <FigureImg url={p.url} alt={p.caption} /> : <img src={p.url} alt={p.caption} loading="lazy" />}</button>
-                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' || p.moment === 'figure' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : p.moment === 'figure' ? t('Battle figure') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
+                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' || p.moment === 'npc' || p.moment === 'figure' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : p.moment === 'npc' ? t('Portrait of a person') : p.moment === 'figure' ? t('Battle figure') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
                 <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
                 {p.moment === 'figure' && <button type="button" className="link" disabled={!!busy || !hasKey} onClick={() => { void ask(t('Repaint this battle figure? It is painted anew now, and the picture is billed like any other.')).then((yes) => { if (yes) void act({ do: 'repaint', id: p.id }); }); }}>{t('Repaint')}</button>}
                 <button type="button" className="link danger" onClick={() => { void ask(p.moment === 'figure' ? t('Delete this battle figure? The drawn one stands in until it is painted anew.') : t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>

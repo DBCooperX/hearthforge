@@ -21,6 +21,7 @@ import { SESSION_HEADER } from './accountApi';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
 import { JoinError } from './game/engine';
+import type { MonsterLook } from '../../shared/monsterLook';
 import { DEFAULT_TIMING, Room, type RoomHooks } from './room';
 import { MONSTERS } from './data/monsters';
 import type { AdminConnection } from '../../shared/admin';
@@ -36,7 +37,7 @@ import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
-import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, portraitKey, tallFigure } from './game/pictures';
+import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, npcFigurePrompt, npcFigureSubject, npcPortraitKey, portraitKey, tallFigure } from './game/pictures';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -241,17 +242,34 @@ const hooks: RoomHooks = {
         })
         .catch(() => {});
     },
+    npcPortrait: (room, npc) => {
+      // Paid by the table, like the pictures of the story. Nothing is started for players whose credit is used up.
+      if (illustrator.npcPortraitGate(room.name, npc) || payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); })) return;
+      illustrator.paintNpcPortrait({ table: room.name, tableTitle: room.game.s.table.title, npc }, (usd) => bill(room.name, usd, 'images'))
+        .then((p) => {
+          const now = room.game.s.memory.npcs.find((n) => n.id === npc.id);
+          // Their looks may have changed while it was painted; then the next flush asks for another.
+          if (now && npcPortraitKey(now) === p.key) { now.portraitId = p.id; now.portraitKey = p.key; room.flush(); }
+        })
+        .catch(() => {});
+    },
     figure: (subject) => illustrator.figure(subject),
     figures: (room) => paintFigures(room),
   },
 };
+
+/** The figure subject of a monster that is a named person with a portrait, or null. */
+function npcSubjectOf(room: Room, m: { name: string; defId: string; look?: MonsterLook }): string | null {
+  const npc = room.game.npcOfMonster(m);
+  return npc ? npcFigureSubject(npc, m.look ?? MONSTERS[m.defId].look) : null;
+}
 
 /** Tables showing a figure get it as soon as it is painted; a monster's figure is shared by every table. */
 function figureArrived(subject: string) {
   for (const r of rooms.values()) {
     const s = r.game.s;
     const here = s.characters.some((c) => heroFigureSubject(c) === subject)
-      || s.monsters.some((m) => m.alive && monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === subject);
+      || s.monsters.some((m) => m.alive && (monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === subject || npcSubjectOf(r, m) === subject));
     if (here && s.players.some((p) => p.connected)) r.flush();
   }
 }
@@ -279,6 +297,18 @@ function paintFigures(room: Room) {
     const def = MONSTERS[m.defId];
     if (!def) continue;
     const look = m.look ?? def.look;
+    // A person the party met fights as themselves, painted from their portrait; the table pays for it.
+    const person = room.game.npcOfMonster(m);
+    const personSubject = person ? npcFigureSubject(person, look) : null;
+    if (person && personSubject) {
+      if (asked.has(personSubject) || illustrator.figureGate(personSubject)) continue;
+      asked.add(personSubject);
+      if (broke()) return;
+      const { prompt, key } = npcFigurePrompt(person, look);
+      illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject: personSubject, caption: person.name, prompt, key, tall: true, portraitId: person.portraitId! }, (usd) => bill(room.name, usd, 'images'))
+        .then(() => figureArrived(personSubject)).catch(() => {});
+      continue;
+    }
     const subject = monsterFigureSubject(m.defId, look);
     if (asked.has(subject) || illustrator.figureGate(subject)) continue;
     asked.add(subject);
@@ -664,7 +694,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         if (repaint) {
           for (const r of rooms.values()) {
             const s = r.game.s;
-            if (s.phase === 'combat' && (s.characters.some((c) => heroFigureSubject(c) === gone.subject) || s.monsters.some((m) => m.alive && monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === gone.subject))) paintFigures(r);
+            if (s.phase === 'combat' && (s.characters.some((c) => heroFigureSubject(c) === gone.subject) || s.monsters.some((m) => m.alive && monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === gone.subject || npcSubjectOf(r, m) === gone.subject))) paintFigures(r);
           }
         }
       }
@@ -673,6 +703,9 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         for (const r of rooms.values()) {
           const hero = r.game.s.characters.find((c) => c.portraitId === body.id);
           if (hero) { hero.portraitId = null; r.flush(); }
+          // A deleted portrait of a person the party met is painted anew the next time they come up.
+          const person = r.game.s.memory.npcs.find((n) => n.portraitId === body.id);
+          if (person) { person.portraitId = null; person.portraitKey = undefined; r.flush(); }
         }
       }
       const room = done.removed ? rooms.get(done.removed.table) : null;

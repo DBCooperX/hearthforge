@@ -664,6 +664,10 @@ export interface Npc {
   notes: string[];
   origin: 'seed' | 'dm';
   visual: VisualBible;
+  /** The painted portrait of this person (/pictures/<id>). Missing: the wax seal with their initial is shown. */
+  portraitId?: string | null;
+  /** What the portrait was painted from, so a changed appearance gets a new one. */
+  portraitKey?: string;
 }
 
 /** Someone in the current scene. Only people the party has met by name have an id, a role and a disposition. */
