@@ -1006,6 +1006,8 @@ export const DE: Record<string, string> = {
   "{name}'s table": 'Tisch von {name}',
   'Players': 'Spieler',
   'Solo': 'Allein',
+  'Multiplayer': 'Mehrspieler',
+  'Click to rename this table': 'Klick, um den Tisch umzubenennen',
   'Only with an invite code': 'Nur mit Einladungscode',
   'Open the table': 'Tisch eröffnen',
   'Cancel': 'Abbrechen',

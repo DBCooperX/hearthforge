@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Playtest fixes
+- **Renaming a table is easy to find.** The table name in the lobby now has a pencil and can be clicked to rename it (hosts and the Innkeeper). The Rename link is easier to read on the parchment.
+- **Solo and multiplayer tables are listed apart.** The lobby groups tables into Multiplayer and Solo, each with the most recently played first.
 - **Tidy names.** Place names on the zone map no longer overlap: long names are cut short, each name takes a free spot around its place, and one that still finds no room shows when you point at the place. Long hero names are cut with a dot-dot-dot in the party panel and on the battle nameplate, which shows the first name.
 - **Table talk is a window.** Drag it by its title bar; it stays where you left it (double-click the title bar to put it back).
 - **Two-weapon fighting.** A light melee weapon (dagger, shortsword, scimitar, handaxe) can go in the off hand next to another light weapon. After attacking, the new Off-hand attack button spends the bonus action on a second strike without the ability modifier.

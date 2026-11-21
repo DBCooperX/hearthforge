@@ -125,6 +125,8 @@ export class Room {
     this.timing = { ...DEFAULT_TIMING, ...timing };
     const saved = store.load(name);
     this.game = new Game(name, Math.random, saved);
+    const savedAt = Date.parse(store.info?.().find((i) => i.room === name)?.savedAt ?? '');
+    this.lastPlayed = Number.isFinite(savedAt) ? savedAt : Date.now();
     this.game.interactiveReactions = this.timing.reactionWaitMs > 0;
     this.game.reactionWaitMs = this.timing.reactionWaitMs;
     for (const p of this.game.s.players) p.connected = false;
@@ -219,6 +221,9 @@ export class Room {
 
   get empty() { return this.sockets.size === 0; }
 
+  /** When this table last changed (saved), in milliseconds since the epoch. The lobby sorts by it. */
+  lastPlayed = 0;
+
   /** What the lobby shows about this table. */
   summary(): TableSummary {
     const s = this.game.s;
@@ -232,6 +237,7 @@ export class Room {
       locked: !!s.table.code,
       heroes: s.characters.length,
       hostId: s.hostId,
+      lastPlayed: this.lastPlayed,
     };
   }
 
@@ -378,6 +384,7 @@ export class Room {
   /** Push pending movement animations and the latest state to everyone, then persist. */
   flush() {
     if (this.closed) return;
+    this.lastPlayed = Date.now();
     const moves = this.game.takeMoves();
     const portrait = this.hooks.pictures?.portrait;
     if (portrait) for (const c of this.game.s.characters) if (!c.dead && c.portraitKey !== portraitKey(c)) portrait(this, c);

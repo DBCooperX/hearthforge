@@ -39,6 +39,13 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   const [seats, setSeats] = useState(MAX_SEATS);
   const me = name.replace(/\s+/g, ' ').trim();
   const tables = conn.tables ?? [];
+  /** Solo tables (one seat) and multiplayer tables, each the most recently played first. Without both kinds there is one plain list. */
+  const groups = useMemo(() => {
+    const byRecent = (a: TableSummary, b: TableSummary) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0);
+    const multi = tables.filter((x) => x.maxPlayers > 1).sort(byRecent);
+    const solo = tables.filter((x) => x.maxPlayers <= 1).sort(byRecent);
+    return [{ id: 'multi', label: t('Multiplayer'), list: multi }, { id: 'solo', label: t('Solo'), list: solo }].filter((g) => g.list.length > 0);
+  }, [tables, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The table being renamed or deleted from this list, and what has been typed so far. */
   const [editing, setEditing] = useState<{ id: string; mode: 'rename' | 'delete'; text: string } | null>(null);
   const [binError, setBinError] = useState('');
@@ -100,15 +107,25 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
 
         <h2>{t('Tables')}</h2>
         {conn.tables && tables.length === 0 && <p className="muted">{t('Nobody has opened a table yet. Open the first one below.')}</p>}
+        {groups.map((g) => (
+        <section key={g.id} className="table-group" aria-label={g.label}>
+        {groups.length > 1 && <h3 className="table-group-title">{g.label} <span className="muted">({g.list.length})</span></h3>}
         <ul className="tables">
-          {tables.map((tb) => {
+          {g.list.map((tb) => {
             const mine = tb.players.some((p) => p.id === playerId);
             const full = !mine && tb.players.length >= tb.maxPlayers;
             const clash = !mine && !!me && tb.players.some((p) => p.name.toLocaleLowerCase() === me.toLocaleLowerCase());
             return (
               <li key={tb.id} className={['table-card', mine && 'mine', tb.id === link.room && 'invited'].filter(Boolean).join(' ')}>
                 <div className="table-head">
-                  <b>{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}{tb.title}</b>
+                  <b>{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}
+                    {mayManage(tb) ? (
+                      <button type="button" className="table-name" disabled={!conn.connected} title={t('Click to rename this table')} aria-label={`${t('Rename')}: ${tb.title}`}
+                        onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>
+                        {tb.title} <span className="pencil" aria-hidden="true">✏️</span>
+                      </button>
+                    ) : tb.title}
+                  </b>
                   <span className={tb.playing ? 'status playing' : 'status'}>{tb.playing ? t('Adventure under way') : t('Gathering the party')}</span>
                 </div>
                 <div className="table-meta">
@@ -144,7 +161,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                       </form>
                     ) : (
                       <span className="row">
-                        <button type="button" className="link" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>{t('Rename')}</button>
+                        <button type="button" className="link" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>✏️ {t('Rename')}</button>
                         <button type="button" className="link danger" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'delete', text: '' })}>{t('Delete the table')}</button>
                       </span>
                     )}
@@ -165,6 +182,8 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
             );
           })}
         </ul>
+        </section>
+        ))}
 
         {binError && <p className="notice error" role="alert">{binError}</p>}
         <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />

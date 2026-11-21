@@ -16,6 +16,12 @@
 .table-card.invited { box-shadow: 0 0 0 2px var(--ember), 0 0 18px rgba(238, 143, 60, 0.45), inset 0 0 22px rgba(120, 80, 30, 0.22); }
 .table-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; }
 .table-head b { font-family: var(--font-head); font-size: 18px; color: #4a2c10; overflow-wrap: anywhere; }
+.table-group { display: grid; gap: 8px; }
+.table-group-title { margin: 6px 0 0; font-family: var(--font-head); font-size: 16px; color: var(--gold); letter-spacing: 0.04em; }
+.table-name { all: unset; cursor: pointer; font: inherit; color: inherit; overflow-wrap: anywhere; border-bottom: 1px dashed rgba(74, 44, 16, 0.5); }
+.table-name:hover, .table-name:focus-visible { border-bottom-style: solid; color: #8a3a10; }
+.table-name:disabled { cursor: default; }
+.table-name .pencil { font-size: 14px; margin-left: 2px; }
 .status { margin-left: auto; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #3f6b34; white-space: nowrap; }
 .status.playing { color: #9a4a16; }
 .table-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--ink-soft); }
@@ -127,3 +133,9 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
 .chat-drag { display: flex; flex: 1; min-width: 0; }
 .chat-float .chat > header { cursor: grab; touch-action: none; user-select: none; }
 .chat-float .chat > header:active { cursor: grabbing; }
+
+/* The rename and delete links sit on parchment, so they need dark ink to be seen. */
+.table-manage .link { color: #6a3a10; text-decoration: underline; opacity: 1; }
+.table-manage .link.danger { color: #9a2f1c; }
+.table-manage .link:disabled { opacity: 0.5; }
+.table-manage input { color: #f1e4c8; }
