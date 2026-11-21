@@ -2,7 +2,8 @@
 // whether a picture may be painted, and the scene card written in the same reply gets it. Who is in the picture is
 // described from the fixed facts the game keeps (a hero's species, class and looks; a person's appearance), so the
 // heroes look the same from one picture to the next even before earlier pictures are passed along.
-import { PICTURE_GATES, PICTURE_MOMENTS, type PictureMoment } from '../../../shared/illustrations';
+import { FIGURE_STYLE, PICTURE_GATES, PICTURE_MOMENTS, figureBackdrop, type FigureKey, type PictureMoment } from '../../../shared/illustrations';
+import { lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { LOOK_NAMES, heroLook } from '../../../shared/heroLook';
 import { SPECIES } from '../../../shared/rules';
 import type { Game } from './engine';
@@ -25,6 +26,8 @@ export interface PictureHooks {
   gate(moment: PictureMoment): keyof typeof PICTURE_GATES | null;
   /** Paint it for this story entry. Runs in the background; the entry is updated when it is done. */
   paint(entryId: number, ask: PictureAsk): void;
+  /** The painted battle figure for a subject (see heroFigureSubject), if there is one and figures are on. */
+  figure?(subject: string): string | null;
 }
 
 const clean = (raw: unknown, max: number) => String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -138,4 +141,65 @@ export function placePictureHint(game: Game): Record<string, string> {
   const hooks = game.pictures;
   if (!game.newPlace || !hooks || game.s.phase === 'combat' || hooks.gate('place')) return {};
   return { picture_available: `The party is at ${game.newPlace.name} for the first time. You may call illustrate once with moment "place" to show it, before scene, with the place as the painter sees it from where the party stands.` };
+}
+
+// --- Battle figures --------------------------------------------------------------------------------------------------
+
+/** What a hero's battle figure is painted from: their portrait. No portrait, no painted figure. */
+export function heroFigureSubject(c: Pick<Character, 'id' | 'portraitId'>): string | null {
+  return c.portraitId ? `h:${c.id}|${c.portraitId}` : null;
+}
+
+/** A monster's figure is shared by every monster of the same kind and look, on every table of the server. */
+export function monsterFigureSubject(defId: string, look: MonsterLook): string {
+  return `m:${defId}|${lookKey(look)}`;
+}
+
+/** Green is the key colour for figures that are pink or purple themselves, magenta for the rest. */
+const keyFor = (color: string): FigureKey => (/pink|purple|magenta|violet/i.test(color) ? 'green' : 'magenta');
+
+/** The prompt for a hero's battle figure. The hero's portrait goes along as the only reference. */
+export function heroFigurePrompt(c: Character): { prompt: string; key: FigureKey } {
+  const key = keyFor(heroLook(c).color);
+  return {
+    key,
+    prompt: [
+      `Style: ${FIGURE_STYLE}`,
+      `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
+      'The attached image is this hero\'s painted portrait. Paint the very same person, now standing at full length: the same face, skin, hair, beard, build, colours and clothes, with the gear of the class (armour, robes, holy symbol, bow, staff) held ready but not covering the face. Standing upright on both feet, in a calm, ready stance.',
+      figureBackdrop(key),
+    ].join('\n\n'),
+  };
+}
+
+const LOOK_WORDS = {
+  heads: (n: number) => (n > 1 ? `${n} heads` : ''),
+  arms: (n: number) => (n > 2 ? `${n} arms` : ''),
+};
+
+/** A monster's look in words for the image model. */
+function describeLook(l: MonsterLook): string {
+  const bits = [
+    LOOK_WORDS.heads(l.heads), LOOK_WORDS.arms(l.arms), l.horns ? 'horns' : '', l.tail ? 'a tail' : '',
+    l.wings ? `${l.wings === 'bat' ? 'leathery bat' : 'feathered'} wings` : '', l.eyes ? `glowing ${l.eyes} eyes` : '',
+    l.armor ? `${l.armor === 'plate' ? 'heavy plate' : 'leather'} armour` : '', l.weapon ? `wielding a ${l.weapon}` : '',
+    l.aura ? `a faint ${l.aura} aura close around it` : '', l.mutation ? `${l.mutation} body` : '',
+  ].filter(Boolean);
+  return `${l.size} ${l.body === 'humanoid' ? 'humanoid' : l.body} build, mostly ${l.color}${bits.length ? `, with ${bits.join(', ')}` : ''}`;
+}
+
+/** Bodies that stand upright get a tall picture; the rest a square one. */
+export const tallBody = (l: MonsterLook) => ['humanoid', 'giant', 'ghost', 'elemental', 'construct'].includes(l.body);
+
+/** The prompt for a monster's battle figure, from its SRD name and its look. Its stats never change what is drawn. */
+export function monsterFigurePrompt(name: string, kind: string, l: MonsterLook): { prompt: string; key: FigureKey } {
+  const key = keyFor(l.color);
+  return {
+    key,
+    prompt: [
+      `Style: ${FIGURE_STYLE}`,
+      `Subject: a ${name} (${kind}) from classic fantasy: ${describeLook(l)}. Menacing and full of character, in an attacking stance, turned toward the viewer.`,
+      figureBackdrop(key),
+    ].join('\n\n'),
+  };
 }

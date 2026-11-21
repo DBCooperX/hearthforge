@@ -6,11 +6,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { join } from 'node:path';
 import {
   DEFAULT_PICTURE_CONFIG, PICTURE_KEYS, PORTRAIT_STYLE, PICTURE_MOMENTS, PICTURE_PROVIDERS, PICTURE_STYLES, STYLE_PROMPTS, pictureRefs, pictureUsd,
-  type PictureConfig, type PictureGate, type PictureInfo, type PictureLibrary, type PictureMoment, type PictureProvider,
+  type FigureKey, type PictureConfig, type PictureGate, type PictureInfo, type PictureLibrary, type PictureMoment, type PictureProvider,
 } from '../../shared/illustrations';
 import { readJson, writePrivate } from './admin/config';
 import { PAINTERS, PictureFailure, type PaintRequest } from './pictureServices';
-import { picturePrompt, portraitKey, portraitPrompt, type PictureAsk } from './game/pictures';
+import { monsterFigurePrompt, picturePrompt, portraitKey, portraitPrompt, type PictureAsk } from './game/pictures';
+import { baseLook } from '../../shared/monsterLook';
 import type { Character } from '../../shared/types';
 
 export class PictureError extends Error {
@@ -54,6 +55,10 @@ export class Illustrator {
   /** Portraits that failed in this run, by hero and look, so a refusal is not paid for again and again. */
   private failedPortraits = new Set<string>();
   private lastError = '';
+  /** The newest painted figure of each subject. */
+  private figures = new Map<string, string>();
+  /** Figures that failed in this run, so a refusal is not paid for again and again. */
+  private failedFigures = new Set<string>();
 
   constructor(private dir: string, private keyOf: (name: string) => string, private fetchFn: typeof fetch = fetch, private now: () => number = Date.now) {
     mkdirSync(dir, { recursive: true });
@@ -62,6 +67,65 @@ export class Illustrator {
     this.config = cleanConfig(readJson<Partial<PictureConfig>>(this.configFile, {}), DEFAULT_PICTURE_CONFIG);
     const saved = readJson<Stored[]>(this.indexFile, []);
     this.index = Array.isArray(saved) ? saved.filter((p) => p && ID.test(p.id) && typeof p.file === 'string') : [];
+    this.indexFigures();
+  }
+
+  private indexFigures() {
+    this.figures.clear();
+    for (const p of this.index) if (p.moment === 'figure' && p.subject) this.figures.set(p.subject, p.id);
+  }
+
+  /** The painted battle figure of a subject, while figures are on. Off, everyone sees the drawn ones again at once. */
+  figure(subject: string): string | null {
+    return this.config.on && this.config.figures ? this.figures.get(subject) ?? null : null;
+  }
+
+  /** Why no figure may be painted for this subject now, or null. Credits are checked by whoever bills. */
+  figureGate(subject: string): PictureGate | 'figures' | 'done' | null {
+    const cfg = this.config;
+    if (!cfg.on) return 'off';
+    if (!cfg.figures) return 'figures';
+    if (!this.key(cfg.provider)) return 'no_key';
+    if (this.figures.has(subject)) return 'done';
+    if (this.busy.has(`figure:${subject}`) || this.failedFigures.has(subject)) return 'busy';
+    const today = dayOf(this.now());
+    if (this.index.filter((p) => p.moment === 'figure' && dayOf(p.at) === today).length >= cfg.figuresPerDay) return 'day';
+    if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
+    return null;
+  }
+
+  /**
+   * Paint a battle figure on a flat key colour. A hero's portrait goes along so the figure is the same person.
+   * Resolves to the picture once it is kept; `bill` is told what it cost.
+   */
+  async paintFigure(job: { table: string; tableTitle: string; subject: string; caption: string; prompt: string; key: FigureKey; tall: boolean; portraitId?: string; account?: string }, bill: (usd: number) => void): Promise<PictureInfo> {
+    const cfg = this.config;
+    const provider = cfg.provider, model = this.model, key = this.key(provider);
+    if (!key) throw new PictureError('no_key');
+    const busyKey = `figure:${job.subject}`;
+    if (this.busy.has(busyKey)) throw new PictureError('busy');
+    this.busy.add(busyKey);
+    try {
+      const portrait = job.portraitId ? this.index.find((p) => p.id === job.portraitId) : null;
+      const refs: PaintRequest['refs'] = [];
+      if (portrait && pictureRefs(provider, model) > 0) { try { refs.push({ mime: portrait.mime, data: readFileSync(join(this.dir, portrait.file)) }); } catch { /* gone: paint from the words */ } }
+      let painted;
+      try {
+        painted = await PAINTERS[provider](this.fetchFn, model, key, { prompt: job.prompt, refs, tall: job.tall, square: !job.tall });
+      } catch (err) {
+        this.failedFigures.add(job.subject);
+        this.lastError = err instanceof Error ? err.message : String(err);
+        console.warn(`[pictures] figure of ${job.caption}: ${this.lastError}`);
+        throw new PictureError(err instanceof PictureFailure ? err.code : 'failed');
+      }
+      const stored = this.keep(painted, { table: job.table, tableTitle: job.tableTitle, entry: 0, moment: 'figure', subject: job.subject, caption: job.caption, provider, model, usd: pictureUsd(cfg, provider, model), ...(job.account ? { account: job.account } : {}), keyColor: job.key });
+      this.figures.set(job.subject, stored.id);
+      console.log(`[pictures] painted the battle figure of ${job.caption} (${stored.id}) with ${provider} ${model}`);
+      bill(stored.usd);
+      return view(stored);
+    } finally {
+      this.busy.delete(busyKey);
+    }
   }
 
   private key(p: PictureProvider) { return this.keyOf(PICTURE_KEYS[p]).trim(); }
@@ -83,7 +147,7 @@ export class Illustrator {
     if (!this.key(c.provider)) return 'no_key';
     if (!c.moments[moment]) return 'moment';
     if (this.busy.has(table)) return 'busy';
-    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait');
+    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait' && p.moment !== 'figure');
     const today = dayOf(this.now());
     if (mine.filter((p) => dayOf(p.at) === today).length >= c.perTableDay) return 'day';
     const last = mine.reduce((n, p) => Math.max(n, p.at), 0);
@@ -102,7 +166,7 @@ export class Illustrator {
   private refsFor(table: string, max: number, portraits: string[] = []): PaintRequest['refs'] {
     if (max <= 0) return [];
     const out: PaintRequest['refs'] = [];
-    const ordered = [...portraits.map((id) => this.index.find((p) => p.id === id)).filter((p): p is Stored => !!p), ...[...this.index].reverse().filter((p) => p.table === table && p.moment !== 'portrait')];
+    const ordered = [...portraits.map((id) => this.index.find((p) => p.id === id)).filter((p): p is Stored => !!p), ...[...this.index].reverse().filter((p) => p.table === table && p.moment !== 'portrait' && p.moment !== 'figure')];
     for (const p of ordered) {
       const file = join(this.dir, p.file);
       try { out.push({ mime: p.mime, data: readFileSync(file) }); } catch { continue; }
@@ -194,7 +258,7 @@ export class Illustrator {
     writeFileSync(join(this.dir, file), painted.data);
     const stored: Stored = { ...info, id, at: this.now(), file, mime: EXT[painted.mime] ? painted.mime : 'image/png' };
     this.index.push(stored);
-    if (this.index.length > MAX_INDEX) this.index.splice(0, this.index.length - MAX_INDEX);
+    if (this.index.length > MAX_INDEX) { this.index.splice(0, this.index.length - MAX_INDEX); this.indexFigures(); }
     this.save();
     this.lastError = '';
     return stored;
@@ -212,6 +276,24 @@ export class Illustrator {
     const stored = this.index.find((x) => x.id === p.id);
     if (stored) { stored.moment = 'sample'; this.save(); }
     return { ...p, moment: 'sample' };
+  }
+
+  /** A test battle figure, a goblin, for the Innkeeper. It does not stand in for real goblins. */
+  async sampleFigure(bill: (usd: number) => void): Promise<PictureInfo> {
+    const look = baseLook('humanoid', 'small', 'green', { weapon: 'sword', armor: 'leather' });
+    const { prompt, key } = monsterFigurePrompt('Goblin', 'humanoid', look);
+    const subject = `sample:${randomBytes(4).toString('hex')}`;
+    const p = await this.paintFigure({ table: 'sample', tableTitle: '', subject, caption: 'Goblin', prompt, key, tall: true }, bill);
+    const stored = this.index.find((x) => x.id === p.id);
+    if (stored) { stored.moment = 'sample'; this.save(); }
+    this.figures.delete(subject);
+    return { ...p, moment: 'sample' };
+  }
+
+  /** One picture, by id. */
+  info(id: string): PictureInfo | null {
+    const p = this.index.find((x) => x.id === id);
+    return p ? view(p) : null;
   }
 
   /** The file of a picture, for serving it. */
@@ -249,6 +331,7 @@ export class Illustrator {
       const [p] = this.index.splice(at, 1);
       rmSync(join(this.dir, p.file), { force: true });
       this.save();
+      if (p.moment === 'figure') { this.indexFigures(); if (p.subject) this.failedFigures.delete(p.subject); }
       return { removed: { table: p.table, entry: p.entry } };
     }
     throw new PictureError('bad_request');
@@ -294,6 +377,8 @@ export function cleanConfig(raw: Partial<PictureConfig>, base: PictureConfig): P
     style: PICTURE_STYLES.includes(r.style) ? r.style : base.style,
     portraits: typeof r.portraits === 'boolean' ? r.portraits : base.portraits ?? true,
     portraitsPerDay: bound(r.portraitsPerDay, 0, 20, base.portraitsPerDay ?? 3),
+    figures: typeof r.figures === 'boolean' ? r.figures : base.figures ?? true,
+    figuresPerDay: bound(r.figuresPerDay, 0, 200, base.figuresPerDay ?? 20),
     customStyle: typeof r.customStyle === 'string' ? r.customStyle.replace(/\s+/g, ' ').trim().slice(0, 600) : base.customStyle,
     moments,
     perTableDay: bound(r.perTableDay, 0, 50, base.perTableDay),

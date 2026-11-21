@@ -240,6 +240,8 @@ export interface Character {
   portraitId?: string | null;
   /** What the portrait was painted from, so a changed look gets a new one. */
   portraitKey?: string;
+  /** The painted battle figure (/pictures/<id>), made from the portrait. Only in the state sent to players. */
+  figureId?: string | null;
   appearance: string;
   backstory: string;
   /** Level-up choices the player has not made yet. */

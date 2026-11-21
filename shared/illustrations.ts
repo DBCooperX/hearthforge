@@ -94,6 +94,23 @@ export const STYLE_PROMPTS: Record<Exclude<PictureStyle, 'custom'>, string> = {
  */
 export const PORTRAIT_STYLE = 'Painted fantasy character portrait for a dark-fantasy tavern game: head and shoulders, three-quarter view, face fully visible and centred, looking just past the viewer. Painterly oil brushwork over a fine ink underdrawing, rich but muted colours in warm candlelit tones of amber, ember orange, deep brown and the character\'s own colours, soft rim light, a dark smoky background with a faint warm glow behind the head. Square format, the head in the middle third, nothing important near the corners because the picture is shown in a round frame.';
 
+/**
+ * Battle figures: the miniatures on the battle map, painted once and reused. A hero's figure is painted from their
+ * portrait, so the two match; a monster is painted once per kind and look for the whole server. The image models
+ * cannot paint a transparent background, so they paint on one flat key colour that the browser takes out again.
+ */
+export const FIGURE_STYLE = 'A single painted fantasy miniature figure for a tabletop battle map, in the same painterly look as Hearthforge\'s hero portraits: oil brushwork over a fine ink underdrawing, rich but muted colours, warm candlelit key light from the upper left, a crisp clean silhouette with a thin dark outline so it reads from far away. The whole body from head to feet (or claws, tail and wingtips), nothing cut off by the edge, a small margin all round, centred. Seen from the front at a slight three-quarter turn and slightly from above, as a player looks down at a miniature on the table.';
+
+/** The flat colour figures are painted on, named for the image model, and its value for the browser. */
+export const FIGURE_KEYS = {
+  magenta: { words: 'pure magenta (#FF00FF)', rgb: [255, 0, 255] },
+  green: { words: 'pure chroma green (#00FF00)', rgb: [0, 255, 0] },
+} as const;
+export type FigureKey = keyof typeof FIGURE_KEYS;
+
+/** The background part of every figure prompt. */
+export const figureBackdrop = (key: FigureKey) => `Background: one perfectly flat, uniform ${FIGURE_KEYS[key].words} colour filling the whole image edge to edge, no gradient, no texture, no vignette. No floor, no ground, no cast shadow, no base, no pedestal, no scenery. Do not use that background colour anywhere on the figure. No text, no letters, no frame, no border, no watermark, no signature.`;
+
 /** How the Innkeeper set illustrations up. Kept in the data folder; changes apply at once. */
 export interface PictureConfig {
   on: boolean;
@@ -109,6 +126,10 @@ export interface PictureConfig {
   portraits: boolean;
   /** At most this many portraits per account and day, so trying looks does not run up a bill. */
   portraitsPerDay: number;
+  /** Paint battle figures for heroes (from their portraits) and for each kind of monster. */
+  figures: boolean;
+  /** At most this many new battle figures per day for the whole server. */
+  figuresPerDay: number;
   /** At most this many pictures per table and day (real days, counted from midnight). */
   perTableDay: number;
   /** At least this many minutes between two pictures at one table. */
@@ -127,6 +148,8 @@ export const DEFAULT_PICTURE_CONFIG: PictureConfig = {
   customStyle: '',
   portraits: true,
   portraitsPerDay: 3,
+  figures: true,
+  figuresPerDay: 20,
   moments: { boss: true, victory: true, reveal: true, opening: false, place: true, farewell: false },
   perTableDay: 4,
   gapMinutes: 20,
@@ -153,7 +176,11 @@ export interface PictureInfo {
   table: string;
   tableTitle: string;
   entry: number;
-  moment: PictureMoment | 'sample' | 'portrait';
+  moment: PictureMoment | 'sample' | 'portrait' | 'figure';
+  /** For a battle figure: what it shows ("h:<hero>|<portrait>" or "m:<monster>|<look>"). */
+  subject?: string;
+  /** For a battle figure: the flat colour it was painted on, which the browser takes out. */
+  keyColor?: FigureKey;
   /** What the Dungeon Master asked to be shown, in English. */
   caption: string;
   provider: PictureProvider;

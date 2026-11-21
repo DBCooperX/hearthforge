@@ -82,7 +82,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
-import type { PictureAsk, PictureHooks } from './pictures';
+import { heroFigureSubject, monsterFigureSubject, type PictureAsk, type PictureHooks } from './pictures';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
@@ -5854,6 +5854,20 @@ export class Game {
     (this.s.sneaks ??= {})[c.id] = { total: 30, at: this.world.minutes };
   }
 
+  /** A hero as players see them: with the painted battle figure, when there is one. */
+  private withFigure(c: Character): Character {
+    const subject = heroFigureSubject(c);
+    const id = subject ? this.pictures?.figure?.(subject) ?? null : null;
+    return id ? { ...c, figureId: id } : c;
+  }
+
+  /** A monster's look as players see it: with the painted figure of its kind, when there is one. */
+  private figureLook(m: Monster): MonsterLook {
+    const look = m.look ?? MONSTERS[m.defId].look;
+    const id = this.pictures?.figure?.(monsterFigureSubject(m.defId, look)) ?? null;
+    return id ? { ...look, imageId: id } : look;
+  }
+
   publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean; unanswered?: { logId: number; playerId: string }[] }): GameState {
     const s = this.s;
     const w = s.world;
@@ -5863,13 +5877,13 @@ export class Game {
       phase: s.phase,
       map: { width: this.width, height: this.height, rows: s.rows, biome: s.biome ?? 'dungeon' },
       light: s.phase === 'combat' ? { ambient: s.ambient ?? 'bright', sources: this.lightSources() } : { ambient: 'bright', sources: [] },
-      characters: s.characters,
+      characters: this.pictures?.figure ? s.characters.map((c) => this.withFigure(c)) : s.characters,
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
         ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions,
         effects: (m.effects ?? []).map(({ condition, turns, save, untilHero, onHurt, by, spell }) => ({ condition, turns, save, untilHero, onHurt, by, spell })),
         sprite: MONSTERS[m.defId].sprite,
-        tiles: this.tilesOf(m), look: m.look ?? MONSTERS[m.defId].look, restyled: !!m.look && lookKey(m.look) !== lookKey(MONSTERS[m.defId].look),
+        tiles: this.tilesOf(m), look: this.figureLook(m), restyled: !!m.look && lookKey(m.look) !== lookKey(MONSTERS[m.defId].look),
         kind: MONSTERS[m.defId].type, description: m.description ?? this.n(MONSTERS[m.defId].description),
         senses: this.monsterSenses(m), light: m.light ?? null, reach: this.monsterReach(m),
         cr: MONSTERS[m.defId].cr, abilities: this.notable(MONSTERS[m.defId]),

@@ -65,6 +65,10 @@ export interface RoomHooks {
     paint(room: Room, entryId: number, ask: PictureAsk): void;
     /** A hero has no portrait for their current look yet: paint one if the server may. */
     portrait?(room: Room, hero: Character): void;
+    /** Battle figures: the painted one for a subject, if any. */
+    figure?(subject: string): string | null;
+    /** Paint the battle figures this table still lacks, if the server may. */
+    figures?(room: Room): void;
   };
 }
 
@@ -135,7 +139,7 @@ export class Room {
     this.lastGold = this.game.s.gold;
     this.lastPhase = this.game.s.phase;
     const pictures = hooks.pictures;
-    if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask) };
+    if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask), figure: (subject) => pictures.figure?.(subject) ?? null };
     // A picture that was being painted when the server stopped will not arrive.
     for (const l of this.game.s.log) if (l.scene?.painting) delete l.scene.painting;
     this.game.tally = (heroId, what) => {
@@ -388,6 +392,7 @@ export class Room {
     const moves = this.game.takeMoves();
     const portrait = this.hooks.pictures?.portrait;
     if (portrait) for (const c of this.game.s.characters) if (!c.dead && c.portraitKey !== portraitKey(c)) portrait(this, c);
+    this.hooks.pictures?.figures?.(this);
     this.game.checkTrophies();
     this.creditGold();
     const state: ServerMessage = {

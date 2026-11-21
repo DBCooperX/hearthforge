@@ -12,6 +12,7 @@ import { tileWalkable } from '../../../shared/battlemap';
 import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { monsterCanvas, monsterFigure, monsterVariant } from './monsterArt';
 import { artOfCharacter, heroCanvas, heroStanding } from './heroArt';
+import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
 import { heroSenses, lightLevels, shortName, tileAt } from './util';
@@ -166,6 +167,45 @@ function figureTex(key: string, make: () => HTMLCanvasElement, pixel = false): T
   return t;
 }
 
+/** Size a flat token sprite to its square (or block of squares), standing on the bottom edge. */
+function fitToken(sp: Sprite, texture: Texture, kind: 'pc' | 'monster', size: number) {
+  sp.texture = texture;
+  // Monster tokens fill the square (or the block of squares) the creature occupies; hero tokens are round framed
+  // portraits drawn at high resolution and fill their square.
+  const side = (kind === 'monster' ? size : 1) * TILE;
+  sp.scale.set(side / Math.max(texture.width, texture.height));
+  sp.position.set(side / 2, side - sp.height / 2);
+}
+
+/**
+ * A painted figure as a flat-view token: the figure standing on a small round base in the colours of its side, so it
+ * reads as a token from straight above as well.
+ */
+const flatFigures = new Map<string, Texture>();
+function flatFigureTex(id: string, fig: HTMLCanvasElement, kind: 'pc' | 'monster'): Texture {
+  const k = `${kind}|${id}`;
+  let t = flatFigures.get(k);
+  if (t) return t;
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  const rim = kind === 'pc' ? '#c9a45c' : '#a5483a';
+  g.save();
+  g.translate(S / 2, S * 0.86);
+  g.scale(1, 0.42);
+  g.beginPath(); g.arc(0, 8, S * 0.4, 0, Math.PI * 2); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fill();
+  g.beginPath(); g.arc(0, 0, S * 0.4, 0, Math.PI * 2); g.fillStyle = '#2b241d'; g.fill();
+  g.lineWidth = 7; g.strokeStyle = rim; g.stroke();
+  g.restore();
+  const k2 = Math.min((S * 0.94) / fig.height, (S * 0.94) / fig.width);
+  const w = fig.width * k2, h = fig.height * k2;
+  g.drawImage(fig, (S - w) / 2, S * 0.9 - h, w, h);
+  t = smoothTexture(c);
+  flatFigures.set(k, t);
+  return t;
+}
+
 let softTex: Texture | null = null;
 /** A soft round blot: shadows. */
 function soft(): Texture {
@@ -288,6 +328,7 @@ export class MapRenderer {
   onTile: (x: number, y: number) => void = () => {};
   onHoverMonster: (hover: TokenHover | null) => void = () => {};
   private hoverId: string | null = null;
+  private unFigures: () => void = () => {};
 
   constructor(options: RendererOptions = { view: 'flat', zoom: 1, reducedMotion: false, labels: { miss: 'Miss' } }) {
     this.tilt = options.view === 'tilt';
@@ -327,6 +368,8 @@ export class MapRenderer {
       if (t) this.onTile(t.x, t.y);
     });
     this.listenForPanning(this.app.canvas);
+    // A painted figure that finishes loading is swapped in at once.
+    this.unFigures = onFigureLoaded(() => { if (this.ready && this.state && !this.destroyed) this.sync(); });
     this.app.ticker.add((ticker) => this.tick(Math.min(0.1, ticker.deltaMS / 1000)));
     this.ready = true;
     if (this.state) this.sync();
@@ -334,6 +377,7 @@ export class MapRenderer {
 
   destroy() {
     this.destroyed = true;
+    this.unFigures();
     if (this.ready) {
       this.groundRT?.destroy(true);
       this.app.destroy(true, { children: true });
@@ -445,21 +489,16 @@ export class MapRenderer {
         const root = new Container();
         const sp = new Sprite(texture);
         sp.anchor.set(0.5);
-        if (kind === 'monster') {
-          // Monster tokens fill the square (or the block of squares) the creature occupies.
-          sp.scale.set((size * TILE) / Math.max(texture.width, texture.height));
-          sp.position.set((size * TILE) / 2, size * TILE - sp.height / 2);
-        } else {
-          // Hero tokens are round framed portraits drawn at high resolution; they fill their square.
-          sp.scale.set(TILE / Math.max(texture.width, texture.height));
-          sp.position.set(TILE / 2, TILE - sp.height / 2);
-        }
+        fitToken(sp, texture, kind, size);
         const bar = new Graphics();
         root.addChild(sp, bar);
         root.position.set(x * TILE, y * TILE);
         this.entLayer.addChild(root);
         e = { id, root, sprite: sp, bar, path: [], x, y, hp, kind, size, plate: null, name, stand: null, tint: 0xffffff, unseen: false, down: false, flash: 0, shake: 0, incoming: 0, held: null, phase: Math.random() * 6 };
         this.ents.set(id, e);
+      } else if (e.sprite.texture !== texture) {
+        // The gear changed, or a painted figure has arrived.
+        fitToken(e.sprite, texture, kind, size);
       }
       if (hp !== e.hp) {
         this.hpChanged(e, hp - e.hp);
@@ -483,22 +522,27 @@ export class MapRenderer {
     for (const c of state.characters) {
       if (c.dead) continue;
       const art = artOfCharacter(c, state.items);
-      const heroTexture = heroTex(art);
+      const painted = paintedFigure(c.figureId);
+      const heroTexture = painted && c.figureId ? flatFigureTex(c.figureId, painted, 'pc') : heroTex(art);
       const e = place(c.id, 'pc', c.name, heroTexture, c.x, c.y, c.hp, c.maxHp);
-      if (e.sprite.texture !== heroTexture) e.sprite.texture = heroTexture; // gear changed
       const down = c.hp <= 0;
       e.down = down;
       e.sprite.rotation = down ? Math.PI / 2 : 0;
       e.sprite.tint = c.dead ? 0x555555 : 0xffffff;
       e.root.alpha = down ? 0.75 : 1;
       e.root.zIndex = down ? 0 : 2;
-      if (this.tilt) this.standFor(e, `h|${heroArtKey(art)}`, () => figureTex(`h|${heroArtKey(art)}`, () => heroStanding(art)), c.maxHp, false);
+      if (this.tilt) {
+        const key = painted ? `f|${c.figureId}` : `h|${heroArtKey(art)}`;
+        this.standFor(e, key, () => figureTex(key, () => painted ?? heroStanding(art)), c.maxHp, false);
+      }
     }
     for (const m of state.monsters) {
       if (!m.alive) continue;
-      const pack = !m.restyled && packSprites.has(m.sprite);
+      const painted = paintedFigure(m.look.imageId);
+      const pack = !painted && !m.restyled && packSprites.has(m.sprite);
       const variant = monsterVariant(m.id);
-      const e = place(m.id, 'monster', m.name, pack ? tex(m.sprite) : monsterTex(m.look, variant), m.x, m.y, m.hp, m.maxHp, m.tiles);
+      const flat = painted && m.look.imageId ? flatFigureTex(m.look.imageId, painted, 'monster') : pack ? tex(m.sprite) : monsterTex(m.look, variant);
+      const e = place(m.id, 'monster', m.name, flat, m.x, m.y, m.hp, m.maxHp, m.tiles);
       e.root.zIndex = 1;
       // In the dark, a monster nobody in the party can see is only a shape.
       const unseen = this.opts.unseenIds.has(m.id);
@@ -507,8 +551,8 @@ export class MapRenderer {
       e.root.alpha = unseen ? 0.55 : 1;
       e.bar.visible = !unseen;
       if (this.tilt) {
-        const key = pack ? `p|${m.sprite}` : `m|${lookKey(m.look)}#${variant}`;
-        this.standFor(e, key, () => figureTex(key, () => (pack ? spriteCanvas(m.sprite) : monsterFigure(m.look, variant)), pack), m.maxHp, pack);
+        const key = painted ? `f|${m.look.imageId}` : pack ? `p|${m.sprite}` : `m|${lookKey(m.look)}#${variant}`;
+        this.standFor(e, key, () => figureTex(key, () => (painted ?? (pack ? spriteCanvas(m.sprite) : monsterFigure(m.look, variant))), pack), m.maxHp, pack);
       }
     }
     for (const [id, e] of this.ents) this.showPlate(e, seen.has(id) && id === this.opts.activeId && !e.unseen);
