@@ -362,6 +362,13 @@ const SpeakerIcon = ({ off }: { off: boolean }) => (
     {off && <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
   </svg>
 );
+const ChatIcon = ({ off }: { off: boolean }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+    <path d="M4 5h16v11H10l-4 3.5V16H4z" fill="currentColor" />
+    {off && <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />}
+  </svg>
+);
+
 const ClickIcon = ({ off }: { off: boolean }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <path d="M6 4l11 7.5-5 1.2 3 5.8-2.2 1.1-3-5.9L6 17z" fill="currentColor" />
@@ -397,6 +404,7 @@ export function SoundMixer() {
           {m.enabled && m.ambientAvailable && <WindIcon off={m.ambientMuted} />}
           {fx.enabled && <HornIcon off={fx.muted} />}
           {n.manifest.enabled && <VoiceIcon off={n.muted} />}
+          <ChatIcon off={!prefs.chatChime} />
           <ClickIcon off={!prefs.sounds} />
         </span>
         <span className="mix-caret" aria-hidden>{prefs.mixerOpen ? '▴' : '▾'}</span>
@@ -407,6 +415,7 @@ export function SoundMixer() {
           {m.enabled && m.ambientAvailable && <Row label={t('Ambient sound')} muted={m.ambientMuted} volume={m.ambient} onMute={() => music.setAmbientMuted(!m.ambientMuted)} onVolume={(v) => music.setAmbient(v)}><WindIcon off={m.ambientMuted} /></Row>}
           {fx.enabled && <Row label={t('Sound effects')} muted={fx.muted} volume={fx.volume} onMute={() => sfx.setMuted(!fx.muted)} onVolume={(v) => sfx.setVolume(v)}><HornIcon off={fx.muted} /></Row>}
           {n.manifest.enabled && <Row label={t('Narrator')} muted={n.muted} volume={n.volume} onMute={() => narrator.setMuted(!n.muted)} onVolume={(v) => narrator.setVolume(v)}><VoiceIcon off={n.muted} /></Row>}
+          <Row label={t('Table talk chime')} muted={!prefs.chatChime} volume={prefs.chatChimeVolume} onMute={() => { const on = !prefs.chatChime; setPrefs({ chatChime: on }); if (on) uiSound('chat'); }} onVolume={(v) => { setPrefs(v <= 0 ? { chatChime: false } : { chatChime: true, chatChimeVolume: v }); }}><ChatIcon off={!prefs.chatChime} /></Row>
           <Row label={t('Interface sounds')} muted={!prefs.sounds} volume={prefs.soundVolume} onMute={() => { setPrefs({ sounds: !prefs.sounds }); uiSound('tab'); }} onVolume={(v) => { setPrefs(v <= 0 ? { sounds: false } : { sounds: true, soundVolume: v }); uiSound('click'); }}><ClickIcon off={!prefs.sounds} /></Row>
           <p className="mix-hint muted small">{t('Each slider is a share of the master volume.')}</p>
         </div>
@@ -434,7 +443,7 @@ export function MusicControl() {
     return () => { window.removeEventListener('pointerdown', away); window.removeEventListener('keydown', key, true); };
   }, [open]);
   const prefs = usePrefs();
-  const allOff = masterLevel(prefs) <= 0 || !prefs.sounds && (!m.enabled || m.muted) && (!m.enabled || !m.ambientAvailable || m.ambientMuted) && (!fx.enabled || fx.muted) && (!n.manifest.enabled || n.muted);
+  const allOff = masterLevel(prefs) <= 0 || !prefs.sounds && !prefs.chatChime && (!m.enabled || m.muted) && (!m.enabled || !m.ambientAvailable || m.ambientMuted) && (!fx.enabled || fx.muted) && (!n.manifest.enabled || n.muted);
   return (
     <span className={`music ${allOff ? 'off' : ''}`} ref={box}>
       <button type="button" className={open ? 'nav-btn icon-only on' : 'nav-btn icon-only'} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} title={t('Sound')} aria-label={t('Sound')}>

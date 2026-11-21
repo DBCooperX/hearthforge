@@ -2,7 +2,7 @@
 // They are short and quiet on purpose: a page turning, a buckle, a latch.
 import { getPrefs, masterLevel } from './prefs';
 
-export type Sfx = 'open' | 'close' | 'tab' | 'page' | 'click' | 'equip' | 'drop' | 'coin' | 'deny' | 'victory' | 'defeat' | 'ambush' | 'turn';
+export type Sfx = 'open' | 'close' | 'tab' | 'page' | 'click' | 'equip' | 'drop' | 'coin' | 'deny' | 'victory' | 'defeat' | 'ambush' | 'turn' | 'chat';
 
 let ctx: AudioContext | null = null;
 let noise: AudioBuffer | null = null;
@@ -80,6 +80,10 @@ const RECIPES: Record<Sfx, (ac: AudioContext, out: AudioNode) => void> = {
   turn: (ac, out) => {
     for (const [i, f] of [587, 880].entries()) { tone(ac, out, { type: 'triangle', from: f, at: i * 0.12, dur: 0.35, gain: 0.2 }); tone(ac, out, { type: 'sine', from: f * 2, at: i * 0.12, dur: 0.2, gain: 0.05 }); }
   },
+  // Table talk: a soft two-note chime, quieter and rounder than the turn bell.
+  chat: (ac, out) => {
+    for (const [i, f] of [1319, 1760].entries()) { tone(ac, out, { type: 'sine', from: f, at: i * 0.11, dur: 0.38, gain: 0.16 }); tone(ac, out, { type: 'sine', from: f * 2.01, at: i * 0.11, dur: 0.14, gain: 0.03 }); }
+  },
   // A short rising call on a horn, the last note held.
   victory: (ac, out) => {
     for (const [i, f] of [392, 523, 659].entries()) { tone(ac, out, { type: 'triangle', from: f, at: i * 0.13, dur: 0.16, gain: 0.22 }); tone(ac, out, { type: 'sine', from: f * 2, at: i * 0.13, dur: 0.12, gain: 0.05 }); }
@@ -94,8 +98,10 @@ const RECIPES: Record<Sfx, (ac: AudioContext, out: AudioNode) => void> = {
 /** Play an interface sound, if the player has them switched on. Never throws. */
 export function sfx(name: Sfx) {
   const prefs = getPrefs();
-  const level = prefs.soundVolume * masterLevel(prefs);
-  if (!prefs.sounds || level <= 0) return;
+  // The table talk chime has its own switch and volume, apart from the interface sounds.
+  const own = name === 'chat';
+  const level = (own ? prefs.chatChimeVolume : prefs.soundVolume) * masterLevel(prefs);
+  if (!(own ? prefs.chatChime : prefs.sounds) || level <= 0) return;
   const ac = audio();
   if (!ac) return;
   try {

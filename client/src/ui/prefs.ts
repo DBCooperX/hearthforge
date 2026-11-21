@@ -23,10 +23,14 @@ export interface Prefs {
   edgeScroll: boolean;
   /** In a fight, seconds without doing anything on your turn before End turn reminds you. 0 is off. */
   turnReminder: number;
+  /** A soft chime when another player writes in table talk. */
+  chatChime: boolean;
+  /** 0 to 1, a share of the master volume. */
+  chatChimeVolume: number;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20 };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5 };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {

@@ -31,6 +31,7 @@ import { useAccount, type AccountState } from './account';
 import type { Profile } from '../../shared/accounts';
 import { OUT_OF_CREDIT, chf, type CreditView } from '../../shared/credits';
 import { SignInScreen } from './components/SignIn';
+import { sfx as uiSound } from './ui/sound';
 import { ProfileWindow } from './ui/Profile';
 import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
@@ -136,6 +137,13 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   const newestChat = lastForeignChat(conn);
   const chatShown = chatOpen || state?.phase === 'lobby';
   useEffect(() => { if (chatShown || !state) setChatSeen(newestChat); }, [chatShown, newestChat, !state]);
+  // A soft chime for a new message from someone else. What was already there when the table opened is not new.
+  const chimed = useRef<number | null>(null);
+  useEffect(() => {
+    if (!state) { chimed.current = null; return; }
+    if (chimed.current !== null && newestChat > chimed.current) uiSound('chat');
+    chimed.current = newestChat;
+  }, [newestChat, !state]);
   const unread = conn.chat.filter((m) => m.from !== playerId && m.id > chatSeen).length;
 
   const mine = useMemo(() => state?.characters.filter((c) => c.ownerId === playerId) ?? [], [state]);
