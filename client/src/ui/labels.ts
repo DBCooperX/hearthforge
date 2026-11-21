@@ -35,7 +35,7 @@ export const JOURNAL_EMPTY: Record<keyof typeof JOURNAL_TABS, string> = {
 };
 
 /** The tabs of the Settings window. */
-export const SETTINGS_TABS = { game: 'Game', dm: 'Dungeon Master', keys: 'Keyboard', table: 'Table & server' } as const;
+export const SETTINGS_TABS = { game: 'Game', sound: 'Audio', keys: 'Keyboard' } as const;
 
 export const TEXT_SIZES = ['normal', 'large', 'larger'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
@@ -48,7 +48,7 @@ export const SHORTCUTS: { keys: string[]; text: string; combo?: boolean }[] = [
   { keys: ['J'], text: 'Journal' },
   { keys: ['M'], text: 'Map' },
   { keys: ['T'], text: 'Trade, where there is a merchant' },
-  { keys: ['Esc'], text: 'Close a window or cancel; with nothing open, the settings' },
+  { keys: ['Esc'], text: 'Close a window or cancel; with nothing open, the game menu' },
   { keys: ['1', '4'], text: 'Switch hero or bookmark in an open window' },
   { keys: ['W', 'A', 'S', 'D'], text: 'Move in a fight' },
   { keys: ['Shift', '←↑→↓'], text: 'Look around the battle map (or drag it, or point at its edge)' },
@@ -72,12 +72,18 @@ export const ART_ERRORS = {
 export { MUSIC_ERRORS };
 export const SCENE_LABELS = { tavern: 'Tavern', town: 'Town', overworld: 'Overworld', dungeon: 'Dungeon', combat: 'Combat', boss: 'Boss fight' } as const;
 export const ACCESS_LABELS = { auto: 'Downloads by itself', click: 'Paste a link', manual: 'Get it there, drop it here' } as const;
-export const ASSET_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', art: 'Art' } as const;
 
 /** The Innkeeper's sections. */
 export const INN_TABS = {
-  overview: 'Overview', tables: 'Tables', players: 'Players', assets: 'Assets', settings: 'Settings',
-  server: 'Server & updates', usage: 'AI costs', logs: 'Log', backups: 'Backups',
+  overview: 'Overview', tables: 'Tables', players: 'Players', costs: 'Costs and credits', dm: 'Dungeon Master',
+  sound: 'Sound and voice', art: 'Art', server: 'Server',
+} as const;
+export const SOUND_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
+export const ART_TABS = { art: 'Art packs', settings: 'Switches' } as const;
+export const SERVER_TABS = { server: 'Updates and restart', backups: 'Backups', logs: 'Log' } as const;
+export const INN_SECTIONS = {
+  ai: 'AI and models', newTables: 'New tables start with', timing: 'Timing at the table', switches: 'On and off for everyone',
+  soundKeys: 'Keys for sound services', art: 'Art settings', server: 'Server settings',
 } as const;
 export const SOURCE_LABELS = { panel: 'Set here', env: 'From the installer', default: 'Default' } as const;
 export const PHASE_LABELS: Record<string, string> = { lobby: 'Gathering', explore: 'Exploring', combat: 'In a fight', defeat: 'Defeated' };
@@ -102,9 +108,9 @@ export const TRADE_MOODS = ['Prices are 10% worse today', 'Prices are 10% better
 export const ALL_LABELS: string[] = [
   ...Object.values(SETTINGS_TABS),
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
-  ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
+  ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOUND_TABS), ...Object.values(ART_TABS), ...Object.values(SERVER_TABS), ...Object.values(INN_SECTIONS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(ACCOUNT_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
-  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(ASSET_TABS),
+  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(TIER_LABELS), ...Object.values(TIER_TEXT), ...FACTIONS.map((f) => f.blurb), ...TROPHIES.flatMap((x) => [x.name, x.text]),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),

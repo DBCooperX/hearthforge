@@ -1,5 +1,5 @@
 import { itemArtUrl } from '../game/itemArt';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
@@ -278,10 +278,12 @@ interface FeedProps {
   conn: Connection;
   /** Narrow log beside the battle map instead of the main story column. */
   compact?: boolean;
+  /** The last log entry of the fight that just ended: the first scene after it opens with a divider. */
+  afterFight?: number;
 }
 
 /** The story: scene cards, what players said, dice and system notes, plus the box to act in. */
-export function StoryFeed({ state, conn, compact }: FeedProps) {
+export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
   const t = useT();
   const { lang } = useLang();
   const [text, setText] = useState('');
@@ -304,11 +306,30 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
   // The newest line of mine that the Dungeon Master has not started on can still be taken back.
   const takeBackId = state.unanswered.filter((u) => u.playerId === playerId).pop()?.logId;
   const writing = state.players.filter((p) => p.id !== playerId && conn.typing[p.id] === 'story').map((p) => p.name);
+  // Number keys pick a suggested action, as in a dialogue menu, when nobody is typing and no window is open.
+  useEffect(() => {
+    if (!chips.length || compact) return;
+    const key = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (e.ctrlKey || e.metaKey || e.altKey || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return;
+      if (!/^[1-9]$/.test(e.key) || document.querySelector('.overlay')) return;
+      const action = chips[Number(e.key) - 1];
+      if (action) { e.preventDefault(); say(action); }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [chips.join('\n'), compact, say]);
+  const dividerAt = afterFight === undefined ? undefined : state.log.find((l) => l.id > afterFight && l.kind === 'dm')?.id;
 
   return (
     <section className={compact ? 'story compact' : 'story'}>
       <div className="feed">
-        {state.log.map((l) => <Entry key={l.id} entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />)}
+        {state.log.map((l) => (
+          <Fragment key={l.id}>
+            {l.id === dividerAt && <div className="after-battle" role="separator"><span>{t('After the battle')}</span></div>}
+            <Entry entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
+          </Fragment>
+        ))}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}
         {state.travelling && <p className="line typing">{t('On the road…')}</p>}
         {state.gathering && !state.dmBusy && <p className="line typing">{answered ? t('The Dungeon Master gives the others a moment to act…') : t('The Dungeon Master is listening. Say what you do, and it is resolved together with the others.')}</p>}
@@ -317,17 +338,18 @@ export function StoryFeed({ state, conn, compact }: FeedProps) {
       </div>
       {chips.length > 0 && (
         <div className="chips">
-          {chips.map((a, i) => <button key={i} className="chip-action" onClick={() => say(a)}>{a}</button>)}
+          {chips.map((a, i) => <button key={i} className="chip-action" data-pick={i + 1} onClick={() => say(a)}>{i < 9 && <kbd className="kbd">{i + 1}</kbd>}{a}</button>)}
         </div>
       )}
       <form
         className={asking ? 'composer ooc' : 'composer'}
         onSubmit={(e) => { e.preventDefault(); say(text, ooc); setText(''); setOoc(false); signal(''); }}
       >
+        <span className="quill" aria-hidden>✒</span>
         <input value={text} onChange={(e) => { setText(e.target.value); signal(e.target.value); }} maxLength={500} placeholder={asking ? t('Ask the Dungeon Master out of character…') : exploring ? t('What do you do? Say or try anything…') : t('Speak to the Dungeon Master…')} />
         <MicButton lang={lang} text={text} setText={(v) => { setText(v); signal(v); }} />
         <button type="button" className="ooc-toggle" aria-pressed={asking} disabled={!ooc && parseOoc(text) !== null} title={t('Out-of-character question: answered as a note, the story does not move on')} onClick={() => setOoc(!ooc)}>{t('Ask the DM')}</button>
-        <button className="primary" disabled={!text.trim()}>{t('Send')}</button>
+        <button className="primary" disabled={!text.trim()} title={t('Enter')}>{t('Send')}</button>
       </form>
     </section>
   );

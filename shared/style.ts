@@ -138,3 +138,65 @@ export function styleText(style: DmStyle): string {
     'The content rating always wins over the tone and over what a player asks for. If a player pushes past it, steer the scene elsewhere in the fiction without lecturing.',
   ].join('\n');
 }
+
+/**
+ * What the challenge level changes, shown as a table under the picker so nobody has to hover:
+ * one row per aspect, one cell per level (Coaching … Strict).
+ */
+export const CHALLENGE_ROWS: { label: L; cells: [L, L, L, L, L] }[] = [
+  {
+    label: { en: 'Check difficulty', de: 'Schwierigkeit der Proben' },
+    cells: [
+      { en: '3 easier', de: '3 leichter' }, { en: '2 easier', de: '2 leichter' }, { en: 'Standard', de: 'Standard' },
+      { en: '1–2 harder if rash', de: '1–2 schwerer, wenn unbedacht' }, { en: '2+ harder if rash', de: '2+ schwerer, wenn unbedacht' },
+    ],
+  },
+  {
+    label: { en: 'Warnings before danger', de: 'Warnungen vor Gefahr' },
+    cells: [
+      { en: 'Always, clearly', de: 'Immer und deutlich' }, { en: 'Before serious danger', de: 'Vor ernster Gefahr' }, { en: 'What a careful hero notices', de: 'Was ein umsichtiger Held bemerkt' },
+      { en: 'Only what you can see', de: 'Nur was ihr seht' }, { en: 'None', de: 'Keine' },
+    ],
+  },
+  {
+    label: { en: 'A failed check', de: 'Eine misslungene Probe' },
+    cells: [
+      { en: 'Opens another way', de: 'Öffnet einen anderen Weg' }, { en: 'Costs time or supplies', de: 'Kostet Zeit oder Vorräte' }, { en: 'A real setback', de: 'Ein echter Rückschlag' },
+      { en: 'Costs dearly', de: 'Kostet viel' }, { en: 'No second chances', de: 'Keine zweite Chance' },
+    ],
+  },
+  {
+    label: { en: 'Rules hints', de: 'Regelhinweise' },
+    cells: [
+      { en: 'Names the skill and why', de: 'Nennt Fertigkeit und Grund' }, { en: 'Now and then', de: 'Ab und zu' }, { en: 'Only when asked', de: 'Nur auf Nachfrage' },
+      { en: 'None', de: 'Keine' }, { en: 'None', de: 'Keine' },
+    ],
+  },
+  {
+    label: { en: 'Enemies in a fight', de: 'Gegner im Kampf' },
+    cells: [
+      { en: 'Spread their attacks', de: 'Verteilen ihre Angriffe' }, { en: 'Spread their attacks', de: 'Verteilen ihre Angriffe' }, { en: 'Fight sensibly', de: 'Kämpfen vernünftig' },
+      { en: 'Gang up on the weakest', de: 'Gehen gemeinsam auf den Schwächsten' }, { en: 'Gang up, ruthlessly', de: 'Gehen gemeinsam und gnadenlos vor' },
+    ],
+  },
+  {
+    label: { en: 'Death of a hero', de: 'Tod eines Helden' },
+    cells: [
+      { en: 'Rare, only after warnings', de: 'Selten, nur nach Warnung' }, { en: 'Unlikely', de: 'Unwahrscheinlich' }, { en: 'Possible', de: 'Möglich' },
+      { en: 'Likely if reckless', de: 'Wahrscheinlich bei Leichtsinn' }, { en: 'Happens', de: 'Kommt vor' },
+    ],
+  },
+];
+
+/** How monsters choose whom to attack at each challenge level. The server uses it when the DM names no target. */
+export type TargetHabit = 'spread' | 'sensible' | 'focus';
+export const targetHabit = (rules: number): TargetHabit => (clampRules(rules) <= 2 ? 'spread' : clampRules(rules) >= 4 ? 'focus' : 'sensible');
+
+/** The line the Dungeon Master gets before running the monsters' turns. */
+export function monsterTacticsText(style: DmStyle): string {
+  switch (targetHabit(style.rules)) {
+    case 'spread': return 'Challenge for this table is low: spread the monsters\' attacks over different heroes rather than piling onto one, and prefer the hero who was attacked least this fight. Heroes at 0 hit points are never attacked.';
+    case 'focus': return 'Challenge for this table is high: monsters fight as a pack. Gang up on the most wounded or least armoured hero they can reach, finish what they started and pull back to heal when hurt.';
+    default: return 'Monsters fight sensibly for their kind: they go for whoever threatens them most or is closest, and switch targets when it makes sense.';
+  }
+}

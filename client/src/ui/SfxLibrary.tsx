@@ -7,6 +7,7 @@ import { useT } from '../i18n';
 import { sfx as effects } from '../sfx';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { sfx } from './sound';
+import { ask } from './Confirm';
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, cache: 'no-store', headers: { ...init?.headers, [INNKEEPER_HEADER]: innkeeperSession() } });
@@ -42,7 +43,7 @@ export function SfxLibrary() {
   if (!lib) return <div className="settings-body"><p className="muted">{error ? t(SFX_ERRORS.failed) : t('Loading…')}</p></div>;
   return (
     <div className="settings-body" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-      {!lib.enabled && <p className="art-note">{t('Sound effects are switched off on this server (Settings → Playing).')}</p>}
+      {!lib.enabled && <p className="art-note">{t('Sound effects are switched off on this server (Sound and voice → Switches and keys).')}</p>}
       <p className="muted small">{t('Without recordings the game makes every effect itself. Kenney\'s free packs (CC0) sound more natural for hits, footsteps and coins. Kenney does not allow automatic downloads: open the pack\'s page, download the zip there and drop it here. Nothing has to be copied onto the server.')}</p>
       {error && <p className="art-error" role="alert">{t(SFX_ERRORS[error as keyof typeof SFX_ERRORS] ?? SFX_ERRORS.failed)}</p>}
       <div className={over ? 'art-drop over' : 'art-drop'}>
@@ -60,7 +61,7 @@ export function SfxLibrary() {
             </div>
             <span className="art-pack-actions">
               {p.page && <a href={p.page} target="_blank" rel="noreferrer noopener">{t('Download from Kenney')}</a>}
-              {p.count > 0 && <button type="button" className="link danger" disabled={busy} onClick={() => { if (window.confirm(t('Delete "{title}" from the server?', { title: t(p.name) }))) void run(() => api<Library>('/api/sfx/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: p.id }) })); }}>{t('Remove')}</button>}
+              {p.count > 0 && <button type="button" className="link danger" disabled={busy} onClick={() => { void ask(t('Delete "{title}" from the server?', { title: t(p.name) }), { danger: true }).then((yes) => { if (yes) void run(() => api<Library>('/api/sfx/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: p.id }) })); }); }}>{t('Remove')}</button>}
             </span>
           </li>
         ))}

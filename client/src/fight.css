@@ -32,8 +32,37 @@
    map dims and the card rises. --fight-beat is that pause. */
 .stage.fight-over { --fight-beat: 1.3s; }
 .stage.fight-over .map { filter: saturate(0.6) brightness(0.72); transition: filter 1.2s ease var(--fight-beat); }
-.stage.fight-over.leaving { animation: fight-fade 0.7s ease-in forwards; }
-@keyframes fight-fade { to { opacity: 0; filter: blur(3px); } }
+/* Continue: the card goes first, the HUD slides off, and the battle map sinks back into the dark,
+   pulling away, losing colour and going soft, before the story takes the screen (LEAVE_MS, 1.5 s). */
+.stage.fight-over.leaving .fight-end { animation: fight-card-out 0.35s ease-in forwards; }
+.stage.fight-over.leaving .turnbar { animation: hud-up 0.5s ease-in forwards; }
+.stage.fight-over.leaving .map { animation: battle-sink 1.5s cubic-bezier(0.4, 0, 0.6, 1) forwards; transition: none; }
+.game:has(.stage.fight-over.leaving) .story.compact { animation: hud-right 0.6s ease-in 0.1s forwards; }
+@keyframes fight-card-out { to { opacity: 0; transform: scale(0.96); } }
+@keyframes hud-up { to { opacity: 0; transform: translateY(-100%); } }
+@keyframes hud-right { to { opacity: 0; transform: translateX(40px); } }
+@keyframes battle-sink {
+  from { transform: scale(1); filter: saturate(0.6) brightness(0.72) blur(0); opacity: 1; }
+  60% { opacity: 0.8; }
+  to { transform: scale(0.9); filter: saturate(0.15) brightness(0.3) blur(8px); opacity: 0; }
+}
+
+/* The story comes back in steps: the column rises, then the world panel slides in. */
+.game.after-fight .stage > .story { animation: story-arrive 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.game.after-fight .worldpanel { animation: world-arrive 0.8s cubic-bezier(0.2, 0.8, 0.3, 1) 0.45s both; }
+@keyframes story-arrive { from { opacity: 0; transform: translateY(24px); filter: blur(3px); } }
+@keyframes world-arrive { from { opacity: 0; transform: translateX(36px); } }
+
+/* "After the battle": the first scene after a fight opens under a quiet divider. */
+.after-battle { display: flex; align-items: center; gap: 14px; margin: 18px 6px 4px; color: #c9a86a; animation: fade 1.2s ease both; }
+.after-battle::before, .after-battle::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #b98a3a 40%, #f0c877); }
+.after-battle::after { transform: scaleX(-1); }
+.after-battle span { font-family: var(--font-head); font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; white-space: nowrap; }
+
+/* Under the results: what the Dungeon Master is doing meanwhile. */
+.fight-end-next { margin: -4px 0 12px; font-family: var(--font-story); font-style: italic; font-size: 14px; color: #a99c8a; }
+.fight-end-next.writing::before { content: '✒'; display: inline-block; margin-right: 6px; animation: quill 1.1s ease-in-out infinite; }
+@keyframes quill { 0%, 100% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(3px, -2px) rotate(-8deg); } }
 
 .fight-end {
   position: absolute; inset: 0; z-index: 40; display: grid; place-items: center;
@@ -73,7 +102,7 @@
 @keyframes fight-row-in { from { opacity: 0; transform: translateX(-8px); } }
 @media (prefers-reduced-motion: reduce) {
   .stage.fight-over { --fight-beat: 0s; }
-  .surprise-banner, .fight-end, .fight-end-card, .fight-end-stats > div, .stage.fight-over.leaving { animation-duration: 0.01s !important; animation-delay: 0s !important; }
+  .surprise-banner, .fight-end, .fight-end-card, .fight-end-stats > div, .stage.fight-over.leaving .map, .stage.fight-over.leaving .turnbar, .game.after-fight .stage > .story, .game.after-fight .worldpanel { animation-duration: 0.01s !important; animation-delay: 0s !important; }
 }
 
 /* Battle view switch (2.5D or flat) and zoom, top right of the battle map. */

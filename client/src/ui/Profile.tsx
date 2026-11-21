@@ -8,6 +8,7 @@ import { accountCall } from '../account';
 import { accountErrorText } from '../components/SignIn';
 import { useLang, useT, type Translate } from '../i18n';
 import { Window } from './Window';
+import { ask } from './Confirm';
 
 export function playTime(t: Translate, ms: number): string {
   const min = Math.round(ms / 60000);
@@ -79,8 +80,8 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
   };
 
   /** Clear numbers: everything, the hero list, or one hero's entry. */
-  const clear = async (what: 'all' | 'heroes' | 'hero', ask: string, done: string, hero?: string) => {
-    if (!window.confirm(ask)) return;
+  const clear = async (what: 'all' | 'heroes' | 'hero', question: string, done: string, hero?: string) => {
+    if (!(await ask(question, { danger: true }))) return;
     try {
       await accountCall('/stats', { what, hero });
       setNote({ text: done, bad: false });

@@ -9,6 +9,7 @@ import { music } from '../music';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { ACCESS_LABELS as ACCESS, MUSIC_ERRORS, SCENE_LABELS as SCENES } from './labels';
 import { sfx } from './sound';
+import { ask } from './Confirm';
 
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -87,7 +88,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
   if (!lib) return <div className="settings-body"><p className="muted">{error ? t(MUSIC_ERRORS.failed) : t('Loading…')}</p></div>;
   return (
     <div className="settings-body" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-      {!lib.enabled && <p className="art-note">{t('Music is switched off on this server (Settings → Playing).')}</p>}
+      {!lib.enabled && <p className="art-note">{t('Music is switched off on this server (Sound and voice → Switches and keys).')}</p>}
       <p className="muted small">{t(layer === 'music'
         ? 'Players hear one track at a time, picked at random from the files of the current scene.'
         : 'Ambient loops play quietly under the music: a crowd, a fire, wind. A file plays in the scene you assign it to.')}</p>
@@ -115,7 +116,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
 
       {layer === 'ambient' && (
         <p className="art-note">
-          {t('With a free Freesound API key (Settings → Playing) the server can fetch CC0 loops for the tavern, town, overworld and dungeon.')}{' '}
+          {t('With a free Freesound API key (Sound and voice → Switches and keys) the server can fetch CC0 loops for the tavern, town, overworld and dungeon.')}{' '}
           <button type="button" disabled={!!busy || lib.pending} onClick={() => void run('freesound', () => act({ do: 'freesound' }))}>{busy === 'freesound' ? t('Downloading…') : t('Get CC0 loops from Freesound')}</button>
         </p>
       )}
@@ -146,7 +147,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
                         <button type="button" aria-label={t('Listen')} title={t('Listen')} onClick={() => preview(i)}>{playing === i.id ? '■' : '▶'}</button>
                         {sceneSelect(i.context, (ctx) => void run(i.id, () => act({ do: 'set', id: i.id, context: ctx })), t('Scene'))}
                         <button type="button" role="switch" aria-checked={i.enabled} className={i.enabled ? 'switch on' : 'switch'} disabled={!!busy} onClick={() => void run(i.id, () => act({ do: 'set', id: i.id, enabled: !i.enabled }))}>{i.enabled ? t('On') : t('Off')}</button>
-                        <button type="button" className="link danger" disabled={!!busy} onClick={() => { if (window.confirm(t('Delete "{title}" from the server?', { title: i.title }))) void run(i.id, () => act({ do: 'remove', id: i.id })); }}>{t('Remove')}</button>
+                        <button type="button" className="link danger" disabled={!!busy} onClick={() => { void ask(t('Delete "{title}" from the server?', { title: i.title }), { danger: true }).then((yes) => { if (yes) void run(i.id, () => act({ do: 'remove', id: i.id })); }); }}>{t('Remove')}</button>
                       </>
                     ) : (
                       <button type="button" disabled={!!busy || lib.pending} onClick={() => void run(i.id, () => act({ do: 'fetch', id: i.id }))}>{busy === i.id ? t('Downloading…') : t('Download')}</button>

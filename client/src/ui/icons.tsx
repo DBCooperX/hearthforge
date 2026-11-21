@@ -36,6 +36,11 @@ const PATHS = {
   pin: <><path d="M9 3.500h6l-1 6 3.500 3.500h-11L10 9.500Z" /><path d="M12 13v7.500" /></>,
   innkeeper: <><circle cx="8" cy="15.500" r="4.200" /><path d="m11 12.500 8.500-8.500M16.500 7l2.800 2.800M13.800 9.700l2.200 2.200" /></>,
   search: <><circle cx="10.500" cy="10.500" r="6" /><path d="m15 15 5.500 5.500" /></>,
+  menu: <path d="M4.500 7h15M4.500 12h15M4.500 17h15" />,
+  resume: <path d="M8 5.500v13l10-6.500Z" />,
+  leave: <><path d="M13.500 4.500h-7a1.500 1.500 0 0 0-1.500 1.500v12a1.500 1.500 0 0 0 1.500 1.500h7" /><path d="M10 12h10M16.500 8.500 20 12l-3.500 3.500" /></>,
+  fullscreen: <path d="M4.500 9V4.500H9M15 4.500h4.500V9M19.500 15v4.500H15M9 19.500H4.500V15" />,
+  restart: <><path d="M19.500 12a7.500 7.500 0 1 1-2.200-5.300" /><path d="M19.500 4.500v4h-4" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

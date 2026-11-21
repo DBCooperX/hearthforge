@@ -713,3 +713,7 @@
 .inn-table tr.inn-subrow td { background: rgba(0, 0, 0, 0.16); padding: 8px 10px 10px; }
 .inn-table b.warn { color: #f0c877; }
 .inn-table b.bad { color: #e8705f; }
+
+/* Sub-sections of the Innkeeper with their own tabs (Sound and voice, Art, Server). */
+.inn-sub { padding: 12px 20px 22px; }
+.inn-sub.fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
