@@ -1,6 +1,6 @@
 // Interface sounds, made in the browser with the Web Audio API so nothing has to be downloaded.
 // They are short and quiet on purpose: a page turning, a buckle, a latch.
-import { getPrefs } from './prefs';
+import { getPrefs, masterLevel } from './prefs';
 
 export type Sfx = 'open' | 'close' | 'tab' | 'page' | 'click' | 'equip' | 'drop' | 'coin' | 'deny' | 'victory' | 'defeat' | 'ambush';
 
@@ -90,12 +90,13 @@ const RECIPES: Record<Sfx, (ac: AudioContext, out: AudioNode) => void> = {
 /** Play an interface sound, if the player has them switched on. Never throws. */
 export function sfx(name: Sfx) {
   const prefs = getPrefs();
-  if (!prefs.sounds || prefs.soundVolume <= 0) return;
+  const level = prefs.soundVolume * masterLevel(prefs);
+  if (!prefs.sounds || level <= 0) return;
   const ac = audio();
   if (!ac) return;
   try {
     const master = ac.createGain();
-    master.gain.value = prefs.soundVolume * 0.5;
+    master.gain.value = level * 0.5;
     master.connect(ac.destination);
     RECIPES[name](ac, master);
   } catch { /* a missing sound must never break the interface */ }

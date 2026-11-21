@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { SFX_DOM_EVENT, SFX_EVENTS, pickSample, sfxForLog, type SfxEvent, type SfxManifest } from '../../shared/sfx';
 import type { GameState } from '../../shared/types';
 import { synth } from './sfxSynth';
+import { masterLevel, onMasterChange } from './ui/prefs';
 
 const KEY = 'hearthforge.sfx';
 /** The same sound is not started twice within this many milliseconds, so a volley is not a roar. */
@@ -34,7 +35,7 @@ export class SfxPlayer {
   private snap: SfxSnapshot;
   private started = false;
 
-  constructor() { this.snap = this.snapshot(); }
+  constructor() { this.snap = this.snapshot(); onMasterChange(() => this.save(this.settings)); }
 
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => void this.listeners.delete(fn); };
   getSnapshot = () => this.snap;
@@ -73,7 +74,7 @@ export class SfxPlayer {
     this.emit();
   }
 
-  private level(s: Settings) { return s.muted ? 0 : s.volume; }
+  private level(s: Settings) { return (s.muted ? 0 : s.volume) * masterLevel(); }
   setMuted(muted: boolean) { this.save({ ...this.settings, muted }); }
   /** Dragging to zero mutes and keeps the old level for when the effects come back. */
   setVolume(volume: number) { this.save(volume <= 0 ? { ...this.settings, muted: true } : { muted: false, volume: Math.min(1, volume) }); }

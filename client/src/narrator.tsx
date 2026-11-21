@@ -7,6 +7,7 @@ import type { VoiceManifest } from '../../shared/voice';
 import { SESSION_HEADER, accountSession } from './account';
 import { useT } from './i18n';
 import { music } from './music';
+import { masterLevel, onMasterChange } from './ui/prefs';
 
 const KEY = 'hearthforge.narrator';
 /** At most this many story entries wait to be read. In a busy fight the oldest are dropped. */
@@ -41,7 +42,10 @@ export class NarratorPlayer {
   private snap: NarratorSnapshot;
   private started = false;
 
-  constructor() { this.snap = this.snapshot(); }
+  constructor() {
+    this.snap = this.snapshot();
+    onMasterChange(() => { if (this.current?.audio) this.current.audio.volume = this.settings.volume * masterLevel(); });
+  }
 
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => void this.listeners.delete(fn); };
   getSnapshot = () => this.snap;
@@ -105,7 +109,7 @@ export class NarratorPlayer {
   private save(next: Settings) {
     this.settings = next;
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* applies until the page closes */ }
-    if (this.current?.audio) this.current.audio.volume = next.volume;
+    if (this.current?.audio) this.current.audio.volume = next.volume * masterLevel();
     this.emit();
   }
 
@@ -131,7 +135,7 @@ export class NarratorPlayer {
         // The next part is fetched while this one plays.
         const following = part + 1 < parts ? this.fetchPart(job, part + 1).catch(() => null) : Promise.resolve(null);
         const audio = new Audio(got.url);
-        audio.volume = this.settings.volume;
+        audio.volume = this.settings.volume * masterLevel();
         me.audio = audio;
         music.duck(true);
         const url = got.url;
