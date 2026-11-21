@@ -11,6 +11,7 @@ import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
 import { conditionHelp, heroTitle } from '../game/util';
 import { ABILITY_HELP, BACKGROUNDS, GLOSSARY, SKILL_HELP, loc } from '../../../shared/rules';
+import { PREMADE_BY_ID } from '../../../shared/premades';
 import { useLang, useT } from '../i18n';
 import { Rich, dice, featureText, signed } from './Guide';
 import { Hint } from '../ui/Hint';
@@ -39,6 +40,11 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
   const { lang } = useLang();
   const [side, setSideState] = useState<Side>(lastSide);
   const setSide = (s: Side) => { lastSide = s; setSideState(s); };
+  /** A ready-made hero keeps the English text it was created with; show it in the table's language while it is unchanged. */
+  const ownText = (text: string, field: 'appearance' | 'bio') => {
+    const pre = c.premadeId ? PREMADE_BY_ID[c.premadeId] : undefined;
+    return pre && text === pre[field].en ? loc(pre[field], lang) : text;
+  };
   const floor = XP_THRESHOLDS[c.level - 1];
   const next = c.level < MAX_LEVEL ? XP_THRESHOLDS[c.level] : null;
   const pct = next ? Math.max(0, Math.min(100, ((c.xp - floor) / (next - floor)) * 100)) : 100;
@@ -227,8 +233,8 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
             )}
             {side === 'story' && (
               <div className="cs-story">
-                {c.appearance && <><h4>{t('Appearance')}</h4><p>{c.appearance}</p></>}
-                {c.backstory && <><h4>{t('Backstory')}</h4><p>{c.backstory}</p></>}
+                {c.appearance && <><h4>{t('Appearance')}</h4><p>{ownText(c.appearance, 'appearance')}</p></>}
+                {c.backstory && <><h4>{t('Backstory')}</h4><p>{ownText(c.backstory, 'bio')}</p></>}
                 {!c.appearance && !c.backstory && <p className="muted">{t('Nothing is written about this hero yet.')}</p>}
                 <h4>{t('Equipment')}</h4>
                 <ul className="cs-gear">

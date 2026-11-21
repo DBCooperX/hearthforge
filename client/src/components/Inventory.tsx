@@ -2,7 +2,7 @@ import { ItemIcon } from '../ui/ItemIcon';
 import { useEffect, useMemo, useState } from 'react';
 import { ABILITIES, SLOT_LABELS } from '../../../shared/content';
 import { SPELL_BUFFS } from '../../../shared/spells';
-import { weaponAttack } from '../../../shared/build';
+import { isLightWeapon, weaponAttack } from '../../../shared/build';
 import { INV_FILTERS, INV_SORTS, arrangeBag, carriedWeight, carryCapacity, equipPreview, itemGroup, itemWeight, slotForItem, type InvFilter, type InvSort } from '../../../shared/inventory';
 import { itemDef } from '../../../shared/items';
 import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemDef, type ItemInstance, type SlotId } from '../../../shared/types';
@@ -40,10 +40,10 @@ export function kindLine(def: ItemDef, t: Translate): string {
   return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
-interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean }
+interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean; onSplit?: () => void }
 
 /** Everything about one item: what it does for this hero, how it compares with what they wear, and its story. */
-export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: TipProps) {
+export function ItemDetails({ def, item, c, state, equipped, mine, pinned, onSplit }: TipProps) {
   const t = useT();
   const { lang } = useLang();
   const story = def.story;
@@ -53,6 +53,7 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: Tip
   const props = def.weapon ? [
     def.weapon.finesse && t('Finesse'),
     def.weapon.twoHanded && t('Two-handed'),
+    isLightWeapon(def) && t('Light weapon'),
     def.weapon.ranged && t('Range {normal}/{long} ft', def.weapon.ranged),
     def.weapon.bonus && t('Magic {bonus}', { bonus: signed(def.weapon.bonus) }),
   ].filter(Boolean) as string[] : [];
@@ -71,7 +72,7 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: Tip
     def.consumable?.buff && t('Effect: {spell}', { spell: t(SPELL_BUFFS[def.consumable.buff]?.chip ?? def.consumable.buff) }),
     def.consumable?.temp && t('{n} temporary hit points', { n: def.consumable.temp }),
   ].filter(Boolean) as string[];
-  const action = !mine ? null : equipped ? t('Double-click to take it off') : preview ? t('Double-click to equip') : def.consumable ? t('Double-click to drink') : null;
+  const action = !mine ? null : !equipped && isLightWeapon(def) && !!c.equipment.mainHand ? t('Drag to the off hand to wield two weapons') : equipped ? t('Double-click to take it off') : preview ? t('Double-click to equip') : def.consumable ? t('Double-click to drink') : null;
   return (
     <div className={['item-tip', def.rarity ?? 'common', story?.quest && 'quest'].filter(Boolean).join(' ')}>
       <header>
@@ -122,6 +123,7 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned }: Tip
         {def.value > 0 && <span><Icon name="coin" size={14} /> {def.value} {t('gp')}</span>}
         {!weight && !def.value && <span>{t('No weight or worth to speak of')}</span>}
         <span className="spacer" />
+        {pinned && onSplit && mine && item.qty > 1 && def.stackable && <button type="button" className="item-split" onClick={onSplit}>{t('Split…')}</button>}
         {pinned ? <span className="item-pinned"><Icon name="pin" size={13} /> {t('Pinned')}</span> : action && <span className="item-action">{action}</span>}
       </footer>
     </div>
@@ -147,13 +149,15 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   /** The item pinned by a click, so long notes can be read and scrolled without holding the mouse still. */
   const [picked, setPicked] = useState<Shown | null>(null);
   const mine = c.ownerId === playerId;
+  /** A stack being divided: which one, and (when it came from a drop on a hero) who gets the share. */
+  const [split, setSplit] = useState<{ item: ItemInstance; index: number; to?: string } | null>(null);
   const defOf = (item: ItemInstance | null) => (item ? itemDef(state.items, item.defId) ?? null : null);
   const dragDef = defOf(drag?.item ?? null);
   const dragSlot = dragDef ? slotForItem(dragDef) : null;
   const filter = prefs.invFilter, sort = prefs.invSort;
   const plain = filter === 'all' && sort === 'manual';
 
-  useEffect(() => { setHover(null); setPicked(null); }, [c.id]);
+  useEffect(() => { setHover(null); setPicked(null); setSplit(null); }, [c.id]);
 
   /** What each backpack square shows and which real bag index it stands for. Null squares are filled by hidden items. */
   const squares = useMemo(() => {
@@ -179,8 +183,9 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   const cell = (item: ItemInstance | null, loc: InvLoc | null, key?: string | number) => {
     const def = defOf(item);
     const isSlot = loc?.type === 'slot';
-    const valid = drag && isSlot && dragSlot === loc.slot;
-    const invalid = drag && isSlot && dragSlot !== loc.slot;
+    const fits = (slot: SlotId) => dragSlot === slot || (slot === 'offHand' && isLightWeapon(dragDef));
+    const valid = drag && isSlot && fits(loc.slot);
+    const invalid = drag && isSlot && !fits(loc.slot);
     const unusable = def && mine && slotForItem(def) && !equipPreview(c, def, state.items)?.usable;
     const classes = ['cell', isSlot && 'slot-cell', !loc && 'inert', def?.rarity, def?.story?.quest && 'quest', item && 'filled', item && item.uid === picked?.uid && 'picked', valid && 'valid', invalid && 'invalid', unusable && 'unusable'];
     const body = (
@@ -241,7 +246,11 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
     <Window
       title={t('Inventory')} icon="inventory" hotkey="I" size="large" className="inventory" onClose={onClose}
       tabs={<HeroTabs state={state} selectedId={c.id} onSelect={onSelect} dropping={!!drag}
-        onDropOn={(o) => { if (drag) { conn.send({ t: 'give', characterId: c.id, from: drag.from, toCharacterId: o.id }); sfx('drop'); } setDrag(null); }} />}
+        onDropOn={(o, shift) => {
+          if (drag && shift && drag.item.qty > 1 && drag.from.type === 'bag' && defOf(drag.item)?.stackable) setSplit({ item: drag.item, index: drag.from.index, to: o.id });
+          else if (drag) { conn.send({ t: 'give', characterId: c.id, from: drag.from, toCharacterId: o.id }); sfx('drop'); }
+          setDrag(null);
+        }} />}
       footer={(
         <>
           <Hint title={t('Carried weight')} text={t('Everything {name} wears and carries. A hero can carry 15 lb for each point of Strength. For your information only: the game does not slow anyone down yet.', { name: c.name })}>
@@ -251,7 +260,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               <span><b>{num(weight, lang)}</b> / {t('{n} lb', { n: capacity })}</span>
             </div>
           </Hint>
-          <span className="inv-hint">{mine ? t('Double-click to equip or use. Drag onto a hero to hand over. Click to pin the details.') : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}</span>
+          <span className="inv-hint">{mine ? t('Double-click to equip or use. Drag onto a hero to hand over (hold Shift to hand over part of a stack). Click to pin the details.') : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}</span>
           <Hint title={t('Party gold')} text={t('Shared by the whole party.')}>
             <div className="purse" tabIndex={0}><Icon name="coin" size={17} /> <b>{state.gold.toLocaleString(lang)}</b> {t('gp')}</div>
           </Hint>
@@ -313,9 +322,53 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
       {shown && shownItem && shownDef && (
         <Float anchor={shown.rect} side="right" className="item-float" interactive={!hover && !!picked}>
           <ItemDetails def={shownDef} item={shownItem} c={c} state={state} mine={mine} pinned={!hover && !!picked}
+            onSplit={() => { const i = c.bag.findIndex((b) => b?.uid === shownItem.uid); if (i >= 0) { setSplit({ item: shownItem, index: i }); setPicked(null); } }}
             equipped={Object.values(c.equipment).some((e) => e?.uid === shownItem.uid)} />
         </Float>
       )}
+      {split && <SplitDialog state={state} from={c} item={split.item} index={split.index} to={split.to} conn={conn} onClose={() => setSplit(null)} />}
     </Window>
+  );
+}
+
+interface SplitProps { state: GameState; from: Character; item: ItemInstance; index: number; to?: string; conn: Connection; onClose: () => void }
+
+/** Divides a stack: some stay, some go to another hero, or into a stack of their own in the same backpack. */
+function SplitDialog({ state, from, item, index, to, conn, onClose }: SplitProps) {
+  const t = useT();
+  const def = itemDef(state.items, item.defId);
+  const [n, setN] = useState(Math.max(1, Math.floor(item.qty / 2)));
+  const [target, setTarget] = useState(to ?? '');
+  const others = state.characters.filter((o) => o.id !== from.id && !o.dead);
+  const free = from.bag.findIndex((b) => !b);
+  const count = Math.min(item.qty - 1, Math.max(1, Math.floor(n) || 1));
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (target) conn.send({ t: 'give', characterId: from.id, from: { type: 'bag', index }, toCharacterId: target, qty: count });
+    else if (free >= 0) conn.send({ t: 'inv_move', characterId: from.id, from: { type: 'bag', index }, to: { type: 'bag', index: free }, qty: count });
+    else { conn.toast(t('No free bag space')); sfx('deny'); return; }
+    sfx('drop');
+    onClose();
+  };
+  return (
+    <div className="split-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <form className="panel split-dialog" onSubmit={submit}>
+        <h3>{t('Split {item}', { item: def ? t(def.name) : '' })}</h3>
+        <p className="muted">{t('You have {n}. Choose how many to take out of the stack.', { n: item.qty })}</p>
+        <label>{t('How many')}
+          <input type="number" min={1} max={item.qty - 1} value={n} autoFocus onChange={(e) => setN(Number(e.target.value))} />
+        </label>
+        <label>{t('Where to')}
+          <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">{t('A separate stack in this backpack')}</option>
+            {others.map((o) => <option key={o.id} value={o.id}>{t('Hand to {name}', { name: o.name })}</option>)}
+          </select>
+        </label>
+        <div className="confirm-buttons">
+          <button type="button" onClick={onClose}>{t('Cancel')}</button>
+          <button className="primary">{t('Split')}</button>
+        </div>
+      </form>
+    </div>
   );
 }

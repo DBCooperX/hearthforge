@@ -59,7 +59,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             </div>
             <div className="info">
               <div className="name">
-                <b>{c.name}</b>
+                <b title={c.name}>{c.name}</b>
                 <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{classLabel(c, t)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />

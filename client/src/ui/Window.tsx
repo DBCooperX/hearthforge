@@ -74,7 +74,7 @@ interface HeroTabsProps {
   selectedId: string;
   onSelect: (id: string) => void;
   /** Called when something is dropped on another hero's tab. */
-  onDropOn?: (c: Character) => void;
+  onDropOn?: (c: Character, shift: boolean) => void;
   /** Whether a drop is on offer right now. */
   dropping?: boolean;
 }
@@ -107,7 +107,7 @@ export function HeroTabs({ state, selectedId, onSelect, onDropOn, dropping }: He
             style={{ '--class': CLASS_INFO[c.classId].color } as React.CSSProperties}
             onClick={() => { if (c.id !== selectedId) { onSelect(c.id); sfx('tab'); } }}
             onDragOver={(e) => { if (dropping && c.id !== selectedId) e.preventDefault(); }}
-            onDrop={(e) => { e.preventDefault(); if (c.id !== selectedId) onDropOn?.(c); }}
+            onDrop={(e) => { e.preventDefault(); if (c.id !== selectedId) onDropOn?.(c, e.shiftKey); }}
           >
             <span className="hero-tab-face"><img className="hero-art" src={heroPortraitUrl(artOfCharacter(c, state.items))} alt="" /></span>
             <span className="hero-tab-text">

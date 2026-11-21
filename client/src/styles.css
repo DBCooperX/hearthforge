@@ -535,3 +535,9 @@ ul.plain li { font-size: 14.5px; }
   font-family: var(--font-head); font-weight: 600; font-size: 2.9em; line-height: 0.82; float: left; padding: 6px 4px 0 0; color: color-mix(in srgb, var(--mood) 60%, #2a180a);
 }
 .story.compact .scene .scene-where { font-size: 12px; margin-top: -2px; }
+
+/* Long hero and player names stay on one line and end in a dot-dot-dot; the whole name is in the tooltip. */
+.name b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name .sheet-link { flex: none; }
+.chip.owner { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info { grid-template-columns: minmax(0, 1fr); }

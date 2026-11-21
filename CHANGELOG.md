@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Playtest fixes
+- **Tidy names.** Place names on the zone map no longer overlap: long names are cut short, each name takes a free spot around its place, and one that still finds no room shows when you point at the place. Long hero names are cut with a dot-dot-dot in the party panel and on the battle nameplate, which shows the first name.
+- **Table talk is a window.** Drag it by its title bar; it stays where you left it (double-click the title bar to put it back).
+- **Two-weapon fighting.** A light melee weapon (dagger, shortsword, scimitar, handaxe) can go in the off hand next to another light weapon. After attacking, the new Off-hand attack button spends the bonus action on a second strike without the ability modifier.
+- **Splitting stacks.** Click a stack, then Split… to take some out into a new stack or hand them to another hero; hold Shift while dropping a stack on a hero tab to hand over part of it.
+- **Ready-made heroes in German.** Appearance and backstory of the ready-made heroes show in the table's language.
+- Battle map buttons (view and zoom) no longer pass clicks on to the map underneath.
+
 ### Story illustrations
 - **Hand-drawn pictures of the big moments.** When a boss steps out, a hard fight is won or a big secret comes out, the Dungeon Master can have the moment painted in ink and watercolour; the picture appears above that scene for the whole table and opens large with a click. The default style is a loose black charcoal sketch on old paper. Off by default: the Innkeeper switches it on under Art → Illustrations and picks the service (Google Gemini by default, FLUX on fal.ai or Replicate, OpenAI), the model, the style, which moments, and limits per table, per day and per month. Keys go under Art → Switches and keys and work without a restart. Pictures go on the player credits as their own column. Heroes and people are drawn from the looks the game keeps, and earlier pictures of the table go along so they stay recognisable. See README → Story illustrations.
 - **Painted hero portraits.** With illustrations on, every new hero gets a painted portrait in colour from the choices in the character creator, all in one shared look made for the round brass frames. It replaces the drawn bust once it is ready (the drawn one stays as the fallback), a changed look gets a new one, and the player whose hero it is pays for it (at most 3 a day each by default).

@@ -510,8 +510,9 @@ export class Room {
       case 'disengage': return g.disengage(playerId, String(msg.characterId));
       case 'escape': return g.escape(playerId, String(msg.characterId));
       case 'light': return g.setLight(playerId, String(msg.characterId), !!msg.on);
-      case 'inv_move': return g.invMove(playerId, String(msg.characterId), msg.from, msg.to);
-      case 'give': return g.give(playerId, String(msg.characterId), msg.from, String(msg.toCharacterId));
+      case 'inv_move': return g.invMove(playerId, String(msg.characterId), msg.from, msg.to, msg.qty === undefined ? undefined : Number(msg.qty));
+      case 'give': return g.give(playerId, String(msg.characterId), msg.from, String(msg.toCharacterId), msg.qty === undefined ? undefined : Number(msg.qty));
+      case 'offhand': return g.offhandAttack(playerId, String(msg.characterId), String(msg.targetId));
       case 'buy': return void g.buy(playerId, String(msg.characterId), String(msg.shopId), String(msg.defId), Number(msg.qty));
       case 'sell': return void g.sell(playerId, String(msg.characterId), String(msg.shopId), msg.from, Number(msg.qty));
       case 'haggle': return void g.haggle(playerId, String(msg.characterId), String(msg.shopId));

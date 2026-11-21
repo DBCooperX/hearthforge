@@ -722,3 +722,12 @@
 .camp-list.tight { gap: 5px; }
 .camp-list p { margin: 2px 0 0; }
 .camp-notes { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; }
+
+/* ---------- splitting a stack ---------- */
+.split-overlay { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(8, 6, 4, 0.55); }
+.split-dialog { display: grid; gap: 10px; width: min(340px, calc(100% - 24px)); padding: 16px 18px; }
+.split-dialog h3 { margin: 0; font-family: var(--font-head); }
+.split-dialog p { margin: 0; }
+.split-dialog label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.split-dialog input, .split-dialog select { font: inherit; color: var(--text); background: #0e0d0b; border: 1px solid #403b36; border-radius: 6px; padding: 5px 8px; }
+.item-split { margin-right: auto; }

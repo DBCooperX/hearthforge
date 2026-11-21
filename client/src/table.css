@@ -124,3 +124,6 @@ button.link.danger:hover:not(:disabled) { color: #ff9f8f; border-bottom-color: #
 .bin-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .bin-item { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 10px; border: 1px dashed var(--ink-soft, #8a7a5a); border-radius: 6px; }
 .bin-acts { display: flex; gap: 10px; align-items: center; }
+.chat-drag { display: flex; flex: 1; min-width: 0; }
+.chat-float .chat > header { cursor: grab; touch-action: none; user-select: none; }
+.chat-float .chat > header:active { cursor: grabbing; }

@@ -14,7 +14,7 @@ import { monsterCanvas, monsterFigure, monsterVariant } from './monsterArt';
 import { artOfCharacter, heroCanvas, heroStanding } from './heroArt';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
-import { heroSenses, lightLevels, tileAt } from './util';
+import { heroSenses, lightLevels, shortName, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
 import tableUrl from '../assets/battle-table.webp';
@@ -688,7 +688,7 @@ export class MapRenderer {
     if (!on) { if (e.plate) e.plate.visible = false; return; }
     if (!e.plate) {
       const plate = new Container();
-      const text = new Text({ text: e.name, style: { fontFamily: 'Cinzel, Georgia, serif', fontSize: 26, fontWeight: '700', fill: 0x2a1a08, letterSpacing: 1 } });
+      const text = new Text({ text: shortName(e.name, 14), style: { fontFamily: 'Cinzel, Georgia, serif', fontSize: 26, fontWeight: '700', fill: 0x2a1a08, letterSpacing: 1 } });
       text.anchor.set(0.5, 0.5);
       const w = text.width + 26, h = text.height + 8;
       const g = new Graphics();

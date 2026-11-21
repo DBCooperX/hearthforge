@@ -4,7 +4,7 @@
 
 import { targetHabit, type TargetHabit } from '../../../shared/style';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
-import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
+import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isLightWeapon, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
 import {
   BEAST_FORMS, CLASS_FEATURES, CLASS_IDS, GROUPS, OPTIONS, RESOURCES, SUBCLASS_LEVEL, cantripScale, chosenIn, classAbilities, critFrom, extraAttacks, featureRank,
   SLOT_COST, grantedChoices, hasFeature, inspirationDie, martialDie, maxSpellLevelFor, optionLine, optionsFor, rageDamage, resourceLeft, resourceMax, saveProfs, sneakDice, speedBonus, type BeastForm,
@@ -850,7 +850,7 @@ export class Game {
   addPremade(playerId: string, premadeId: string, name: string): Character {
     const pre = PREMADE_BY_ID[premadeId];
     if (!pre) throw new GameError(this.t`Unknown hero`);
-    return this.createCharacter(playerId, { ...pre.spec, name: String(name ?? '').trim() || pre.spec.name, backstory: loc(pre.bio, this.lang) });
+    return this.createCharacter(playerId, { ...pre.spec, name: String(name ?? '').trim() || pre.spec.name, appearance: loc(pre.appearance, this.lang), backstory: loc(pre.bio, this.lang) });
   }
 
   /** Roll 4d6 and drop the lowest, six times. The creator only accepts these scores for the "roll" method. */
@@ -1530,6 +1530,7 @@ export class Game {
       combat.actionUsed = false;
       combat.bonusUsed = false;
       combat.attacksLeft = 0;
+      combat.attacked = false;
       combat.savageUsed = false;
       combat.disengaged = false;
       combat.once = [];
@@ -1848,6 +1849,7 @@ export class Game {
   private spendAttack(c: Character) {
     const combat = this.s.combat;
     if (!combat || this.s.phase !== 'combat') return;
+    combat.attacked = true;
     if (!combat.actionUsed) {
       combat.actionUsed = true;
       combat.attacksLeft = extraAttacks(c) + (this.buffOn(c, 'extraAttack') ? 1 : 0);
@@ -2065,12 +2067,37 @@ export class Game {
     this.checkCombatOver();
   }
 
+  /** The light weapon in the off hand, if there is one. */
+  private offWeaponOf(c: Character): ItemDef | null {
+    const it = c.equipment.offHand;
+    const def = it ? this.def(it.defId) : null;
+    return def?.weapon ? def : null;
+  }
+
+  /**
+   * Two-weapon fighting: after attacking with a light weapon in the main hand, a bonus action
+   * attacks with the light weapon in the other. The off-hand hit adds no ability modifier to damage
+   * (unless it is negative).
+   */
+  offhandAttack(playerId: string, characterId: string, targetId: string) {
+    const c = this.actor(playerId, characterId);
+    if (this.s.phase !== 'combat' || !this.s.combat) throw new GameError(this.t`There is nothing to fight right now`);
+    if (c.form) throw new GameError(this.t`${c.name} cannot wield weapons in this shape`);
+    if (!isLightWeapon(this.weaponOf(c)) || !isLightWeapon(this.offWeaponOf(c))) throw new GameError(this.t`Fighting with two weapons needs a light melee weapon in each hand`);
+    if (!this.s.combat.attacked) throw new GameError(this.t`Attack with your main hand first. The off-hand attack follows it`);
+    this.canAct(true);
+    const m = this.targetMonster(c, targetId, 5);
+    this.spendAction(true);
+    this.strike(c, m, { offhand: true });
+    this.checkCombatOver();
+  }
+
   /**
    * One weapon attack, rolled and resolved. An opportunity attack is always a melee attack,
    * so a hero holding a bow strikes with a fist instead. Returns whether it hit.
    */
-  private strike(c: Character, m: Monster, opts: { reaction?: boolean; unarmed?: boolean; flurry?: boolean; beast?: BeastForm['attacks'][number]; again?: boolean; cast?: boolean } = {}): boolean {
-    const held = opts.unarmed || opts.beast ? null : this.weaponOf(c);
+  private strike(c: Character, m: Monster, opts: { reaction?: boolean; unarmed?: boolean; flurry?: boolean; beast?: BeastForm['attacks'][number]; again?: boolean; cast?: boolean; offhand?: boolean } = {}): boolean {
+    const held = opts.unarmed || opts.beast ? null : opts.offhand ? this.offWeaponOf(c) : this.weaponOf(c);
     const w = opts.reaction && held?.weapon?.ranged ? null : held;
     const wp = w?.weapon;
     const ranged = wp?.ranged;
@@ -2177,7 +2204,9 @@ export class Game {
         combat.savageUsed = true;
         rolled = Math.max(rolled, weaponDice());
       }
-      dmg = rolled + mod + (wp?.bonus ?? 0) + atk.flat + magicWeapon;
+      // Fighting with two weapons: the off hand adds no ability modifier, and Dueling needs a free hand.
+      const twoWeapons = !!this.offWeaponOf(c);
+      dmg = rolled + (opts.offhand ? Math.min(0, mod) : mod) + (wp?.bonus ?? 0) + (twoWeapons ? 0 : atk.flat) + magicWeapon;
     }
     if (raging && usesStr) dmg += rageDamage(c);
     if (raging && reckless && this.feat(c, 'frenzy') && this.once(`${c.id}:frenzy`)) { dmg += dice(`${rageDamage(c)}d6`); notes.push(this.n('Frenzy')); }
@@ -4639,7 +4668,13 @@ export class Game {
 
   private canEquip(c: Character, item: ItemInstance, slot: SlotId): string | null {
     const def = this.def(item.defId);
-    if (this.slotFor(def) !== slot) return `${def.name} doesn't go there`;
+    // A light melee weapon can also go in the off hand, to fight with two weapons.
+    const offWeapon = slot === 'offHand' && def.kind === 'weapon';
+    if (offWeapon) {
+      if (!isLightWeapon(def)) return this.t`${this.n(def.name)} is too heavy for the off hand. Only light melee weapons go there`;
+      const main = c.equipment.mainHand ? this.def(c.equipment.mainHand.defId) : null;
+      if (!isLightWeapon(main)) return this.t`Hold a light melee weapon in the main hand to wield one in the off hand too`;
+    } else if (this.slotFor(def) !== slot) return `${def.name} doesn't go there`;
     if (!this.proficient(c, def)) return `${c.className}s can't use ${def.name}`;
     if (def.attune) {
       const attuned = SLOT_IDS.filter((s) => s !== slot && c.equipment[s] && c.equipment[s]!.uid !== item.uid && this.def(c.equipment[s]!.defId).attune).length;
@@ -4684,11 +4719,11 @@ export class Game {
     return true;
   }
 
-  invMove(playerId: string, characterId: string, from: InvLoc, to: InvLoc) {
-    this.moveItem(this.actor(playerId, characterId, false), from, to);
+  invMove(playerId: string, characterId: string, from: InvLoc, to: InvLoc, qty?: number) {
+    this.moveItem(this.actor(playerId, characterId, false), from, to, qty);
   }
 
-  private moveItem(c: Character, from: InvLoc, to: InvLoc) {
+  private moveItem(c: Character, from: InvLoc, to: InvLoc, qty?: number) {
     if (!this.validLoc(from) || !this.validLoc(to)) throw new GameError(this.t`Bad inventory slot`);
     const item = this.getLoc(c, from);
     if (!item) throw new GameError(this.t`Nothing there`);
@@ -4702,6 +4737,17 @@ export class Game {
       const err = this.canEquip(c, other, from.slot);
       if (err) throw new GameError(err);
     }
+    // Part of a stack: split some off into an empty square, or onto a stack of the same thing.
+    if (qty !== undefined && from.type === 'bag' && to.type === 'bag' && item.qty > 1) {
+      if (!this.def(item.defId).stackable) throw new GameError(this.t`That cannot be split`);
+      const n = Math.floor(Number(qty));
+      if (!(n >= 1 && n < item.qty)) throw new GameError(this.t`Pick a number between 1 and ${item.qty - 1}`);
+      if (other && other.defId !== item.defId) throw new GameError(this.t`Put it in an empty square`);
+      if (other) other.qty += n;
+      else c.bag[to.index] = this.newItem(item.defId, n);
+      item.qty -= n;
+      return;
+    }
     // Stack merge inside the bag.
     if (other && to.type === 'bag' && from.type === 'bag' && other.defId === item.defId && this.def(item.defId).stackable) {
       other.qty += item.qty;
@@ -4712,7 +4758,8 @@ export class Game {
     this.setLoc(c, from, other);
     // Two-handed weapons and shields exclude each other.
     const main = c.equipment.mainHand ? this.def(c.equipment.mainHand.defId) : null;
-    if (main?.weapon?.twoHanded && c.equipment.offHand) {
+    const offDef = c.equipment.offHand ? this.def(c.equipment.offHand.defId) : null;
+    if (main?.weapon && offDef && (main.weapon.twoHanded || (offDef.kind === 'weapon' && !isLightWeapon(main)))) {
       const drop = to.type === 'slot' && to.slot === 'offHand' ? 'mainHand' : 'offHand';
       const idx = this.firstFreeBag(c);
       if (idx < 0) {
@@ -4746,7 +4793,7 @@ export class Game {
     return { character: c.name, item: def.name, slot, changed: true, ...(before ? { put_away: before } : {}) };
   }
 
-  give(playerId: string, characterId: string, from: InvLoc, toCharacterId: string) {
+  give(playerId: string, characterId: string, from: InvLoc, toCharacterId: string, qty?: number) {
     const c = this.actor(playerId, characterId, false);
     const t = this.char(toCharacterId);
     if (t.id === c.id) return;
@@ -4755,10 +4802,16 @@ export class Game {
     const item = this.getLoc(c, from);
     if (!item) throw new GameError(this.t`Nothing there`);
     if (this.s.phase === 'combat' && cheb(c, t) > 1) throw new GameError(this.t`${t.name} is too far away to hand that over mid-fight`);
-    if (!this.addToBag(t, item.defId, item.qty)) throw new GameError(this.t`${t.name}'s bag is full`);
-    this.setLoc(c, from, null);
+    const part = qty !== undefined && item.qty > 1 ? Math.floor(Number(qty)) : item.qty;
+    if (!(part >= 1 && part <= item.qty)) throw new GameError(this.t`Pick a number between 1 and ${item.qty}`);
+    if (part < item.qty && !this.def(item.defId).stackable) throw new GameError(this.t`That cannot be split`);
+    if (!this.addToBag(t, item.defId, part)) throw new GameError(this.t`${t.name}'s bag is full`);
+    if (part < item.qty) item.qty -= part;
+    else this.setLoc(c, from, null);
     this.refresh(c);
-    this.log('system', this.t`${c.name} hands ${this.n(this.def(item.defId).name)} to ${t.name}.`);
+    this.log('system', part > 1
+      ? this.t`${c.name} hands ${part} × ${this.n(this.def(item.defId).name)} to ${t.name}.`
+      : this.t`${c.name} hands ${this.n(this.def(item.defId).name)} to ${t.name}.`);
   }
 
   useItem(playerId: string, characterId: string, uid: string, targetId?: string) {

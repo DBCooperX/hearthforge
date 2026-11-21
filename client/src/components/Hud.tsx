@@ -4,6 +4,7 @@ import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from
 import { castLevel, diceAtLevel, upcastable } from '../../../shared/spells';
 import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
+import { isLightWeapon } from '../../../shared/build';
 import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
@@ -22,7 +23,7 @@ const ACTIVE: Record<string, string> = {
   superior_defense: 'superior defense', holy_nimbus: 'holy nimbus', natures_veil: 'invisible', dodge: 'dodging',
 };
 
-export type Targeting = { kind: 'attack' } | { kind: 'ability'; abilityId: string; level?: number; item?: string } | { kind: 'item'; uid: string } | null;
+export type Targeting = { kind: 'attack' } | { kind: 'offhand' } | { kind: 'ability'; abilityId: string; level?: number; item?: string } | { kind: 'item'; uid: string } | null;
 
 export function TurnBar({ state }: { state: GameState }) {
   const t = useT();
@@ -232,6 +233,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
 
   // The common actions: always there, in a fixed place.
   const cunning = hasFeature(c, 'cunning_action');
+  const twoWeapons = isLightWeapon(itemDef(state.items, c.equipment.mainHand?.defId ?? '')) && isLightWeapon(itemDef(state.items, c.equipment.offHand?.defId ?? '')) && !c.form;
   const common: Entry[] = [
     {
       ref: 'attack', name: t('Attack'), icon: <Glyph keys={['action:attack']} emoji="⚔️" />, cost: 'action',
@@ -240,6 +242,13 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       tip: <>{t('Attack with your main-hand weapon. You can also just click an enemy.')}{combat.attacksLeft > 0 && actionUsed && <em>{t('one more attack')}</em>}</>,
       run: () => toggle({ kind: 'attack' }),
     },
+    ...(twoWeapons ? [{
+      ref: 'offhand', name: t('Off-hand attack'), icon: <Glyph keys={['action:attack']} emoji="🗡️" />, cost: 'bonus' as Cost,
+      why: general || (!combat.attacked ? t('Attack with your main hand first.') : combat.bonusUsed ? spentWhy('bonus') : ''),
+      on: targeting?.kind === 'offhand',
+      tip: <>{t('Two-weapon fighting: after attacking with a light weapon, a bonus action attacks with the light weapon in your other hand. Its damage adds no ability modifier.')}</>,
+      run: () => toggle({ kind: 'offhand' }),
+    }] : []),
     ...COMMON_IDS.filter((id) => c.abilityIds.includes(id)).map(abilityEntry),
     {
       ref: 'disengage', name: t('Disengage'), icon: <Glyph keys={['action:disengage']} emoji="🏃" />, cost: cunning ? 'bonus' : 'action',
