@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Combat
+- **Smarter monster movement.** Archers and casters now pick where to stand: a square they can shoot their target from, out of arm's reach, behind a tree, rock or crate when there is one, instead of standing in the open or shooting point-blank with Disadvantage. Goblins slip out of reach with Nimble Escape before shooting. "Hold position" may still take a step or two into cover. Creatures backing off look for distance and cover. Melee monsters walk through their allies' squares (but never stop on them), so a creature stuck behind a friend in a doorway or corridor no longer just stands there; if its target is walled in, it goes for a hero it can reach, or at least closes in. Fliers such as bats, stirges and dragons move at their flying speed.
+- **Attack and spell animations always play.** The blow that ends a fight (a Fire Bolt on the last goblin) now plays on the battle map before the victory or defeat card rises, instead of the map being swapped out under it. A creature felled mid-fight stays until the hit reaches it, with its damage number, then fades. Saves against breath weapons, poisons, charms and holds show a ring too, not only spell saves that deal damage.
+
 ### Accounts
 - **Rename accounts.** Players rename themselves in their profile; the Innkeeper renames any account, the default "innkeeper" too, from Players → Accounts. Seats at tables follow the new name (unless someone there already has it), and sessions stay signed in. The password-recovery file now finds the owner even after a rename.
 - **Clear your stats.** In the profile: reset all numbers and the hero list, clear the whole list, or remove one hero's entry (the hero stays at the table). The Innkeeper can clear any account's stats.

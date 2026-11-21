@@ -59,7 +59,7 @@ const MONSTER_TOOL = tool(
     tactic: {
       type: 'string',
       enum: ['engage', 'hold_position', 'retreat', 'disengage'],
-      description: 'engage: move as needed to make the attack. hold_position: stay put and attack only if already in range. retreat: back away, then use a ranged attack if it has one; leaving a hero\'s reach lets that hero make an opportunity attack. disengage: back away without provoking, but it gives up its attack (creatures with Nimble Escape still attack).',
+      description: 'engage: move as needed to make the attack. The server picks the square: archers and casters find one they can shoot from, out of reach and behind cover if there is any; melee creatures close in, past their allies. hold_position: stay put (at most a step or two into cover) and attack only if in range; for guards and sentries, not for archers. retreat: back away toward distance and cover, then use a ranged attack if it has one; leaving a hero\'s reach lets that hero make an opportunity attack. disengage: back away without provoking, but it gives up its attack (creatures with Nimble Escape still attack).',
     },
   },
 );
