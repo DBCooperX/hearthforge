@@ -103,7 +103,7 @@ export interface MusicLibrary {
 
 export const MUSIC_ERRORS = {
   failed: 'That did not work. The server log says more.',
-  no_key: 'Add your free Freesound API key first (Settings → Playing).',
+  no_key: 'Add your free Freesound API key first (Sound and voice → Switches and keys).',
   forbidden: 'Music is managed in the Innkeeper, by the owner of this server.',
   not_audio: 'This is not an audio file (mp3, ogg, m4a, wav or flac).',
   too_big: 'This file is too large (96 MB at most).',

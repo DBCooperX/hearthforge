@@ -88,7 +88,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
   if (!lib) return <div className="settings-body"><p className="muted">{error ? t(MUSIC_ERRORS.failed) : t('Loading…')}</p></div>;
   return (
     <div className="settings-body" onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-      {!lib.enabled && <p className="art-note">{t('Music is switched off on this server (Settings → Playing).')}</p>}
+      {!lib.enabled && <p className="art-note">{t('Music is switched off on this server (Sound and voice → Switches and keys).')}</p>}
       <p className="muted small">{t(layer === 'music'
         ? 'Players hear one track at a time, picked at random from the files of the current scene.'
         : 'Ambient loops play quietly under the music: a crowd, a fire, wind. A file plays in the scene you assign it to.')}</p>
@@ -116,7 +116,7 @@ export function SoundLibrary({ layer }: { layer: MusicLayer }) {
 
       {layer === 'ambient' && (
         <p className="art-note">
-          {t('With a free Freesound API key (Settings → Playing) the server can fetch CC0 loops for the tavern, town, overworld and dungeon.')}{' '}
+          {t('With a free Freesound API key (Sound and voice → Switches and keys) the server can fetch CC0 loops for the tavern, town, overworld and dungeon.')}{' '}
           <button type="button" disabled={!!busy || lib.pending} onClick={() => void run('freesound', () => act({ do: 'freesound' }))}>{busy === 'freesound' ? t('Downloading…') : t('Get CC0 loops from Freesound')}</button>
         </p>
       )}

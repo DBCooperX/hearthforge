@@ -3,8 +3,8 @@
 // It is reached from the list of tables and from Settings, by accounts with the Innkeeper role.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ADMIN_ERRORS, HTTPS_DNS_PROVIDERS, MODEL_SUGGESTIONS, type HttpsStatus, SETTINGS, SETTING_GROUPS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
-  type BackupInfo, type LogLine, type SettingDef, type SettingGroup, type SettingValue, type UpdaterStatus, type UsageReport, type UsageTotals,
+  ADMIN_ERRORS, HTTPS_DNS_PROVIDERS, MODEL_SUGGESTIONS, type HttpsStatus, SETTINGS, type AdminBan, type AdminConnection, type AdminOverview, type AdminStatus, type AdminTable,
+  type BackupInfo, type LogLine, type SettingDef, type SettingValue, type UpdaterStatus, type UsageReport, type UsageTotals,
 } from '../../../shared/admin';
 import { CLASS_INFO } from '../../../shared/content';
 import { chf, type CreditConfig, type CreditReport } from '../../../shared/credits';
@@ -20,7 +20,7 @@ import { inn, innDownload, InnError } from './innkeeperApi';
 import { signedOut } from '../account';
 import type { AccountRow, AccountView, InviteView, LegacySeat, Role } from '../../../shared/accounts';
 import { playTime } from './Profile';
-import { ASSET_TABS, INN_MISC, INN_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
+import { ART_TABS, INN_MISC, INN_SECTIONS, INN_TABS, SERVER_TABS, SOUND_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
 import { SfxLibrary } from './SfxLibrary';
 import { NarratorLibrary } from './NarratorLibrary';
@@ -29,7 +29,21 @@ import { TabBar, Window } from './Window';
 import { ask } from './Confirm';
 
 type Tab = keyof typeof INN_TABS;
-const TAB_ICONS: Record<Tab, IconName> = { overview: 'innkeeper', tables: 'table', players: 'people', assets: 'inventory', settings: 'settings', server: 'up', usage: 'coin', logs: 'lore', backups: 'journal' };
+const TAB_ICONS: Record<Tab, IconName> = { overview: 'innkeeper', tables: 'table', players: 'people', costs: 'coin', dm: 'quest', sound: 'sound', art: 'inventory', server: 'up' };
+
+/** Where each server setting lives: next to the feature it controls. */
+const DM_SECTIONS = [
+  { title: INN_SECTIONS.ai, keys: ['ANTHROPIC_API_KEY', 'HEARTHFORGE_DM_MODEL_STANDARD', 'HEARTHFORGE_DM_MODEL_KEY', 'HEARTHFORGE_DM_MODEL_BACKGROUND', 'HEARTHFORGE_DM_FORCE_MODEL', 'HEARTHFORGE_DM_STORY_ON_KEY', 'HEARTHFORGE_DM_EFFORT'] },
+  { title: INN_SECTIONS.newTables, keys: ['HEARTHFORGE_DM_TONE', 'HEARTHFORGE_DM_RULES', 'HEARTHFORGE_DM_RATING'] },
+  { title: INN_SECTIONS.timing, keys: ['HEARTHFORGE_TURN_WAIT', 'HEARTHFORGE_UNDO_WINDOW', 'HEARTHFORGE_REACTION_WAIT'] },
+];
+const SOUND_SECTIONS = [
+  { title: INN_SECTIONS.switches, keys: ['HEARTHFORGE_MUSIC', 'HEARTHFORGE_SFX', 'HEARTHFORGE_NARRATOR'] },
+  { title: INN_SECTIONS.soundKeys, keys: ['FREESOUND_API_KEY', 'ELEVENLABS_API_KEY', 'OPENAI_API_KEY'] },
+];
+const ART_SECTIONS = [{ title: INN_SECTIONS.art, keys: ['HEARTHFORGE_ART', 'HEARTHFORGE_AUTO_ASSETS', 'HEARTHFORGE_ART_UPLOADS'] }];
+const SERVER_SECTIONS = [{ title: INN_SECTIONS.server, keys: ['HEARTHFORGE_AUTO_UPDATE', 'HEARTHFORGE_TRUST_PROXY'] }];
+type Section = { title: string; keys: string[] };
 
 const errorText = (t: Translate, err: unknown) => {
   const code = err instanceof InnError ? err.code : 'failed';
@@ -95,7 +109,7 @@ function Overview({ fail, say, go, firstPassword }: PaneProps & { go: (tab: Tab)
       {firstPassword && <Note kind="warn"><span>{t('You are still using the first password. Choose your own.')}</span><button type="button" onClick={() => go('server')}>{t('Change password')}</button></Note>}
       {o.restartPending && <Note kind="warn"><span>{t('Settings were changed. They apply after a restart.')}</span><button type="button" onClick={() => go('server')}>{t('To the restart')}</button></Note>}
       {o.updater.connected && o.updater.behind > 0 && <Note kind="good"><span>{newVersion(o.updater.behind, t)}</span><button type="button" onClick={() => go('server')}>{t('Show')}</button></Note>}
-      {o.dm.mode === 'scripted' && <Note><span>{t('No API key is in use, so the scripted Dungeon Master runs the tables.')}</span><button type="button" onClick={() => go('settings')}>{t('Add a key')}</button></Note>}
+      {o.dm.mode === 'scripted' && <Note><span>{t('No API key is in use, so the scripted Dungeon Master runs the tables.')}</span><button type="button" onClick={() => go('dm')}>{t('Add a key')}</button></Note>}
       <div className="inn-stats">
         <Stat label={t('Tables')} value={o.tables} sub={t('{n} with players', { n: o.playing })} />
         <Stat label={t('Connections')} value={o.connections} />
@@ -123,16 +137,41 @@ function Overview({ fail, say, go, firstPassword }: PaneProps & { go: (tab: Tab)
 
 // ---------------------------------------------------------------------------- assets
 
-function AssetsPane() {
+/** A section with its own row of tabs, filling the pane: sound, art and the server. */
+function SubTabs<K extends string>({ tabs, children }: { tabs: Record<K, string>; children: (tab: K) => ReactNode }) {
   const t = useT();
-  const [sub, setSub] = useState<keyof typeof ASSET_TABS>('music');
+  const ids = Object.keys(tabs) as K[];
+  const [sub, setSub] = useState<K>(ids[0]);
   return (
     <div className="assets-pane">
-      <TabBar tabs={(Object.keys(ASSET_TABS) as (keyof typeof ASSET_TABS)[]).map((id) => ({ id, label: t(ASSET_TABS[id]) }))} value={sub} onChange={setSub} />
-      <div className="assets-body">
-        {sub === 'art' ? <ArtWindow embedded /> : sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : <SoundLibrary key={sub} layer={sub} />}
-      </div>
+      <TabBar tabs={ids.map((id) => ({ id, label: t(tabs[id]) }))} value={sub} onChange={setSub} />
+      <div className="assets-body">{children(sub)}</div>
     </div>
+  );
+}
+
+function SoundPane(pane: PaneProps & { go: (tab: Tab) => void }) {
+  return (
+    <SubTabs tabs={SOUND_TABS}>
+      {(sub) => sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : sub === 'settings' ? <div className="inn-sub"><SettingsBlock {...pane} sections={SOUND_SECTIONS} /></div> : <SoundLibrary key={sub} layer={sub} />}
+    </SubTabs>
+  );
+}
+
+function ArtPane(pane: PaneProps & { go: (tab: Tab) => void }) {
+  return <SubTabs tabs={ART_TABS}>{(sub) => sub === 'art' ? <ArtWindow embedded /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}</SubTabs>;
+}
+
+function ServerTabs(pane: PaneProps & { go: (tab: Tab) => void; firstPassword: boolean; onPassword: () => void }) {
+  return (
+    <SubTabs tabs={SERVER_TABS}>
+      {(sub) => sub === 'logs' ? <div className="inn-sub fill"><LogsPane {...pane} /></div> : sub === 'backups' ? <div className="inn-sub"><BackupsPane {...pane} /></div> : (
+        <div className="inn-sub inn-stack">
+          <ServerPane {...pane} />
+          <SettingsBlock {...pane} sections={SERVER_SECTIONS} />
+        </div>
+      )}
+    </SubTabs>
   );
 }
 
@@ -410,12 +449,11 @@ function SettingRow({ def, value, draft, onDraft, onReset }: { def: SettingDef; 
   );
 }
 
-function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void }) {
+function SettingsBlock({ fail, say, go, sections }: PaneProps & { go: (tab: Tab) => void; sections: Section[] }) {
   const t = useT();
   const [data, setData] = useState<{ settings: SettingValue[]; restartPending: boolean } | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [test, setTest] = useState<KeyResult | 'busy' | null>(null);
-  const [group, setGroup] = useState<SettingGroup>('dm');
   useEffect(() => { inn<typeof data>('/env').then(setData).catch(fail); }, [fail]);
   if (!data) return <p className="muted">{t('Loading…')}</p>;
   const dirty = Object.keys(draft).length > 0;
@@ -430,16 +468,14 @@ function SettingsPane({ fail, say, go }: PaneProps & { go: (tab: Tab) => void })
     setTest('busy');
     try { setTest(await inn<KeyResult>('/env/test', { body: { key: draft.ANTHROPIC_API_KEY } })); } catch (err) { setTest(null); fail(err); }
   };
-  const groups = Object.keys(SETTING_GROUPS) as SettingGroup[];
-  const changedIn = (g: SettingGroup) => SETTINGS.filter((d) => d.group === g && d.key in draft).length;
   return (
     <div className="inn-stack inn-settings">
-      <TabBar tabs={groups.map((g) => ({ id: g, label: t(SETTING_GROUPS[g]), count: changedIn(g) || undefined }))} value={group} onChange={setGroup} />
       {data.restartPending && <Note kind="warn"><span>{t('Settings were changed. They apply after a restart.')}</span><button type="button" onClick={() => go('server')}>{t('To the restart')}</button></Note>}
       <datalist id="inn-models">{MODEL_SUGGESTIONS.map((m) => <option key={m} value={m} />)}</datalist>
-      {[group].map((g) => (
-        <section key={g}>
-          {SETTINGS.filter((d) => d.group === g).map((def) => {
+      {sections.map((sec) => (
+        <section key={sec.title}>
+          <h3>{t(sec.title)}</h3>
+          {sec.keys.map((k) => SETTINGS.find((d) => d.key === k)).filter((d): d is SettingDef => !!d).map((def) => {
             const value = data.settings.find((v) => v.key === def.key);
             if (!value) return null;
             return (
@@ -623,7 +659,7 @@ function ServerPane({ fail, say, firstPassword, onPassword }: PaneProps & { firs
             {u.log.length > 0 && <details open={busy || u.state === 'failed'}><summary>{t('Updater log')}</summary><pre className="inn-log small">{u.log.join('\n')}</pre></details>}
           </>
         )}
-        <p className="muted small">{t('If a new version does not start, the updater puts the previous one back by itself. Automatic updates can be switched on under Settings.')}</p>
+        <p className="muted small">{t('If a new version does not start, the updater puts the previous one back by itself. Automatic updates can be switched on below, under Server settings.')}</p>
       </section>
       <HttpsSection fail={fail} say={say} />
       <section>
@@ -923,17 +959,16 @@ export function Innkeeper({ account, onClose }: { account: AccountView; onClose:
               </button>
             ))}
           </nav>
-          <div className={tab === 'assets' || tab === 'logs' ? 'inn-pane fill' : 'inn-pane'}>
+          <div className={tab === 'sound' || tab === 'art' || tab === 'server' ? 'inn-pane fill' : 'inn-pane'}>
             {message && <div className={message.bad ? 'inn-flash is-bad' : 'inn-flash'} role="status">{message.text}</div>}
             {tab === 'overview' && <Overview {...pane} go={setTab} firstPassword={first} />}
             {tab === 'tables' && <Tables {...pane} />}
             {tab === 'players' && <><AccountsPane {...pane} me={account.id} /><PlayersPane {...pane} /></>}
-            {tab === 'assets' && <AssetsPane />}
-            {tab === 'settings' && <SettingsPane {...pane} go={setTab} />}
-            {tab === 'server' && <ServerPane {...pane} firstPassword={first} onPassword={loadStatus} />}
-            {tab === 'usage' && <div className="inn-stack"><CreditsPane {...pane} /><UsagePane {...pane} /></div>}
-            {tab === 'logs' && <LogsPane {...pane} />}
-            {tab === 'backups' && <BackupsPane {...pane} />}
+            {tab === 'costs' && <div className="inn-stack"><CreditsPane {...pane} /><UsagePane {...pane} /></div>}
+            {tab === 'dm' && <SettingsBlock {...pane} go={setTab} sections={DM_SECTIONS} />}
+            {tab === 'sound' && <SoundPane {...pane} go={setTab} />}
+            {tab === 'art' && <ArtPane {...pane} go={setTab} />}
+            {tab === 'server' && <ServerTabs {...pane} go={setTab} firstPassword={first} onPassword={loadStatus} />}
           </div>
         </div>
       )}

@@ -81,7 +81,7 @@ export function NarratorLibrary() {
           {VOICE_PROVIDERS.map((p) => <option key={p} value={p} disabled={!usable(p) && p !== c.provider}>{t(PROVIDER_LABELS[p])}{!usable(p) ? ` (${p === 'piper' ? t('not in this image') : t('needs a key')})` : ''}</option>)}
         </select>
       </div>
-      {!lib.keys.openai && !lib.keys.elevenlabs && <p className="muted small">{t('For OpenAI or ElevenLabs, add the API key under Settings → Voice and restart the server.')}</p>}
+      {!lib.keys.openai && !lib.keys.elevenlabs && <p className="muted small">{t('For OpenAI or ElevenLabs, add the API key under Sound and voice → Switches and keys and restart the server.')}</p>}
 
       {c.provider === 'piper' && (
         <>

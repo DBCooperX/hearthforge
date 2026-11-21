@@ -100,7 +100,7 @@ export interface VoiceLibrary {
 export const VOICE_ERRORS = {
   failed: 'That did not work. The server log says more.',
   forbidden: 'The narrator is set up in the Innkeeper, by the owner of this server.',
-  no_key: 'This needs an API key first (Settings → Voice).',
+  no_key: 'This needs an API key first (Sound and voice → Switches and keys).',
   not_installed: 'This voice is not on the server yet. Download it first.',
   no_piper: 'Piper is not part of this server. Rebuild the image with the current Dockerfile.',
   bad_request: 'That did not work. The server log says more.',
