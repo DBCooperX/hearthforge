@@ -734,11 +734,11 @@ function UsageRows<T extends UsageTotals>({ rows, name, head }: { rows: T[]; nam
   const most = Math.max(1e-9, ...rows.map((r) => r.cost ?? 0));
   return (
     <table className="inn-table">
-      <thead><tr><th>{head}</th><th className="num">{t('Calls')}</th><th className="num">{t('Input')}</th><th className="num">{t('Output')}</th><th className="num">{t('From cache')}</th><th className="num">{t('Costs')}</th><th /></tr></thead>
+      <thead><tr><th>{head}</th><th className="num">{t('Calls')}</th><th className="num">{t('Input')}</th><th className="num">{t('Output')}</th><th className="num">{t('From cache')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Voice')}</th><th className="num">{t('Costs')}</th><th /></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={name(r)}>
-            <td>{name(r)}</td><td className="num">{r.calls}</td><td className="num">{tokens(r.input + r.cacheWrite)}</td><td className="num">{tokens(r.output)}</td><td className="num">{tokens(r.cacheRead)}</td><td className="num">{money(r.cost)}</td>
+            <td>{name(r)}</td><td className="num">{r.calls}</td><td className="num">{tokens(r.input + r.cacheWrite)}</td><td className="num">{tokens(r.output)}</td><td className="num">{tokens(r.cacheRead)}</td><td className="num">{r.images ? money(r.images) : ''}</td><td className="num">{r.voice ? money(r.voice) : ''}</td><td className="num">{money(r.cost)}</td>
             <td className="inn-bar"><i style={{ width: `${Math.round(((r.cost ?? 0) / most) * 100)}%` }} /></td>
           </tr>
         ))}
@@ -840,7 +840,7 @@ function UsagePane({ fail }: PaneProps) {
   const t = useT();
   const [r] = usePoll<UsageReport>('/usage', 15000, fail);
   if (!r) return <p className="muted">{t('Loading…')}</p>;
-  if (!r.total.calls) return <p className="muted">{t('The AI Dungeon Master has not been called yet. Costs show up here once it has.')}</p>;
+  if (!r.total.calls && !r.total.images && !r.total.voice) return <p className="muted">{t('The AI Dungeon Master has not been called yet. Costs show up here once it has.')}</p>;
   return (
     <div className="inn-stack">
       <div className="inn-stats">
@@ -848,11 +848,13 @@ function UsagePane({ fail }: PaneProps) {
         <Stat label={t('Input')} value={tokens(r.total.input + r.total.cacheWrite)} sub={t('tokens')} />
         <Stat label={t('Output')} value={tokens(r.total.output)} sub={t('tokens')} />
         <Stat label={t('From cache')} value={tokens(r.total.cacheRead)} sub={t('tokens')} />
+        <Stat label={t('Pictures')} value={money(r.total.images ?? 0)} sub={t('image service')} />
+        <Stat label={t('Voice')} value={money(r.total.voice ?? 0)} sub={t('narrator')} />
       </div>
-      <section><h3>{t('By model')}</h3><UsageRows rows={r.models} name={(m) => m.model} head={t('Model')} /></section>
+      <section><h3>{t('By model')}</h3><UsageRows rows={r.models} name={(m) => (m.model === 'images' ? t('Pictures') : m.model === 'voice' ? t('Narrator voice') : m.model)} head={t('Model')} /></section>
       <section><h3>{t('By table')}</h3><UsageRows rows={r.tables} name={(x) => x.title} head={t('Table')} /></section>
       <section><h3>{t('By day')}</h3><UsageRows rows={r.days.slice(0, 30)} name={(d) => d.day} head={t('Day')} /></section>
-      <p className="muted small">{t('An estimate from the tokens the API reported and these list prices per million tokens: {prices}. Your invoice from Anthropic is what counts.', { prices: r.prices.map((p) => `${p.model} $${p.input} / $${p.output}`).join(', ') })}</p>
+      <p className="muted small">{t('An estimate from the tokens the API reported and these list prices per million tokens: {prices}, plus what pictures and the narrator voice cost at the prices set for them. Your invoices are what counts.', { prices: r.prices.map((p) => `${p.model} $${p.input} / $${p.output}`).join(', ') })}</p>
     </div>
   );
 }

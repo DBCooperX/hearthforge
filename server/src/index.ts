@@ -165,6 +165,8 @@ function payersAt(table: string): string[] {
 
 /** Book what the AI cost at a table, and tell the players charged how much credit is left. */
 function bill(table: string, usd: number, kind: CostKind) {
+  // Pictures and voice also count in the Innkeeper's AI costs, next to the Dungeon Master's tokens.
+  if (kind !== 'claude') usage.recordExtra(table, kind, usd);
   // Reading a campaign book is paid by whoever brought it; books from the list for everyone are on the house.
   if (table.startsWith('campaign:')) {
     const owner = campaigns.info(table.slice(9))?.owner;
@@ -219,7 +221,7 @@ const hooks: RoomHooks = {
       // Paid by the player whose hero it is; seats from before accounts get the drawn bust.
       const owner = creditAccount(hero.ownerId);
       if (!owner || !credits.mayPlay(owner) || illustrator.portraitGate(owner.id, hero)) return;
-      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero }, (usd) => tellCredits(credits.charge([owner.id], usd, 'images')))
+      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero }, (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
         .then((p) => {
           const now = room.game.s.characters.find((c) => c.id === hero.id);
           // The look may have changed while it was painted; then the next flush asks for another.
@@ -589,7 +591,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
       if (body.do === 'sample' || body.do === 'sample_portrait') {
         // The Innkeeper trying a style pays for it like anyone else: it shows in their own costs.
         const me = accounts.account(req.headers[SESSION_HEADER]);
-        const pay = (usd: number) => { if (me) credits.charge([me.id], usd, 'images'); };
+        const pay = (usd: number) => { usage.recordExtra('Innkeeper samples', 'images', usd); if (me) credits.charge([me.id], usd, 'images'); };
         const picture = body.do === 'sample' ? await illustrator.sample(pay) : await illustrator.samplePortrait(pay);
         return json(200, { ...illustrator.library(), sample: picture });
       }

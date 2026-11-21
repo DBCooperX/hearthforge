@@ -1,7 +1,7 @@
 // What the AI Dungeon Master costs: tokens per day, table and model, with an estimate in dollars.
 // The numbers are added up in one small file in the data volume and kept for ninety days.
 import { join } from 'node:path';
-import type { UsageReport, UsageTotals } from '../../../shared/admin';
+import type { ExtraKind, UsageReport, UsageTotals } from '../../../shared/admin';
 import { readJson, writePrivate } from './config';
 
 /**
@@ -47,7 +47,17 @@ export function sampleCost(u: UsageSample): number | null {
   return costOf(u.model, [1, u.input || 0, u.output || 0, u.cacheRead || 0, u.cacheWrite || 0, u.cacheWrite1h || 0]);
 }
 
-const zero = (): UsageTotals => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+const zero = (): UsageTotals => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, images: 0, voice: 0 });
+
+/** Pictures and voice: counted as calls, with their dollars in their own field and in the cost. */
+function addExtra(into: UsageTotals, kind: ExtraKind, c: [number, number]) {
+  into.calls += c[0];
+  into[kind] = (into[kind] ?? 0) + c[1];
+  if (into.cost !== null) into.cost += c[1];
+}
+
+/** day -> table -> kind -> [calls, dollars] */
+type Extras = Record<string, Record<string, Partial<Record<ExtraKind, [number, number]>>>>;
 
 function add(into: UsageTotals, model: string, c: Counts) {
   into.calls += c[0]; into.input += c[1]; into.output += c[2]; into.cacheRead += c[3]; into.cacheWrite += c[4];
@@ -60,27 +70,50 @@ export const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 export class Usage {
   private file: string;
   private book: Book;
+  private extraFile: string;
+  private extras: Extras;
   private timer: NodeJS.Timeout | null = null;
 
   constructor(dataDir: string, private now: () => number = Date.now) {
     this.file = join(dataDir, 'usage.json');
     this.book = readJson<Book>(this.file, {});
+    this.extraFile = join(dataDir, 'usage-extras.json');
+    this.extras = readJson<Extras>(this.extraFile, {});
   }
 
-  record(u: UsageSample) {
-    const day = ((this.book[dayOf(this.now())] ??= {})[u.table] ??= {});
-    const c = (day[u.model] ??= [0, 0, 0, 0, 0]);
-    c[0] += 1; c[1] += u.input || 0; c[2] += u.output || 0; c[3] += u.cacheRead || 0; c[4] += u.cacheWrite || 0; c[5] = (c[5] ?? 0) + (u.cacheWrite1h || 0);
+  /** Book what a picture or a narrator line cost at a table, so it counts with the Dungeon Master's tokens. */
+  recordExtra(table: string, kind: ExtraKind, usd: number) {
+    if (!(usd > 0)) return;
+    const slot = ((this.extras[dayOf(this.now())] ??= {})[table] ??= {});
+    const c = (slot[kind] ??= [0, 0]);
+    c[0] += 1; c[1] += usd;
+    this.schedule();
+  }
+
+  private schedule() {
     if (!this.timer) {
       this.timer = setTimeout(() => { this.timer = null; this.flush(); }, 5000);
       this.timer.unref?.();
     }
   }
 
+  private eachExtra(fn: (day: string, table: string, kind: ExtraKind, c: [number, number]) => void) {
+    for (const [day, tables] of Object.entries(this.extras)) for (const [table, kinds] of Object.entries(tables)) for (const [kind, c] of Object.entries(kinds)) fn(day, table, kind as ExtraKind, c!);
+  }
+
+  record(u: UsageSample) {
+    const day = ((this.book[dayOf(this.now())] ??= {})[u.table] ??= {});
+    const c = (day[u.model] ??= [0, 0, 0, 0, 0]);
+    c[0] += 1; c[1] += u.input || 0; c[2] += u.output || 0; c[3] += u.cacheRead || 0; c[4] += u.cacheWrite || 0; c[5] = (c[5] ?? 0) + (u.cacheWrite1h || 0);
+    this.schedule();
+  }
+
   flush() {
     const oldest = dayOf(this.now() - KEEP_DAYS * 86400000);
     for (const day of Object.keys(this.book)) if (day < oldest) delete this.book[day];
+    for (const day of Object.keys(this.extras)) if (day < oldest) delete this.extras[day];
     try { writePrivate(this.file, JSON.stringify(this.book)); } catch (err) { console.error('[usage] could not be saved:', err); }
+    try { writePrivate(this.extraFile, JSON.stringify(this.extras)); } catch (err) { console.error('[usage] could not be saved:', err); }
   }
 
   /** Totals for the days from `from` on (YYYY-MM-DD), optionally for one table. */
@@ -93,6 +126,7 @@ export class Usage {
         for (const [model, c] of Object.entries(models)) add(t, model, c);
       }
     }
+    this.eachExtra((day, id, kind, c) => { if (day >= from && (table === undefined || id === table)) addExtra(t, kind, c); });
     return t;
   }
 
@@ -107,6 +141,9 @@ export class Usage {
         }
       }
     }
+    this.eachExtra((day, table, kind, c) => {
+      addExtra(slot(days, day), kind, c); addExtra(slot(tables, table), kind, c); addExtra(slot(models, kind), kind, c); addExtra(total, kind, c);
+    });
     const byCost = (a: UsageTotals, b: UsageTotals) => (b.cost ?? 0) - (a.cost ?? 0) || b.output - a.output;
     return {
       days: [...days].map(([day, t]) => ({ day, ...t })).sort((a, b) => (a.day < b.day ? 1 : -1)),

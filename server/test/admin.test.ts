@@ -86,6 +86,23 @@ describe('AI costs', () => {
     expect(report.total.calls).toBe(3);
   });
 
+  it('counts pictures and the narrator voice with the tokens', () => {
+    const now = Date.parse('2026-11-15T10:00:00Z');
+    const d = dir();
+    const usage = new Usage(d, () => now);
+    usage.record({ table: 'friday', model: 'claude-sonnet-5-5', input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 });
+    usage.recordExtra('friday', 'images', 0.067);
+    usage.recordExtra('friday', 'images', 0.067);
+    usage.recordExtra('friday', 'voice', 0.02);
+    usage.recordExtra('friday', 'voice', 0); // free voices cost nothing and are not counted
+    expect(usage.totals('', 'friday')).toMatchObject({ calls: 4, images: expect.closeTo(0.134, 5), voice: expect.closeTo(0.02, 5), cost: expect.closeTo(2.154, 5) });
+    usage.flush();
+    const report = new Usage(d, () => now).report((id) => id);
+    expect(report.models.map((m) => m.model).sort()).toEqual(['claude-sonnet-5-5', 'images', 'voice']);
+    expect(report.tables[0]).toMatchObject({ table: 'friday', calls: 4 });
+    expect(report.total.cost).toBeCloseTo(2.154, 5);
+  });
+
   it('says so when it does not know what a model costs', () => {
     const usage = new Usage(dir());
     usage.record({ table: 't', model: 'some-future-model', input: 10, output: 10, cacheRead: 0, cacheWrite: 0 });
