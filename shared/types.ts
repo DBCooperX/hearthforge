@@ -580,6 +580,8 @@ export interface TableSummary {
   locked: boolean;
   heroes: number;
   hostId: string | null;
+  /** When the table was last played, in milliseconds since the epoch. */
+  lastPlayed: number;
 }
 
 /** A line of table talk between players. The Dungeon Master never sees it. */
