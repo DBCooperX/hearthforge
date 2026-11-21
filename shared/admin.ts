@@ -250,9 +250,15 @@ export interface UsageTotals {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  /** Estimated cost in US dollars. Null when a model's price is not known. */
+  /** Estimated cost in US dollars, pictures and voice included. Null when a model's price is not known. */
   cost: number | null;
+  /** The part of the cost (and of `calls`) that went to pictures and to the narrator's voice, in US dollars. */
+  images?: number;
+  voice?: number;
 }
+
+/** Costs that are not the Dungeon Master's tokens. */
+export type ExtraKind = 'images' | 'voice';
 
 export interface UsageReport {
   /** Per day, newest first. */
