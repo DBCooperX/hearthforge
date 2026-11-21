@@ -7,6 +7,7 @@ import { BIOMES } from '../../../shared/battlemap';
 import { LOOK_HELP, applyLookTokens } from '../../../shared/monsterLook';
 import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
+import { ABILITY_KEYS } from '../../../shared/rules';
 import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
 import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
@@ -31,7 +32,6 @@ type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 /** Models that accept the server-side refusal fallback parameter. */
 const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-2', 'claude-fable-5-1', 'claude-sonnet-5-5'];
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
-const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 /** Journal entries kept verbatim; older ones are condensed into the chronicle. */
 const JOURNAL_KEEP = 20;
 const JOURNAL_LIMIT = 45;

@@ -28,5 +28,3 @@ export function inArea(area: MonsterArea, origin: Pt, aim: Pt, p: Pt): boolean {
   return across <= (area.width ?? 5) / 10 + 0.3;
 }
 
-/** How far an area reaches from the creature, in feet. */
-export const areaReach = (area: MonsterArea) => (area.shape === 'sphere' ? (area.range ?? 60) + area.size : area.size);

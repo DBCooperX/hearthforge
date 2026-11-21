@@ -6,6 +6,7 @@
 import { baseLook, type CreatureType, type MonsterLook, type Size } from '../../../shared/monsterLook';
 import type { LightKindId } from '../../../shared/light';
 import type { AbilityKey } from '../../../shared/types';
+import { ABILITY_KEYS } from '../../../shared/rules';
 import srd from './srd/monsters.json';
 import { MONSTER_SPELLS } from './monsterSpells';
 
@@ -733,7 +734,6 @@ interface SrdMonster {
   legendary?: { uses: number; options: LegendaryOption[] }; flags?: MonsterFlags; traits?: { name: string; slot?: string; text: string }[]; look: MonsterLook; gold?: string;
 }
 
-const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const mod = (score: number) => Math.floor((score - 10) / 2);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -799,5 +799,3 @@ export function crValue(cr: string): number {
   return b ? a / b : a;
 }
 
-/** Every damaging or disabling thing a creature can do on its turn, by name. */
-export const actionNames = (d: MonsterDef): string[] => [...new Set([...d.attacks.map((a) => a.name), ...(d.specials ?? []).filter((s) => s.slot === 'action' || s.slot === 'bonus').map((s) => s.name)])];

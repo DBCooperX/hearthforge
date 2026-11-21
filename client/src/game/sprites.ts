@@ -5,6 +5,7 @@
 
 import { setItemIcons } from './itemArt';
 import { battleTileGrid } from './battleTiles';
+import { mulberry32 } from '../../../shared/start';
 
 export const TILE = 16;
 type Grid = (string | null)[][];
@@ -136,16 +137,7 @@ function wolf(): Grid {
   return outline(g);
 }
 
-function mulberry(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const mulberry = mulberry32;
 
 function floor(variant: number): Grid {
   const g = blank();
@@ -225,12 +217,6 @@ export function spriteCanvas(name: string): HTMLCanvasElement {
 
 const urlCache = new Map<string, string>();
 
-/** Sprite as a data URL, for portraits in the React UI. */
-export function spriteUrl(name: string): string {
-  let u = urlCache.get(name);
-  if (!u) { u = spriteCanvas(name).toDataURL(); urlCache.set(name, u); }
-  return u;
-}
 
 const TILE_SPRITES = /^(floor|wall)/;
 

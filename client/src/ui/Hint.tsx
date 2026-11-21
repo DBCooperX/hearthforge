@@ -86,13 +86,3 @@ export function Info({ text, title, side }: { text: ReactNode; title?: ReactNode
   );
 }
 
-/** A choice chip whose explanation waits in a tooltip. The wrapper keeps the tooltip working while the chip is disabled. */
-export function Chip({ on, disabled, hint, onClick, children }: { on: boolean; disabled?: boolean; hint?: ReactNode; onClick: () => void; children: ReactNode }) {
-  return (
-    <Hint text={hint}>
-      <span className="chip-wrap">
-        <button type="button" className={on ? 'on' : ''} aria-pressed={on} disabled={disabled} onClick={onClick}>{children}</button>
-      </span>
-    </Hint>
-  );
-}

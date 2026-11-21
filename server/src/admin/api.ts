@@ -8,6 +8,7 @@ import type { InternalState } from '../game/engine';
 import type { Room } from '../room';
 import type { Auth } from './auth';
 import { AccountsError, type Accounts } from '../accounts';
+import { readBody as readRaw } from '../http';
 import { SESSION_HEADER, legacySeats } from '../accountApi';
 import { ROLES, type Role } from '../../../shared/accounts';
 import { ConfigError, type Config } from './config';
@@ -76,18 +77,8 @@ class Refused extends Error {
   constructor(readonly status: number, readonly code: AdminError) { super(code); }
 }
 
-function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
-  return new Promise((done, fail) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    req.on('data', (c: Buffer) => {
-      size += c.length;
-      if (size > max) { fail(new Refused(413, 'too_big')); req.resume(); } else chunks.push(c);
-    });
-    req.on('end', () => done(Buffer.concat(chunks)));
-    req.on('error', fail);
-  });
-}
+
+const readBody = (req: IncomingMessage, max: number) => readRaw(req, max, () => new Refused(413, 'too_big'));
 
 const tableIdOk = (id: string) => /^[a-z0-9_-]{1,32}$/.test(id);
 const backupNameOk = (name: string) => /^hearthforge-[0-9a-z-]{1,40}\.json$/.test(name);

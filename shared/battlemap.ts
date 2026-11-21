@@ -5,6 +5,9 @@
 import type { TerrainCode } from './hex';
 import type { LocationKind } from './types';
 
+/** Distance on the battle grid, in squares: diagonals count as one. */
+export const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
 export const BIOMES = ['dungeon', 'cave', 'ruin', 'tavern', 'town', 'road', 'bridge', 'camp', 'plains', 'forest', 'hills', 'mountains', 'swamp'] as const;
 export type Biome = (typeof BIOMES)[number];
 export const isBiome = (v: unknown): v is Biome => typeof v === 'string' && (BIOMES as readonly string[]).includes(v);

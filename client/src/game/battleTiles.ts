@@ -4,20 +4,12 @@
 // a single sprite per square.
 
 import type { Biome } from '../../../shared/battlemap';
+import { mulberry32 } from '../../../shared/start';
 
 type Grid = (string | null)[][];
 const N = 16;
 
-function mulberry(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const mulberry = mulberry32;
 
 const rect = (g: Grid, x0: number, y0: number, x1: number, y1: number, c: string) => { for (let y = Math.max(0, y0); y <= Math.min(N - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(N - 1, x1); x++) g[y][x] = c; };
 const px = (g: Grid, x: number, y: number, c: string) => { if (x >= 0 && y >= 0 && x < N && y < N) g[y][x] = c; };

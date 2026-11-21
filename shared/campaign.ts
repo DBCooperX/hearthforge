@@ -8,8 +8,6 @@ type L = Record<Lang, string>;
 
 /** Largest book the server takes. */
 export const CAMPAIGN_MAX_BYTES = 64 * 1024 * 1024;
-/** File types a book can come as. */
-export const CAMPAIGN_TYPES = ['.pdf', '.txt', '.md'] as const;
 
 /**
  * How a book from the list gets onto the server, following the house rule for third-party files:
@@ -151,4 +149,3 @@ export interface CampaignPick {
   title: string;
 }
 
-export const CAMPAIGN_ERRORS = ['too_big', 'not_a_book', 'no_text', 'download_failed', 'not_found', 'forbidden', 'no_dm', 'failed', 'bad_request'] as const;

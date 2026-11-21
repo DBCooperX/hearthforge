@@ -11,7 +11,7 @@
 //    see has advantage. Both together cancel out.
 //  - Spells that need a target you can see, and opportunity attacks, need sight.
 
-import { tileBlocksSight, tilesBetween, type Biome } from './battlemap';
+import { cheb, tileBlocksSight, tilesBetween, type Biome } from './battlemap';
 import type { SpeciesId } from './types';
 
 export const LIGHT_LEVELS = ['dark', 'dim', 'bright'] as const;
@@ -40,7 +40,6 @@ export const LIGHT_KINDS = {
   glow: { bright: 0, dim: 10, carried: false },
 } as const satisfies Record<string, LightKind>;
 export type LightKindId = keyof typeof LIGHT_KINDS;
-export const isLightKind = (v: unknown): v is LightKindId => typeof v === 'string' && v in LIGHT_KINDS;
 
 /** Catalogue items a hero can light, best first, with the light each gives. */
 export const LIGHT_ITEMS: { itemId: string; kind: LightKindId }[] = [
@@ -61,7 +60,6 @@ export interface Senses { darkvision: number; blindsight: number }
 export const NO_SENSES: Senses = { darkvision: 0, blindsight: 0 };
 
 interface Pt { x: number; y: number }
-const cheb = (a: Pt, b: Pt) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const rank = (l: LightLevel) => LIGHT_LEVELS.indexOf(l);
 const brighter = (a: LightLevel, b: LightLevel) => (rank(a) >= rank(b) ? a : b);
 

@@ -16,11 +16,6 @@ export const SIZE_TILES: Record<Size, number> = { tiny: 1, small: 1, medium: 1, 
 export const CREATURE_TYPES = ['aberration', 'beast', 'celestial', 'construct', 'dragon', 'elemental', 'fey', 'fiend', 'giant', 'humanoid', 'monstrosity', 'ooze', 'plant', 'undead'] as const;
 export type CreatureType = (typeof CREATURE_TYPES)[number];
 
-/** The body a creature type gets when its catalogue entry does not say otherwise. */
-export const TYPE_BODY: Record<CreatureType, Body> = {
-  aberration: 'aberration', beast: 'beast', celestial: 'humanoid', construct: 'construct', dragon: 'dragon', elemental: 'elemental', fey: 'humanoid',
-  fiend: 'humanoid', giant: 'giant', humanoid: 'humanoid', monstrosity: 'beast', ooze: 'ooze', plant: 'plant', undead: 'humanoid',
-};
 
 export const COLORS = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'tan', 'grey', 'black', 'white', 'bone'] as const;
 export type Color = (typeof COLORS)[number];

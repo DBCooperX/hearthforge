@@ -14,6 +14,7 @@ import { accountSession } from '../account';
 import { Window } from '../ui/Window';
 import { sfx } from '../ui/sound';
 import { WherePicker } from './CampaignShelf';
+import { copyText } from '../ui/clipboard';
 
 type Pick = 'where' | 'begin' | 'tone' | 'challenge' | 'rating' | 'language' | 'details';
 
@@ -185,12 +186,6 @@ export function ChallengePicker({ value, host, onPick, onClose }: { value: numbe
   );
 }
 
-function copyText(text: string, field: HTMLInputElement | null): boolean {
-  if (navigator.clipboard && window.isSecureContext) { void navigator.clipboard.writeText(text); return true; }
-  if (!field) return false;
-  field.select();
-  try { return document.execCommand('copy'); } catch { return false; }
-}
 
 /** What few people change: the table's name, the story language, invite-only and the world seed. */
 function TableDetails({ state, conn, onClose }: { state: GameState; conn: Connection; onClose: () => void }) {

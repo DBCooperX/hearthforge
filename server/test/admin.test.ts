@@ -1,6 +1,6 @@
 // The Innkeeper: who gets in, what the settings file does to the environment, what the AI costs,
 // and the admin API end to end over a real HTTP server.
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -21,7 +21,6 @@ import type { Store } from '../src/db';
 import { TableBin } from '../src/bin';
 import { MemoryStore } from './memoryStore';
 import { ScriptedDM } from '../src/dm/scripted';
-import type { InternalState } from '../src/game/engine';
 import { PAUSED_MESSAGE, Room } from '../src/room';
 
 const dir = () => mkdtempSync(join(tmpdir(), 'hf-admin-'));

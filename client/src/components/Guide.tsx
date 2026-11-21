@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import { applyFeat, initiateNeeds, type Build, type Sheet } from '../../../shared/build';
-import type { Lang } from '../../../shared/i18n';
+import { metric, type Lang } from '../../../shared/i18n';
 import { fillFeat } from '../../../shared/recommend';
 import { ABILITY_KEYS, EFFECT_LINES, FEATS, GLOSSARY, SPELL_TIPS, loc, type Effect, type L, type Option, type Term } from '../../../shared/rules';
 import { abilityMod, type AbilityKey, type FeatId, type FeatPick } from '../../../shared/types';
@@ -17,7 +17,7 @@ export const dice = (expr: string, lang: Lang) => (lang === 'de' ? expr.replace(
 /** A sheet feature line in the interface language. Species traits carry their own German text. */
 export function featureText(line: string, lang: Lang, t: Translate): string {
   const e = EFFECT_LINES[line];
-  return e && lang === 'de' ? `${t(e.name)}: ${e.de}` : t(line);
+  return e && lang === 'de' ? `${t(e.name)}: ${metric(e.de)}` : t(line);
 }
 
 // ------------------------------------------------------------ glossary text

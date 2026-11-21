@@ -7,6 +7,8 @@
 // sit in a round brass (heroes) or blackened iron (monsters) frame.
 // Original generated art, CC0 like the rest.
 
+import { mulberry32 } from '../../../shared/start';
+
 export type RGB = [number, number, number];
 export type P = [number, number];
 
@@ -25,16 +27,7 @@ export function canvas(w: number, h = w): HTMLCanvasElement {
   return c;
 }
 
-export function seeded(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export const seeded = mulberry32;
 
 /** What a surface is made of. The engraving pass draws each one its own way. */
 export type Material = 'plain' | 'metal' | 'fur' | 'scales' | 'chain' | 'wood' | 'cloth' | 'leather' | 'bone' | 'hair' | 'skin';

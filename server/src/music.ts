@@ -101,7 +101,6 @@ function looksLikeAudio(bytes: Uint8Array, contentType: string): boolean {
 }
 
 let fetching = false;
-export const musicPending = () => fetching;
 
 /** A refusal the interface can explain. `code` is one of the keys of MUSIC_ERRORS. */
 export class MusicError extends Error {

@@ -73,7 +73,7 @@ import { EXPOSED, HAMPERED, HELD, HELPLESS, HERO_CONDITIONS, INCAPACITATING, typ
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollDie, rollMode, signed, type Rng, type RollMode } from './dice';
-import { COVER_BONUS, buildBattleMap, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
+import { COVER_BONUS, buildBattleMap, cheb, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZES, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { campaignShelf, viewer } from '../campaign/registry';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
@@ -356,7 +356,6 @@ interface MonsterPlan {
 
 type Pt = { x: number; y: number };
 const key = (x: number, y: number) => `${x},${y}`;
-const cheb = (a: Pt, b: Pt) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const DIRS: Pt[] = [
   { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
   { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
@@ -3054,7 +3053,6 @@ export class Game {
     }
     const chosen = choice.rep;
 
-    const start = { x: m.x, y: m.y };
     let walked: Pt[] = [];
     const shooter = !!chosen?.ranged;
     if (tactic === 'engage' && !shooter) {

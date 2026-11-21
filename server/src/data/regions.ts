@@ -8,7 +8,7 @@
 //   {atSite} {underSite} {fromSite} {inSite}           the main threat's lair with its preposition
 //   {dist}                                             "about 18 miles north-east" (premise only)
 
-import type { LocationKind, Disposition } from '../../../shared/types';
+import type { LocationKind } from '../../../shared/types';
 
 export type L = { en: string; de: string };
 /** [English, German]. German name parts are in the form that joins into a compound. */
