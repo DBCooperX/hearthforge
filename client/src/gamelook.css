@@ -7,7 +7,7 @@
 }
 html, body { cursor: var(--cursor); }
 button:not(:disabled), a, [role='button'], .map, summary, label.check, .adv-card, .choice, .menu-entry { cursor: var(--cursor-hand); }
-input[type='text'], input[type='password'], input:not([type]), textarea, .feed, .chat-feed { cursor: auto; }
+input[type='text'], input[type='password'], input:not([type]), textarea { cursor: text; }
 
 /* The interface is not text to select; the story, the chat, the log and every field are. */
 body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }

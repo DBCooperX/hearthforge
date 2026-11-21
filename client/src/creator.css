@@ -40,7 +40,7 @@
 }
 .pick.focused .pick-main { border-color: #a8824c; background: rgba(255, 200, 130, 0.06); }
 .pick.on .pick-main { border-color: var(--gold); background: linear-gradient(rgba(230, 183, 101, 0.16), rgba(230, 183, 101, 0.06)); }
-.pick.off .pick-main { opacity: 1; cursor: default; }
+.pick.off .pick-main { opacity: 1; cursor: var(--cursor, default); }
 .pick.off:not(.on) .pick-main { opacity: 0.5; }
 .pick-mark { flex: none; width: 16px; height: 16px; border: 1px solid #625952; display: grid; place-items: center; font-size: 11px; color: #1a1208; }
 .pick-mark.radio { border-radius: 50%; } .pick-mark.check { border-radius: 3px; }

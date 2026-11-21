@@ -30,7 +30,7 @@
 .zd-room.unknown { opacity: 0.45; }
 .zonemap.under .zd-fog { fill: #0d0b09; opacity: 0.8; }
 
-.zspot { cursor: default; }
+.zspot { cursor: var(--cursor, default); }
 .zspot.go { cursor: pointer; }
 .zspot-disc { fill: #f3e7c8; stroke: #4a3a26; stroke-width: 0.45; }
 .zspot:not(.visited) .zspot-disc { fill: #e3d6b4; stroke-dasharray: 1 0.7; opacity: 0.85; }

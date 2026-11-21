@@ -70,7 +70,7 @@
   animation: fight-end-in 0.5s ease-out var(--fight-beat, 0s) both; cursor: pointer;
 }
 .fight-end-card {
-  cursor: default; position: relative; width: min(520px, calc(100% - 32px)); padding: 22px 30px 20px; text-align: center;
+  cursor: var(--cursor, default); position: relative; width: min(520px, calc(100% - 32px)); padding: 22px 30px 20px; text-align: center;
   background: var(--iron); border: 1px solid #4a423a; border-radius: 6px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 220, 170, 0.06);
   animation: fight-card-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) calc(var(--fight-beat, 0s) + 0.1s) both;
@@ -115,6 +115,6 @@
 .map-controls button + button { border-left: 1px solid var(--line); }
 .map-controls button:hover:not(:disabled) { color: var(--gold); background: rgba(212, 168, 87, 0.08); }
 .map-controls button.on { color: #1b140c; background: linear-gradient(#e2bf72, #b98e45); }
-.map-controls button:disabled { opacity: 0.4; cursor: default; }
+.map-controls button:disabled { opacity: 0.4; cursor: var(--cursor, default); }
 .map-controls .zoom-level { min-width: 48px; font-variant-numeric: tabular-nums; }
 .map-zoom button:not(.zoom-level) { font-size: 16px; line-height: 1; }

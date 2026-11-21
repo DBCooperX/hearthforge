@@ -27,7 +27,7 @@ p { margin: 0; }
 button, input { font: inherit; color: inherit; }
 button { border: 1px solid var(--line); padding: 7px 12px; cursor: pointer;
 }
-button:disabled { opacity: 0.45; cursor: default; }
+button:disabled { opacity: 0.45; cursor: var(--cursor, default); }
 button.primary { padding: 10px 16px; }
 button.link { border: none; padding: 2px 6px; }
 button.link:hover { color: var(--gold); }
@@ -269,7 +269,7 @@ ul.plain small { color: var(--muted); }
 
 /* ---------- story items ---------- */
 /* The inventory's .item rule must not stretch hover cards about items. */
-.hovercard.item { position: fixed; width: 300px; height: auto; place-items: stretch; cursor: default; }
+.hovercard.item { position: fixed; width: 300px; height: auto; place-items: stretch; cursor: var(--cursor, default); }
 /* Hover cards in the story stay on screen however much there is to say. */
 .hovercard { max-height: min(70vh, 460px); overflow: hidden; }
 
