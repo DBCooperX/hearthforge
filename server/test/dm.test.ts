@@ -74,6 +74,23 @@ describe('Claude Dungeon Master', () => {
     expect(g.s.log.some((l) => l.text.startsWith(`${block[0].name} `))).toBe(true);
   });
 
+  it('never leaves the model without a way to answer in a fight, and tells it not to talk about tools', async () => {
+    const g = combatGame();
+    const block = g.monsterBlock();
+    const { dm, requests } = stubbed(() => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Der Kampf geht weiter.' }] }));
+    await dm.runMonsters(g, block, async (id, intent) => g.monsterAct(id, intent));
+    await dm.answerQuestion(g, { player: 'Tester', text: 'Wie viele Ratten sind es noch?' }, noop);
+    await dm.respond(g, [{ player: 'Tester', text: 'Ich rufe den Ratten zu, sie sollen fliehen.' }], noop);
+    const [monsters, question, reply] = requests;
+    expect(text(monsters.messages[0].content)).toMatch(/no scene tool/);
+    expect(text(question.messages[0].content)).toMatch(/no scene tool/);
+    expect(question.tools ?? []).toHaveLength(0);
+    // A player's words in a fight still get the scene tool, so the reply can be handed over.
+    expect(reply.tools.map((t: any) => t.name)).toContain('scene');
+    expect(text(reply.messages[0].content)).toMatch(/Never mention tools/);
+    expect(JSON.stringify(reply.system)).toMatch(/Never tell the players that a tool is missing/);
+  });
+
   it('falls back to scripted behaviour when the API fails', async () => {
     const g = combatGame();
     const block = g.monsterBlock();
