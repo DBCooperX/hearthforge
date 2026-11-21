@@ -469,6 +469,11 @@ export class Room {
       const began = this.attempt(ws, () => this.apply(playerId, msg)) && msg.t === 'start';
       this.flush();
       if (began) await this.prepareWorld();
+      // A hero who joins an adventure already under way gets a personal thread too, without holding up play.
+      else if ((msg.t === 'create_character' || msg.t === 'add_premade') && this.game.s.setting && this.dm.weaveThreads) {
+        const g = this.game, epoch = this.epoch;
+        void this.dm.weaveThreads(g).then(() => { if (epoch === this.epoch) this.flush(); });
+      }
       await this.pump();
     });
   }

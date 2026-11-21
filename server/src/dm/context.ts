@@ -90,6 +90,13 @@ You are a game master at a table, not the author of a literary mystery. The play
 - Suggest two to four next actions, each a short phrase a player might click, such as "Ask Marta about the smithy". Vary them (talk, explore, act) and treat them as prompts, never as the only options.
 - Refer to known people, places and items by their exact names. The interface highlights those names and shows a card about them on hover.
 
+The heroes' own stories
+Each hero's backstory, as their player wrote it, is listed under "Heroes" in "About this table".
+- Treat a backstory as true. Never contradict it. Add to a hero's past only in small ways that fit, and let the player confirm, change or refuse what you add.
+- Give every hero with a backstory one personal thread: someone or something from their past that turns up here, tied to a person, place or quest that already exists in this story. When a thread is listed for a hero, follow it; when none is, find one yourself before the hero's second or third scene.
+- Bring a thread forward every few scenes, not every scene, and share the spotlight fairly between the heroes. Weave threads into the main story so they pay off at its key moments, instead of running beside it. A personal thread never replaces the main quest.
+- Let a hero's past show in small ways too: someone who knows their name, a place they remember, a skill their old life taught them.
+
 Memory
 You do not remember earlier scenes by yourself. Each turn you are given the current state and what has been saved. Keep that record useful:
 - Call remember_npc whenever you introduce a named character or the party learns something lasting about one. Give a one-sentence physical appearance the first time; it is kept unchanged and later used to draw them consistently.
@@ -267,7 +274,25 @@ function playedBy(game: Game, c: Character): string {
     : ` Played by ${p.name}, who is AWAY from the table right now: keep this hero in the background, safe and with the party, and do not decide, speak or roll for them beyond that.`;
 }
 
-function partyLines(game: Game): string[] {
+/**
+ * Each hero's backstory and personal thread. They rarely change, so they belong to "About this table",
+ * which the prompt cache serves; only a new hero or a rewritten backstory changes them.
+ */
+function heroLines(game: Game): string[] {
+  const heroes = game.s.characters.filter((c) => c.backstory?.trim());
+  if (!heroes.length) return [];
+  const threads = game.s.setting?.threads ?? [];
+  return [
+    '',
+    'Heroes (backstories as their players wrote them; see "The heroes\' own stories"):',
+    ...heroes.flatMap((c) => {
+      const thread = threads.find((t) => t.characterId === c.id && t.backstory === c.backstory);
+      return [`- ${c.name} [${c.id}]: ${c.backstory}`, ...(thread ? [`  Personal thread, for you only: ${thread.hook}`] : [])];
+    }),
+  ];
+}
+
+function partyLines(game: Game, withBackstory: boolean): string[] {
   return game.s.characters.map((c) => {
     const weapon = c.equipment.mainHand ? game.def(c.equipment.mainHand.defId).name : 'unarmed';
     const form = c.form && BEAST_FORMS[c.form] ? `in the shape of a ${BEAST_FORMS[c.form].name.toLowerCase()}, ` : '';
@@ -294,7 +319,7 @@ function partyLines(game: Game): string[] {
       ...(items.length ? [`  Magic items (the server runs bonuses, resistances and the spells of wands and staffs; you play out the rest): ${items.join(' | ')}`] : []),
       ...(traits.length ? [`  Traits to honour in the story: ${traits.join(' ')}`] : []),
       ...(c.appearance ? [`  Appearance: ${c.appearance}`] : []),
-      ...(c.backstory ? [`  Backstory: ${c.backstory}`] : []),
+      ...(withBackstory && c.backstory ? [`  Backstory: ${c.backstory}`] : []),
     ].join('\n');
   });
 }
@@ -318,7 +343,7 @@ function settingLine(game: Game): string {
  * Sent ahead of everything that changes, so the Claude API can serve it from the prompt cache.
  */
 export function describeTable(game: Game): string {
-  return [...languageNote(game), ...styleNote(game), settingLine(game), ...campaignNote(game)].join('\n');
+  return [...languageNote(game), ...styleNote(game), settingLine(game), ...heroLines(game), ...campaignNote(game)].join('\n');
 }
 
 /**
@@ -352,7 +377,7 @@ export function describeWorld(game: Game, opts: { live?: boolean } = {}): string
     lines.push('Known places elsewhere on the map:');
     for (const l of elsewhere) lines.push(`- ${l.name} [${l.id}] (${l.kind}), ${hexDistance(l, w.party) * HEX_MILES} miles ${direction(w.party, l)}${l.visited ? ', visited' : ', not yet visited'}. ${l.description}`);
   }
-  lines.push(`Party (${s.gold} gp between them):`, ...partyLines(game));
+  lines.push(`Party (${s.gold} gp between them):`, ...partyLines(game, !opts.live));
   const budget = fightBudget(game);
   if (budget) lines.push(budget);
   const held = game.heldStoryItems();

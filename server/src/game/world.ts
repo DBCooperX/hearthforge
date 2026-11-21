@@ -80,6 +80,12 @@ export interface MemoryState {
 }
 
 /** Where and how this table's story is set. Saved with the game; tables from before start options have none. */
+export interface HeroThread {
+  characterId: string;
+  backstory: string;
+  hook: string;
+}
+
 export interface SettingState {
   /** The region with its article, in the table's language: "the Emberfall Vale". */
   name: string;
@@ -97,6 +103,12 @@ export interface SettingState {
   premiseId: string;
   /** The host's own premise, when premiseId is 'custom'. */
   custom: string;
+  /**
+   * One personal story thread per hero, drawn from the backstory their player wrote and tied to
+   * this region or campaign book. For the Dungeon Master only, in English. A thread holds the
+   * backstory it was made from: when the player rewrites the backstory, the old thread is dropped.
+   */
+  threads?: HeroThread[];
   /** The AI has reworded the rolled descriptions for this table. */
   fleshedOut?: boolean;
   /** When the adventure began, in minutes from the start of day 1: the time of day the opening plays at. */
