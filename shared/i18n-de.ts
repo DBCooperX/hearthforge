@@ -987,6 +987,10 @@ export const DE: Record<string, string> = {
 
   // ---- lobby, table and table talk
   'Tables': 'Tische',
+  'at {table}': 'an «{table}»',
+  'at a table': 'an einem Tisch',
+  'choosing a table': 'sucht einen Tisch',
+  'Private': 'Privat',
   'Nobody has opened a table yet. Open the first one below.': 'Noch hat niemand einen Tisch eröffnet. Eröffne unten den ersten.',
   'Needs an invite code': 'Nur mit Einladungscode',
   'Adventure under way': 'Abenteuer läuft',
@@ -1079,6 +1083,7 @@ export const DE: Record<string, string> = {
   'That invite code is not right.': 'Dieser Einladungscode stimmt nicht.',
   'No table uses that invite code.': 'Kein Tisch verwendet diesen Einladungscode.',
   'That seat belongs to another player.': 'Dieser Platz gehört einem anderen Spieler.',
+  'This is a solo table. Only its owner can play here.': 'Das ist ein Solo-Tisch. Nur sein Besitzer kann hier spielen.',
   'Give the table a name.': 'Gib dem Tisch einen Namen.',
   // engine lines about the table
   '{0} has left the table.': '{0} hat den Tisch verlassen.',

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Playtest fixes
+- **Closed tables and who is online.** Solo tables are closed to everyone but their owner (the lobby shows them as Private). New tables for several players start with an invite code, which the host can switch off in the table room; tables you already have stay as they are, and nobody loses a seat they hold. The lobby has a new Who is here list: players see who is around, and which table those at their own tables sit at; the Innkeeper sees every table.
 - **Renaming a table is easy to find.** The table name in the lobby now has a pencil and can be clicked to rename it (hosts and the Innkeeper). The Rename link is easier to read on the parchment.
 - **Solo and multiplayer tables are listed apart.** The lobby groups tables into Multiplayer and Solo, each with the most recently played first.
 - **Tidy names.** Place names on the zone map no longer overlap: long names are cut short, each name takes a free spot around its place, and one that still finds no room shows when you point at the place. Long hero names are cut with a dot-dot-dot in the party panel and on the battle nameplate, which shows the first name.

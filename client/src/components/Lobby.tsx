@@ -77,8 +77,8 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   };
   const open = (e: React.FormEvent) => {
     e.preventDefault();
-    // Name, story language and invite-only are set in the table room, under "Table details".
-    conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: false });
+    // Name and story language are set in the table room, under "Table details". Tables for several players start with an invite code, which the host can switch off there.
+    conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: seats > 1 });
   };
 
   return (
@@ -113,7 +113,8 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
         <ul className="tables">
           {g.list.map((tb) => {
             const mine = tb.players.some((p) => p.id === playerId);
-            const full = !mine && tb.players.length >= tb.maxPlayers;
+            const solo = !mine && tb.maxPlayers <= 1 && tb.players.length > 0;
+            const full = !mine && !solo && tb.players.length >= tb.maxPlayers;
             const clash = !mine && !!me && tb.players.some((p) => p.name.toLocaleLowerCase() === me.toLocaleLowerCase());
             return (
               <li key={tb.id} className={['table-card', mine && 'mine', tb.id === link.room && 'invited'].filter(Boolean).join(' ')}>
@@ -173,9 +174,9 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                       onKeyDown={(e) => { if (e.key === 'Enter' && ready && code.trim()) sit(tb); }} />
                   )}
                   {clash && <small className="warn">{t('Someone called {name} already sits here.', { name: me })}</small>}
-                  <button className={mine ? 'primary' : ''} disabled={!ready || full || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
+                  <button className={mine ? 'primary' : ''} disabled={!ready || full || solo || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
                     title={!me ? t('Enter your name first.') : undefined}>
-                    {mine ? t('Back to your seat') : full ? t('Full') : t('Sit down')}
+                    {mine ? t('Back to your seat') : solo ? t('Private') : full ? t('Full') : t('Sit down')}
                   </button>
                 </div>
               </li>
@@ -184,6 +185,18 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
         </ul>
         </section>
         ))}
+
+        <section className="online-now" aria-label={t('Who is here')}>
+          <h3 className="table-group-title">{t('Who is here')} <span className="muted">({conn.online.length})</span></h3>
+          <ul className="online-list">
+            {conn.online.map((o) => (
+              <li key={o.id} className={o.seated ? 'who here' : 'who here lobby'}>
+                <b>{o.name}</b>{o.id === playerId && <span className="muted"> ({t('you')})</span>}
+                <small className="muted"> · {o.table ? t('at {table}', { table: o.tableTitle || o.table }) : o.seated ? t('at a table') : t('choosing a table')}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         {binError && <p className="notice error" role="alert">{binError}</p>}
         <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />

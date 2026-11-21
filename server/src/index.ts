@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
+import { onlineList } from './online';
 import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
@@ -135,14 +136,24 @@ function newCode(): string {
 }
 
 let listTimer: NodeJS.Timeout | null = null;
-const tableList = (): ServerMessage => ({ t: 'tables', tables: [...rooms.values()].map((r) => r.summary()) });
+const tableList = (ws?: WebSocket): ServerMessage => {
+  const viewer = ws ? conns.get(ws) : undefined;
+  const role = viewer?.accountId ? accounts.get(viewer.accountId)?.role : undefined;
+  const online = onlineList(
+    [...conns].map(([w, c]) => {
+      const room = seated.get(w);
+      return { accountId: c.accountId, account: c.account, room: room && { name: room.name, title: room.game.s.table.title, sits: (id: string) => !!room.game.player(id) } };
+    }),
+    { id: viewer?.accountId, innkeeper: role === 'innkeeper' },
+  );
+  return { t: 'tables', tables: [...rooms.values()].map((r) => r.summary()), online };
+};
 /** Tell everyone in the lobby that the list of tables changed, at most a few times a second. */
 function pushTables() {
   if (listTimer) return;
   listTimer = setTimeout(() => {
     listTimer = null;
-    const payload = JSON.stringify(tableList());
-    for (const ws of lobby) if (ws.readyState === ws.OPEN) ws.send(payload);
+    for (const ws of lobby) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(tableList(ws)));
   }, 150);
 }
 
@@ -195,7 +206,7 @@ const hooks: RoomHooks = {
   binned: (state, by) => { bin.add(state, by); },
   renamed: (room) => accounts.retitle(room.name, room.game.s.table.title),
   changed: pushTables,
-  detached: (ws) => void seated.delete(ws),
+  detached: (ws) => { seated.delete(ws); pushTables(); },
   closed: (room) => { rooms.delete(room.name); pushTables(); },
   newCode,
   paused: (room) => auth.paused(room.name),
@@ -310,7 +321,8 @@ function createTable(msg: Extract<ClientMessage, { t: 'create_table' }> & { name
   if (isLang(msg.language)) s.language = msg.language;
   // The founder sits down before the code exists, so they never have to enter their own code.
   room.join(ws, playerId, token, String(msg.name ?? ''));
-  if (msg.locked) s.table.code = newCode();
+  // Tables for several players start with an invite code; the host can switch it off in the table room. Solo tables are closed to everyone else anyway.
+  if (s.table.maxPlayers > 1 && msg.locked !== false) s.table.code = newCode();
   rooms.set(id, room);
   room.flush();
   pushTables();
@@ -837,7 +849,8 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       seated.get(ws)?.leave(ws);
       seated.delete(ws);
       lobby.add(ws);
-      return send(tableList());
+      pushTables();
+      return send(tableList(ws));
     }
     if (msg.t === 'delete_table' || msg.t === 'rename_table') {
       // Both are done from the list of tables, never from inside a game, by the host or the Innkeeper.
@@ -880,6 +893,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
         if (before && before !== room) before.leave(ws);
         seated.set(ws, room);
         lobby.delete(ws);
+        pushTables();
       } catch (err) {
         if (!(err instanceof JoinError)) throw err;
         send({ t: 'error', message: err.message, join: true });
@@ -893,6 +907,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     lobby.delete(ws);
     seated.get(ws)?.leave(ws);
     seated.delete(ws);
+    pushTables();
   };
   ws.on('close', gone);
   ws.on('error', gone);
