@@ -281,7 +281,7 @@ export class Illustrator {
   /** A test battle figure, a goblin, for the Innkeeper. It does not stand in for real goblins. */
   async sampleFigure(bill: (usd: number) => void): Promise<PictureInfo> {
     const look = baseLook('humanoid', 'small', 'green', { weapon: 'sword', armor: 'leather' });
-    const { prompt, key } = monsterFigurePrompt('Goblin', 'humanoid', look);
+    const { prompt, key } = monsterFigurePrompt({ id: 'goblin', name: 'Goblin', type: 'humanoid', look }, look);
     const subject = `sample:${randomBytes(4).toString('hex')}`;
     const p = await this.paintFigure({ table: 'sample', tableTitle: '', subject, caption: 'Goblin', prompt, key, tall: true }, bill);
     const stored = this.index.find((x) => x.id === p.id);

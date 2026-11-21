@@ -36,7 +36,7 @@ import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
-import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, portraitKey, tallBody } from './game/pictures';
+import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, portraitKey, tallFigure } from './game/pictures';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -283,8 +283,8 @@ function paintFigures(room: Room) {
     if (asked.has(subject) || illustrator.figureGate(subject)) continue;
     asked.add(subject);
     if (broke()) return;
-    const { prompt, key } = monsterFigurePrompt(def.name, def.type, look);
-    illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: def.name, prompt, key, tall: tallBody(look) }, (usd) => bill(room.name, usd, 'images'))
+    const { prompt, key } = monsterFigurePrompt(def, look);
+    illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: def.name, prompt, key, tall: tallFigure(def, look) }, (usd) => bill(room.name, usd, 'images'))
       .then(() => figureArrived(subject)).catch(() => {});
   }
 }
