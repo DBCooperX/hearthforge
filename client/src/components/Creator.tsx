@@ -456,7 +456,8 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
           </span>
         </label>
         <div className="look">
-          <img className="hero-art look-portrait" src={heroPortraitUrl(artOfDraft(d)!, 240)} alt="" />
+          {/* No class yet (the step bar can jump here first): an empty frame until there is a hero to draw. */}
+          {d.classId ? <img className="hero-art look-portrait" src={heroPortraitUrl(artOfDraft(d)!, 240)} alt="" /> : <span className="hero-art look-portrait" aria-hidden />}
           <div className="look-rows">
             <Swatches label={t('Skin')} value={look.skin} options={SPECIES_SKINS[d.speciesId ?? 'human']} colors={SKINS} onPick={(skin) => update({ look: { ...look, skin } })} />
             {d.speciesId !== 'dragonborn' && <Choices label={t('Hair')} value={look.hair} options={HAIR_STYLES} onPick={(hair) => update({ look: { ...look, hair } })} />}
