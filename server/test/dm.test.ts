@@ -130,7 +130,7 @@ describe('Claude Dungeon Master', () => {
     expect(requests[0].model).toBe('std-model');
     expect(requests[0].tools.map((t: any) => t.name)).toContain('start_combat');
     expect(requests[0].tools.every((t: any) => t.input_schema.additionalProperties === false)).toBe(true);
-    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['campaign', 'change_standing', 'companion', 'equip_item', 'find_monsters', 'give_story_item', 'illustrate', 'log_event', 'note_clue', 'open_shop', 'rest', 'rumour', 'secret', 'set_stage', 'start_combat', 'take_item', 'travel_to', 'update_story_item']);
+    expect(requests[0].tools.filter((t: any) => !t.strict).map((t: any) => t.name).sort()).toEqual(['campaign', 'change_standing', 'companion', 'equip_item', 'find_monsters', 'give_story_item', 'illustrate', 'inspiration', 'log_event', 'note_clue', 'open_shop', 'rest', 'rumour', 'secret', 'set_stage', 'start_combat', 'take_item', 'travel_to', 'update_story_item']);
     expect(text(requests[0].messages[0].content)).toMatch(/Emberfall[\s\S]*Silence the Warren/);
     expect(text(requests[0].messages[0].content)).toContain('I buy a round');
     const results = requests[1].messages[2].content;

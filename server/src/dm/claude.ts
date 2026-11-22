@@ -103,7 +103,7 @@ const STORY_TOOLS: Tool[] = [
   tool('remember_npc', 'Save or update a named character in your memory. Call it when you introduce someone or the party learns something lasting about them. Matching is by name.', {
     name: str("The character's full name."),
     role: str('Who they are in a few words, for example "blacksmith\'s apprentice". Empty string to leave unchanged.'),
-    description: str('One or two sentences on personality and situation. Empty string to leave unchanged.'),
+    description: str('One or two sentences on their manner (how they talk, a quirk, a want or flaw) and situation. Keep to it every time you play them. Empty string to leave unchanged.'),
     appearance: str('One sentence describing how they look: age, build, hair, clothing, distinguishing marks. Only used the first time; it is then fixed so pictures of them stay consistent. Empty string if already given.'),
     disposition: { type: 'string', enum: [...DISPOSITIONS], description: 'How they currently feel about the party.' },
     location_id: str('Id of the location where they are. Empty string for the place the party is in now.'),
@@ -125,6 +125,10 @@ const STORY_TOOLS: Tool[] = [
   }),
   tool('record_deed', 'Record something the party did that the world would remember them for.', {
     text: str('One sentence, in the past tense.'),
+  }),
+  looseTool('inspiration', "Award Heroic Inspiration to a hero whose player just played their character's personality, flaw, bond or backstory in a way that cost them something or made the table smile. The hero keeps it until it rerolls their next failed ability check. A hero holds one at a time.", {
+    hero_id: str('Id of the hero, for example "pc1".'),
+    reason: str('What the player did, in a few words in the table language, for example "stood by their oath to the old priest".'),
   }),
   tool('award_xp', 'Give the party experience for an achievement outside combat. The server splits it between the heroes and caps large awards.', {
     amount: int('Total experience for the party. 25 to 100 is typical.'),
@@ -425,6 +429,8 @@ export class ClaudeDM implements DungeonMaster {
             return game.setQuest({ title: String(i.title), status: i.status as QuestStatus, summary: i.summary, note: i.note });
           case 'record_deed':
             return game.recordDeed(String(i.text));
+          case 'inspiration':
+            return game.inspire(String(i.hero_id ?? ''), String(i.reason ?? ''));
           case 'award_xp':
             return game.awardXp(Number(i.amount), String(i.reason ?? ''));
           case 'change_gold':

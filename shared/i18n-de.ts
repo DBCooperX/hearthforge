@@ -1601,6 +1601,15 @@ export const DE: Record<string, string> = {
   'Default content rating': 'Standard-Inhaltsfreigabe',
   'Family keeps it gentle, teen is classic fantasy, mature allows darker themes. New tables start here.': 'Familie bleibt sanft, Jugendfrei ist klassische Fantasy, Ab 18 erlaubt düsterere Themen. Neue Tische starten hier.',
 
+  '{0} is inspired': '{0} ist inspiriert',
+  '{0}: Inspiration rerolls, {1}{2} = {3} vs DC {4}. {5}': '{0}: Inspiration würfelt neu, {1}{2} = {3} gegen SG {4}. {5}',
+  'Inspiration: the next failed check is rolled again': 'Inspiration: Die nächste misslungene Probe wird neu gewürfelt',
+  'Unknown character flavour': 'Unbekannte Charakterdarstellung',
+  'Default character flavour': 'Standard-Charakterdarstellung',
+  'How strongly the people of the story and the companions play their personality, clichés and humour. Heroes are never affected. New tables start here; the host can change it.': 'Wie stark die Figuren der Geschichte und die Begleiter ihre Persönlichkeit, Klischees und ihren Humor ausspielen. Helden sind nie betroffen. Neue Tische starten hier; der Gastgeber kann es ändern.',
+  'Characters': 'Figuren',
+  'Characters and clichés': 'Figuren und Klischees',
+
   // ---------------------------------------------------------------- the short table room and creator
   'Chosen for you': 'Für dich gewählt',
   'The game picked what suits your class. Change anything you like, or tick "Decide everything myself" below to walk through every choice.': 'Das Spiel hat gewählt, was zu deiner Klasse passt. Ändere, was du möchtest, oder setze unten den Haken bei „Alles selbst entscheiden“, um jede Entscheidung durchzugehen.',

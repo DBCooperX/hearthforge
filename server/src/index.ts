@@ -360,7 +360,7 @@ const tableId = (raw: unknown) => String(raw ?? '').toLowerCase().replace(/[^a-z
 
 /** The style new tables start with: what the owner set in the Innkeeper, else the built-in default. */
 function defaultStyle() {
-  return cleanStyle({ tone: env.HEARTHFORGE_DM_TONE, rules: env.HEARTHFORGE_DM_RULES || undefined, rating: env.HEARTHFORGE_DM_RATING }, DEFAULT_STYLE);
+  return cleanStyle({ tone: env.HEARTHFORGE_DM_TONE, rules: env.HEARTHFORGE_DM_RULES || undefined, rating: env.HEARTHFORGE_DM_RATING, flavour: env.HEARTHFORGE_DM_FLAVOUR }, DEFAULT_STYLE);
 }
 
 function createTable(msg: Extract<ClientMessage, { t: 'create_table' }> & { name: string }, ws: WebSocket, playerId: string, token: string): Room {

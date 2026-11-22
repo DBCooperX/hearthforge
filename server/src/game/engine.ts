@@ -538,6 +538,7 @@ export class Game {
     // A value that is present but unknown is an error, not a silent fallback.
     if (patch.tone !== undefined && next.tone !== patch.tone) throw new GameError(this.t`Unknown tone`);
     if (patch.rating !== undefined && next.rating !== patch.rating) throw new GameError(this.t`Unknown content rating`);
+    if (patch.flavour !== undefined && next.flavour !== patch.flavour) throw new GameError(this.t`Unknown character flavour`);
     this.s.table.style = next;
   }
 
@@ -5675,6 +5676,17 @@ export class Game {
     const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
     const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
     this.log('roll', this.t`${c.name}: ${label}, ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
+    // Heroic Inspiration: the first failed check is rerolled once, and the new roll counts.
+    if (!success && c.heroic) {
+      c.heroic = false;
+      let again = this.heroD20(c, mode).value;
+      if (proficient && this.feat(c, 'reliable_talent') && again < 10) again = 10;
+      r = again;
+      total = r + mod;
+      if (ability === 'str' && this.feat(c, 'indomitable_might')) total = Math.max(total, c.abilities.str);
+      success = total >= dc;
+      this.log('roll', this.t`${c.name}: Inspiration rerolls, ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`);
+    }
     // Peerless Skill: a failed check gets an inspiration die, spent only if it turns the result.
     if (!success && this.feat(c, 'peerless_skill') && this.left(c, 'inspiration') > 0) {
       const die = rollDie(inspirationDie(c), this.rng);
@@ -5964,6 +5976,17 @@ export class Game {
   }
 
   /** Story experience for things other than winning fights. Clamped so the DM cannot skip levels. */
+  /** The Dungeon Master rewards in-character play. One Heroic Inspiration at a time, only for a hero a player runs. */
+  inspire(heroId: string, reason: string) {
+    const c = this.s.characters.find((h) => h.id === heroId);
+    if (!c || c.dead) throw new GameError(this.t`Unknown character`);
+    if (c.heroic) return { already: true };
+    c.heroic = true;
+    const why = reason.trim().slice(0, 100);
+    this.log('system', this.t`${c.name} is inspired` + (why ? ` (${why})` : '') + '.');
+    return { granted: true };
+  }
+
   awardXp(amount: number, reason: string) {
     const heroes = this.s.characters.filter((c) => !c.dead);
     const top = Math.max(1, ...heroes.map((c) => c.level));

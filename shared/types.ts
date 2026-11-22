@@ -256,6 +256,8 @@ export interface Character {
   form?: string | null;
   /** A bard's inspiration die waiting to be used: its size. */
   inspired?: number;
+  /** Heroic Inspiration, earned from the Dungeon Master for playing in character: rerolls the next failed ability check, then is gone. */
+  heroic?: boolean;
   /** Spell effects on this hero: Bless, Haste, Mage Armor... `by` is the caster, `level` the slot level it was cast at. */
   buffs?: { id: string; spell: string; by: string; level: number; n?: number; images?: number; adapted?: string }[];
   /** What worn magic items add to the ability scores right now, so taking them off can undo it. */
