@@ -10,6 +10,7 @@ import type { StartOptions } from './start';
 import type { ShopView } from './trade';
 import type { DmStyle } from './style';
 import type { LightKindId, LightLevel, LightSource, Senses } from './light';
+import type { CombatOdds, OddsReason } from './odds';
 import type { FactionView, RumourView } from './reputation';
 import type { ZoneView } from './zone';
 import type { TrophyView } from './achievements';
@@ -570,6 +571,8 @@ export interface RollInfo {
   target: { kind: 'AC' | 'DC'; value: number; name?: string };
   outcome: 'hit' | 'miss' | 'crit' | 'success' | 'failure';
   damage?: { amount: number; type: string };
+  /** What shaped the roll: advantage, cover, a blessing. Shown on the roll card, most of all on a miss. */
+  why?: { code: OddsReason; n?: number }[];
 }
 
 export interface LevelUpInfo {
@@ -844,6 +847,8 @@ export interface GameState {
   unanswered: { logId: number; playerId: string }[];
   /** How the last fight ended. Its `seq` grows with every fight. */
   lastFight: FightOutcome | null;
+  /** Hit chances and damage for the hero who may act now, before anything is committed. */
+  odds?: CombatOdds | null;
   /** Set while the owner has the table in test mode: the host gets a toolbox, everyone sees the badge. `since` is the time it was switched on. */
   testMode: { since: number } | null;
 }

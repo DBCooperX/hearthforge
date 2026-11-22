@@ -1,3 +1,5 @@
+import { weaponAttack } from '../../shared/build';
+import { itemDef } from '../../shared/items';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onPortraitLoaded } from './game/heroArt';
 import { ABILITIES } from '../../shared/content';
@@ -20,7 +22,7 @@ import { Trade } from './components/Trade';
 import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
 import { heroSees, key, lightLevels, pathTo, provokersOf, reachable, tileAt } from './game/util';
-import { tileWalkable } from '../../shared/battlemap';
+import { tileCost, tileDifficult, tileWalkable } from '../../shared/battlemap';
 import { inFootprint } from '../../shared/monsterLook';
 import { musicContext } from '../../shared/music';
 import { useT } from './i18n';
@@ -92,6 +94,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   const [risky, setRisky] = useState<{ x: number; y: number; path: { x: number; y: number }[]; ids: string[] } | null>(null);
   /** On a touch screen the first tap on a square or an enemy only plans the move or the blow; a second tap goes. */
   const [planned, setPlanned] = useState<{ x: number; y: number } | null>(null);
+  const [hoverTile, setHoverTile] = useState<{ x: number; y: number } | null>(null);
   /** The owner's panel. It sits above everything, also above the list of tables; ?innkeeper opens it directly. */
   const [innkeeper, setInnkeeper] = useState(() => new URLSearchParams(location.search).has('innkeeper'));
   const closeInnkeeper = useCallback(() => {
@@ -305,6 +308,27 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [state, actor, combat, targeting, overlay, innkeeper, send, risky, travelTarget]);
 
+  // Pointing at a square on your turn: the way there, what it costs, and who would strike as you go.
+  const moveAhead = useMemo(() => {
+    const at = hoverTile ?? planned;
+    if (!at || !state || !combat || !actor || targeting || risky) return null;
+    if (state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, at.x, at.y))) return null;
+    const path = pathTo(state, actor, combat.movementLeft, at.x, at.y);
+    if (!path?.length) return null;
+    const steps = path.reduce((n, p) => n + tileCost(tileAt(state, p.x, p.y)), 0);
+    return {
+      path: new Set(path.map((p) => key(p.x, p.y))), feet: steps * 5, left: Math.max(0, combat.movementLeft - steps) * 5,
+      rough: path.some((p) => tileDifficult(tileAt(state, p.x, p.y))), foes: provokersOf(state, actor, path).map((m) => m.name),
+    };
+  }, [hoverTile, planned, state, combat, actor, targeting, risky]);
+  const moveTip = moveAhead && hoverTile ? (
+    <>
+      <b>{t('{n} ft', { n: moveAhead.feet })}</b>
+      <span className="muted">{t('{n} ft left after this', { n: moveAhead.left })}{moveAhead.rough ? ` · ${t('rough ground costs double')}` : ''}</span>
+      {moveAhead.foes.length > 0 && <span className="risk">{t('Opportunity attack from {names}', { names: moveAhead.foes.join(', ') })}</span>}
+    </>
+  ) : null;
+
   const view: ViewOptions = useMemo(() => {
     const reach = state && combat && turnChar ? reachable(state, turnChar, combat.movementLeft) : new Set<string>();
     const targetIds = new Set<string>();
@@ -323,8 +347,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     const plannedPath = new Set<string>();
     const foe = planned && state ? state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, planned.x, planned.y)) : false;
     if (planned && !foe && state && combat && actor) for (const p of pathTo(state, actor, combat.movementLeft, planned.x, planned.y) ?? []) plannedPath.add(key(p.x, p.y));
-    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction, planned, plannedPath };
-  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky, planned, actor]);
+    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction, planned, plannedPath, hoverPath: moveAhead?.path, hoverRisk: !!moveAhead?.foes.length };
+  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky, planned, actor, moveAhead]);
 
   const inn = <>
     {innkeeper && <Innkeeper account={profile.account} onClose={closeInnkeeper} />}
@@ -349,9 +373,16 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   if (!state) return <><LobbyScreen conn={conn} me={me} onInnkeeper={() => setInnkeeper(true)} onMenu={onMenu} />{frontLayer}{inn}<Toasts conn={conn} /></>;
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} onMenu={onMenu} />{frontLayer}{inn}<Toasts conn={conn} /></>;
 
+  // What pointing at a monster would show the odds of: the spell being aimed, else the weapon.
+  const aimWeapon = actor ? weaponAttack(actor, actor.equipment.mainHand ? itemDef(state.items, actor.equipment.mainHand.defId) : null).name : '';
+  const aim = !actor || state.odds?.heroId !== actor.id || targeting?.kind === 'offhand' || targeting?.kind === 'item' || (targetAbility && targetAbility.target !== 'enemy') ? null
+    : targetAbility ? { abilityId: targetAbility.id, label: t(targetAbility.name) }
+    : { abilityId: null, label: t(aimWeapon) };
+
   let hint: string;
   const plannedFoe = planned && state ? state.monsters.find((m) => m.alive && inFootprint(m, m.tiles, planned.x, planned.y)) : undefined;
-  if (planned && !risky) hint = plannedFoe ? t('Tap {name} again to go ahead.', { name: plannedFoe.name }) : t('Tap the same square again to move there.');
+  if (planned && !risky) hint = plannedFoe ? t('Tap {name} again to go ahead.', { name: plannedFoe.name })
+    : [t('Tap the same square again to move there.'), moveAhead ? t('{n} ft, {m} ft left after this.', { n: moveAhead.feet, m: moveAhead.left }) : '', moveAhead?.foes.length ? t('Opportunity attack from {names}', { names: moveAhead.foes.join(', ') }) : ''].filter(Boolean).join(' ');
   else if (targeting?.kind === 'offhand') hint = t('Off-hand attack: click an enemy next to you. Esc to cancel.');
   else if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
@@ -415,7 +446,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
                 last blow, under the victory or defeat screen, and still plays that blow. */}
             <main className={combat ? 'stage' : fightEnd!.leaving ? 'stage fight-over leaving' : 'stage fight-over'}>
               <TurnBar state={combat ? state : fightEnd!.frozen} />
-              <MapView state={combat ? state : fightEnd!.frozen} view={view} onTile={combat ? onTile : noTile} onMoved={conn.onMoved} />
+              <MapView state={combat ? state : fightEnd!.frozen} view={view} onTile={combat ? onTile : noTile} onMoved={conn.onMoved} aim={combat ? aim : null} onHoverTile={setHoverTile} moveTip={moveTip} />
               {combat ? (
                 <>
                   <SurpriseBanner state={state} />

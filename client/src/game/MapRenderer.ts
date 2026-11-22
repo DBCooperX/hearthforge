@@ -95,6 +95,9 @@ export interface ViewOptions {
   /** On a touch screen the first tap only plans: the square it picked, and the way there for a move. */
   planned?: { x: number; y: number } | null;
   plannedPath?: Set<string>;
+  /** The way to the square the mouse points at, before any click: gold, or ember when it provokes. */
+  hoverPath?: Set<string>;
+  hoverRisk?: boolean;
 }
 
 export const EMPTY_VIEW: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set(), unseenIds: new Set(), danger: new Set(), warnIds: new Set(), reaction: null };
@@ -338,6 +341,9 @@ export class MapRenderer {
   /** Two fingers pinched the map: zoom by this factor. */
   onZoom: (factor: number) => void = () => {};
   onHoverMonster: (hover: TokenHover | null) => void = () => {};
+  /** The square under the mouse changed (null: off the map). Mouse only; a finger plans with a tap instead. */
+  onHoverTile: (tile: { x: number; y: number } | null) => void = () => {};
+  private hoverTileKey = '';
   private hoverId: string | null = null;
   private unFigures: () => void = () => {};
 
@@ -371,8 +377,8 @@ export class MapRenderer {
     }
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
-    this.app.stage.on('pointermove', (e) => { if (e.pointerType === 'mouse') { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); } });
-    this.app.stage.on('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.reportHover(); } });
+    this.app.stage.on('pointermove', (e) => { if (e.pointerType === 'mouse') { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); this.reportTile(); } });
+    this.app.stage.on('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.reportHover(); this.reportTile(); } });
     this.app.stage.on('pointertap', (e) => {
       if (this.dragged) { this.dragged = false; return; }
       const t = this.pick(e.global.x, e.global.y);
@@ -733,6 +739,14 @@ export class MapRenderer {
     return { left: this.world.x + e.x * unit, top: this.world.y + e.y * unit, size: e.size * unit };
   }
 
+  private reportTile() {
+    const h = this.hover;
+    const k = h ? `${h.x},${h.y}` : '';
+    if (k === this.hoverTileKey) return;
+    this.hoverTileKey = k;
+    this.onHoverTile(h ? { x: h.x, y: h.y } : null);
+  }
+
   /** Tells the page which monster the pointer is over, so it can show its card. */
   private reportHover() {
     const h = this.hover;
@@ -997,6 +1011,11 @@ export class MapRenderer {
     for (const k of this.opts.plannedPath ?? []) {
       const [x, y] = k.split(',').map(Number);
       g.rect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2).fill({ color: 0xf2c14e, alpha: 0.3 });
+    }
+    // Pointing at a square: the way there, step by step, before the click.
+    for (const k of this.opts.hoverPath ?? []) {
+      const [x, y] = k.split(',').map(Number);
+      g.circle(x * TILE + TILE / 2, y * TILE + TILE / 2, TILE * 0.13).fill({ color: this.opts.hoverRisk ? 0xff6a3d : 0xf2c14e, alpha: 0.9 });
     }
     const p = this.opts.planned;
     if (p) g.rect(p.x * TILE + 1, p.y * TILE + 1, TILE - 2, TILE - 2).stroke({ width: 2, color: 0xffd27a, alpha: beat });

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
 import { partyOf } from '../game/util';
-import { ABILITIES } from '../../../shared/content';
+import { ABILITIES, ABILITY_NAMES } from '../../../shared/content';
 import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from '../../../shared/classes';
-import { castLevel, diceAtLevel, upcastable } from '../../../shared/spells';
+import { castLevel, upcastable } from '../../../shared/spells';
 import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
-import { isLightWeapon } from '../../../shared/build';
-import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
+import { isLightWeapon, weaponAttack } from '../../../shared/build';
+import { abilityFigures, damageSpread } from '../../../shared/odds';
+import { OPPORTUNITY_MODES, type AbilityKey, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
-import { dice } from './Guide';
+import { dice, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { usePrefs } from '../ui/prefs';
 import { AbilityGlyph, Glyph } from '../ui/Glyph';
@@ -184,7 +185,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ab.spellLevel === undefined ? '' : base === 0 ? t('Cantrip') : t('Spell level {n}', { n: base }),
       level > base ? t('Cast at level {n}', { n: level }) : '',
       sustained ? t('Free again this turn') : '',
-      ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(diceAtLevel(ab, level) ?? ab.dice, lang) : '',
+      ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', figuresLine(c, ab, level),
       ab.concentration ? t('Concentration') : '',
       left !== null && pool && RESOURCES[pool] ? `${t(RESOURCES[pool].name)}: ${left}` : '',
     ].filter(Boolean).join(' · ');
@@ -213,7 +214,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
     const left = cast.charges - (it.used ?? 0);
     const cost: Cost = ab.bonusAction ? 'bonus' : 'action';
     const used = ab.bonusAction ? combat!.bonusUsed : actionUsed;
-    const facts = [t('Cast at level {n}', { n: cast.level }), ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : '', ab.dice ? dice(diceAtLevel(ab, cast.level) ?? ab.dice, lang) : ''].filter(Boolean).join(' · ');
+    const facts = [t('Cast at level {n}', { n: cast.level }), ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : '', figuresLine(c, ab, cast.level, true)].filter(Boolean).join(' · ');
     return {
       ref: itemRef(uid), name: t(def.name), icon: def.icon, cost, uses: left,
       why: general || (left <= 0 ? t('No charges left until a long rest.') : used ? spentWhy(cost) : ''),
@@ -232,6 +233,24 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
     return p.kind === 'ab' ? (ABILITIES[p.id] ? abilityEntry(p.id) : null) : itemEntry(p.id);
   };
 
+  // The weapon's own numbers, as the attack will roll them.
+  const weapon = weaponAttack(c, c.equipment.mainHand ? itemDef(state.items, c.equipment.mainHand.defId) : null);
+  const weaponSpread = damageSpread(weapon.damage, weapon.type);
+  const weaponLine = t('{weapon}: {bonus} to hit, {dice} {type} ({min}–{max})', { weapon: t(weapon.name), bonus: signed(weapon.bonus), dice: dice(weapon.damage, lang), type: t(`${weapon.type} damage`), min: weaponSpread.min, max: weaponSpread.max });
+
+  /** A spell's numbers for this hero: its attack bonus or save DC, and its dice with the modifier in. */
+  function figuresLine(who: Character, ab: (typeof ABILITIES)[string], level: number, wand = false) {
+    const f = abilityFigures(who, ab, level);
+    const parts: string[] = [];
+    if (f.toHit !== undefined) parts.push(t('Spell attack {n}', { n: signed(f.toHit) }));
+    if (f.dc !== undefined && f.save) parts.push(t('DC {n} {save} save', { n: wand ? Math.max(15, f.dc) : f.dc, save: t(ABILITY_NAMES[f.save as AbilityKey]) }));
+    if (f.dice && f.spread) {
+      const range = f.spread.min === f.spread.max ? String(f.spread.min) : `${f.spread.min}–${f.spread.max}`;
+      parts.push(f.heal ? t('Heals {dice} ({range})', { dice: dice(f.dice, lang), range }) : `${dice(f.dice, lang)} (${range})`);
+    }
+    return parts.join(' · ');
+  }
+
   // The common actions: always there, in a fixed place.
   const cunning = hasFeature(c, 'cunning_action');
   const twoWeapons = isLightWeapon(itemDef(state.items, c.equipment.mainHand?.defId ?? '')) && isLightWeapon(itemDef(state.items, c.equipment.offHand?.defId ?? '')) && !c.form;
@@ -240,7 +259,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ref: 'attack', name: t('Attack'), icon: <Glyph keys={['action:attack']} emoji="⚔️" />, cost: 'action',
       why: general || (actionUsed && combat.attacksLeft <= 0 ? spentWhy('action') : ''),
       on: targeting?.kind === 'attack',
-      tip: <>{t('Attack with your main-hand weapon. You can also just click an enemy.')}{combat.attacksLeft > 0 && actionUsed && <em>{t('one more attack')}</em>}</>,
+      tip: <>{t('Attack with your main-hand weapon. You can also just click an enemy.')}<em>{weaponLine}</em>{combat.attacksLeft > 0 && actionUsed && <em>{t('one more attack')}</em>}</>,
       run: () => toggle({ kind: 'attack' }),
     },
     ...(twoWeapons ? [{

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { tileDifficult, tileGivesCover, type Biome } from '../../../shared/battlemap';
 import type { GameState } from '../../../shared/types';
 import { useLang, useT } from '../i18n';
@@ -9,6 +9,7 @@ import { MapRenderer, type BattleView, type TokenHover, type ViewOptions } from 
 import { getPrefs, usePrefs } from '../ui/prefs';
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, clampZoom } from '../game/tilt';
 import { useEntityHover } from './Story';
+import { OddsBlock } from './Odds';
 import { heroSenses, partyOf } from '../game/util';
 import type { MoveListener } from '../net';
 
@@ -17,6 +18,12 @@ interface Props {
   view: ViewOptions;
   onTile: (x: number, y: number, touch: boolean) => void;
   onMoved: (fn: MoveListener) => () => void;
+  /** What the acting hero would do to a monster pointed at: the weapon (null) or a spell, with its name. */
+  aim?: { abilityId: string | null; label: string } | null;
+  /** The mouse moved onto another square (null: off the map). */
+  onHoverTile?: (tile: { x: number; y: number } | null) => void;
+  /** A short note that follows the mouse, such as what a move there costs. */
+  moveTip?: ReactNode;
 }
 
 const VIEW_KEY = 'hearthforge.battleView';
@@ -36,7 +43,7 @@ function remember(key: string, value: string) {
 const edgeScrollNow = () => getPrefs().edgeScroll;
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-export function MapView({ state, view, onTile, onMoved }: Props) {
+export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTip }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<MapRenderer | null>(null);
   const [token, setToken] = useState<TokenHover | null>(null);
@@ -44,6 +51,9 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
   const { entities, hover } = useEntityHover();
   const click = useRef(onTile);
   click.current = onTile;
+  const hoverTile = useRef(onHoverTile);
+  hoverTile.current = onHoverTile;
+  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const t = useT();
   // The battle view (2.5D or flat) and the zoom are each player's own, remembered in the browser.
   const [mode, setMode] = useState<BattleView>(storedView);
@@ -58,6 +68,7 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     r.onTile = (x, y, touch) => click.current(x, y, touch);
     r.onZoom = (factor) => setZoom((z) => clampZoom(z * factor));
     r.onHoverMonster = setToken;
+    r.onHoverTile = (tile) => hoverTile.current?.(tile);
     r.update(now.state, now.view);
     r.setEdgeScroll(edgeScrollNow());
     void r.init(host.current!);
@@ -130,12 +141,13 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
   // Pointing at a monster shows its card, anchored to its token.
   const hovered = token ? state.monsters.find((m) => m.id === token.id && m.alive) : undefined;
   const hoveredName = hovered?.name;
+  const odds = hovered && aim && state.odds ? (aim.abilityId ? state.odds.abilities[aim.abilityId]?.[hovered.id] : state.odds.attack[hovered.id]) : undefined;
   useEffect(() => {
     const entity = hoveredName ? entities.find((e) => e.kind === 'monster' && e.name === hoveredName) : undefined;
-    if (entity && anchor.current) hover.show(entity, anchor.current);
+    if (entity && anchor.current) hover.show(entity, anchor.current, odds && aim ? <OddsBlock odds={odds} label={aim.label} /> : undefined);
     else hover.hide();
     return () => hover.hide();
-  }, [hoveredName, token, entities, hover]);
+  }, [hoveredName, token, entities, hover, odds, aim?.label]);
 
   // Status icons ride above their tokens: placed every frame, since tokens slide and the camera pans.
   const layer = useRef<HTMLDivElement>(null);
@@ -186,7 +198,8 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     t('Attacking what you cannot see has disadvantage; attacking what cannot see you has advantage.'),
   ].filter(Boolean).join(' ');
   return (
-    <div className="map" ref={host}>
+    <div className="map" ref={host} onMouseMove={(e) => { const b = host.current?.getBoundingClientRect(); if (b) setCursor({ x: e.clientX - b.left, y: e.clientY - b.top }); }} onMouseLeave={() => setCursor(null)}>
+      {moveTip && cursor && !token && <div className="move-tip" style={{ left: cursor.x + 18, top: cursor.y + 14 }} aria-live="polite">{moveTip}</div>}
       <div className="token-statuses" ref={layer}>
         {turn && (
           <div key={`turn-${turn.id}`} className={`turn-marker ${turn.kind}${turn.mine ? ' mine' : ''}`} data-token={turn.id} data-lift={turn.lift} style={{ visibility: 'hidden' }} aria-hidden>

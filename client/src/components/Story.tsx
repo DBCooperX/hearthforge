@@ -1,4 +1,6 @@
 import { itemArtUrl } from '../game/itemArt';
+import { GOOD_REASONS } from '../../../shared/odds';
+import { reasonText } from './Odds';
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, formatHours, hexDistance } from '../../../shared/hex';
@@ -99,7 +101,8 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
 }
 
 interface Hover {
-  show: (e: Entity, el: HTMLElement) => void;
+  /** `extra` rides at the bottom of the card, such as the odds of an attack on a monster. */
+  show: (e: Entity, el: HTMLElement, extra?: ReactNode) => void;
   hide: () => void;
 }
 const HoverContext = createContext<{ entities: Entity[]; pattern: RegExp | null; hover: Hover }>({ entities: [], pattern: null, hover: { show: () => {}, hide: () => {} } });
@@ -110,7 +113,7 @@ export const useEntityHover = () => useContext(HoverContext);
 /** Provides entity highlighting and one shared hover card to everything inside it. */
 export function EntityProvider({ state, children }: { state: GameState; children: ReactNode }) {
   const t = useT();
-  const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean } | null>(null);
+  const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean; extra?: ReactNode } | null>(null);
   const entities = useMemo(() => buildEntities(state, t), [state.memory, state.items, state.world?.locations, state.world?.party, state.characters, state.monsters, state.phase, state.players, state.language, t]);
   const pattern = useMemo(() => {
     const names = [...new Set(entities.map((e) => e.name))].filter((n) => n.length > 2).sort((a, b) => b.length - a.length);
@@ -118,10 +121,10 @@ export function EntityProvider({ state, children }: { state: GameState; children
     return new RegExp(`(?<![\\p{L}\\p{N}])(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}])`, 'gu');
   }, [entities]);
   const hover = useMemo<Hover>(() => ({
-    show: (entity, el) => {
+    show: (entity, el, extra) => {
       const r = el.getBoundingClientRect();
-      const below = r.top < 240;
-      setCard({ entity, x: Math.max(12, Math.min(window.innerWidth - 312, r.left + r.width / 2 - 150)), y: below ? r.bottom + 8 : r.top - 8, below });
+      const below = r.top < (extra ? 360 : 240);
+      setCard({ entity, x: Math.max(12, Math.min(window.innerWidth - 312, r.left + r.width / 2 - 150)), y: below ? r.bottom + 8 : r.top - 8, below, extra });
     },
     hide: () => setCard(null),
   }), []);
@@ -141,6 +144,7 @@ export function EntityProvider({ state, children }: { state: GameState; children
           </div>
           {card.entity.description && <p>{card.entity.description}</p>}
           {card.entity.facts.length > 0 && <ul>{card.entity.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>}
+          {card.extra}
         </div>
       )}
     </HoverContext.Provider>
@@ -221,6 +225,12 @@ function DiceRoll({ roll, animate }: { roll: RollInfo; animate: boolean }) {
           )}
           {rolling && <span className="muted">{t('rolling…')}</span>}
         </div>
+        {!rolling && (roll.why?.length || (roll.outcome === 'miss' && roll.die !== 1 && roll.target.kind === 'AC')) ? (
+          <ul className="odds-why dice-why">
+            {roll.outcome === 'miss' && roll.die !== 1 && roll.target.kind === 'AC' && roll.total < roll.target.value && <li className="bad">{t('Short by {n}', { n: roll.target.value - roll.total })}</li>}
+            {roll.why?.map((r, i) => <li key={i} className={GOOD_REASONS.has(r.code) ? 'good' : 'bad'}>{reasonText(r.code, r.n, t)}</li>)}
+          </ul>
+        ) : null}
       </div>
     </div>
   );
