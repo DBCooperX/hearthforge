@@ -8,10 +8,11 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ACCOUNT_PREFIX, PASSWORD_MIN, cleanUsername, emptyPlayStats, usernameOk,
-  type AccountError, type AccountRow, type AccountView, type HeroStats, type InviteView, type PlayStats, type Profile, type Role,
+  ACCOUNT_PREFIX, MAX_TEMPLATES, PASSWORD_MIN, cleanSpec, cleanUsername, emptyPlayStats, usernameOk,
+  type AccountError, type HeroTemplate, type AccountRow, type AccountView, type HeroStats, type InviteView, type PlayStats, type Profile, type Role,
 } from '../../shared/accounts';
 import { readJson, writePrivate } from './admin/config';
+import type { CharacterSpec } from '../../shared/types';
 
 /** A "remember me" session lasts a month; any other one a day. */
 export const REMEMBER_MS = 30 * 24 * 3600 * 1000;
@@ -34,6 +35,8 @@ interface Account {
   mustChange: boolean;
   stats: PlayStats;
   heroes: Record<string, HeroStats>;
+  /** Heroes kept as templates (My heroes). Missing in accounts from before. */
+  templates?: HeroTemplate[];
 }
 
 interface Session { account: string; until: number }
@@ -448,6 +451,46 @@ export class Accounts {
     this.saveSoon();
   }
 
+  // ------------------------------------------------------------------ My heroes
+
+  /** The heroes an account keeps, newest change first. */
+  templates(id: string): HeroTemplate[] {
+    const a = this.get(id);
+    return [...(a?.templates ?? [])].sort((x, y) => y.updatedAt - x.updatedAt);
+  }
+
+  template(id: string, templateId: string): HeroTemplate | undefined {
+    return this.get(id)?.templates?.find((x) => x.id === templateId);
+  }
+
+  /** Keep a hero (already checked against the rules by the caller), or replace the one with this id. */
+  saveTemplate(id: string, spec: CharacterSpec, templateId?: string): HeroTemplate {
+    const a = this.get(id);
+    if (!a) throw new AccountsError('not_found');
+    const list = (a.templates ??= []);
+    const t = this.now();
+    const old = templateId ? list.find((x) => x.id === templateId) : undefined;
+    if (templateId && !old) throw new AccountsError('not_found');
+    if (old) {
+      Object.assign(old, { name: spec.name, spec, updatedAt: t });
+      this.flush();
+      return old;
+    }
+    if (list.length >= MAX_TEMPLATES) throw new AccountsError('too_many_heroes');
+    const made: HeroTemplate = { id: `hero_${randomBytes(6).toString('hex')}`, name: spec.name, spec, savedAt: t, updatedAt: t };
+    list.push(made);
+    this.flush();
+    return made;
+  }
+
+  removeTemplate(id: string, templateId: string) {
+    const a = this.get(id);
+    const i = a?.templates?.findIndex((x) => x.id === templateId) ?? -1;
+    if (!a || !a.templates || i < 0) throw new AccountsError('not_found');
+    a.templates.splice(i, 1);
+    this.flush();
+  }
+
   profile(id: string): Profile | null {
     const a = this.get(id);
     if (!a) return null;
@@ -473,6 +516,7 @@ export class Accounts {
         id: r.id, username: cleanUsername(r.username), password: '', role: r.role === 'innkeeper' ? 'innkeeper' : 'player',
         createdAt: Number(r.createdAt) || this.now(), lastSeen: Number(r.lastSeen) || 0, mustChange: true,
         stats: { ...emptyPlayStats(), ...(r.stats ?? {}) }, heroes: r.heroes && typeof r.heroes === 'object' ? r.heroes : {},
+        templates: Array.isArray(r.templates) ? r.templates.filter((x): x is HeroTemplate => !!x && typeof x.id === 'string' && !!cleanSpec(x.spec)).slice(0, MAX_TEMPLATES) : [],
       });
       added++;
     }

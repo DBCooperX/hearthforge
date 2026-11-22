@@ -3,6 +3,7 @@
 // Heroes, seats and saves belong to the account, so a player picks up their hero on any device.
 
 import type { CreditView } from './credits';
+import type { CharacterSpec } from './types';
 
 export type Role = 'player' | 'innkeeper';
 export const ROLES: Role[] = ['player', 'innkeeper'];
@@ -89,6 +90,9 @@ export const ACCOUNT_ERRORS = {
   last_innkeeper: 'The server needs at least one innkeeper.',
   not_yourself: 'You cannot do that to your own account.',
   not_found: 'That account does not exist any more.',
+  bad_hero: 'That hero is not complete, or has choices the rules do not allow.',
+  too_many_heroes: 'You keep 30 heroes already. Delete one first.',
+  no_recipe: 'This hero was made before heroes could be kept. Make it again in the creator to keep it.',
   bad_request: 'That did not work.',
   failed: 'That did not work.',
 } as const;
@@ -120,3 +124,32 @@ export interface BinItem {
 
 /** How many deleted tables each host keeps in the bin. The oldest one goes when an eleventh arrives. */
 export const BIN_KEEP = 10;
+
+/** How many heroes an account may keep as templates. */
+export const MAX_TEMPLATES = 30;
+
+/**
+ * A hero kept on the account: the choices of the creator (a level 1 character sheet), never a played
+ * hero. A table gets a copy built by the same rules as any new hero, so the template does not change.
+ */
+export interface HeroTemplate {
+  id: string;
+  name: string;
+  spec: CharacterSpec;
+  savedAt: number;
+  updatedAt: number;
+}
+
+/** The creator's choices and nothing else, with the texts cut to length. Anything unknown is dropped. */
+export function cleanSpec(raw: unknown): CharacterSpec | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const keys = ['name', 'gender', 'speciesId', 'classId', 'backgroundId', 'method', 'base', 'boosts', 'skills', 'speciesSkill', 'expertise', 'fightingStyle', 'classOptions', 'originFeat', 'backgroundFeat', 'spells', 'kit', 'look', 'appearance', 'backstory'];
+  const out: Record<string, unknown> = {};
+  for (const k of keys) if (r[k] !== undefined) out[k] = r[k];
+  if (JSON.stringify(out).length > 8000) return null;
+  out.name = String(out.name ?? '').trim().slice(0, 20);
+  out.appearance = String(out.appearance ?? '').trim().slice(0, 400);
+  out.backstory = String(out.backstory ?? '').trim().slice(0, 1200);
+  return out as unknown as CharacterSpec;
+}

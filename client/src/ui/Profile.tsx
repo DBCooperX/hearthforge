@@ -8,6 +8,7 @@ import { accountCall } from '../account';
 import { accountErrorText } from '../components/SignIn';
 import { useLang, useT, type Translate } from '../i18n';
 import { Window } from './Window';
+import { deleteTemplate, useHeroTemplates } from '../templates';
 import { ask } from './Confirm';
 
 export function playTime(t: Translate, ms: number): string {
@@ -55,6 +56,7 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
   // Fresh numbers whenever the window opens.
   useEffect(() => { onChanged(); }, []);
   const { account, stats, heroes } = profile;
+  const { heroes: kept } = useHeroTemplates();
 
   const change = async (e: FormEvent) => {
     e.preventDefault();
@@ -125,6 +127,22 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
           {heroes.length > 0 && <p className="inn-actions"><button type="button" className="link danger" onClick={() => void clear('heroes', t('Clear the hero list? The totals above stay.'), t('The hero entry was removed.'))}>{t('Clear hero list')}</button></p>}
           <p className="muted small">{t('Removing an entry only clears the list. The hero stays at the table.')} {t('Gold is what the party took in while the hero was in it. Play time counts while you sit at the table. Test mode does not count.')}</p>
         </section>
+        {kept.length > 0 && (
+          <section>
+            <h3>{t('My heroes')}</h3>
+            <table className="inn-table">
+              <tbody>
+                {kept.map((h) => (
+                  <tr key={h.id}>
+                    <td><b>{h.name}</b> <span className="muted small">{t(CLASSES[h.spec.classId]?.name ?? h.spec.classId)}</span></td>
+                    <td className="inn-actions"><button type="button" className="link danger" onClick={async () => { if (await ask(t('Delete {name} from My heroes? Heroes already at a table keep playing.', { name: h.name }), { danger: true, ok: t('Delete') })) void deleteTemplate(h.id).catch(() => {}); }}>{t('Delete')}</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted small">{t('Heroes you keep on your account. A hero joins the party as a fresh level 1 copy, so playing never changes the saved one.')} {t('Pick them when you gather a party: you can add, change and keep them there.')}</p>
+          </section>
+        )}
         <section>
           <h3>{t('Account name')}</h3>
           <form className="inn-form" onSubmit={rename}>
