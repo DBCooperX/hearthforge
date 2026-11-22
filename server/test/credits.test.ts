@@ -1,5 +1,5 @@
-// Player credits: the AI's costs per account in francs, the Innkeeper's payments, and the stop at zero.
-import { mkdtempSync } from 'node:fs';
+// Player credits: the AI's costs per account in one global currency, the Innkeeper's payments, and the stop at zero.
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -18,12 +18,14 @@ const jonas = { id: 'acc_jonas', username: 'Jonas', role: 'player' as const };
 const chris = { id: 'acc_chris', username: 'Chris', role: 'innkeeper' as const };
 
 describe('credits', () => {
-  it('counts costs per account in francs, shared among those at the table', () => {
+  it('counts costs per account in the global currency, shared among those at the table', () => {
     const c = new Credits(dir());
-    c.setConfig({ chfPerUsd: 0.8 });
+    c.setConfig({ currency: 'CHF', rate: 0.8, voiceUsdPer1k: { elevenlabs: 0.04 } });
     c.charge([mira.id, jonas.id], 1, 'claude');
-    c.charge([mira.id], c.voiceCost('elevenlabs', 5000), 'voice');
-    expect(c.voiceCost('elevenlabs', 5000)).toBeCloseTo(0.2);
+    // The cheaper model counts half.
+    expect(c.voiceCost(1000, 'cheaper')).toBeCloseTo(0.02);
+    c.charge([mira.id], c.voiceCost(5000), 'voice');
+    expect(c.voiceCost(5000)).toBeCloseTo(0.2);
     const r = c.report([mira, jonas]);
     expect(r.rows[0]).toMatchObject({ username: 'Mira', spentClaude: 0.4, last30: 0.56 });
     expect(r.rows[0].spentVoice).toBeCloseTo(0.16);
@@ -35,7 +37,7 @@ describe('credits', () => {
 
   it('warns early and stops at zero once credits are on, but never an innkeeper or a free account', () => {
     const c = new Credits(dir());
-    c.setConfig({ on: true, chfPerUsd: 1, warnChf: 2 });
+    c.setConfig({ on: true, warn: 2 });
     expect(c.view(mira)).toMatchObject({ limited: true, balance: 0, out: true });
     c.topUp(mira.id, 10, 'TWINT');
     expect(c.view(mira)).toMatchObject({ paid: 10, balance: 10, low: false, out: false });
@@ -56,7 +58,8 @@ describe('credits', () => {
   it('refuses nonsense and keeps what it was told across a restart', () => {
     const d = dir();
     const c = new Credits(d);
-    expect(() => c.setConfig({ chfPerUsd: -1 })).toThrow();
+    expect(() => c.setConfig({ currency: 'CHF', rate: -1 })).toThrow();
+    expect(() => c.setConfig({ currency: 'Swiss francs', rate: 1 })).toThrow();
     expect(() => c.topUp(mira.id, 'lots', '')).toThrow();
     expect(() => c.topUp(mira.id, 0, '')).toThrow();
     c.setConfig({ on: true, voiceUsdPer1k: { elevenlabs: 0.05 } });
@@ -64,14 +67,63 @@ describe('credits', () => {
     c.charge([mira.id], 1, 'claude');
     c.flush();
     const again = new Credits(d);
-    expect(again.config).toMatchObject({ on: true, chfPerUsd: 0.85, voiceUsdPer1k: { elevenlabs: 0.05, openai: 0.015 } });
-    expect(again.view(mira).balance).toBeCloseTo(19.15);
+    expect(again.config).toMatchObject({ on: true, currency: 'USD', rate: 1, voiceUsdPer1k: { elevenlabs: 0.05 } });
+    expect(again.view(mira).balance).toBeCloseTo(19);
     // A backup brings back accounts this server does not know, and leaves the others alone.
     const fresh = new Credits(dir());
     expect(fresh.restore(again.exportable())).toBe(1);
     expect(fresh.view(mira).paid).toBe(20);
     again.forget(mira.id);
     expect(again.view(mira).paid).toBe(0);
+  });
+
+  it('prices everything in dollars without any conversion by default', () => {
+    const c = new Credits(dir());
+    c.charge([mira.id], 1.25, 'claude');
+    expect(c.view(mira)).toMatchObject({ currency: 'USD', spent: 1.25 });
+    // Dollars never take a rate, whatever is sent.
+    c.setConfig({ rate: 7 });
+    expect(c.config.rate).toBe(1);
+  });
+
+  it('converts money already booked once when the currency changes, then books straight in the new one', () => {
+    const c = new Credits(dir());
+    c.topUp(mira.id, 10, 'cash');
+    c.charge([mira.id], 2, 'claude');
+    c.setConfig({ currency: 'CHF', rate: 0.8 });
+    expect(c.view(mira)).toMatchObject({ currency: 'CHF', paid: 8, spent: 1.6, balance: 6.4 });
+    expect(c.config.warn).toBeCloseTo(1.6);
+    // Later costs use the fixed rate and nothing else.
+    c.charge([mira.id], 1, 'voice');
+    expect(c.report([mira]).rows[0]).toMatchObject({ spentVoice: 0.8 });
+    // Changing only the rate leaves what is booked alone.
+    c.setConfig({ rate: 0.9 });
+    expect(c.view(mira).paid).toBe(8);
+    // And back to dollars: 8 CHF at 0.9 is about $8.89.
+    c.setConfig({ currency: 'USD' });
+    expect(c.view(mira).paid).toBeCloseTo(8.89, 2);
+    expect(c.config.rate).toBe(1);
+  });
+
+  it('reads credits saved in francs by an older version', () => {
+    const d = dir();
+    writeFileSync(join(d, 'credits.json'), JSON.stringify({
+      config: { on: true, chfPerUsd: 0.85, warnChf: 3, voiceUsdPer1k: { elevenlabs: 0.04 } },
+      accounts: { [mira.id]: { topUps: [{ at: 1, chf: 10, note: 'TWINT' }], claude: 1, voice: 0.5, days: {} } },
+    }));
+    const c = new Credits(d);
+    expect(c.config).toMatchObject({ on: true, currency: 'CHF', rate: 0.85, warn: 3 });
+    expect(c.view(mira)).toMatchObject({ currency: 'CHF', paid: 10, spent: 1.5, balance: 8.5 });
+    expect(c.report([mira]).rows[0].topUps[0]).toMatchObject({ amount: 10, note: 'TWINT' });
+  });
+
+  it('brings a backup in another currency across at both fixed rates', () => {
+    const old = new Credits(dir());
+    old.setConfig({ currency: 'CHF', rate: 0.8 });
+    old.topUp(mira.id, 8, 'cash');
+    const fresh = new Credits(dir());
+    expect(fresh.restore(old.exportable())).toBe(1);
+    expect(fresh.view(mira)).toMatchObject({ currency: 'USD', paid: 10 });
   });
 });
 

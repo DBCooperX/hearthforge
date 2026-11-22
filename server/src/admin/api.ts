@@ -19,6 +19,7 @@ import type { Logs } from './logs';
 import type { Updater } from './updater';
 import { dayOf, type Usage } from './usage';
 import { CreditsError, type Credits } from '../credits';
+import type { Money } from '../../../shared/credits';
 
 export const NOTICES = {
   restart5: 'The server restarts in 5 minutes. Your game is saved.',
@@ -176,9 +177,9 @@ export class AdminApi {
         case '/accounts': return this.accountList();
         case '/env': return { settings: ctx.config.list(), restartPending: ctx.config.pending };
         case '/https': return ctx.updater.https();
-        case '/usage': return ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title
+        case '/usage': return { ...ctx.usage.report((id) => ctx.rooms.get(id)?.game.s.table.title
           // Reading a campaign book when it arrives is booked under the book, not a table.
-          ?? (id.startsWith('campaign:') ? `📖 ${campaignShelf()?.info(id.slice(9))?.title ?? id.slice(9)}` : id));
+          ?? (id.startsWith('campaign:') ? `📖 ${campaignShelf()?.info(id.slice(9))?.title ?? id.slice(9)}` : id)), money: this.money() };
         case '/credits': return this.credits();
         case '/logs': return { lines: ctx.logs.since(Number(url.searchParams.get('after')) || 0) };
         case '/backups': return { backups: this.backups() };
@@ -252,8 +253,8 @@ export class AdminApi {
         const target = () => { const a = ctx.accounts.get(id); if (!a) throw new Refused(404, 'not_found'); return a; };
         try {
           switch (body.do) {
-            case 'config': ctx.credits.setConfig((body.config ?? {}) as Record<string, unknown>); console.log(`[innkeeper] ${me.username} changed the credit settings (credits ${ctx.credits.config.on ? 'on' : 'off'}).`); break;
-            case 'top_up': { const a = target(); ctx.credits.topUp(a.id, body.chf, body.note); console.log(`[innkeeper] ${me.username} booked CHF ${Number(body.chf).toFixed(2)} for ${a.username}.`); ctx.creditsChanged?.([a.id]); break; }
+            case 'config': ctx.credits.setConfig((body.config ?? {}) as Record<string, unknown>); console.log(`[innkeeper] ${me.username} changed the credit settings (credits ${ctx.credits.config.on ? 'on' : 'off'}, ${ctx.credits.config.currency}).`); ctx.creditsChanged?.(ctx.accounts.list().map((a) => a.id)); break;
+            case 'top_up': { const a = target(); ctx.credits.topUp(a.id, body.amount, body.note); console.log(`[innkeeper] ${me.username} booked ${ctx.credits.config.currency} ${Number(body.amount).toFixed(2)} for ${a.username}.`); ctx.creditsChanged?.([a.id]); break; }
             case 'free': { const a = target(); ctx.credits.setFree(a.id, body.free === true); ctx.creditsChanged?.([a.id]); break; }
             default: throw new Refused(400, 'bad_request');
           }
@@ -403,6 +404,7 @@ export class AdminApi {
       updater: ctx.updater.status(),
       usageToday: ctx.usage.totals(dayOf(now)),
       usageMonth: ctx.usage.totals(`${dayOf(now).slice(0, 7)}-01`),
+      money: this.money(),
     };
   }
 
@@ -411,7 +413,9 @@ export class AdminApi {
     return { accounts: accounts.list(), invites: accounts.invites(), legacy: legacySeats(rooms) };
   }
 
-  private tables(): { tables: AdminTable[] } {
+  private money(): Money { const { currency, rate } = this.ctx.credits.config; return { currency, rate }; }
+
+  private tables(): { tables: AdminTable[]; money: Money } {
     const { ctx } = this;
     const saved = new Map((ctx.store.info?.() ?? []).map((i) => [i.room, i]));
     const tables = [...ctx.rooms.values()].map((room): AdminTable => {
@@ -438,7 +442,7 @@ export class AdminApi {
       };
     });
     tables.sort((a, b) => Number(b.players.some((p) => p.connected)) - Number(a.players.some((p) => p.connected)) || (a.savedAt < b.savedAt ? 1 : -1));
-    return { tables };
+    return { tables, money: this.money() };
   }
 
   /** The names and quests of earlier tables, which new stories are nudged away from. */

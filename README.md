@@ -160,7 +160,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
 | `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Assets → Narrator. |
-| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | For hosted narrator voices (OpenAI also for story illustrations). See [Voice and HTTPS](#voice-and-https). |
+| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | ElevenLabs for the hosted narrator voice, OpenAI for story illustrations. See [Voice and HTTPS](#voice-and-https). |
 | `GEMINI_API_KEY`, `FAL_KEY`, `REPLICATE_API_TOKEN` | empty | For story illustrations; can also be typed in the Innkeeper. See [Story illustrations](#story-illustrations). |
 | `COMPOSE_PROFILES=https`, `HEARTHFORGE_DOMAIN`, `HEARTHFORGE_LOCAL_HOSTS`, `HEARTHFORGE_DNS_PROVIDER`, `HEARTHFORGE_DNS_TOKEN`, `HEARTHFORGE_ACME_EMAIL` | off | HTTPS through Caddy (`.env` only). See [HTTPS](#https). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
@@ -233,7 +233,7 @@ At the big moments of an adventure (a boss steps out, a hard fight is won, a big
 - **Hero portraits**: every new hero gets a painted portrait from the choices in the character creator (species, class, skin, hair, beard, colours and the appearance text). All portraits share one look, in warm colour, made for the round brass frames, whatever style the scenes use. It replaces the drawn bust in the party panel, the sheet, the lobby and the tabs once it has loaded; a changed look gets a new one. It is paid by the player whose hero it is, at most 3 per player and day by default. **Paint a sample portrait** tries the look. Scene pictures take the portraits of the heroes in them along, so the heroes look the same.
 - **Battle figures**: the miniatures on the battle map can be painted too (on by default once illustrations are on; Innkeeper → Art → Illustrations → Battle figures). A hero's figure is painted from their portrait, so the two match, and is paid by the player whose hero it is. Each kind of monster (catalogue creature plus the look the Dungeon Master gave it) is painted once, the first time it shows up, paid by that table, and then reused at every table of the server. Image models cannot paint a transparent background, so figures are painted on flat magenta (green for pink and purple figures) and the browser cuts the figure out. Until a figure has loaded, and when the switch is off, the drawn figures stay. At most 20 new figures a day for the whole server by default. Deleting a figure under Latest pictures has it painted anew the next time it is needed; **Paint a sample figure** tries the look on a goblin.
 - **Which moments** may get a picture: boss, victory and reveal by default; a first arrival at a new place is on too (never a revisit, and the day and gap limits still apply); the opening scene and deaths or partings can be ticked on.
-- **Budget**: there are no limits by count any more (no pictures per day, no minutes between pictures). The only caps are the monthly budget for the whole server in dollars (10 by default, 0 for none) and the players' credit. When either runs out, pictures pause and the story goes on as usual.
+- **Budget**: there are no limits by count any more (no pictures per day, no minutes between pictures). The only caps are the monthly budget for the whole server in the Innkeeper's currency (10 dollars by default, 0 for none) and the players' credit. When either runs out, pictures pause and the story goes on as usual.
 
 | Service | Key | Default model | List price per picture (Nov 2026) |
 | --- | --- | --- | --- |
@@ -253,8 +253,7 @@ Each picture is billed to the player credits like the rest of the AI, shared amo
 | Voice | Cost | |
 | --- | --- | --- |
 | **Piper** (default) | free | Runs on the server's CPU. Part of the image; its voices (about 60 to 120 MB each) are downloaded once from [Piper's collection](https://huggingface.co/rhasspy/piper-voices) into `/data/voice`. Clear, a little like an audiobook robot. Defaults: *northern English man* and *Thorsten* for German. Each voice links to its licence card. |
-| **OpenAI** (`OPENAI_API_KEY`) | a few cents an evening | `gpt-4o-mini-tts`, told to read like a fireside storyteller. Every voice speaks both languages. |
-| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. |
+| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. Quality is *Best quality* (multilingual v2) or *Cheaper* (Flash v2.5, half the credits per character). |
 
 Put the keys under **Settings → Voice** and restart. Speech is stored on the server (up to 400 MB, oldest first), so a scene read once is never paid for twice, and only the Dungeon Master's own story can be read, by players sitting at that table. Long scenes are read in parts, so the first sentences start while the rest is still being made. On two cores Piper needs a second or two per part.
 

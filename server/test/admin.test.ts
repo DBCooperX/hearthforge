@@ -359,22 +359,24 @@ describe('innkeeper API', () => {
     r.ctx.creditsChanged = (ids) => void told.push(ids);
     const mira = r.ctx.accounts.create('Mira', 'player').account;
     let rep = (await call(r, '/credits')).body;
-    expect(rep.config).toMatchObject({ on: false, chfPerUsd: 0.85, warnChf: 2, voiceUsdPer1k: { elevenlabs: 0.04 } });
+    expect(rep.config).toMatchObject({ on: false, currency: 'USD', rate: 1, warn: 2, voiceUsdPer1k: { elevenlabs: 0.08 } });
     expect(rep.rows.map((x: { username: string }) => x.username)).toEqual(['innkeeper', 'Mira']);
-    rep = (await call(r, '/credits', { do: 'top_up', id: mira.id, chf: 10, note: 'TWINT' })).body;
-    expect(rep.rows[1]).toMatchObject({ paid: 10, limited: false, topUps: [{ chf: 10, note: 'TWINT' }] });
+    rep = (await call(r, '/credits', { do: 'top_up', id: mira.id, amount: 10, note: 'TWINT' })).body;
+    expect(rep.rows[1]).toMatchObject({ paid: 10, limited: false, topUps: [{ amount: 10, note: 'TWINT' }] });
     expect(told).toEqual([[mira.id]]);
-    rep = (await call(r, '/credits', { do: 'config', config: { on: true, warnChf: 3 } })).body;
-    expect(rep.config).toMatchObject({ on: true, warnChf: 3, chfPerUsd: 0.85 });
+    rep = (await call(r, '/credits', { do: 'config', config: { on: true, warn: 3 } })).body;
+    expect(rep.config).toMatchObject({ on: true, warn: 3, currency: 'USD', rate: 1 });
     expect(rep.rows[1]).toMatchObject({ limited: true, balance: 10 });
     expect(rep.rows[0]).toMatchObject({ limited: false });
-    expect((await call(r, '/credits', { do: 'config', config: { chfPerUsd: 'lots' } })).body).toEqual({ error: 'bad_value' });
-    expect((await call(r, '/credits', { do: 'top_up', id: 'acc_nobody', chf: 5 })).status).toBe(404);
+    expect((await call(r, '/credits', { do: 'config', config: { currency: 'CHF', rate: 'lots' } })).body).toEqual({ error: 'bad_value' });
+    // Another currency needs the Innkeeper's own fixed rate.
+    expect((await call(r, '/credits', { do: 'config', config: { currency: 'CHF' } })).body).toEqual({ error: 'bad_value' });
+    expect((await call(r, '/credits', { do: 'top_up', id: 'acc_nobody', amount: 5 })).status).toBe(404);
     rep = (await call(r, '/credits', { do: 'free', id: mira.id, free: true })).body;
     expect(rep.rows[1]).toMatchObject({ free: true, limited: false });
     // A backup keeps them.
     const made = (await call(r, '/backup')).body;
-    expect(made.credits.accounts[mira.id].topUps[0].chf).toBe(10);
+    expect(made.credits.accounts[mira.id].topUps[0].amount).toBe(10);
   });
 
   it('backs tables up and puts them back, without secrets', async () => {

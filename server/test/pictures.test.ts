@@ -246,7 +246,7 @@ describe('the Dungeon Master and the scene card', () => {
 describe('credits', () => {
   it('books pictures as their own kind of cost', () => {
     const c = new Credits(dir());
-    c.setConfig({ chfPerUsd: 0.8 });
+    c.setConfig({ currency: 'CHF', rate: 0.8 });
     c.charge(['acc_mira', 'acc_jonas'], 0.1, 'images');
     const row = c.report([{ id: 'acc_mira', username: 'Mira', role: 'player' }]).rows[0];
     expect(row.spentImages).toBeCloseTo(0.04);

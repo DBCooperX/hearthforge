@@ -1,7 +1,7 @@
 // The narrator in the Innkeeper: which service speaks, in which voice, how fast. One choice for the whole server;
 // players only mute it or turn it down. Piper voices are downloaded from Piper's own collection when picked.
 import { useEffect, useRef, useState } from 'react';
-import { OPENAI_VOICES, PROVIDER_LABELS, VOICE_ERRORS, VOICE_PROVIDERS, type VoiceChoice, type VoiceLibrary as Library, type VoiceProvider } from '../../../shared/voice';
+import { PROVIDER_LABELS, VOICE_ERRORS, VOICE_PROVIDERS, VOICE_QUALITIES, type VoiceChoice, type VoiceLibrary as Library, type VoiceProvider } from '../../../shared/voice';
 import type { Lang } from '../../../shared/i18n';
 import { useT } from '../i18n';
 import { narrator } from '../narrator';
@@ -81,7 +81,7 @@ export function NarratorLibrary() {
           {VOICE_PROVIDERS.map((p) => <option key={p} value={p} disabled={!usable(p) && p !== c.provider}>{t(PROVIDER_LABELS[p])}{!usable(p) ? ` (${p === 'piper' ? t('not in this image') : t('needs a key')})` : ''}</option>)}
         </select>
       </div>
-      {!lib.keys.openai && !lib.keys.elevenlabs && <p className="muted small">{t('For OpenAI or ElevenLabs, add the API key under Sound and voice → Switches and keys and restart the server.')}</p>}
+      {!lib.keys.elevenlabs && <p className="muted small">{t('For ElevenLabs, add the API key under Sound and voice → Switches and keys and restart the server.')}</p>}
 
       {c.provider === 'piper' && (
         <>
@@ -113,19 +113,6 @@ export function NarratorLibrary() {
         </>
       )}
 
-      {c.provider === 'openai' && (
-        <div className="setting">
-          <span>{t('Voice')}</span>
-          <span className="setting-controls">
-            <select value={c.openai} disabled={busy} onChange={(e) => choose({ openai: e.target.value })}>
-              {OPENAI_VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
-            {listen('en', { provider: 'openai', openai: c.openai })}
-            {listen('de', { provider: 'openai', openai: c.openai })}
-          </span>
-        </div>
-      )}
-
       {c.provider === 'elevenlabs' && (
         <div className="setting">
           <span>{t('Voice')}</span>
@@ -135,9 +122,18 @@ export function NarratorLibrary() {
               {lib.elevenlabsVoices.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
             <button type="button" className="link" disabled={busy} onClick={() => void act({ do: 'refresh' })}>{t('Reload the list')}</button>
-            {listen('en', { provider: 'elevenlabs', elevenlabs: c.elevenlabs })}
-            {listen('de', { provider: 'elevenlabs', elevenlabs: c.elevenlabs })}
+            {listen('en', { provider: 'elevenlabs', elevenlabs: c.elevenlabs, quality: c.quality })}
+            {listen('de', { provider: 'elevenlabs', elevenlabs: c.elevenlabs, quality: c.quality })}
           </span>
+        </div>
+      )}
+
+      {c.provider === 'elevenlabs' && (
+        <div className="setting">
+          <span>{t('Quality')}<br /><span className="muted small">{t('Cheaper uses half the credits per character, with a slightly less natural voice.')}</span></span>
+          <select value={c.quality} disabled={busy} onChange={(e) => choose({ quality: e.target.value as VoiceChoice['quality'] })}>
+            {VOICE_QUALITIES.map((q) => <option key={q} value={q}>{q === 'quality' ? t('Best quality') : t('Cheaper')}</option>)}
+          </select>
         </div>
       )}
 

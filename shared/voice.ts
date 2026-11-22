@@ -1,14 +1,13 @@
 // The narrator: the Dungeon Master's story read aloud. The Innkeeper picks one voice for the
 // whole server; each player only mutes it or sets its volume. The speech is made on the server,
-// by Piper (free, runs on the server's own CPU) or by OpenAI or ElevenLabs (an API key, paid).
+// by Piper (free, runs on the server's own CPU) or by ElevenLabs (an API key, paid).
 import type { Lang } from './i18n';
 
-export const VOICE_PROVIDERS = ['piper', 'openai', 'elevenlabs', 'off'] as const;
+export const VOICE_PROVIDERS = ['piper', 'elevenlabs', 'off'] as const;
 export type VoiceProvider = (typeof VOICE_PROVIDERS)[number];
 
 export const PROVIDER_LABELS: Record<VoiceProvider, string> = {
   piper: 'Piper, on this server (free)',
-  openai: 'OpenAI (API key, a few cents per evening)',
   elevenlabs: 'ElevenLabs (API key, sounds the most natural)',
   off: 'No narrator',
 };
@@ -46,19 +45,23 @@ export const PIPER_VOICES: PiperVoice[] = [
   { id: 'de_DE-ramona-low', lang: 'de', label: 'Ramona, German woman, soft', mb: 63 },
 ];
 
-export const OPENAI_VOICES = ['fable', 'onyx', 'ballad', 'sage', 'ash', 'coral', 'echo', 'nova', 'alloy', 'shimmer', 'verse'] as const;
-export const OPENAI_TTS_MODEL = 'gpt-4o-mini-tts';
 /** George, one of ElevenLabs' own voices: a warm British storyteller. */
 export const ELEVENLABS_DEFAULT_VOICE = 'JBFqnCBsd6RMkjVDRZzb';
-export const ELEVENLABS_MODEL = 'eleven_multilingual_v2';
+/** Quality is the multilingual model (one credit per character); Cheaper is Flash, which costs half as much. */
+export const VOICE_QUALITIES = ['quality', 'cheaper'] as const;
+export type VoiceQuality = (typeof VOICE_QUALITIES)[number];
+export const ELEVENLABS_MODELS: Record<VoiceQuality, string> = { quality: 'eleven_multilingual_v2', cheaper: 'eleven_flash_v2_5' };
+/** What a character costs next to the Quality model. */
+export const VOICE_QUALITY_FACTOR: Record<VoiceQuality, number> = { quality: 1, cheaper: 0.5 };
 
 export interface VoiceChoice {
   provider: VoiceProvider;
   /** Piper speaks one language per voice, so there is one for each language of the story. */
   piper: Record<Lang, string>;
-  /** OpenAI and ElevenLabs voices speak both languages. */
-  openai: string;
+  /** ElevenLabs voices speak both languages. */
   elevenlabs: string;
+  /** Which ElevenLabs model reads: the best, or the cheaper one. */
+  quality: VoiceQuality;
   /** 0.8 is slower, 1.2 faster. */
   speed: number;
 }
@@ -66,8 +69,8 @@ export interface VoiceChoice {
 export const DEFAULT_VOICE: VoiceChoice = {
   provider: 'piper',
   piper: { en: 'en_GB-northern_english_male-medium', de: 'de_DE-thorsten-high' },
-  openai: 'fable',
   elevenlabs: ELEVENLABS_DEFAULT_VOICE,
+  quality: 'quality',
   speed: 1,
 };
 
@@ -88,7 +91,7 @@ export interface VoiceLibrary {
   /** The Piper program is in the image. */
   piperReady: boolean;
   piper: PiperVoiceState[];
-  keys: { openai: boolean; elevenlabs: boolean };
+  keys: { elevenlabs: boolean };
   /** The voices of the ElevenLabs account, when its key is set and the list could be read. */
   elevenlabsVoices: { id: string; name: string }[];
   /** Megabytes of speech kept on disk, so a story read once is not paid for twice. */

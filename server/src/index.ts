@@ -16,7 +16,7 @@ import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLi
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { Narrator, VoiceError, langOf } from './voice';
-import { speechParts } from '../../shared/voice';
+import { speechParts, type VoiceQuality } from '../../shared/voice';
 import { SESSION_HEADER } from './accountApi';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
@@ -191,6 +191,9 @@ function bill(table: string, usd: number, kind: CostKind) {
   }
   tellCredits(credits.charge(payersAt(table), usd, kind));
 }
+
+/** The currency every price is shown in, and its fixed rate per dollar. */
+function moneyNow() { const { currency, rate } = credits.config; return { currency, rate }; }
 
 /** Send these accounts their credit, on every device they are signed in on. Only to those who can run out. */
 function tellCredits(ids: string[], always = false) {
@@ -653,7 +656,7 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       const part = Math.max(0, Math.floor(Number(url.searchParams.get('part')) || 0));
       if (part >= parts.length) return json(404, { error: 'bad_request' });
       const lang = langOf(room.game.s.language);
-      const paid = (provider: 'openai' | 'elevenlabs', chars: number) => bill(room.name, credits.voiceCost(provider, chars), 'voice');
+      const paid = (chars: number, quality: VoiceQuality) => bill(room.name, credits.voiceCost(chars, quality), 'voice');
       const audio = await narrator.speak(parts[part], lang, undefined, paid);
       // The next part is made while this one plays.
       if (part + 1 < parts.length) void narrator.speak(parts[part + 1], lang, undefined, paid).catch(() => {});
@@ -667,11 +670,16 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         ? 'Der Regen trommelt auf das Dach der Taverne. Am Kamin hebt eine Fremde den Kopf und mustert euch lange. «Ihr seid spät», sagt sie leise. «Setzt euch. Die Strasse nach Norden ist nicht mehr sicher.»'
         : 'Rain drums on the roof of the tavern. By the hearth, a stranger lifts her head and studies you for a long moment. "You are late," she says quietly. "Sit. The north road is no longer safe."';
       const over: Record<string, unknown> = {};
-      for (const k of ['provider', 'openai', 'elevenlabs', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
+      for (const k of ['provider', 'elevenlabs', 'quality', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
       if (url.searchParams.has('piper')) over.piper = { ...narrator.library().choice.piper, [lang]: url.searchParams.get('piper') };
       // The Innkeeper trying voices pays for it like anyone else: it shows in their own costs.
       const me = accounts.account(req.headers[SESSION_HEADER]);
-      const audio = await narrator.speak(sample, lang, over, (provider, chars) => { if (me) credits.charge([me.id], credits.voiceCost(provider, chars), 'voice'); });
+      // Like a picture sample, it counts in the AI costs even when no account is signed in.
+      const audio = await narrator.speak(sample, lang, over, (chars, quality) => {
+        const usd = credits.voiceCost(chars, quality);
+        usage.recordExtra('Innkeeper samples', 'voice', usd);
+        if (me) credits.charge([me.id], usd, 'voice');
+      });
       return sendAudio(req, res, audio.file, audio.type);
     }
     if (req.method === 'POST' && url.pathname === '/api/voice/action') {
@@ -695,7 +703,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
   };
   try {
     if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
-    if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, illustrator.library());
+    if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, { ...illustrator.library(), money: moneyNow() });
     if (req.method === 'POST' && url.pathname === '/api/pictures/action') {
       const body = JSON.parse((await readRaw(req, 16 * 1024, () => new PictureError('bad_request'))).toString('utf8') || '{}') as Record<string, unknown>;
       if (body.do === 'sample' || body.do === 'sample_portrait' || body.do === 'sample_figure') {
@@ -703,7 +711,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         const me = accounts.account(req.headers[SESSION_HEADER]);
         const pay = (usd: number) => { usage.recordExtra('Innkeeper samples', 'images', usd); if (me) credits.charge([me.id], usd, 'images'); };
         const picture = body.do === 'sample' ? await illustrator.sample(pay) : body.do === 'sample_figure' ? await illustrator.sampleFigure(pay) : await illustrator.samplePortrait(pay);
-        return json(200, { ...illustrator.library(), sample: picture });
+        return json(200, { ...illustrator.library(), money: moneyNow(), sample: picture });
       }
       // "Repaint" deletes a battle figure and paints it anew at once, at every table where its hero or monster stands.
       const repaint = body.do === 'repaint';
@@ -735,7 +743,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         const entry = room.game.s.log.find((l) => l.id === done.removed!.entry);
         if (entry?.scene) { entry.scene.imageId = null; room.flush(); }
       }
-      return json(200, illustrator.library());
+      return json(200, { ...illustrator.library(), money: moneyNow() });
     }
     return json(404, { error: 'bad_request' });
   } catch (err) {

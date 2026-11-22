@@ -5,6 +5,7 @@ import { PICTURE_MOMENT_LABELS, type PictureInfo } from '../../../shared/illustr
 import { useLang, useT } from '../i18n';
 import { ask } from './Confirm';
 import { cutOut } from '../game/paintedFigures';
+import { usd } from './money';
 
 /** A battle figure as it stands on the map: its key-colour background taken out, on a dark ground. */
 export function FigureImg({ url, alt }: { url: string; alt: string }) {
@@ -29,7 +30,6 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 const tabOf = (p: PictureInfo): Tab => p.moment === 'portrait' ? 'heroes' : p.moment === 'npc' ? 'people' : p.moment === 'figure' ? 'figures' : 'scenes';
 const PAGE = 24;
-const usd = (n: number) => `$${n < 0.1 ? n.toFixed(3) : n.toFixed(2)}`;
 
 export function PictureGallery({ pictures, canRepaint, busy, act }: {
   pictures: PictureInfo[]; canRepaint: boolean; busy: boolean; act: (body: Record<string, unknown>) => Promise<boolean>;
@@ -122,7 +122,7 @@ export function PictureGallery({ pictures, canRepaint, busy, act }: {
             <div className="gallery-box-img">{image({ ...open })}</div>
             <figcaption>
               <b>{title(open)}</b>
-              <span className="muted small">{kind(open)} · {day(open)} · {usd(open.usd)}{open.caption && open.caption !== title(open) ? ` · ${open.caption}` : ''}</span>
+              <span className="muted small">{kind(open)} · {day(open)} · {usd(open.usd, true)}{open.caption && open.caption !== title(open) ? ` · ${open.caption}` : ''}</span>
               <span className="gallery-actions">
                 {list.length > 1 && <button type="button" onClick={() => step(-1)} aria-label={t('Previous picture')}>‹</button>}
                 {open.moment === 'figure' && <button type="button" disabled={busy || !canRepaint} onClick={() => void repaint(open)}>{t('Repaint')}</button>}
