@@ -1648,6 +1648,8 @@ export const DE: Record<string, string> = {
   'Game': 'Spiel',
 
   // ---------------------------------------------------------------- opportunity attacks and light
+  'Tap {name} again to go ahead.': 'Tippe nochmals auf {name}, um es auszuführen.',
+  'Tap the same square again to move there.': 'Tippe nochmals auf dasselbe Feld, um dorthin zu gehen.',
   'Leaving the reach of {names} invites an opportunity attack. Click the same square again to go anyway, or Disengage first.': 'Wer die Reichweite von {names} verlässt, provoziert einen Gelegenheitsangriff. Klicke noch einmal auf dasselbe Feld, um trotzdem zu gehen, oder zieh dich vorher zurück.',
   'Disengage': 'Rückzug',
   "Until the end of your turn, leaving an enemy's reach invites no opportunity attack.": 'Bis zum Ende deines Zuges provozierst du keine Gelegenheitsangriffe, wenn du die Reichweite eines Gegners verlässt.',

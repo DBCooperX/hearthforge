@@ -91,3 +91,18 @@
   .story .composer input, .story:not(.compact) .composer input { flex: 1 1 100%; min-width: 0; }
   .story .composer .ooc-toggle, .story:not(.compact) .composer .ooc-toggle { margin-left: auto; }
 }
+
+/* ---------- battles by finger ---------- */
+/* The map takes every touch itself: one finger drags it around, two pinch it, a tap plans and a second tap acts. */
+.map canvas { touch-action: none; }
+/* A finger resting on a slot shows what it does (ui/Hint.tsx), without the browser selecting text or opening its menu. */
+.hb-slot, .hb-endturn, .eco { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+@media (pointer: coarse) {
+  .map-controls button { min-width: 40px; min-height: 38px; }
+  .hb-slot .hk { display: none; }
+}
+@media (max-width: 640px) {
+  .map-legend { font-size: 11px; padding: 4px 8px; left: 6px; bottom: 6px; max-width: calc(100% - 12px); }
+  .map-controls { top: 6px; right: 6px; }
+  .turnbar { padding: 5px 8px; gap: 6px; }
+}
