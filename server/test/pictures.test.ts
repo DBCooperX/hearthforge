@@ -56,10 +56,8 @@ const job = (table = 't1') => ({ table, tableTitle: 'The Mill', entry: 5, ask: {
 
 describe('the Innkeeper setup', () => {
   it('keeps what is valid and ignores the rest', () => {
-    const c = cleanConfig({ provider: 'nope' as never, perTableDay: 999, gapMinutes: -4, style: 'woodcut', models: { gemini: 'rm -rf /' } as never, moments: { reveal: false } as never, usd: { 'gemini:gemini-3.1-flash-image': 0.05, 'bad key': 1 } as never }, DEFAULT_PICTURE_CONFIG);
+    const c = cleanConfig({ provider: 'nope' as never, style: 'woodcut', models: { gemini: 'rm -rf /' } as never, moments: { reveal: false } as never, usd: { 'gemini:gemini-3.1-flash-image': 0.05, 'bad key': 1 } as never }, DEFAULT_PICTURE_CONFIG);
     expect(c.provider).toBe('gemini');
-    expect(c.perTableDay).toBe(50);
-    expect(c.gapMinutes).toBe(0);
     expect(c.style).toBe('woodcut');
     expect(c.models.gemini).toBe('gemini-3.1-flash-image');
     expect(c.moments).toMatchObject({ boss: true, reveal: false });
@@ -77,8 +75,8 @@ describe('the Innkeeper setup', () => {
     expect(ill.library().keys).toEqual({ gemini: true, fal: false, replicate: false, openai: false });
   });
 
-  it('holds to the moments ticked, the limit per day, the gap and the monthly budget', async () => {
-    const { ill, later } = illustrator({ perTableDay: 2, gapMinutes: 15, monthUsd: 0.2 });
+  it('holds to the moments ticked and the monthly budget, with no limit by count or gap', async () => {
+    const { ill } = illustrator({ monthUsd: 0.2 });
     expect(ill.gate('t1', 'opening')).toBe('moment');
     // A first arrival at a new place is on by default, also for a setup saved before that moment existed.
     expect(ill.gate('t1', 'place')).toBeNull();
@@ -86,21 +84,18 @@ describe('the Innkeeper setup', () => {
     let billed = 0;
     await ill.paint(job(), (usd) => { billed += usd; });
     expect(billed).toBeCloseTo(0.067);
-    expect(ill.gate('t1', 'boss')).toBe('gap');
-    expect(ill.gate('t2', 'boss')).toBeNull();
-    later(20);
+    // No gap, no daily count: the next picture may follow at once.
+    expect(ill.gate('t1', 'boss')).toBeNull();
     await ill.paint(job(), () => {});
-    later(20);
-    expect(ill.gate('t1', 'victory')).toBe('day');
-    // A third picture elsewhere would pass the budget of 20 cents.
-    expect(ill.gate('t2', 'boss')).toBe('month');
+    // A third picture would pass the budget of 20 cents.
+    expect(ill.gate('t1', 'victory')).toBe('month');
     expect(ill.library().month).toEqual({ count: 2, usd: 0.134 });
   });
 });
 
 describe('the services', () => {
   it('asks Gemini with the prompt and, from the second picture on, the earlier pictures of the table', async () => {
-    const { ill, calls, later } = illustrator({ gapMinutes: 0 });
+    const { ill, calls, later } = illustrator({});
     const first = await ill.paint(job(), () => {});
     expect(first.url).toMatch(/^\/pictures\/[a-f0-9]{18}$/);
     expect(ill.file(first.id)?.mime).toBe('image/png');
@@ -158,7 +153,7 @@ describe('the services', () => {
   });
 
   it('asks OpenAI for a new picture, and for an edit once it has earlier ones', async () => {
-    const { ill, calls, later } = illustrator({ provider: 'openai', gapMinutes: 0 }, () => ({ data: [{ b64_json: PNG.toString('base64') }] }), { OPENAI_API_KEY: 'sk-x' });
+    const { ill, calls, later } = illustrator({ provider: 'openai' }, () => ({ data: [{ b64_json: PNG.toString('base64') }] }), { OPENAI_API_KEY: 'sk-x' });
     await ill.paint(job(), () => {});
     later(1);
     await ill.paint(job(), () => {});
@@ -270,10 +265,10 @@ it('keeps pictures in their own folder', async () => {
 });
 
 describe('hero portraits', () => {
-  it('paints each hero once per look, square and in the shared portrait style, and counts them per player', async () => {
+  it('paints each hero once per look, square and in the shared portrait style, with no count limit', async () => {
     const g = newGame();
     const brann = g.s.characters[0];
-    const { ill, calls, later } = illustrator({ portraitsPerDay: 2 });
+    const { ill, calls } = illustrator({});
     expect(ill.portraitGate('acc_mira', brann)).toBeNull();
     let billed = 0;
     const p = await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: brann }, (usd) => { billed += usd; });
@@ -287,15 +282,13 @@ describe('hero portraits', () => {
     expect(calls[0].body.contents[0].parts).toHaveLength(1);
     brann.portraitId = p.id; brann.portraitKey = p.key;
     expect(ill.portraitGate('acc_mira', brann)).toBe('done');
-    // A new look asks again, until the player's portraits for the day are used up.
+    // A new look asks again, however many portraits the player has had today.
     brann.look = { ...brann.look, hairColor: brann.look.hairColor === 'white' ? 'black' : 'white' };
     expect(ill.portraitGate('acc_mira', brann)).toBeNull();
     await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: brann }, () => {});
     brann.look = { ...brann.look, beard: brann.look.beard === 'none' ? 'long' : 'none' };
-    expect(ill.portraitGate('acc_mira', brann)).toBe('day');
-    expect(ill.portraitGate('acc_jonas', g.s.characters[1])).toBeNull();
-    later(24 * 60);
     expect(ill.portraitGate('acc_mira', brann)).toBeNull();
+    expect(ill.portraitGate('acc_jonas', g.s.characters[1])).toBeNull();
     // Portraits do not count against the scene pictures of the table.
     expect(ill.gate('pics', 'boss')).toBeNull();
     ill.action({ do: 'config', config: { portraits: false } });
@@ -311,7 +304,7 @@ describe('hero portraits', () => {
 
   it('passes the portraits of the heroes in a scene along first', async () => {
     const g = newGame();
-    const { ill, calls, later } = illustrator({ gapMinutes: 0 });
+    const { ill, calls, later } = illustrator({});
     const p = await ill.paintPortrait({ table: 'pics', tableTitle: 'Pics', account: 'acc_mira', hero: g.s.characters[0] }, () => {});
     g.s.characters[0].portraitId = p.id;
     g.pictures = { gate: () => null, paint: () => {} };

@@ -6,6 +6,9 @@ import type { InvFilter, InvSort } from '../../../shared/inventory';
 import { DEFAULT_BATTLE_NARRATION, type BattleNarrationMode } from '../../../shared/battleNarration';
 import type { TextSize } from './labels';
 
+/** How big the faces beside the speakers of the story are. */
+export type StoryPortraits = 'large' | 'small' | 'off';
+
 export interface Prefs {
   sounds: boolean;
   /** 0 to 1. */
@@ -30,10 +33,12 @@ export interface Prefs {
   chatChimeVolume: number;
   /** How much of a fight the narrator reads aloud: nothing, the big moments, or every comment. */
   battleNarration: BattleNarrationMode;
+  /** Portraits beside what people say in the story: large, small or none. */
+  storyPortraits: StoryPortraits;
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5, battleNarration: DEFAULT_BATTLE_NARRATION };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5, battleNarration: DEFAULT_BATTLE_NARRATION, storyPortraits: 'large' };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {

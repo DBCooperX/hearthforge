@@ -124,20 +124,10 @@ export interface PictureConfig {
   moments: Record<PictureMoment, boolean>;
   /** Paint a portrait of each new hero from the choices made in the creator. */
   portraits: boolean;
-  /** At most this many portraits per account and day, so trying looks does not run up a bill. */
-  portraitsPerDay: number;
   /** Paint a small portrait of each named person the party meets, billed to the table. */
   npcPortraits: boolean;
-  /** At most this many such portraits per table and day. */
-  npcPortraitsPerDay: number;
   /** Paint battle figures for heroes (from their portraits) and for each kind of monster. */
   figures: boolean;
-  /** At most this many new battle figures per day for the whole server. */
-  figuresPerDay: number;
-  /** At most this many pictures per table and day (real days, counted from midnight). */
-  perTableDay: number;
-  /** At least this many minutes between two pictures at one table. */
-  gapMinutes: number;
   /** The server stops painting for the rest of the month after this many dollars. 0: no cap. */
   monthUsd: number;
   /** What one picture is billed at, in dollars, when the model's price differs from the list. Empty: the list price. */
@@ -151,14 +141,9 @@ export const DEFAULT_PICTURE_CONFIG: PictureConfig = {
   style: 'charcoal',
   customStyle: '',
   portraits: true,
-  portraitsPerDay: 3,
   npcPortraits: true,
-  npcPortraitsPerDay: 6,
   figures: true,
-  figuresPerDay: 20,
   moments: { boss: true, victory: true, reveal: true, opening: false, place: true, farewell: false },
-  perTableDay: 4,
-  gapMinutes: 20,
   monthUsd: 10,
   usd: {},
 };
@@ -228,8 +213,6 @@ export const PICTURE_GATES = {
   off: 'Illustrations are switched off on this server.',
   no_key: 'No picture service is set up.',
   moment: 'This kind of moment does not get a picture here.',
-  day: 'This table has had all its pictures for today.',
-  gap: 'The last picture at this table was too recent.',
   month: 'The server has spent its picture budget for this month.',
   credit: 'The players at this table have no credit left.',
   busy: 'A picture is already being painted for this table.',
@@ -248,8 +231,6 @@ export const PICTURE_OUTCOME_LABELS: Record<PictureAskOutcome, string> = {
   off: 'Not made: illustrations are switched off',
   no_key: 'Not made: no picture service is set up',
   moment: 'Not made: this kind of moment is switched off',
-  day: 'Not made: the table has had its pictures for today',
-  gap: 'Not made: the last picture at this table was too recent',
   month: 'Not made: the monthly budget is spent',
   credit: 'Not made: a player at this table has no credit left',
   busy: 'Not made: another picture is being painted for this table',

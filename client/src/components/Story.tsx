@@ -4,7 +4,8 @@ import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, formatHours, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl, monsterVariant } from '../game/monsterArt';
-import { artOfCharacter, heroPortraitUrl, paintedPortraitUrl } from '../game/heroArt';
+import { artOfCharacter, heroPortraitUrl, onPortraitLoaded, paintedPortraitUrl } from '../game/heroArt';
+import { usePrefs } from '../ui/prefs';
 import type { CreatureType, Size } from '../../../shared/monsterLook';
 import { playerId, useTypingSignal, type Connection } from '../net';
 import { KIND_ICON } from './HexMap';
@@ -225,10 +226,61 @@ function DiceRoll({ roll, animate }: { roll: RollInfo; animate: boolean }) {
   );
 }
 
+// ------------------------------------------------------------- portraits in the story
+
+/** Redraws the caller whenever a painted portrait has finished loading. */
+function usePortraitTick() {
+  const [, tick] = useState(0);
+  useEffect(() => onPortraitLoaded(() => tick((n) => n + 1)), []);
+}
+
+/** The framed face of a speaker in the story: the painted portrait, or an initial in a brass ring until there is one. */
+function Face({ name, image, portraitId, kind }: { name: string; image?: string; portraitId?: string | null; kind: 'npc' | 'hero' }) {
+  usePortraitTick();
+  const src = image ?? paintedPortraitUrl(portraitId, 144);
+  return (
+    <span className={`face ${kind}`} aria-hidden="true">
+      {src ? <img className="hero-art" src={src} alt="" /> : <span className="face-initial">{[...name.trim()][0]?.toUpperCase() ?? '?'}</span>}
+    </span>
+  );
+}
+
+const OPEN_QUOTE = /["„“”«»‹›]/u;
+
+/** Who speaks in a paragraph of narration: the first named person before the first quotation mark (after it, when the quote opens the paragraph). */
+export function speakerOf(text: string, entities: Entity[], pattern: RegExp | null): Entity | null {
+  if (!pattern) return null;
+  const q = text.search(OPEN_QUOTE);
+  if (q < 0) return null;
+  const people = (from: number, to: number) => {
+    for (const m of text.slice(from, to).matchAll(pattern)) {
+      const e = entities.find((x) => x.name === m[0] && (x.kind === 'npc' || x.kind === 'hero'));
+      if (e) return e;
+    }
+    return null;
+  };
+  return people(0, q) ?? (q <= 2 ? people(q, text.length) : null);
+}
+
+/** One paragraph of narration; when a named person speaks in it and portraits are on, the person's face sits beside it. */
+function Paragraph({ text }: { text: string }) {
+  const { entities, pattern } = useContext(HoverContext);
+  const { storyPortraits } = usePrefs();
+  const who = storyPortraits === 'off' ? null : speakerOf(text, entities, pattern);
+  if (!who) return <p><RichText text={text} /></p>;
+  return (
+    <div className={`speech ${storyPortraits}`}>
+      <Face name={who.name} image={who.image} portraitId={who.portraitId} kind={who.kind === 'hero' ? 'hero' : 'npc'} />
+      <div className="speech-body"><b className="speech-name">{who.name}</b><p><RichText text={text} /></p></div>
+    </div>
+  );
+}
+
 // ----------------------------------------------------------------- feed
 
-function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; animate: boolean; takeBack?: () => void; table: string; lang: string }) {
+function Entry({ entry, animate, takeBack, table, lang, hero }: { entry: LogEntry; animate: boolean; takeBack?: () => void; table: string; lang: string; hero?: { name: string; image: string } }) {
   const t = useT();
+  const { storyPortraits } = usePrefs();
   switch (entry.kind) {
     case 'dm':
       return (
@@ -239,10 +291,18 @@ function Entry({ entry, animate, takeBack, table, lang }: { entry: LogEntry; ani
           <ReadAloud table={table} entry={entry.id} lang={lang} />
           {entry.scene?.where && <SceneStage scene={entry.scene} />}
           {entry.scene && (entry.scene.imageId || entry.scene.painting) && <ScenePicture scene={entry.scene} />}
-          {entry.text.split(/\n{2,}/).map((p, i) => <p key={i}><RichText text={p} /></p>)}
+          {entry.text.split(/\n{2,}/).map((p, i) => <Paragraph key={i} text={p} />)}
         </article>
       );
     case 'chat':
+      if (hero && storyPortraits !== 'off') {
+        return (
+          <div className={`said with-face ${storyPortraits}`}>
+            <Face name={hero.name} image={hero.image} kind="hero" />
+            <div className="said-body"><b>{entry.speaker}<i className="said-hero">{hero.name}</i></b>{entry.text}{takeBack && <button type="button" className="takeback" onClick={takeBack}>↩ {t('Take back')}</button>}</div>
+          </div>
+        );
+      }
       return <p className="said"><b>{entry.speaker}</b>{entry.text}{takeBack && <button type="button" className="takeback" onClick={takeBack}>↩ {t('Take back')}</button>}</p>;
     case 'ask':
       return <p className="said ask"><b>{entry.speaker}<i>{t('to the Dungeon Master')}</i></b>{entry.text}</p>;
@@ -432,6 +492,13 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [chips.join('\n'), compact, say]);
+  usePortraitTick();
+  // The hero each player plays, so what they say and do in the story carries the hero's face.
+  const heroOf = (speaker?: string) => {
+    const player = state.players.find((p) => p.name === speaker);
+    const c = player && state.characters.find((h) => h.ownerId === player.id);
+    return c ? { name: c.name, image: heroPortraitUrl(artOfCharacter(c, state.items), 144) } : undefined;
+  };
   const dividerAt = afterFight === undefined ? undefined : state.log.find((l) => l.id > afterFight && l.kind === 'dm')?.id;
 
   return (
@@ -440,7 +507,7 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
         {state.log.map((l) => (
           <Fragment key={l.id}>
             {l.id === dividerAt && <div className="after-battle" role="separator"><span>{t('After the battle')}</span></div>}
-            <Entry entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
+            <Entry entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} hero={l.kind === 'chat' ? heroOf(l.speaker) : undefined} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
           </Fragment>
         ))}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}
