@@ -77,6 +77,7 @@ import { d20, roll, rollDie, rollMode, signed, type Rng, type RollMode } from '.
 import { COVER_BONUS, buildBattleMap, cheb, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZES, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { campaignShelf, viewer } from '../campaign/registry';
+import { storyLedger } from '../story/ledger';
 import { generateWorld, isExplored, knownTerrain, maskedTerrain, reveal, trueTerrain, type LocationState, type MemoryState, type NpcState, type SettingState, type WorldState } from './world';
 import { RESTOCK_DAYS, MAX_SHOPS, SHELVES, rollStock, shopKindOf } from '../data/shops';
 import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type Mood as HaggleMood, type ShopKind, type ShopStock, type ShopView } from '../../../shared/trade';
@@ -977,6 +978,7 @@ export class Game {
     s.world = world;
     s.memory = memory;
     s.setting = setting;
+    if (!setting.campaign) { const avoid = storyLedger()?.note(s.room); if (avoid) setting.avoid = avoid; }
     // A campaign book brings its own powers and people; the rolled guild, temple and watch would be inventions of ours.
     s.factions = setting.campaign ? [] : makeFactions(setting.seed, this.lang, setting.region === 'classic');
     s.achievements = [];

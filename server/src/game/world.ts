@@ -109,6 +109,8 @@ export interface SettingState {
    * backstory it was made from: when the player rewrites the backstory, the old thread is dropped.
    */
   threads?: HeroThread[];
+  /** A nudge to use names and quest shapes earlier tables did not, fixed when the adventure began. For the Dungeon Master only. */
+  avoid?: string;
   /** The AI has reworded the rolled descriptions for this table. */
   fleshedOut?: boolean;
   /** When the adventure began, in minutes from the start of day 1: the time of day the opening plays at. */

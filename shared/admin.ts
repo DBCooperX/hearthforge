@@ -196,6 +196,15 @@ export interface AdminTable {
   usage: UsageTotals;
 }
 
+/** What earlier tables used up, which new stories are nudged away from. */
+export interface AdminVariety {
+  /** How many earlier tables are remembered. */
+  tables: number;
+  npcs: string[];
+  places: string[];
+  quests: string[];
+}
+
 /**
  * One table's whole story as the Innkeeper sees it: what the Dungeon Master has set up, and which
  * of it the party has already found. Things the party does not know yet are marked `known: false`.
