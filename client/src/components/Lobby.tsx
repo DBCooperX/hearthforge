@@ -1,3 +1,4 @@
+import { fmtAmount, type CreditView } from '../../../shared/credits';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ABILITIES, CLASS_INFO } from '../../../shared/content';
 import { buildSheet, type Draft } from '../../../shared/build';
@@ -98,6 +99,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
             {who.account.role === 'innkeeper' && (
               <button type="button" className="inn-door" onClick={onInnkeeper} title={t('For whoever runs this server')}><Icon name="innkeeper" size={18} /> <span className="inn-label">{t('Innkeeper')}</span></button>
             )}
+            <CreditPill credit={conn.credit} onClick={who.onProfile} />
             <AccountMenu who={who} />
           </div>
         </header>
@@ -133,6 +135,18 @@ export function useDismiss(open: boolean, close: () => void, box?: React.RefObje
     document.addEventListener('keydown', esc, true);
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc, true); };
   }, [open, box]);
+}
+
+/** What is left of your AI credit, beside your name. Amber when low, red when used up; opens your account page. Only for accounts that can run out. */
+function CreditPill({ credit, onClick }: { credit: CreditView | null; onClick: () => void }) {
+  const t = useT();
+  if (!credit || !credit.limited) return null;
+  const left = fmtAmount(Math.max(0, credit.balance), credit.currency);
+  return (
+    <button type="button" className={`credit-pill${credit.out ? ' is-out' : credit.low ? ' is-low' : ''}`} onClick={onClick} title={t('Your AI credit. Click for what you spent.')}>
+      <Icon name="coin" size={16} /> {t('{left} left', { left })}
+    </button>
+  );
 }
 
 /** Your name with a small menu: your account and signing out. */

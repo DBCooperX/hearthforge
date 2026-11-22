@@ -188,10 +188,10 @@ function bill(table: string, usd: number, kind: CostKind) {
   // Reading a campaign book is paid by whoever brought it; books from the list for everyone are on the house.
   if (table.startsWith('campaign:')) {
     const owner = campaigns.info(table.slice(9))?.owner;
-    if (owner && accounts.get(owner)) tellCredits(credits.charge([owner], usd, kind));
+    if (owner && accounts.get(owner)) tellCredits(credits.charge([owner], usd, kind, { id: table, title: campaigns.info(table.slice(9))?.title ?? table }));
     return;
   }
-  tellCredits(credits.charge(payersAt(table), usd, kind));
+  tellCredits(credits.charge(payersAt(table), usd, kind, { id: table, title: rooms.get(table)?.game.s.table.title ?? table }));
 }
 
 /** The currency every price is shown in, and its fixed rate per dollar. */
@@ -248,7 +248,7 @@ const hooks: RoomHooks = {
       // Paid by the player whose hero it is; seats from before accounts get the drawn bust.
       const owner = creditAccount(hero.ownerId);
       if (!owner || !credits.mayPlay(owner) || illustrator.portraitGate(owner.id, hero)) return;
-      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero, reference: hero.refId ? heroRefs.read(owner.id, hero.refId) : null }, (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
+      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero, reference: hero.refId ? heroRefs.read(owner.id, hero.refId) : null }, (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images', { id: room.name, title: room.game.s.table.title })); })
         .then((p) => {
           const now = room.game.s.characters.find((c) => c.id === hero.id);
           // The look may have changed while it was painted; then the next flush asks for another.
@@ -308,7 +308,7 @@ function paintFigures(room: Room) {
     if (!owner || !credits.mayPlay(owner)) continue;
     const { prompt, key } = heroFigurePrompt(c);
     illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: c.name, prompt, key, tall: true, portraitId: c.portraitId!, account: owner.id },
-      (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
+      (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images', { id: room.name, title: room.game.s.table.title })); })
       .then(() => figureArrived(subject)).catch(() => {});
   }
   const broke = () => payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
@@ -769,7 +769,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/account/')) {
-    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; }, heroRefs, refsUsable: () => illustrator.canUseReference() }, req, res, url);
+    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; }, usageOf: (id) => { const a = creditAccount(id); return a ? credits.usage(a) : null; }, heroRefs, refsUsable: () => illustrator.canUseReference() }, req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/admin/')) {

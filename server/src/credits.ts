@@ -2,7 +2,7 @@
 // Master, a paid voice for the narrator) is shared out among the accounts it was spent for and booked in the one
 // global currency, at the fixed rate the Innkeeper entered (1 for dollars). The Innkeeper books what players have paid in. See shared/credits.ts.
 import { join } from 'node:path';
-import { CURRENCY_CODE, DEFAULT_CREDIT_CONFIG, type CreditConfig, type CreditReport, type CreditRow, type CreditView, type TopUp } from '../../shared/credits';
+import { CURRENCY_CODE, DEFAULT_CREDIT_CONFIG, type CreditConfig, type CreditReport, type CreditRow, type CreditView, type TopUp, type UsageView } from '../../shared/credits';
 import { readJson, writePrivate } from './admin/config';
 import { VOICE_QUALITY_FACTOR, type VoiceQuality } from '../../shared/voice';
 
@@ -18,6 +18,8 @@ interface Ledger {
   images?: number;
   /** Spent per day (YYYY-MM-DD): [claude, voice, illustrations]. Kept for 90 days. */
   days: Record<string, [number, number, number?]>;
+  /** Spent per table (its name), with its title as last seen and the cost per day. Kept for 90 days. */
+  tables?: Record<string, { title: string; days: Record<string, number> }>;
   free?: boolean;
 }
 
@@ -61,6 +63,7 @@ function scaleLedger(l: Ledger, f: number) {
   l.claude = round(l.claude * f); l.voice = round(l.voice * f);
   if (l.images) l.images = round(l.images * f);
   for (const d of Object.values(l.days)) for (let i = 0; i < d.length; i++) d[i] = round((d[i] ?? 0) * f);
+  for (const t of Object.values(l.tables ?? {})) for (const k of Object.keys(t.days)) t.days[k] = round(t.days[k] * f);
 }
 
 export class Credits {
@@ -128,7 +131,7 @@ export class Credits {
    * Book a cost in dollars, shared equally among the accounts it was spent for. Returns the accounts charged, so
    * their players can be told how much is left.
    */
-  charge(ids: string[], usd: number, kind: CostKind): string[] {
+  charge(ids: string[], usd: number, kind: CostKind, table?: { id: string; title: string }): string[] {
     const who = [...new Set(ids)];
     if (!who.length || !(usd > 0)) return [];
     const share = (usd * this.s.config.rate) / who.length;
@@ -139,6 +142,11 @@ export class Credits {
       const d = (l.days[day] ??= [0, 0, 0]);
       const i = kind === 'claude' ? 0 : kind === 'voice' ? 1 : 2;
       d[i] = round((d[i] ?? 0) + share);
+      if (table) {
+        const t = ((l.tables ??= {})[table.id] ??= { title: table.title, days: {} });
+        t.title = table.title;
+        t.days[day] = round((t.days[day] ?? 0) + share);
+      }
     }
     this.saveSoon();
     return who;
@@ -181,6 +189,20 @@ export class Credits {
     return { currency: this.s.config.currency, limited, free, paid, spent, balance, low: limited && !out && balance < this.s.config.warn, out, warn: this.s.config.warn };
   }
 
+  /** What this account spent over the last `days` days (today included): by kind and by table, biggest first. */
+  usage(a: CreditAccount, days = 7): UsageView {
+    const l = this.s.accounts[a.id];
+    const since = dayOf(this.now() - (days - 1) * 86400000);
+    const sum: [number, number, number] = [0, 0, 0];
+    for (const [d, v] of Object.entries(l?.days ?? {})) if (d >= since) for (let i = 0; i < 3; i++) sum[i] += v[i] ?? 0;
+    const byTable = Object.entries(l?.tables ?? {})
+      .map(([id, t]) => ({ id, title: t.title, amount: round(Object.entries(t.days).filter(([d]) => d >= since).reduce((n, [, v]) => n + v, 0)) }))
+      .filter((t) => t.amount > 0).sort((x, y) => y.amount - x.amount);
+    const total = round(sum[0] + sum[1] + sum[2]);
+    const tabled = round(byTable.reduce((n, t) => n + t.amount, 0));
+    return { currency: this.s.config.currency, days, total, claude: round(sum[0]), voice: round(sum[1]), images: round(sum[2]), byTable, elsewhere: Math.max(0, round(total - tabled)) };
+  }
+
   /** False when credits are on and this account has none left. */
   mayPlay(a: CreditAccount): boolean {
     return !this.view(a).out;
@@ -198,7 +220,13 @@ export class Credits {
 
   private save() {
     const oldest = dayOf(this.now() - KEEP_DAYS * 86400000);
-    for (const l of Object.values(this.s.accounts)) for (const d of Object.keys(l.days)) if (d < oldest) delete l.days[d];
+    for (const l of Object.values(this.s.accounts)) {
+      for (const d of Object.keys(l.days)) if (d < oldest) delete l.days[d];
+      for (const [id, t] of Object.entries(l.tables ?? {})) {
+        for (const d of Object.keys(t.days)) if (d < oldest) delete t.days[d];
+        if (!Object.keys(t.days).length) delete l.tables![id];
+      }
+    }
     try { writePrivate(this.file, JSON.stringify(this.s)); } catch (err) { console.error('[credits] could not be saved:', err); }
   }
 
@@ -227,7 +255,7 @@ export class Credits {
     const f = was.currency && was.currency !== this.s.config.currency && Number(was.rate) > 0 ? this.s.config.rate / Number(was.rate) : 1;
     for (const [id, l] of Object.entries(r.accounts)) {
       if (this.s.accounts[id] || !l || !Array.isArray(l.topUps)) continue;
-      this.s.accounts[id] = { topUps: legacyTopUps(l.topUps), claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.free ? { free: true } : {}) };
+      this.s.accounts[id] = { topUps: legacyTopUps(l.topUps), claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.tables ? { tables: l.tables } : {}), ...(l.free ? { free: true } : {}) };
       if (f !== 1) scaleLedger(this.s.accounts[id], f);
       added++;
     }

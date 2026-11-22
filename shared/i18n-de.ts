@@ -2139,6 +2139,12 @@ export const DE: Record<string, string> = {
   'Music, ambient sound, effects, the narrator and the interface. The speaker in the top bar opens the same controls.': 'Musik, Umgebungsgeräusche, Effekte, Erzähler und Oberfläche. Der Lautsprecher oben in der Leiste öffnet dieselben Regler.',
   // Player credits
   'AI credit': 'KI-Guthaben',
+  'Your AI credit. Click for what you spent.': 'Dein KI-Guthaben. Klick für deine Ausgaben.',
+  '{left} left': 'noch {left}',
+  'Spent in the last {n} days': 'Ausgegeben in den letzten {n} Tagen',
+  'Spent': 'Ausgegeben',
+  'Elsewhere': 'Anderswo',
+  'At a table with friends the cost is split among everyone sitting there, so this is your share.': 'An einem Tisch mit Freunden werden die Kosten unter allen aufgeteilt, die dort sitzen. Das hier ist also dein Anteil.',
   'Your AI credit is running low: {left} left. Ask the innkeeper to top it up before it runs out.': 'Dein KI-Guthaben wird knapp: noch {left}. Bitte den Innkeeper, es aufzuladen, bevor es aufgebraucht ist.',
   'OK': 'OK',
   '{amount} booked for {name}.': '{amount} für {name} verbucht.',
