@@ -29,6 +29,7 @@ import './adventure.css';
 import './gamelook.css';
 import './pictures.css';
 import './home.css';
+import './mobile.css';
 import './ui/prefs';
 
 // Art packs are optional; never wait long for them.

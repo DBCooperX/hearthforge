@@ -168,3 +168,23 @@
 .turn-marker > * { animation: turn-bob 1.3s ease-in-out infinite; }
 @keyframes turn-bob { 50% { transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) { .turn-marker > * { animation: none; } }
+
+/* ---------- a narrow battle stage: phones, tablets, and a tablet on its side with three columns ----------
+   The slots scroll sideways instead of pushing End turn out of sight, and End turn gets a full row of its own,
+   big enough for a thumb. */
+@container (max-width: 640px) {
+  .hb-main { --hb: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'common slots' 'end end'; gap: 6px; }
+  .hb-common { grid-area: common; }
+  .hb-slots { grid-area: slots; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .hb-slots > * { scroll-snap-align: start; }
+  .hb-end { grid-area: end; flex-direction: row; align-items: stretch; margin-left: 0; gap: 6px; }
+  .hb-end > :last-child { flex: 1; display: flex; }
+  .hb-endturn { flex: 1; flex-direction: row; gap: 10px; min-height: 46px; font-size: 14px; }
+  .hb-end .oa-mode { flex: none; }
+  .hb-top { gap: 4px 12px; }
+  .hb-top .hint { flex-basis: 100%; margin-left: 0; text-align: left; font-size: 12.5px; }
+  .economy { flex-wrap: wrap; gap: 4px 12px; }
+  .hb-book { left: 0; right: 0; max-height: 52vh; }
+  .hb-book-group { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .hb-book-label { padding-top: 0; }
+}

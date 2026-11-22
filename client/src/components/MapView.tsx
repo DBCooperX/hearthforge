@@ -15,7 +15,7 @@ import type { MoveListener } from '../net';
 interface Props {
   state: GameState;
   view: ViewOptions;
-  onTile: (x: number, y: number) => void;
+  onTile: (x: number, y: number, touch: boolean) => void;
   onMoved: (fn: MoveListener) => () => void;
 }
 
@@ -55,7 +55,8 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
     const now = latest.current;
     const r = new MapRenderer({ view: mode, zoom: now.zoom, reducedMotion: reducedMotion(), labels: { miss: now.miss } });
     renderer.current = r;
-    r.onTile = (x, y) => click.current(x, y);
+    r.onTile = (x, y, touch) => click.current(x, y, touch);
+    r.onZoom = (factor) => setZoom((z) => clampZoom(z * factor));
     r.onHoverMonster = setToken;
     r.update(now.state, now.view);
     r.setEdgeScroll(edgeScrollNow());

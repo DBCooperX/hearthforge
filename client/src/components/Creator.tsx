@@ -184,10 +184,15 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   };
 
   const hoverPatch = (patch: Draft | null) => setHover(patch ? { ...d, ...patch } : null);
+  /** One column on a phone: the details of a pick are below the list, so bring them into view. */
+  const showDetails = () => {
+    if (!window.matchMedia?.('(max-width: 980px)').matches) return;
+    window.setTimeout(() => document.querySelector('.creator-mid')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  };
   const optionRow = (o: Option, patch: Draft, selected: boolean, recommended: boolean, kicker: string, sub?: string) => (
     <PickRow key={o.id} icon={<OptionGlyph option={o} />} title={t(o.name)} sub={sub ?? loc(o.summary, lang)} selected={selected} recommended={recommended}
       focused={focus?.kind === 'option' && focus.option === o}
-      onClick={() => { update(patch); setFocus({ kind: 'option', option: o, kicker }); setHover(null); }}
+      onClick={() => { update(patch); setFocus({ kind: 'option', option: o, kicker }); setHover(null); showDetails(); }}
       onFocus={() => { setFocus({ kind: 'option', option: o, kicker }); hoverPatch(selected ? null : patch); }}
       onLeave={() => setHover(null)} />
   );

@@ -1,0 +1,148 @@
+/* ---------- Phones and tablets held upright: one pane at a time ----------
+   Up to 1000px wide the game screen is the top bar, a slim strip of the party, one pane and a tab bar at the
+   bottom (components/MobileTabs.tsx). The pane is set on .game as data-pane: story, fight, party or place;
+   data-battle marks a fight or its closing screen, when the stage holds the battle map. */
+
+.mobile-tabs { display: none; }
+
+@media (max-width: 1000px) {
+  body:has(.game) { overflow: hidden; }
+  .game, .game.fighting {
+    height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+  }
+  .game > .topbar { flex: none; }
+  .game > .party, .game > .stage, .game > .story.compact, .game > .worldpanel { display: none; min-height: 0; min-width: 0; border-left: none; border-top: none; }
+
+  /* Story: the scenes and the composer, pinned to the bottom. In a fight it is the compact story beside the map. */
+  .game:not([data-battle])[data-pane='story'] > .stage { display: flex; flex: 1; min-height: 0; }
+  .game[data-battle][data-pane='story'] > .story.compact { display: flex; flex: 1; }
+  /* Fight: the battle map, turn bar and hotbar. */
+  .game[data-battle][data-pane='fight'] > .stage { display: flex; flex: 1; min-height: 0; }
+  /* Place: where the party is, the map, merchants, people and quests. */
+  .game[data-pane='place'] > .worldpanel { display: flex; flex: 1; overflow-y: auto; }
+  /* Party: the full party panel with companions and gold. */
+  .game[data-pane='party'] > .party { display: flex; flex: 1; border-right: none; box-shadow: none; }
+
+  /* Story and fight keep the party in view as a strip of portraits with their bars. */
+  .game[data-pane='story'] > .party, .game[data-pane='fight'] > .party {
+    display: flex; flex: none; flex-direction: row; gap: 6px; padding: 6px 8px; overflow-x: auto; overflow-y: hidden;
+    border-right: none; border-bottom: 1px solid #564f48; box-shadow: none; scrollbar-width: none;
+  }
+  .game[data-pane='story'] > .party::-webkit-scrollbar, .game[data-pane='fight'] > .party::-webkit-scrollbar { display: none; }
+  .game[data-pane='story'] > .party > h2, .game[data-pane='fight'] > .party > h2,
+  .game[data-pane='story'] > .party > .companions, .game[data-pane='fight'] > .party > .companions,
+  .game[data-pane='story'] > .party > .gold, .game[data-pane='fight'] > .party > .gold { display: none; }
+  .game[data-pane='story'] > .party .card, .game[data-pane='fight'] > .party .card {
+    flex: 0 0 auto; width: 150px; padding: 4px 8px 4px 4px; gap: 6px; align-items: center;
+  }
+  .game[data-pane='story'] > .party .portrait, .game[data-pane='fight'] > .party .portrait { width: 40px; height: 40px; }
+  .game[data-pane='story'] > .party .portrait img.hero-art, .game[data-pane='fight'] > .party .portrait img.hero-art { width: 40px; height: 40px; }
+  .game[data-pane='story'] > .party .portrait .ac, .game[data-pane='fight'] > .party .portrait .ac { display: none; }
+  .game[data-pane='story'] > .party .info, .game[data-pane='fight'] > .party .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .game[data-pane='story'] > .party .name, .game[data-pane='fight'] > .party .name { font-size: 13px; line-height: 1.1; }
+  .game[data-pane='story'] > .party .name b, .game[data-pane='fight'] > .party .name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game[data-pane='story'] > .party .sheet-link, .game[data-pane='fight'] > .party .sheet-link,
+  .game[data-pane='story'] > .party .xpbar, .game[data-pane='fight'] > .party .xpbar,
+  .game[data-pane='story'] > .party .uses, .game[data-pane='fight'] > .party .uses,
+  .game[data-pane='story'] > .party .conditions .owner, .game[data-pane='fight'] > .party .conditions .owner { display: none; }
+  .game[data-pane='story'] > .party .conditions, .game[data-pane='fight'] > .party .conditions { flex-wrap: nowrap; overflow: hidden; font-size: 10px; }
+  .game[data-pane='story'] > .party .bar, .game[data-pane='fight'] > .party .bar { height: 11px; }
+  .game[data-pane='story'] > .party .bar span, .game[data-pane='fight'] > .party .bar span { line-height: 9px; font-size: 9.5px; }
+  .game[data-pane='story'] > .party .levelup-badge, .game[data-pane='fight'] > .party .levelup-badge { font-size: 10px; padding: 1px 6px; }
+
+  /* The tab bar. */
+  .mobile-tabs {
+    display: flex; flex: none; gap: 2px; padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    background: var(--iron-grain), linear-gradient(#1c1917, #141210); border-top: 1px solid #564f48;
+    box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.35);
+  }
+  .mtab {
+    flex: 1; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    background: none; border: 1px solid transparent; border-radius: 8px; color: var(--muted);
+    font-family: var(--font-story); font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mtab.on { color: #f6dfae; background: rgba(238, 143, 60, 0.12); border-color: rgba(217, 168, 81, 0.45); }
+  .mtab-icon { position: relative; display: grid; place-items: center; }
+  .mtab-dot { position: absolute; top: -2px; right: -6px; width: 9px; height: 9px; border-radius: 50%; background: #ee8f3c; box-shadow: 0 0 6px #ee8f3c; }
+}
+
+/* A tablet upright has room for the story under the battle, so the fight pane shows both and the story tab goes. */
+@media (min-width: 641px) and (max-width: 1000px) {
+  .game[data-battle][data-pane='fight'] > .story.compact { display: flex; flex: 0 0 34%; border-top: 1px solid #564f48; }
+  .mobile-tabs .mtab.phone-only { display: none; }
+  .game[data-pane='story'] > .party .card, .game[data-pane='fight'] > .party .card { width: 180px; }
+}
+
+/* The top bar on narrow screens: the table name shrinks instead of the buttons, and who is here moves to
+   Party and invites (in the menu), where there is room. */
+@media (max-width: 1000px) {
+  .topbar .table-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .presence { display: none; }
+  .topbar .chat-toggle { white-space: nowrap; }
+}
+
+/* The composer on a phone: the text gets the whole first line, the mic, Ask the DM and Send sit below it. */
+@media (max-width: 640px) {
+  .story .composer, .story:not(.compact) .composer { flex-wrap: wrap; row-gap: 6px; }
+  .story:not(.compact) .composer { margin: 0 10px 10px; }
+  .story .composer .quill, .story:not(.compact) .composer .quill { display: none; }
+  .story .composer input, .story:not(.compact) .composer input { flex: 1 1 100%; min-width: 0; }
+  .story .composer .ooc-toggle, .story:not(.compact) .composer .ooc-toggle { margin-left: auto; }
+}
+
+/* ---------- battles by finger ---------- */
+/* The map takes every touch itself: one finger drags it around, two pinch it, a tap plans and a second tap acts. */
+.map canvas { touch-action: none; }
+/* A finger resting on a slot shows what it does (ui/Hint.tsx), without the browser selecting text or opening its menu. */
+.hb-slot, .hb-endturn, .eco { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+@media (pointer: coarse) {
+  .map-controls button { min-width: 40px; min-height: 38px; }
+  .hb-slot .hk { display: none; }
+}
+@media (max-width: 640px) {
+  .map-legend { font-size: 11px; padding: 4px 8px; left: 6px; bottom: 6px; max-width: calc(100% - 12px); }
+  .map-controls { top: 6px; right: 6px; }
+  .turnbar { padding: 5px 8px; gap: 6px; }
+}
+
+/* ---------- lobby, maps and polish ---------- */
+@media (max-width: 760px) {
+  /* The table list gets the whole width; who is here sits above it as a slim box. */
+  .lobby-cols, .tables-tab .lobby-cols { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .online-now, .tables-tab .online-now { position: static; order: -1; padding: 8px 10px; }
+  /* Journal bookmarks scroll sideways instead of wrapping or squeezing. */
+  .bookmarks { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .bookmarks::-webkit-scrollbar { display: none; }
+  .bookmarks .tabbar-tab { flex: 0 0 auto; white-space: nowrap; }
+  /* The map window: a one-line title and a hex map that fits its box. */
+  .win.bigmap .win-head h1 { font-size: 15px; letter-spacing: 0.08em; overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .win.bigmap .win-body { padding: 10px; }
+  .win.bigmap .hexmap svg, .hexmap svg { width: 100%; height: auto; max-height: calc(100dvh - 300px); }
+  .win.bigmap .maptabs { max-width: none; }
+}
+@media (pointer: coarse) {
+  .hexmap-hint { min-height: 32px; font-size: 14px; display: flex; align-items: center; }
+  .maptabs button, .bookmarks .tabbar-tab, .home-tab-btn, .win-close { min-height: 44px; }
+  .win-close { min-width: 44px; }
+  .kbd, .win-head .hotkey, .hotkey { display: none; }
+  button, .link { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ---------- the Innkeeper and the account window on a phone ---------- */
+@media (max-width: 760px) {
+  .win-body, .win-body > * { min-width: 0; }
+  /* Wide tables scroll sideways inside the window, with the name column kept in view. */
+  .inn-table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .inn-table th:first-child, .inn-table td:first-child { position: sticky; left: 0; background: #1d1916; z-index: 1; }
+  .inn-table tr.inn-subrow td:first-child { position: static; }
+  /* Settings rows that sat in two columns stack. */
+  .win-body .row, .win-body .field-row { flex-wrap: wrap; }
+  .win-body input, .win-body select { max-width: 100%; }
+}
+@media (pointer: coarse) {
+  /* A drop area cannot be dropped on: leave the button, drop the instruction to drop. */
+  .art-drop > b:not(.busy) { display: none; }
+  .art-drop { border-style: solid; }
+}

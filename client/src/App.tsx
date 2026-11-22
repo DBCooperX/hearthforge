@@ -15,6 +15,7 @@ import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
 import { Journal } from './components/Journal';
+import { MobileTabs, type Pane } from './components/MobileTabs';
 import { Trade } from './components/Trade';
 import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
@@ -89,6 +90,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
   /** A move that would provoke opportunity attacks waits for a second click on the same tile. */
   const [risky, setRisky] = useState<{ x: number; y: number; path: { x: number; y: number }[]; ids: string[] } | null>(null);
+  /** On a touch screen the first tap on a square or an enemy only plans the move or the blow; a second tap goes. */
+  const [planned, setPlanned] = useState<{ x: number; y: number } | null>(null);
   /** The owner's panel. It sits above everything, also above the list of tables; ?innkeeper opens it directly. */
   const [innkeeper, setInnkeeper] = useState(() => new URLSearchParams(location.search).has('innkeeper'));
   const closeInnkeeper = useCallback(() => {
@@ -174,6 +177,15 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     }
   }, [fightEnd?.outcome.seq, !fightEnd]);
   useEffect(() => { if (combat) setAfterFight(null); }, [!!combat]);
+  // Phones and tablets held upright show one pane at a time (MobileTabs). A fight opens on the battle and
+  // its end goes back to the story; a pane that does not exist right now falls back to the main one.
+  const fighting = !!combat || !!fightEnd;
+  const [pane, setPane] = useState<Pane>('story');
+  useEffect(() => setPane(fighting ? 'fight' : 'story'), [fighting]);
+  const shownPane: Pane = fighting ? (pane === 'place' ? 'fight' : pane) : pane === 'fight' ? 'story' : pane;
+  const logLength = state?.log.length ?? 0;
+  const storySeen = useRef(logLength);
+  useEffect(() => { if (shownPane === 'story') storySeen.current = logLength; }, [shownPane, logLength]);
   const activeId = combat?.order[combat.turnIndex]?.id ?? null;
   const turnChar = playable.find((c) => c.id === activeId) ?? null;
   const selected = state?.characters.find((c) => c.id === selectedId) ?? null;
@@ -195,7 +207,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   }, [state, selected, mine]);
 
   // A planned move only holds while nothing else changes.
-  useEffect(() => setRisky(null), [state?.combat?.turnIndex, state?.combat?.movementLeft, state?.combat?.disengaged, actor?.id, targeting]);
+  useEffect(() => { setRisky(null); setPlanned(null); }, [state?.combat?.turnIndex, state?.combat?.movementLeft, state?.combat?.disengaged, actor?.id, targeting]);
 
   // Leaving a fight or the map drops whatever was being aimed or planned.
   useEffect(() => { if (!combat) setTargeting(null); else { setTravelTarget(null); setOverlay((o) => (o === 'map' ? null : o)); } }, [!!combat]);
@@ -223,10 +235,15 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   );
 
   const onTile = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, touch = false) => {
       if (!state || !combat) return;
       const monster = state.monsters.find((m) => m.alive && inFootprint(m, m.tiles, x, y));
       const hero = [...state.characters, ...(state.companions ?? [])].find((c) => !c.dead && c.x === x && c.y === y);
+      // A finger has no hover to show the way or the foe first: the first tap plans, the same tap again acts.
+      // Picking a hero needs no second tap.
+      const again = planned && planned.x === x && planned.y === y;
+      if (touch && actor && !again && (monster || !hero)) { setPlanned({ x, y }); return; }
+      setPlanned(null);
       if (monster) {
         if (!actor) return conn.toast(t('Wait for your turn'));
         if (targeting?.kind === 'ability' && targeting.item && targetAbility?.target === 'enemy') send({ t: 'use_item', characterId: actor.id, uid: targeting.item, targetId: monster.id });
@@ -240,7 +257,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
       setTargeting(null);
       tryMove(x, y);
     },
-    [state, actor, combat, targeting, targetAbility, wantsAlly, pickCharacter, send, conn, risky],
+    [state, actor, combat, targeting, targetAbility, wantsAlly, pickCharacter, send, conn, risky, planned],
   );
 
   /** Move, but stop once first if the way leads out of an enemy's reach. */
@@ -303,8 +320,11 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     const danger = new Set(risky?.path.map((p) => key(p.x, p.y)) ?? []);
     const warnIds = new Set(risky?.ids ?? []);
     const reaction = combat?.reaction ? { heroId: combat.reaction.heroId, monsterId: combat.reaction.monsterId } : null;
-    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction };
-  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky]);
+    const plannedPath = new Set<string>();
+    const foe = planned && state ? state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, planned.x, planned.y)) : false;
+    if (planned && !foe && state && combat && actor) for (const p of pathTo(state, actor, combat.movementLeft, planned.x, planned.y) ?? []) plannedPath.add(key(p.x, p.y));
+    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction, planned, plannedPath };
+  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky, planned, actor]);
 
   const inn = <>
     {innkeeper && <Innkeeper account={profile.account} onClose={closeInnkeeper} />}
@@ -330,7 +350,9 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   if (state.phase === 'lobby' || !state.world) return <><PartySetup state={state} conn={conn} onMenu={onMenu} />{frontLayer}{inn}<Toasts conn={conn} /></>;
 
   let hint: string;
-  if (targeting?.kind === 'offhand') hint = t('Off-hand attack: click an enemy next to you. Esc to cancel.');
+  const plannedFoe = planned && state ? state.monsters.find((m) => m.alive && inFootprint(m, m.tiles, planned.x, planned.y)) : undefined;
+  if (planned && !risky) hint = plannedFoe ? t('Tap {name} again to go ahead.', { name: plannedFoe.name }) : t('Tap the same square again to move there.');
+  else if (targeting?.kind === 'offhand') hint = t('Off-hand attack: click an enemy next to you. Esc to cancel.');
   else if (targeting?.kind === 'attack') hint = t('Attack: click an enemy. Esc to cancel.');
   else if (targetAbility) hint = `${t(targetAbility.name)}: ${targetAbility.target === 'ally' ? t('click a hero on the map or in the party panel. Esc to cancel.') : t('click an enemy. Esc to cancel.')}`;
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
@@ -345,7 +367,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
 
   return (
     <EntityProvider state={state}>
-      <div className={combat ? 'game fighting' : afterFight?.arriving ? 'game after-fight' : 'game'}>
+      <div className={combat ? 'game fighting' : afterFight?.arriving ? 'game after-fight' : 'game'} data-pane={shownPane} data-battle={fighting ? '' : undefined}>
         <header className="topbar">
           <Wordmark />
           <button className="link table-name" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>{state.table.title}</button>
@@ -461,6 +483,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         )}
         {chatOpen && state.table.maxPlayers > 1 && <ChatWindow state={state} conn={conn} onClose={() => setChatOpen(false)} />}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
+        <MobileTabs pane={shownPane} fighting={fighting} storyNew={logLength > storySeen.current} onPane={setPane} />
         {inn}
         <Toasts conn={conn} />
       </div>

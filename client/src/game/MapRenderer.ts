@@ -92,6 +92,9 @@ export interface ViewOptions {
   warnIds: Set<string>;
   /** Hero and monster of an open reaction prompt. */
   reaction: { heroId: string; monsterId: string } | null;
+  /** On a touch screen the first tap only plans: the square it picked, and the way there for a move. */
+  planned?: { x: number; y: number } | null;
+  plannedPath?: Set<string>;
 }
 
 export const EMPTY_VIEW: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set(), unseenIds: new Set(), danger: new Set(), warnIds: new Set(), reaction: null };
@@ -330,7 +333,10 @@ export class MapRenderer {
   private drag: { x: number; y: number; moved: boolean } | null = null;
   private dragged = false;
   private keys = { x: 0, y: 0 };
-  onTile: (x: number, y: number) => void = () => {};
+  /** A square was tapped or clicked; `touch` when it came from a finger (or a pen), which plans before it acts. */
+  onTile: (x: number, y: number, touch: boolean) => void = () => {};
+  /** Two fingers pinched the map: zoom by this factor. */
+  onZoom: (factor: number) => void = () => {};
   onHoverMonster: (hover: TokenHover | null) => void = () => {};
   private hoverId: string | null = null;
   private unFigures: () => void = () => {};
@@ -365,12 +371,15 @@ export class MapRenderer {
     }
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
-    this.app.stage.on('pointermove', (e) => { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); });
-    this.app.stage.on('pointerleave', () => { this.hover = null; this.reportHover(); });
+    this.app.stage.on('pointermove', (e) => { if (e.pointerType === 'mouse') { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); } });
+    this.app.stage.on('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.reportHover(); } });
     this.app.stage.on('pointertap', (e) => {
       if (this.dragged) { this.dragged = false; return; }
       const t = this.pick(e.global.x, e.global.y);
-      if (t) this.onTile(t.x, t.y);
+      // A finger has no hover: the tapped square becomes the "hovered" one, so a monster shows its card.
+      const touch = e.pointerType !== 'mouse';
+      if (touch) { this.hover = t; this.reportHover(); }
+      if (t) this.onTile(t.x, t.y, touch);
     });
     this.listenForPanning(this.app.canvas);
     // A painted figure that finishes loading is swapped in at once.
@@ -984,6 +993,13 @@ export class MapRenderer {
     if (this.hover && tileWalkable(tileAt(state, this.hover.x, this.hover.y))) {
       g.rect(this.hover.x * TILE + 0.5, this.hover.y * TILE + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color: 0xd4a857, alpha: 0.8 });
     }
+    // A move planned with a tap: the way there in gold, and the square itself framed, until a second tap goes.
+    for (const k of this.opts.plannedPath ?? []) {
+      const [x, y] = k.split(',').map(Number);
+      g.rect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2).fill({ color: 0xf2c14e, alpha: 0.3 });
+    }
+    const p = this.opts.planned;
+    if (p) g.rect(p.x * TILE + 1, p.y * TILE + 1, TILE - 2, TILE - 2).stroke({ width: 2, color: 0xffd27a, alpha: beat });
   }
 
   private focus(): Ent | undefined {
@@ -1026,9 +1042,19 @@ export class MapRenderer {
 
   private listenForPanning(canvas: HTMLCanvasElement) {
     const at = (e: PointerEvent) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    // Fingers on the map, for pinching: two of them zoom, and nothing they do counts as a tap.
+    const fingers = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    const spread = () => { const [a, b] = [...fingers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     canvas.addEventListener('pointermove', (e) => {
       const p = at(e);
       this.pointer = e.pointerType === 'mouse' ? p : null;
+      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, p);
+      if (pinch && fingers.size === 2) {
+        const now = spread();
+        if (now > 0 && Math.abs(now / pinch - 1) > 0.03) { this.onZoom(now / pinch); pinch = now; }
+        return;
+      }
       const d = this.drag;
       if (!d) return;
       const dx = p.x - d.x, dy = p.y - d.y;
@@ -1043,11 +1069,17 @@ export class MapRenderer {
     canvas.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 && e.button !== 1) return;
       const p = at(e);
+      if (e.pointerType !== 'mouse') {
+        fingers.set(e.pointerId, p);
+        if (fingers.size === 2) { pinch = spread(); this.drag = null; this.dragged = true; return; }
+      }
       this.drag = { ...p, moved: false };
       this.dragged = false;
       if (e.button === 1) e.preventDefault();
     });
-    const end = () => {
+    const end = (e: PointerEvent) => {
+      fingers.delete(e.pointerId);
+      if (fingers.size < 2) pinch = 0;
       this.drag = null;
       canvas.style.cursor = '';
     };

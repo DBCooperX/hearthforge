@@ -1,5 +1,5 @@
 import { ItemIcon } from '../ui/ItemIcon';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ABILITIES, SLOT_LABELS } from '../../../shared/content';
 import { SPELL_BUFFS } from '../../../shared/spells';
 import { isLightWeapon, weaponAttack } from '../../../shared/build';
@@ -40,10 +40,10 @@ export function kindLine(def: ItemDef, t: Translate): string {
   return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
-interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean; onSplit?: () => void }
+interface TipProps { def: ItemDef; item: ItemInstance; c: Character; state: GameState; equipped: boolean; mine: boolean; pinned: boolean; onSplit?: () => void; /** What a finger can do instead of dragging: equip, take off, give. */ actions?: ReactNode }
 
 /** Everything about one item: what it does for this hero, how it compares with what they wear, and its story. */
-export function ItemDetails({ def, item, c, state, equipped, mine, pinned, onSplit }: TipProps) {
+export function ItemDetails({ def, item, c, state, equipped, mine, pinned, onSplit, actions }: TipProps) {
   const t = useT();
   const { lang } = useLang();
   const story = def.story;
@@ -126,6 +126,7 @@ export function ItemDetails({ def, item, c, state, equipped, mine, pinned, onSpl
         {pinned && onSplit && mine && item.qty > 1 && def.stackable && <button type="button" className="item-split" onClick={onSplit}>{t('Split…')}</button>}
         {pinned ? <span className="item-pinned"><Icon name="pin" size={13} /> {t('Pinned')}</span> : action && <span className="item-action">{action}</span>}
       </footer>
+      {pinned && actions}
     </div>
   );
 }
@@ -181,6 +182,35 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
     sfx(to.type === 'slot' ? 'equip' : 'drop');
   };
 
+  /**
+   * What drag and drop and a double click do, as buttons under a pinned item, so a finger can do it too:
+   * put on or use, take off, and give to another hero (or a companion).
+   */
+  const touchActions = (item: ItemInstance, def: ItemDef) => {
+    const slotId = (Object.keys(c.equipment) as SlotId[]).find((s) => c.equipment[s]?.uid === item.uid);
+    const bagIndex = c.bag.findIndex((b) => b?.uid === item.uid);
+    const from: InvLoc | null = slotId ? { type: 'slot', slot: slotId } : bagIndex >= 0 ? { type: 'bag', index: bagIndex } : null;
+    if (!from) return undefined;
+    const others = [...state.characters, ...(state.companions ?? [])].filter((o) => o.id !== c.id && !o.dead);
+    const done = () => setPicked(null);
+    return (
+      <div className="item-touch">
+        {from.type === 'bag' && (slotForItem(def) || def.consumable) && (
+          <button type="button" className="primary" onClick={() => { conn.send({ t: 'use_item', characterId: c.id, uid: item.uid }); sfx(slotForItem(def) ? 'equip' : 'drop'); done(); }}>{slotForItem(def) ? t('Equip') : t('Use')}</button>
+        )}
+        {from.type === 'slot' && (
+          <button type="button" onClick={() => {
+            const free = c.bag.findIndex((b) => !b);
+            if (free >= 0) { move(from, { type: 'bag', index: free }); done(); } else { conn.toast(t('No free bag space')); sfx('deny'); }
+          }}>{t('Take off')}</button>
+        )}
+        {others.map((o) => (
+          <button key={o.id} type="button" onClick={() => { conn.send({ t: 'give', characterId: c.id, from, toCharacterId: o.id }); sfx('drop'); done(); }}>{t('Give to {name}', { name: o.name })}</button>
+        ))}
+      </div>
+    );
+  };
+
   const cell = (item: ItemInstance | null, loc: InvLoc | null, key?: string | number) => {
     const def = defOf(item);
     const isSlot = loc?.type === 'slot';
@@ -199,8 +229,8 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
           if (drag && loc) move(drag.from, loc);
           setDrag(null);
         }}
-        onMouseEnter={(e) => setHover(item ? { uid: item.uid, rect: e.currentTarget.getBoundingClientRect() } : null)}
-        onMouseLeave={() => setHover(null)}
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover(item ? { uid: item.uid, rect: e.currentTarget.getBoundingClientRect() } : null); }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null); }}
         onClick={(e) => { setPicked(item && item.uid !== picked?.uid ? { uid: item.uid, rect: e.currentTarget.getBoundingClientRect() } : null); if (item) sfx('click'); }}
         onDoubleClick={() => {
           if (!item || !mine || !loc) return;
@@ -323,6 +353,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
       {shown && shownItem && shownDef && (
         <Float anchor={shown.rect} side="right" className="item-float" interactive={!hover && !!picked}>
           <ItemDetails def={shownDef} item={shownItem} c={c} state={state} mine={mine} pinned={!hover && !!picked}
+            actions={mine && !hover && picked ? touchActions(shownItem, shownDef) : undefined}
             onSplit={() => { const i = c.bag.findIndex((b) => b?.uid === shownItem.uid); if (i >= 0) { setSplit({ item: shownItem, index: i }); setPicked(null); } }}
             equipped={Object.values(c.equipment).some((e) => e?.uid === shownItem.uid)} />
         </Float>

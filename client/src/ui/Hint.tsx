@@ -57,16 +57,49 @@ interface HintProps {
   children: ReactElement<Record<string, unknown>>;
 }
 
-/** Explains its child on hover and on keyboard focus. */
+/** How long a finger rests on a button before its tooltip shows instead of the button acting. */
+const HOLD_MS = 450;
+
+/**
+ * Explains its child on hover and on keyboard focus. On a touch screen a button acts on a tap and
+ * explains itself when the finger rests on it; anything else (an "i", a label) explains itself on a tap.
+ */
 export function Hint({ text, title, side = 'top', children }: HintProps) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const touch = useRef({ at: 0, timer: 0, held: false });
   const show = (e: { currentTarget: Element }) => setAnchor(e.currentTarget.getBoundingClientRect());
   const hide = () => setAnchor(null);
   const child = children as ReactElement<Record<string, (e: never) => void>>;
-  const wrap = (name: string, fn: (e: { currentTarget: Element }) => void) => (e: { currentTarget: Element }) => { fn(e); child.props[name]?.(e as never); };
+  const acts = typeof child.props.onClick === 'function';
+  const wrap = (name: string, fn: (e: never) => void) => (e: never) => { fn(e); child.props[name]?.(e as never); };
+  const recentTouch = () => Date.now() - touch.current.at < 1000;
+  const release = () => {
+    window.clearTimeout(touch.current.timer);
+    if (touch.current.held) touch.current.timer = window.setTimeout(hide, 2500);
+  };
   return (
     <>
-      {cloneElement(child, { onMouseEnter: wrap('onMouseEnter', show), onMouseLeave: wrap('onMouseLeave', hide), onFocus: wrap('onFocus', show), onBlur: wrap('onBlur', hide), onMouseDown: wrap('onMouseDown', hide) } as never)}
+      {cloneElement(child, {
+        onMouseEnter: wrap('onMouseEnter', (e: { currentTarget: Element }) => { if (!recentTouch()) show(e); }),
+        onMouseLeave: wrap('onMouseLeave', hide),
+        onFocus: wrap('onFocus', (e: { currentTarget: Element }) => { if (!(acts && recentTouch())) show(e); }),
+        onBlur: wrap('onBlur', hide),
+        onMouseDown: wrap('onMouseDown', () => { if (!recentTouch()) hide(); }),
+        onPointerDown: wrap('onPointerDown', (e: PointerEvent & { currentTarget: Element }) => {
+          if (e.pointerType === 'mouse') return;
+          touch.current.at = Date.now();
+          touch.current.held = false;
+          window.clearTimeout(touch.current.timer);
+          if (!acts) return;
+          const el = e.currentTarget;
+          touch.current.timer = window.setTimeout(() => { touch.current.held = true; setAnchor(el.getBoundingClientRect()); }, HOLD_MS);
+        }),
+        onPointerUp: wrap('onPointerUp', release),
+        onPointerCancel: wrap('onPointerCancel', release),
+        // A long press opens the browser's menu (and the hotbar clears a slot on right-click): not on touch.
+        ...(child.props.onContextMenu || acts ? { onContextMenu: (e: MouseEvent) => { if (recentTouch()) { e.preventDefault(); return; } child.props.onContextMenu?.(e as never); } } : {}),
+        ...(acts ? { onClick: (e: MouseEvent) => { if (touch.current.held) { touch.current.held = false; e.preventDefault(); return; } child.props.onClick?.(e as never); } } : {}),
+      } as never)}
       {anchor && (text || title) && (
         <Float anchor={anchor} side={side} className="hint-tip">
           {title && <b>{title}</b>}

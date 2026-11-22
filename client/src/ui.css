@@ -732,3 +732,7 @@
 .split-dialog label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .split-dialog input, .split-dialog select { font: inherit; color: var(--text); background: #0e0d0b; border: 1px solid #403b36; border-radius: 6px; padding: 5px 8px; }
 .item-split { margin-right: auto; }
+
+/* What a finger does with a pinned item instead of dragging it: equip, take off, give. */
+.item-touch { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--edge); }
+.item-touch button { flex: 1 1 auto; min-height: 40px; }
