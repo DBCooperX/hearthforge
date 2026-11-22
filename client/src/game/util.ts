@@ -7,6 +7,9 @@ import type { MonsterView } from '../../../shared/types';
 import type { Character, GameState } from '../../../shared/types';
 
 export const key = (x: number, y: number) => `${x},${y}`;
+
+/** Everyone on the party's side: the heroes, then the companions travelling with them. */
+export const partyOf = (state: Pick<GameState, 'characters' | 'companions'>): Character[] => [...state.characters, ...(state.companions ?? [])];
 export { cheb } from '../../../shared/battlemap';
 
 export function tileAt(state: GameState, x: number, y: number): string {
@@ -17,7 +20,7 @@ export function tileAt(state: GameState, x: number, y: number): string {
 function blockedFor(state: GameState, c: Character): Set<string> {
   const blocked = new Set<string>();
   for (const m of state.monsters) if (m.alive) for (let dy = 0; dy < m.tiles; dy++) for (let dx = 0; dx < m.tiles; dx++) blocked.add(key(m.x + dx, m.y + dy));
-  for (const o of state.characters) if (o.id !== c.id && !o.dead && o.hp > 0) blocked.add(key(o.x, o.y));
+  for (const o of partyOf(state)) if (o.id !== c.id && !o.dead && o.hp > 0) blocked.add(key(o.x, o.y));
   return blocked;
 }
 

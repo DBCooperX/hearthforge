@@ -6,7 +6,7 @@ import { SPELL_BUFFS, SPELL_CONDITIONS } from '../../../shared/spells';
 import { glyphKeys } from '../../../shared/glyphs';
 import { metric, type Lang } from '../../../shared/i18n';
 import type { Character, GameState, MonsterView } from '../../../shared/types';
-import { conditionHelp } from './util';
+import { conditionHelp, partyOf } from './util';
 
 export type StatusTone = 'good' | 'bad' | 'mark' | 'focus';
 
@@ -70,7 +70,7 @@ const BUFF_ENDS: Record<string, string> = {
 /** Everything showing on a hero's token. */
 export function heroStatuses(c: Character, state: GameState, t: T, lang: Lang): TokenStatus[] {
   const out: TokenStatus[] = [];
-  const name = (id: string) => state.characters.find((x) => x.id === id)?.name ?? state.monsters.find((x) => x.id === id)?.name ?? '';
+  const name = (id: string) => partyOf(state).find((x) => x.id === id)?.name ?? state.monsters.find((x) => x.id === id)?.name ?? '';
   const done = new Set<string>();
   for (const b of c.buffs ?? []) {
     const def = SPELL_BUFFS[b.id];

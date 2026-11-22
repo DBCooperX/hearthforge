@@ -2,6 +2,7 @@
 // closes the battle map (victory, or the party overwhelmed) before the story takes over again.
 import { useEffect, useRef, useState } from 'react';
 import type { FightOutcome, GameState } from '../../../shared/types';
+import { partyOf } from '../game/util';
 import { useT } from '../i18n';
 import { sfx } from '../ui/sound';
 
@@ -128,7 +129,7 @@ export function SurpriseBanner({ state }: { state: GameState }) {
     return () => window.clearTimeout(timer);
   }, [key]);
   if (!surprise || shown !== key) return null;
-  const caught = state.combat!.order.filter((o) => o.surprised).map((o) => state.characters.find((c) => c.id === o.id)?.name ?? state.monsters.find((m) => m.id === o.id)?.name ?? '?');
+  const caught = state.combat!.order.filter((o) => o.surprised).map((o) => partyOf(state).find((c) => c.id === o.id)?.name ?? state.monsters.find((m) => m.id === o.id)?.name ?? '?');
   const opener = surprise.opener ? state.characters.find((c) => c.id === surprise.opener)?.name : null;
   return (
     <div className={`surprise-banner ${surprise.side}`} role="status" aria-live="polite">

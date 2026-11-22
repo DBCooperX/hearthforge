@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { isLang } from '../../shared/i18n';
 import { onlineList } from './online';
-import { JOIN_ERRORS, MAX_SEATS, type ClientMessage, type ServerMessage } from '../../shared/types';
+import { JOIN_ERRORS, MAX_SEATS, type Character, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
@@ -37,7 +37,7 @@ import { Updater } from './admin/updater';
 import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
-import { heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, npcFigurePrompt, npcFigureSubject, npcPortraitKey, portraitKey, tallFigure } from './game/pictures';
+import { companionFigureSubject, companionLook, heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, npcFigurePrompt, npcFigureSubject, npcPortraitKey, portraitKey, tallFigure } from './game/pictures';
 import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -264,11 +264,18 @@ function npcSubjectOf(room: Room, m: { name: string; defId: string; look?: Monst
   return npc ? npcFigureSubject(npc, m.look ?? MONSTERS[m.defId].look) : null;
 }
 
+/** The figure subject of a companion, painted from the portrait of the person they are, or null. */
+function companionSubjectOf(room: Room, c: Character): string | null {
+  const npc = room.game.s.memory.npcs.find((n) => n.id === c.companion?.npcId);
+  return npc && c.companion ? companionFigureSubject(npc, c.companion.template) : null;
+}
+
 /** Tables showing a figure get it as soon as it is painted; a monster's figure is shared by every table. */
 function figureArrived(subject: string) {
   for (const r of rooms.values()) {
     const s = r.game.s;
     const here = s.characters.some((c) => heroFigureSubject(c) === subject)
+      || s.companions.some((c) => companionSubjectOf(r, c) === subject)
       || s.monsters.some((m) => m.alive && (monsterFigureSubject(m.defId, m.look ?? MONSTERS[m.defId].look) === subject || npcSubjectOf(r, m) === subject));
     if (here && s.players.some((p) => p.connected)) r.flush();
   }
@@ -292,6 +299,17 @@ function paintFigures(room: Room) {
   }
   const broke = () => payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
   const asked = new Set<string>();
+  // Companions fight as themselves, painted from the portrait of the person they are; the table pays, as for people met.
+  for (const c of s.companions) {
+    const npc = s.memory.npcs.find((n) => n.id === c.companion?.npcId);
+    const subject = companionSubjectOf(room, c);
+    if (c.dead || !npc || !subject || asked.has(subject) || illustrator.figureGate(subject)) continue;
+    asked.add(subject);
+    if (broke()) return;
+    const { prompt, key } = npcFigurePrompt(npc, companionLook(c.companion!.template));
+    illustrator.paintFigure({ table: room.name, tableTitle: s.table.title, subject, caption: npc.name, prompt, key, tall: true, portraitId: npc.portraitId! }, (usd) => bill(room.name, usd, 'images'))
+      .then(() => figureArrived(subject)).catch(() => {});
+  }
   for (const m of s.monsters) {
     if (!m.alive) continue;
     const def = MONSTERS[m.defId];

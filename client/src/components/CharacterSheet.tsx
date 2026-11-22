@@ -9,7 +9,7 @@ import { castingAbility, weaponAttack } from '../../../shared/build';
 import { MAX_LEVEL, SLOT_IDS, XP_THRESHOLDS, abilityMod, type AbilityDef, type AbilityKey, type Character, type GameState, PRONOUNS } from '../../../shared/types';
 import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
-import { conditionHelp, heroTitle } from '../game/util';
+import { conditionHelp, heroTitle, partyOf } from '../game/util';
 import { ABILITY_HELP, BACKGROUNDS, GLOSSARY, SKILL_HELP, loc } from '../../../shared/rules';
 import { PREMADE_BY_ID } from '../../../shared/premades';
 import { useLang, useT } from '../i18n';
@@ -205,7 +205,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
                       {castable(a) && (() => {
                         const lv = upcastable(a) ? castLevel(a, castAt[a.id] ?? a.spellLevel, top) : a.spellLevel!;
                         const cost = a.ritual ? 0 : lv > a.spellLevel! ? SLOT_COST[lv - 1] : a.cost;
-                        const allies = state.characters.filter((h) => (a.kind === 'revive' ? h.dead : !h.dead));
+                        const allies = partyOf(state).filter((h) => (a.kind === 'revive' ? h.dead : !h.dead));
                         const on = castOn[a.id] ?? (a.kind === 'revive' ? allies[0]?.id : c.id);
                         return (
                           <div className="cs-cast">

@@ -6,7 +6,7 @@ import { isLightWeapon, weaponAttack } from '../../../shared/build';
 import { INV_FILTERS, INV_SORTS, arrangeBag, carriedWeight, carryCapacity, equipPreview, itemGroup, itemWeight, slotForItem, type InvFilter, type InvSort } from '../../../shared/inventory';
 import { itemDef } from '../../../shared/items';
 import { BAG_SIZE, type Character, type GameState, type InvLoc, type ItemDef, type ItemInstance, type SlotId } from '../../../shared/types';
-import { artOfCharacter, heroUrl } from '../game/heroArt';
+import { artOfCharacter, companionFace, heroUrl } from '../game/heroArt';
 import { heroTitle } from '../game/util';
 import { playerId, type Connection } from '../net';
 import { useLang, useT, type Translate } from '../i18n';
@@ -148,7 +148,8 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   const [hover, setHover] = useState<Shown | null>(null);
   /** The item pinned by a click, so long notes can be read and scrolled without holding the mouse still. */
   const [picked, setPicked] = useState<Shown | null>(null);
-  const mine = c.ownerId === playerId;
+  /** Between fights anyone at the table may sort out a companion's gear; in a fight they act on their own. */
+  const mine = c.companion ? state.phase !== 'combat' : c.ownerId === playerId;
   /** A stack being divided: which one, and (when it came from a drop on a hero) who gets the share. */
   const [split, setSplit] = useState<{ item: ItemInstance; index: number; to?: string } | null>(null);
   const defOf = (item: ItemInstance | null) => (item ? itemDef(state.items, item.defId) ?? null : null);
@@ -245,7 +246,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
   return (
     <Window
       title={t('Inventory')} icon="inventory" hotkey="I" size="large" className="inventory" onClose={onClose}
-      tabs={<HeroTabs state={state} selectedId={c.id} onSelect={onSelect} dropping={!!drag}
+      tabs={<HeroTabs state={state} selectedId={c.id} onSelect={onSelect} dropping={!!drag} companions
         onDropOn={(o, shift) => {
           if (drag && shift && drag.item.qty > 1 && drag.from.type === 'bag' && defOf(drag.item)?.stackable) setSplit({ item: drag.item, index: drag.from.index, to: o.id });
           else if (drag) { conn.send({ t: 'give', characterId: c.id, from: drag.from, toCharacterId: o.id }); sfx('drop'); }
@@ -260,7 +261,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
               <span><b>{num(weight, lang)}</b> / {t('{n} lb', { n: capacity })}</span>
             </div>
           </Hint>
-          <span className="inv-hint">{mine ? t('Double-click to equip or use. Drag onto a hero to hand over (hold Shift to hand over part of a stack). Click to pin the details.') : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}</span>
+          <span className="inv-hint">{c.companion ? (mine ? t('{name} travels with the party and carries what you hand them. Double-click to have them wield something.', { name: c.name }) : t('{name} acts on their own in a fight. Sort out their gear afterwards.', { name: c.name })) : mine ? t('Double-click to equip or use. Drag onto a hero to hand over (hold Shift to hand over part of a stack). Click to pin the details.') : t('{name} belongs to another player, so you can look but not touch.', { name: c.name })}</span>
           <Hint title={t('Party gold')} text={t('Shared by the whole party.')}>
             <div className="purse" tabIndex={0}><Icon name="coin" size={17} /> <b>{state.gold.toLocaleString(lang)}</b> {t('gp')}</div>
           </Hint>
@@ -271,12 +272,12 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
         <section className="doll">
           <div className="doll-name">
             <h2>{c.name}</h2>
-            <small>{t('Level {level} {class}', { level: c.level, class: heroTitle(c, t) })}</small>
+            <small>{c.companion ? `${c.companion.role} · ${t('Companion')}` : t('Level {level} {class}', { level: c.level, class: heroTitle(c, t) })}</small>
           </div>
           <div className="doll-stage">
             <div className="col">{LEFT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
             <div className="figure">
-              <img className="hero-art" src={heroUrl(artOfCharacter(c, state.items))} alt="" />
+              {c.companion?.portraitId ? <img className="hero-art companion-face" src={companionFace(c, state.items)} alt="" /> : <img className="hero-art" src={heroUrl(artOfCharacter(c, state.items))} alt="" />}
             </div>
             <div className="col">{RIGHT.map((s) => cell(c.equipment[s], { type: 'slot', slot: s }, s))}</div>
           </div>
@@ -339,7 +340,7 @@ function SplitDialog({ state, from, item, index, to, conn, onClose }: SplitProps
   const def = itemDef(state.items, item.defId);
   const [n, setN] = useState(Math.max(1, Math.floor(item.qty / 2)));
   const [target, setTarget] = useState(to ?? '');
-  const others = state.characters.filter((o) => o.id !== from.id && !o.dead);
+  const others = [...state.characters, ...(state.companions ?? [])].filter((o) => o.id !== from.id && !o.dead);
   const free = from.bag.findIndex((b) => !b);
   const count = Math.min(item.qty - 1, Math.max(1, Math.floor(n) || 1));
   const submit = (e: React.FormEvent) => {

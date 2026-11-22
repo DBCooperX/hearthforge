@@ -273,7 +273,38 @@ export interface Character {
   light: LightKindId | null;
   /** What to do when an enemy leaves this hero's reach: ask the player, always strike, or let it go. */
   opportunity: OpportunityMode;
+  /** Set on a companion: someone of the story who travels with the party. Heroes never have it. */
+  companion?: CompanionInfo;
 }
+
+/**
+ * What makes a companion: a person of the story who travels with the party for a while. They have the sheet of a
+ * hero, built from a simple SRD stat block, but no player: the server plays their turns in a fight, as their stance
+ * says. They earn no experience and never level up.
+ */
+export interface CompanionInfo {
+  /** The person in the party's memory, or null for someone nameless ("a hired guard"). */
+  npcId: string | null;
+  /** What they do for the party, a few words in the table's language: "Guide, no fighter". */
+  role: string;
+  /** Id of the SRD stat block they are built from (see shared/companions.ts). */
+  template: string;
+  /** The stat block's name in the table's language, such as "Guard" or "Wache". */
+  kind: string;
+  stance: CompanionStance;
+  /** Armour Class of the stat block. Armour handed to them counts when it is better. */
+  baseAc: number;
+  /** The day they joined. */
+  joinedDay: number;
+  /** Their painted portrait (/pictures/<id>), from the person they are. Only in the state sent to players. */
+  portraitId?: string | null;
+}
+
+/** How a companion fights: in the thick of it, by the heroes' side, or out of harm's way. */
+export const COMPANION_STANCES = ['fight', 'guard', 'back'] as const;
+export type CompanionStance = (typeof COMPANION_STANCES)[number];
+/** At most this many companions travel with the party. */
+export const MAX_COMPANIONS = 3;
 
 export const OPPORTUNITY_MODES = ['ask', 'always', 'never'] as const;
 export type OpportunityMode = (typeof OPPORTUNITY_MODES)[number];
@@ -412,7 +443,8 @@ export interface MonsterEffectView {
 
 export interface Combatant {
   id: string;
-  kind: 'pc' | 'monster';
+  /** 'ally' is a companion: on the party's side, played by the server. */
+  kind: 'pc' | 'monster' | 'ally';
   initiative: number;
   /** Caught unawares when the fight began: rolled initiative with Disadvantage. */
   surprised?: boolean;
@@ -747,6 +779,8 @@ export interface GameState {
   /** Light on the battle map: the ambient level and every source, carried ones at their holder. */
   light: { ambient: LightLevel; sources: LightSource[] };
   characters: Character[];
+  /** People of the story who travel with the party. They fight on its side, played by the server. */
+  companions: Character[];
   monsters: MonsterView[];
   combat: CombatState | null;
   /** The current fight includes a boss. Drives the music. */

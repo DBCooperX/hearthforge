@@ -1,11 +1,12 @@
 import { CLASS_INFO } from '../../../shared/content';
 import { BEAST_FORMS, shownResources } from '../../../shared/classes';
-import { MAX_LEVEL, XP_THRESHOLDS, type Character, type GameState, type InvLoc } from '../../../shared/types';
-import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
+import { MAX_LEVEL, XP_THRESHOLDS, type Character, type CompanionStance, type GameState, type InvLoc } from '../../../shared/types';
+import { artOfCharacter, companionFace, heroPortraitUrl } from '../game/heroArt';
 import { playerId } from '../net';
 import { useT } from '../i18n';
 import { classLabel, conditionHelp } from '../game/util';
 import { FeatureGlyph } from '../ui/Glyph';
+import { itemDef } from '../../../shared/items';
 
 interface Props {
   state: GameState;
@@ -16,7 +17,18 @@ interface Props {
   onGive: (fromCharacterId: string, from: InvLoc, to: Character) => void;
   onSheet: (c: Character) => void;
   onLevelUp: (c: Character) => void;
+  /** Open a companion's gear. */
+  onCompanion: (c: Character) => void;
 }
+
+export const STANCE_LABELS: Record<CompanionStance, string> = { fight: 'Fights', guard: 'Guards the heroes', back: 'Keeps back' };
+const STANCE_HELP: Record<CompanionStance, string> = {
+  fight: 'Goes for the nearest enemy.',
+  guard: 'Stays by the heroes and strikes whatever comes close.',
+  back: 'Stays out of harm\'s way and only dodges.',
+};
+const MIME = 'application/x-hearthforge-item';
+
 
 function Bar({ kind, value, max, temp }: { kind: 'hp' | 'mana'; value: number; max: number; temp?: number }) {
   const t = useT();
@@ -29,7 +41,7 @@ function Bar({ kind, value, max, temp }: { kind: 'hp' | 'mana'; value: number; m
   );
 }
 
-export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet, onLevelUp }: Props) {
+export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet, onLevelUp, onCompanion }: Props) {
   const t = useT();
   return (
     <aside className="party">
@@ -87,6 +99,55 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
           </div>
         );
       })}
+      {(state.companions ?? []).length > 0 && (
+        <section className="companions" aria-label={t('Companions')}>
+          <h3>{t('Companions')}</h3>
+          {state.companions.map((c) => {
+            const info = c.companion!;
+            const down = c.hp <= 0 && !c.dead;
+            const weapon = c.equipment.mainHand ? itemDef(state.items, c.equipment.mainHand.defId)?.name ?? null : null;
+            const cls = ['card', 'companion', c.id === activeId && 'active', c.dead && 'dead', down && 'down', targeting && !c.dead && 'targetable'].filter(Boolean).join(' ');
+            return (
+              <div
+                key={c.id}
+                className={cls}
+                title={t('{name} travels with the party. Drop an item here to hand it over; click to see what they carry.', { name: c.name })}
+                onClick={() => (targeting ? onPick(c) : onCompanion(c))}
+                onDragOver={(e) => { if (!c.dead && e.dataTransfer.types.includes(MIME)) e.preventDefault(); }}
+                onDrop={(e) => {
+                  const raw = e.dataTransfer.getData(MIME);
+                  if (!raw) return;
+                  e.preventDefault();
+                  const d = JSON.parse(raw) as { characterId: string; from: InvLoc };
+                  if (d.characterId !== c.id) onGive(d.characterId, d.from, c);
+                }}
+              >
+                <div className="portrait small">
+                  <img className="hero-art face" src={companionFace(c, state.items)} alt="" />
+                  <span className="ac" title={t('Armor Class')}>{c.ac}</span>
+                </div>
+                <div className="info">
+                  <div className="name">
+                    <b title={c.name}>{c.name}</b>
+                    <span className="role" title={t('Fights like: {kind}', { kind: info.kind })}>{info.role}</span>
+                  </div>
+                  <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />
+                  <div className="conditions">
+                    {c.dead ? <span className="chip">{t('fallen')}</span> : <span className={`chip stance ${info.stance}`} title={t(STANCE_HELP[info.stance])}>{t(STANCE_LABELS[info.stance])}</span>}
+                    <span className="chip weapon" title={t('Weapon in hand')}>{weapon ? t(weapon) : t('unarmed')}</span>
+                    {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}
+                    {down && !c.conditions.includes('stable') && (
+                      <span className="saves" title={t('Death saves')}>
+                        {'●'.repeat(c.deathSaves.successes)}{'○'.repeat(3 - c.deathSaves.successes)} <i>{'✖'.repeat(c.deathSaves.failures)}</i>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
       <div className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</div>
     </aside>
   );

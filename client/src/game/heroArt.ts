@@ -578,3 +578,9 @@ export function armedFigure(id: string, fig: HTMLCanvasElement, a: HeroArt, off:
   armed.set(key, out);
   return out;
 }
+
+/** A companion's face: the portrait of the person they are, or the drawn bust until it is painted. */
+export function companionFace(c: Character, items: Record<string, ItemDef>): string {
+  const id = c.companion?.portraitId;
+  return id && /^[a-f0-9]{18}$/.test(id) ? `/pictures/${id}` : heroPortraitUrl(artOfCharacter(c, items));
+}

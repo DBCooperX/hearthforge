@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
+import { partyOf } from '../game/util';
 import { ABILITIES } from '../../../shared/content';
 import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from '../../../shared/classes';
 import { castLevel, diceAtLevel, upcastable } from '../../../shared/spells';
@@ -29,14 +30,14 @@ export function TurnBar({ state }: { state: GameState }) {
   const t = useT();
   const combat = state.combat;
   if (!combat) return null;
-  const name = (id: string) => state.characters.find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
+  const name = (id: string) => partyOf(state).find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
   return (
     <div className="turnbar">
       <span className="phase combat">{t('Round {n}', { n: combat.round })}</span>
       <div className="order">
         {combat.order.map((o, i) => {
           const m = state.monsters.find((x) => x.id === o.id);
-          const c = state.characters.find((x) => x.id === o.id);
+          const c = partyOf(state).find((x) => x.id === o.id);
           const out = m ? !m.alive : c ? c.dead || c.hp <= 0 : true;
           return (
             <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
@@ -134,7 +135,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
 
   if (!me || !combat) return <div className="actionbar"><div className="hint">{hint}</div></div>;
   const c = me;
-  const turnName = state.characters.find((x) => x.id === combat.order[combat.turnIndex]?.id)?.name ?? state.monsters.find((x) => x.id === combat.order[combat.turnIndex]?.id)?.name ?? '';
+  const turnName = partyOf(state).find((x) => x.id === combat.order[combat.turnIndex]?.id)?.name ?? state.monsters.find((x) => x.id === combat.order[combat.turnIndex]?.id)?.name ?? '';
   const reacted = !!combat.reacted?.includes(c.id);
   const toggle = (tg: NonNullable<Targeting>) => setTargeting(JSON.stringify(targeting) === JSON.stringify(tg) ? null : tg);
 
