@@ -530,6 +530,9 @@ export function offWeaponOf(c: Character, items?: Record<string, ItemDef>): Hero
 }
 
 const armed = new Map<string, HTMLCanvasElement>();
+/** Where the painted figure itself sits inside its armed canvas, which has room around it for the weapons. */
+const armedBase = new WeakMap<HTMLCanvasElement, { x: number; y: number; w: number; h: number }>();
+export const baseBoxOf = (c: HTMLCanvasElement) => armedBase.get(c) ?? null;
 
 /** The painted figure with the hero's weapon, shield and off-hand weapon drawn into its hands. */
 export function armedFigure(id: string, fig: HTMLCanvasElement, a: HeroArt, off: HeroGear['weapon'] = 'none'): HTMLCanvasElement {
@@ -542,8 +545,8 @@ export function armedFigure(id: string, fig: HTMLCanvasElement, a: HeroArt, off:
   const side = H / 0.84; // a hero stands 0.84 of the drawn square: the figure's height is that
   const px = 512;
   const g = new Ink(px, 1, 1);
-  const feet = 0.955, hip = 0.607, sy = 0.334;
-  const reach = Math.min(0.2, (W / 2) * 0.95 / side);
+  const feet = 0.955, hip = 0.585, sy = 0.334;
+  const reach = Math.min(0.2, (W * 0.36) / side); // painted arms hang close to the body
   const spell = SPELL[a.classId] ? hex(SPELL[a.classId]!) : null;
   const skin = hex(SKINS[a.look.skin] ?? SKINS.fair);
   const pose = (hand: P, dir: P, k: number): WeaponPose => {
@@ -570,11 +573,14 @@ export function armedFigure(id: string, fig: HTMLCanvasElement, a: HeroArt, off:
     g.mat = 'metal'; g.ell(cx, cy - sh * 0.25, 0.022, 0.022, GOLD);
   }
   g.outline(OUTLINE);
+  // Room round the figure, so a long weapon is not cut off at the edge of the painting.
+  const px0 = Math.round(H * 0.5), py0 = Math.round(H * 0.25), py1 = Math.round(H * 0.12);
   const out = document.createElement('canvas');
-  out.width = W; out.height = H;
+  out.width = W + px0 * 2; out.height = H + py0 + py1;
   const c = out.getContext('2d')!;
-  c.drawImage(fig, 0, 0);
-  c.drawImage(g.canvas(), W / 2 - side / 2, H - feet * side, side, side);
+  c.drawImage(fig, px0, py0);
+  c.drawImage(g.canvas(), px0 + W / 2 - side / 2, py0 + H - feet * side, side, side);
+  armedBase.set(out, { x: px0, y: py0, w: W, h: H });
   armed.set(key, out);
   return out;
 }
