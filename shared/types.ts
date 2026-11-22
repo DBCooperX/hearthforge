@@ -5,6 +5,7 @@ import type { Biome } from './battlemap';
 import type { CreatureType, MonsterLook } from './monsterLook';
 
 import type { Lang } from './i18n';
+import type { HeroTraits } from './traits';
 import type { StartOptions } from './start';
 import type { ShopView } from './trade';
 import type { DmStyle } from './style';
@@ -161,6 +162,8 @@ export interface CharacterSpec {
   look?: Partial<HeroLook>;
   appearance: string;
   backstory: string;
+  /** How the hero acts, as their player set it. Only for the Dungeon Master's non-player people and flavour; never speaks for the hero. */
+  traits?: HeroTraits;
   /** Set when the hero was taken from the premade roster. */
   premadeId?: string;
 }
@@ -244,6 +247,8 @@ export interface Character {
   figureId?: string | null;
   appearance: string;
   backstory: string;
+  /** Personality traits set by the player. Missing: none set (heroes from before). */
+  traits?: HeroTraits;
   /** Level-up choices the player has not made yet. */
   pending: PendingChoice[];
   /** How much of each class resource is spent: rages, focus points, the Lay on Hands pool. Missing in old saves: nothing. */

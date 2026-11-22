@@ -1,6 +1,7 @@
 // Builds the text the Dungeon Master sees: a stable system prompt, and a compact,
 // factual snapshot of the world, the party and everything the DM should remember.
 import { styleText } from '../../../shared/style';
+import { traitLines } from '../../../shared/traits';
 import { BACKGROUNDS, SPECIES } from '../../../shared/rules';
 import { BEAST_FORMS, CLASS_FEATURES, OPTIONS, hasFeature } from '../../../shared/classes';
 import { classLabel, tagged, tr, type Lang } from '../../../shared/i18n';
@@ -98,6 +99,7 @@ Each hero's backstory, as their player wrote it, is listed under "Heroes" in "Ab
 - Treat a backstory as true. Never contradict it. Add to a hero's past only in small ways that fit, and let the player confirm, change or refuse what you add.
 - Give every hero with a backstory one personal thread: someone or something from their past that turns up here, tied to a person, place or quest that already exists in this story. When a thread is listed for a hero, follow it; when none is, find one yourself before the hero's second or third scene.
 - Bring a thread forward every few scenes, not every scene, and share the spotlight fairly between the heroes. Weave threads into the main story so they pay off at its key moments, instead of running beside it. A personal thread never replaces the main quest.
+- A hero may also have a personality set by their player (temperament, humour, speech, quirks, how they react to provocation, danger and company). It is for you to shape how people answer that hero and how an outcome lands: the innkeeper senses the hero is shy and speaks gently, a rival sees a quick temper and pushes, the crowd laughs or goes quiet at the hero's dry humour. It never lets you write what the hero says, thinks, feels or does; the player alone plays them. Use it lightly and never make a hero's traits a rule or a trap.
 - Let a hero's past show in small ways too: someone who knows their name, a place they remember, a skill their old life taught them.
 
 People with character
@@ -291,15 +293,20 @@ function playedBy(game: Game, c: Character): string {
  * which the prompt cache serves; only a new hero or a rewritten backstory changes them.
  */
 function heroLines(game: Game): string[] {
-  const heroes = game.s.characters.filter((c) => c.backstory?.trim());
+  const heroes = game.s.characters.filter((c) => c.backstory?.trim() || traitLines(c.traits).length);
   if (!heroes.length) return [];
   const threads = game.s.setting?.threads ?? [];
   return [
     '',
-    'Heroes (backstories as their players wrote them; see "The heroes\' own stories"):',
+    'Heroes (backstories and personality as their players wrote them; see "The heroes\' own stories"):',
     ...heroes.flatMap((c) => {
       const thread = threads.find((t) => t.characterId === c.id && t.backstory === c.backstory);
-      return [`- ${c.name} [${c.id}]: ${c.backstory}`, ...(thread ? [`  Personal thread, for you only: ${thread.hook}`] : [])];
+      const traits = traitLines(c.traits);
+      return [
+        `- ${c.name} [${c.id}]: ${c.backstory?.trim() || '(no backstory written)'}`,
+        ...(traits.length ? [`  Personality, as the player set it (for how people and the world answer this hero; never to speak or decide for them): ${traits.join('; ')}`] : []),
+        ...(thread ? [`  Personal thread, for you only: ${thread.hook}`] : []),
+      ];
     }),
   ];
 }
@@ -332,6 +339,7 @@ function partyLines(game: Game, withBackstory: boolean): string[] {
       ...(traits.length ? [`  Traits to honour in the story: ${traits.join(' ')}`] : []),
       ...(c.appearance ? [`  Appearance: ${c.appearance}`] : []),
       ...(withBackstory && c.backstory ? [`  Backstory: ${c.backstory}`] : []),
+      ...(withBackstory && traitLines(c.traits).length ? [`  Personality (how the world answers them; never speak for them): ${traitLines(c.traits).join('; ')}`] : []),
     ].join('\n');
   });
 }

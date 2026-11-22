@@ -26,12 +26,13 @@ import type { HeroTemplate } from '../../../shared/accounts';
 import { refreshTemplates, saveTemplate } from '../templates';
 import { accountErrorText } from './SignIn';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
+import { TraitsPicker } from './TraitsPicker';
 import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 const STEPS: StepId[] = ['class', 'species', 'background', 'abilities', 'skills', 'talents', 'equipment', 'identity'];
 /** The short creator asks only for these; the rest is chosen to suit the class. */
 const SHORT_STEPS: StepId[] = ['class', 'species', 'identity'];
-const IDENTITY_FIELDS: (keyof CharacterSpec)[] = ['name', 'gender', 'appearance', 'backstory'];
+const IDENTITY_FIELDS: (keyof CharacterSpec)[] = ['name', 'gender', 'appearance', 'backstory', 'traits'];
 
 const pickOne = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 /** `n` different entries in random order. */
@@ -575,6 +576,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
                 <span>{t('Backstory')} <small className="muted">({t('optional')})</small></span>
                 <textarea value={d.backstory ?? ''} maxLength={1200} rows={detailed ? 6 : 3} onChange={(e) => update({ backstory: e.target.value })} placeholder={t('Where do you come from, what do you want, who or what did you leave behind? A few sentences are enough.')} />
               </label>
+              <TraitsPicker value={d.traits} onChange={(traits) => update({ traits })} />
             </div>
           </>
         )}
@@ -587,7 +589,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   const canRecommend = !!d.classId && STEP_FIELDS[step].length > 0;
   const recommendStep = () => {
     if (!d.classId) return;
-    const keep: (keyof CharacterSpec)[] = ['classId', 'name', 'gender', 'appearance', 'backstory', ...ALL_FIELDS.filter((f) => !STEP_FIELDS[step].includes(f))];
+    const keep: (keyof CharacterSpec)[] = ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits', ...ALL_FIELDS.filter((f) => !STEP_FIELDS[step].includes(f))];
     if (step === 'abilities' && d.method === 'roll' && rolled) {
       // Rolled scores stay rolled: lay them out by priority and re-pick only the background bonus.
       const sorted = [...rolled].sort((x, y) => y - x);
@@ -663,7 +665,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   const canRandom = step === 'class' || step === 'identity' || (!!d.classId && (step !== 'abilities' || !!d.base));
   const quickBuild = () => {
     if (!d.classId) return;
-    setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory'])));
+    setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits'])));
     go('identity');
   };
   const create = async () => {

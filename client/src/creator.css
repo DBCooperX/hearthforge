@@ -173,3 +173,12 @@
 .swatch.on { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(230, 183, 101, 0.35); }
 .segmented.small { flex-wrap: wrap; }
 .segmented.small button { padding: 4px 6px; font-size: 12.5px; }
+
+/* Personality traits on the identity step */
+.traits { border: 1px solid var(--line, #3a3226); border-radius: 8px; padding: 8px 12px; }
+.traits summary { cursor: pointer; font-size: 14px; color: var(--text); }
+.traits .trait-group { margin: 10px 0; }
+.traits h5 { margin: 0 0 5px; font-size: 13px; color: var(--text); }
+.traits h5 small { margin-left: 6px; font-weight: normal; }
+.traits .chips button.on { border-color: var(--gold); background: rgba(212, 175, 55, 0.18); }
+.traits label { margin-top: 8px; }

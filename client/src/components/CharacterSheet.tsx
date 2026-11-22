@@ -11,6 +11,7 @@ import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
 import { itemDef } from '../../../shared/items';
 import { conditionHelp, heroTitle, partyOf } from '../game/util';
 import { ABILITY_HELP, BACKGROUNDS, GLOSSARY, SKILL_HELP, loc } from '../../../shared/rules';
+import { traitLines, traitText } from '../../../shared/traits';
 import { PREMADE_BY_ID } from '../../../shared/premades';
 import { useLang, useT } from '../i18n';
 import { Rich, dice, featureText, signed } from './Guide';
@@ -235,7 +236,8 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               <div className="cs-story">
                 {c.appearance && <><h4>{t('Appearance')}</h4><p>{ownText(c.appearance, 'appearance')}</p></>}
                 {c.backstory && <><h4>{t('Backstory')}</h4><p>{ownText(c.backstory, 'bio')}</p></>}
-                {!c.appearance && !c.backstory && <p className="muted">{t('Nothing is written about this hero yet.')}</p>}
+                {traitLines(c.traits).length > 0 && <><h4>{t('Personality')}</h4><p>{traitText(c.traits, lang)}</p></>}
+                {!c.appearance && !c.backstory && !traitLines(c.traits).length && <p className="muted">{t('Nothing is written about this hero yet.')}</p>}
                 <h4>{t('Equipment')}</h4>
                 <ul className="cs-gear">
                   {worn.length === 0 && <li className="muted">{t('Nothing equipped.')}</li>}

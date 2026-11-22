@@ -8,7 +8,8 @@ import type { HeroTemplate } from '../../../shared/accounts';
 import type { GameState } from '../../../shared/types';
 import { artOfDraft, heroPortraitUrl } from '../game/heroArt';
 import { classLabel, heroTitle } from '../game/util';
-import { useT } from '../i18n';
+import { traitLines, traitText } from '../../../shared/traits';
+import { useLang, useT } from '../i18n';
 import type { Connection } from '../net';
 import { deleteTemplate } from '../templates';
 import { ask } from '../ui/Confirm';
@@ -16,6 +17,7 @@ import { Info } from '../ui/Hint';
 
 export function MyHeroes({ heroes, state, conn, onEdit }: { heroes: HeroTemplate[]; state: GameState; conn: Connection; onEdit: (h: HeroTemplate) => void }) {
   const t = useT();
+  const { lang } = useLang();
   const [picked, setPicked] = useState<string | null>(null);
   const full = state.characters.length >= 4;
   const inParty = (h: HeroTemplate) => state.characters.some((c) => c.templateId === h.id);
@@ -48,6 +50,7 @@ export function MyHeroes({ heroes, state, conn, onEdit }: { heroes: HeroTemplate
           <div className="hero-detail-text">
             <h3>{shown.name} <small>{heroTitle({ className: CLASSES[shown.spec.classId].name, gender: shown.spec.gender, speciesId: shown.spec.speciesId }, t)} · {t(BACKGROUNDS[shown.spec.backgroundId].name)}</small></h3>
             {shown.spec.backstory && <p className="bio">{shown.spec.backstory}</p>}
+            {traitLines(shown.spec.traits).length > 0 && <p className="bio muted">{traitText(shown.spec.traits, lang)}</p>}
           </div>
           <div className="hero-detail-stats">
             <p className="hero-stats"><b>{sheet.maxHp}</b> {t('HP')} · <b>{sheet.ac}</b> {t('AC')}{sheet.maxMana > 0 && <> · <b>{sheet.maxMana}</b> {t('Mana')}</>}</p>
