@@ -2401,4 +2401,21 @@ export const DE: Record<string, string> = {
   '{0} stays back, out of harm\'s way.': '{0} hält sich zurück, ausser Gefahr.',
   '{0} stays by the heroes, on guard.': '{0} bleibt wachsam bei der Gruppe.',
   '{0} closes in.': '{0} rückt näher.',
+
+  // ---------------------------------------------------------------- My heroes (saved heroes)
+  'My heroes': 'Meine Helden',
+  'Keep in My heroes': 'In «Meine Helden» behalten',
+  'Kept in My heroes': 'In «Meine Helden» gespeichert',
+  'Edit': 'Bearbeiten',
+  'Save changes': 'Änderungen speichern',
+  'Change your saved hero': 'Gespeicherten Helden ändern',
+  'Change the saved hero in the character creator': 'Den gespeicherten Helden im Charaktererschaffer ändern',
+  'Heroes you keep on your account. A hero joins the party as a fresh level 1 copy, so playing never changes the saved one.': 'Helden, die du auf deinem Konto behältst. Ein Held kommt als frische Kopie auf Stufe 1 in die Gruppe, das Spielen verändert den gespeicherten also nie.',
+  'Keeps this hero in My heroes, so you can use a fresh copy of them at any table. The copy at the table never changes the saved hero.': 'Behält diesen Helden in «Meine Helden», damit du an jedem Tisch eine frische Kopie von ihm nutzen kannst. Die Kopie am Tisch verändert den gespeicherten Helden nie.',
+  'Delete {name} from My heroes? Heroes already at a table keep playing.': '{name} aus «Meine Helden» löschen? Helden, die schon an einem Tisch sind, spielen weiter.',
+  'Pick them when you gather a party: you can add, change and keep them there.': 'Wähle sie beim Zusammenstellen der Gruppe: Dort kannst du sie hinzufügen, ändern und behalten.',
+  'That hero is already in the party': 'Dieser Held ist schon in der Gruppe',
+  'That hero is not complete, or has choices the rules do not allow.': 'Dieser Held ist nicht vollständig oder hat Wahlen, die die Regeln nicht erlauben.',
+  'You keep 30 heroes already. Delete one first.': 'Du behältst schon 30 Helden. Lösche zuerst einen.',
+  'This hero was made before heroes could be kept. Make it again in the creator to keep it.': 'Dieser Held wurde erschaffen, bevor man Helden behalten konnte. Erschaffe ihn im Charaktererschaffer neu, um ihn zu behalten.',
 };

@@ -180,6 +180,8 @@ The Innkeeper is the owner's panel. Everyone who plays signs in with an account;
 
 Heroes, seats and saves belong to the account, so a player picks up their hero on any device. Seats taken before accounts move to the account by themselves when the player signs in from the browser they played in; the Innkeeper can hand any other one over under **Players → Seats from before accounts**. Each account and each hero counts sessions, play time, killing blows, critical hits, deaths and gold earned, shown under **Your account** (test mode does not count).
 
+**My heroes.** A player can keep heroes on their account (the *Keep in My heroes* switch in the creator, or ★ on a hero in the party) and add a fresh level 1 copy of one to any table from the party screen. Saved heroes live in `/data/accounts.json`; playing a copy never changes the saved hero.
+
 | Page | What it does |
 | --- | --- |
 | **Overview** | What is running, who is playing, today's AI cost, and an announcement for every player. |

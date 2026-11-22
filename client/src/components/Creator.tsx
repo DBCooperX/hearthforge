@@ -22,6 +22,9 @@ import { Backdrop } from '../ui/Brand';
 import { Hint, Info } from '../ui/Hint';
 import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
+import type { HeroTemplate } from '../../../shared/accounts';
+import { refreshTemplates, saveTemplate } from '../templates';
+import { accountErrorText } from './SignIn';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
@@ -107,9 +110,9 @@ function complete(d: Draft, rolled: number[] | undefined): Draft {
   return tidy({ ...recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'speciesId', 'backgroundId', ...IDENTITY_FIELDS]), look: d.look, premadeId: d.premadeId });
 }
 
-interface Props { state: GameState; conn: Connection; onClose: () => void; /** Start from these choices, for example a premade hero. */ initial?: Draft }
+interface Props { state: GameState; conn: Connection; onClose: () => void; /** Start from these choices, for example a premade hero. */ initial?: Draft; /** Change this saved hero (My heroes) instead of making a new one. */ template?: HeroTemplate }
 
-export function Creator({ state, conn, onClose, initial }: Props) {
+export function Creator({ state, conn, onClose, initial, template }: Props) {
   const t = useT();
   const { lang } = useLang();
   const rolled = state.rolled[playerId];
@@ -120,6 +123,9 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     return detailed ? first : complete(first, rolled);
   });
   const [step, setStep] = useState<StepId>('class');
+  /** Also keep the new hero in My heroes. On by default: a hero you made is yours to use again. */
+  const [keep, setKeep] = useState(true);
+  const [saveError, setSaveError] = useState('');
   const [focus, setFocus] = useState<Focus>(null);
   const [hover, setHover] = useState<Draft | null>(null);
 
@@ -660,9 +666,17 @@ export function Creator({ state, conn, onClose, initial }: Props) {
     setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory'])));
     go('identity');
   };
-  const create = () => {
+  const create = async () => {
     if (problems.length) return go(problems[0].step);
-    conn.send({ t: 'create_character', spec: { ...(d as CharacterSpec), name: (d.name ?? '').trim() } });
+    const spec = { ...(d as CharacterSpec), name: (d.name ?? '').trim() };
+    if (template) {
+      // Only the saved hero changes. Heroes already at a table are copies and stay as they are.
+      try { await saveTemplate(spec, state.room, template.id); onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
+      return;
+    }
+    conn.send({ t: 'create_character', spec, keep });
+    // The server keeps the hero when it makes it; the list catches up a moment later.
+    if (keep) window.setTimeout(() => void refreshTemplates(), 600);
     onClose();
   };
   const full = state.characters.length >= 4;
@@ -674,7 +688,7 @@ export function Creator({ state, conn, onClose, initial }: Props) {
         <span className="win-corner tl" /><span className="win-corner tr" /><span className="win-corner bl" /><span className="win-corner br" />
         <header className="creator-head">
           {d.classId && <img className="hero-art" src={heroUrl(artOfDraft(d)!)} alt="" />}
-          <h1>{t('Create your hero')}</h1>
+          <h1>{template ? t('Change your saved hero') : t('Create your hero')}</h1>
           <nav className="steps">
             {steps.map((s, i) => {
               const bad = problems.some((p) => p.step === s);
@@ -704,7 +718,15 @@ export function Creator({ state, conn, onClose, initial }: Props) {
           <span className="spacer" />
           {problems.filter((p) => p.step === step).slice(0, 1).map((p, i) => <span key={i} className="muted small">{loc(p.text, lang)}</span>)}
           {step === 'identity'
-            ? <button type="button" className="primary" disabled={full} onClick={create}>{full ? t('The party is full') : problems.length ? t('Finish the open steps') : t('Create hero')}</button>
+            ? <>
+              {saveError && <span className="muted small" role="alert">{saveError}</span>}
+              {!template && (
+                <Hint text={t('Keeps this hero in My heroes, so you can use a fresh copy of them at any table. The copy at the table never changes the saved hero.')}>
+                  <label className="check mode"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /><span>{t('Keep in My heroes')}</span></label>
+                </Hint>
+              )}
+              <button type="button" className="primary" disabled={!template && full} onClick={() => void create()}>{template ? (problems.length ? t('Finish the open steps') : t('Save changes')) : full ? t('The party is full') : problems.length ? t('Finish the open steps') : t('Create hero')}</button>
+            </>
             : <button type="button" className="primary" onClick={() => go(steps[stepIndex + 1])}>{t('Next')} →</button>}
         </footer>
       </div>

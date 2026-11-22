@@ -271,6 +271,8 @@ export interface Character {
   /** The enemy marked by Hunter's Mark or Hex. */
   mark?: { monsterId: string; spell: string } | null;
   premadeId: string | null;
+  /** The saved hero (My heroes) this hero was copied from. The copy never changes the template. */
+  templateId?: string | null;
   /** The light this hero holds up, or null. Lit from a torch or lantern in the backpack. */
   light: LightKindId | null;
   /** What to do when an enemy leaves this hero's reach: ask the player, always strike, or let it go. */
@@ -886,8 +888,10 @@ export type ClientMessage =
   | { t: 'chat'; text: string; to?: string }
   | { t: 'typing'; where: TypingWhere | null }
   | { t: 'add_character'; classId: ClassId; name: string }
-  | { t: 'create_character'; spec: CharacterSpec }
+  | { t: 'create_character'; spec: CharacterSpec; /** Also keep the hero in My heroes. */ keep?: boolean }
   | { t: 'add_premade'; premadeId: string; name: string }
+  /** A hero kept on the account (My heroes), added to this table as a fresh copy. */
+  | { t: 'add_template'; templateId: string }
   | { t: 'roll_abilities' }
   | { t: 'choose'; characterId: string; choiceId: string; pick: ChoicePick }
   | { t: 'remove_character'; characterId: string }
