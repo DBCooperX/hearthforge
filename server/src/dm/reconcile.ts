@@ -159,7 +159,7 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
   const hero = (v: unknown) => { const t = text(v); return game.s.characters.find((c) => c.id === t || c.name.toLowerCase() === t.toLowerCase())?.id ?? t; };
 
   const place = text(f.place);
-  if (place && !used('move_to_place', 'travel_to') && place !== game.world.placeId) tryIt(`place ${place}`, () => game.journeyTo(place));
+  if (place && !used('move_to_place', 'travel_to') && place !== game.world.placeId) tryIt(`place ${place}`, () => game.proposeJourney(place));
 
   const minutes = Math.max(0, Math.min(MAX_MINUTES, num(f.minutes)));
   if (minutes && !used('advance_time', 'rest')) tryIt(`${minutes} minutes`, () => game.advanceTime(minutes));

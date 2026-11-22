@@ -541,3 +541,8 @@ ul.plain li { font-size: 14.5px; }
 .name .sheet-link { flex: none; }
 .chip.owner { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .info { grid-template-columns: minmax(0, 1fr); }
+
+/* ---------- trip confirm card ---------- */
+.trip-card { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 4px max(20px, calc((100% - 760px) / 2)) 8px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel, rgba(255, 255, 255, 0.05)); animation: rise 0.3s ease both; }
+.trip-card .trip-buttons { display: flex; gap: 8px; margin-left: auto; }
+.story.compact .trip-card { margin: 4px 10px; }

@@ -229,6 +229,8 @@ export interface InternalState {
   memory: MemoryState;
   /** Destination of a journey in progress. */
   travel: { to: Hex; hexes: number; minutes: number; terrain: string[] } | null;
+  /** A trip to another place the Dungeon Master proposed. Nothing moves until the table confirms it. */
+  trip?: { locationId: string; yes: string[] } | null;
   /** The DM flagged the last scene as a turning point, so the next reply gets the strongest model. */
   escalate: boolean;
   /**
@@ -399,6 +401,7 @@ export class Game {
     this.s.items ??= {}; // saves from before story items
     this.s.shops ??= {}; // saves from before trading
     this.s.tradeOffer ??= null;
+    this.s.trip ??= null;
     // Saves from before reputation, rumours and trophies.
     this.s.memory.rumours ??= [];
     this.s.memory.mysteries ??= []; // saves from before clue tracking
@@ -444,6 +447,7 @@ export class Game {
       items: {},
       shops: {},
       tradeOffer: null,
+      trip: null,
       shortRestsLeft: 2,
       log: [],
       logSeq: 0,
@@ -1077,20 +1081,99 @@ export class Game {
    * Longer journeys stay on the map, where the players pick the route.
    */
   journeyTo(ref: string) {
+    const { loc, route } = this.planJourney(ref);
+    if (!route) {
+      this.goTo(loc.id);
+      return { now_at: loc.name, moved: true, minutes: 0 };
+    }
+    return this.makeJourney(loc, route);
+  }
+
+  /**
+   * The story wants the party somewhere else. A place in this hex is a step away and happens at
+   * once; anywhere else becomes a proposal the players confirm, so a scouting trip in the story
+   * never moves everyone and skips the hours by itself.
+   */
+  proposeJourney(ref: string) {
+    const { loc, route } = this.planJourney(ref);
+    if (!route) {
+      this.goTo(loc.id);
+      return { now_at: loc.name, moved: true, minutes: 0 };
+    }
+    this.s.trip = { locationId: loc.id, yes: [] };
+    return {
+      moved: false,
+      proposed: true,
+      note: `${loc.name} is ${route.length * HEX_MILES} miles away. The players now see a confirm card and the party has NOT moved and no time has passed. Narrate only scouting or moving about nearby, and end the scene on the choice to set out; the trip happens only after the players confirm it.`,
+    };
+  }
+
+  /** Read the place and the way there. A place in this hex has no route. */
+  private planJourney(ref: string): { loc: LocationState; route: Hex[] | null } {
     this.needExplore();
     const w = this.world;
     const key = ref.trim().toLowerCase();
     const loc = w.locations.find((l) => l.discovered && l.id.toLowerCase() === key)
       ?? w.locations.find((l) => l.discovered && l.name.toLowerCase() === key);
     if (!loc) throw new GameError(`No known place "${ref}". Known places: ${w.locations.filter((l) => l.discovered).map((l) => `${l.name} [${l.id}]`).join(', ')}.`);
-    if (w.placeId === loc.id) return { now_at: loc.name, moved: false };
-    if (sameHex(loc, w.party)) {
-      this.goTo(loc.id);
-      return { now_at: loc.name, moved: true, minutes: 0 };
-    }
+    if (w.placeId === loc.id || sameHex(loc, w.party)) return { loc, route: null };
     const route = this.knownRoute(loc);
     if (!route) throw new GameError(`The party knows no way to ${loc.name}.`);
     if (route.length > STORY_TRAVEL_HEXES) throw new GameError(`${loc.name} is ${route.length * HEX_MILES} miles away. Tell the players to travel there on the map, which tracks the days on the road.`);
+    return { loc, route };
+  }
+
+  /** What the confirm card shows. */
+  private tripView() {
+    const s = this.s, w = s.world, trip = s.trip;
+    if (!trip || !w || s.phase !== 'explore' || s.travel) return null;
+    const loc = this.location(trip.locationId);
+    const route = loc && !sameHex(loc, w.party) ? this.knownRoute(loc) : null;
+    if (!loc || !route) return null;
+    let minutes = 0;
+    for (const h of route) minutes += hoursFor(trueTerrain(w, h)) * 60;
+    return { locationId: loc.id, name: loc.name, miles: route.length * HEX_MILES, hours: minutes / 60, yes: trip.yes, needed: this.tripVotesNeeded() };
+  }
+
+  /** Votes it takes: just one at a solo table, otherwise more than half of those who are here. */
+  private tripVotesNeeded() {
+    const here = this.s.players.filter((p) => p.connected).length;
+    return Math.floor(here / 2) + 1;
+  }
+
+  /** A player agrees to the proposed trip. The host's yes is enough; otherwise a majority carries it. Returns true once the party sets out. */
+  confirmTrip(playerId: string): boolean {
+    const s = this.s;
+    const view = this.tripView();
+    if (!s.trip || !view) { s.trip = null; throw new GameError(this.t`There is no trip to confirm`); }
+    if (!this.player(playerId)) throw new GameError(this.t`You are not at this table`);
+    if (!s.trip.yes.includes(playerId)) s.trip.yes.push(playerId);
+    const live = s.trip.yes.filter((id) => this.player(id)?.connected).length;
+    if (!(s.hostId === playerId || live >= view.needed)) return false;
+    const loc = this.location(s.trip.locationId)!;
+    s.trip = null;
+    const route = this.knownRoute(loc);
+    if (!route) throw new GameError(this.t`The party knows no way there`);
+    const r = this.makeJourney(loc, route);
+    // The Dungeon Master tells the arrival now, as the party reaches the place.
+    this.newPlace = r.firstVisit ? { id: loc.id, name: loc.name } : null;
+    this.beats.push({ kind: 'arrive', location: loc.name, firstVisit: r.firstVisit, major: MAJOR_KINDS.includes(loc.kind), journey: r.journey });
+    return true;
+  }
+
+  /** Anyone at the table can call the trip off: the party stays where it is and no time passes. */
+  cancelTrip(playerId: string) {
+    const s = this.s;
+    if (!s.trip) return;
+    if (!this.player(playerId)) throw new GameError(this.t`You are not at this table`);
+    const name = this.location(s.trip.locationId)?.name ?? '';
+    s.trip = null;
+    this.log('system', this.t`The party stays where it is and does not set out for ${name}.`);
+  }
+
+  private makeJourney(loc: LocationState, route: Hex[]) {
+    const w = this.world;
+    this.s.trip = null;
     let minutes = 0;
     const terrain: string[] = [];
     for (const h of route) {
@@ -1107,9 +1190,9 @@ export class Game {
     // A tavern in a town: arrive in the town first, so the town counts as visited too.
     const root = this.rootOf(loc);
     if (root !== loc) this.settleIn(root);
-    this.settleIn(loc);
+    const firstVisit = this.settleIn(loc);
     this.log('system', this.t`The party travels ${journey} and reaches ${loc.name}. ${formatTime(w.minutes, this.lang)}.`);
-    return { now_at: loc.name, moved: true, minutes };
+    return { now_at: loc.name, moved: true, minutes, journey, firstVisit };
   }
 
   private knownRoute(to: Hex): Hex[] | null {
@@ -5944,6 +6027,7 @@ export class Game {
       },
       scene: w && s.phase !== 'lobby' ? this.sceneView() : null,
       travelling: !!s.travel,
+      trip: this.tripView(),
       dmBusy: dm.busy,
       dmMode: dm.mode,
       dmModel: dm.model,

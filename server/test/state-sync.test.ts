@@ -85,6 +85,70 @@ describe('travel by story', () => {
   });
 });
 
+describe('trips need a confirm', () => {
+  it('proposes a trip to another place and moves nothing until it is confirmed', () => {
+    const g = newGame();
+    outsideTown(g);
+    const before = { ...g.world.party }, minutes = g.world.minutes;
+    const r = g.proposeJourney('emberfall');
+    expect(r.moved).toBe(false);
+    expect(r.note).toMatch(/NOT moved/);
+    expect(g.world.party).toEqual(before);
+    expect(g.world.minutes).toBe(minutes);
+    const view = g.publicState({ busy: false, mode: 'scripted', model: null }).trip;
+    expect(view).toMatchObject({ name: 'Emberfall', yes: [], needed: 1 });
+    expect(view!.hours).toBeGreaterThan(0);
+  });
+
+  it('a solo player confirms and the party travels, with an arrival for the narrator', () => {
+    const g = newGame();
+    outsideTown(g);
+    g.proposeJourney('emberfall');
+    expect(g.confirmTrip('p1')).toBe(true);
+    expect(g.world.placeId).toBe('emberfall');
+    expect(g.world.minutes).toBeGreaterThan(0);
+    expect(g.s.trip).toBeNull();
+    expect(g.takeBeats().some((b) => b.kind === 'arrive')).toBe(true);
+  });
+
+  it('cancelling keeps the party where it is and no time passes', () => {
+    const g = newGame();
+    outsideTown(g);
+    const before = { ...g.world.party }, minutes = g.world.minutes;
+    g.proposeJourney('emberfall');
+    g.cancelTrip('p1');
+    expect(g.s.trip).toBeNull();
+    expect(g.world.party).toEqual(before);
+    expect(g.world.minutes).toBe(minutes);
+    expect(g.publicState({ busy: false, mode: 'scripted', model: null }).trip).toBeNull();
+    expect(() => g.confirmTrip('p1')).toThrow(/no trip/);
+  });
+
+  it('a place in the party own hex is still reached at once', () => {
+    const g = newGame();
+    const r = g.proposeJourney('gilded_anvil');
+    expect(r.moved).toBe(true);
+    expect(g.s.trip).toBeNull();
+  });
+
+  it('at a full table the host decides, or a majority', () => {
+    const g = newGame();
+    g.upsertPlayer('p2', 'Two', true);
+    g.upsertPlayer('p3', 'Three', true);
+    outsideTown(g);
+    g.proposeJourney('emberfall');
+    expect(g.publicState({ busy: false, mode: 'scripted', model: null }).trip!.needed).toBe(2);
+    expect(g.confirmTrip('p2')).toBe(false);
+    expect(g.world.placeId).toBeNull();
+    expect(g.confirmTrip('p3')).toBe(true);
+    expect(g.world.placeId).toBe('emberfall');
+    g.proposeJourney('gilded_anvil');
+    outsideTown(g);
+    g.proposeJourney('emberfall');
+    expect(g.confirmTrip(g.s.hostId!)).toBe(true);
+  });
+});
+
 describe('rests by the rules', () => {
   it('an afternoon rest of a few hours is a short rest and says what came back', () => {
     const g = newGame();
@@ -165,9 +229,11 @@ describe('reconcile after each reply', () => {
     expect(lastScene(g).where).not.toBe('Emberfall');
     let updates = 0;
     await dm.reconcile(g, async () => { updates++; });
+    // Even a trip the story already told is only proposed: the table confirms before the party moves.
+    expect(g.world.placeId).toBeNull();
+    expect(g.s.trip?.locationId).toBe('emberfall');
+    g.confirmTrip('p1');
     expect(g.world.placeId).toBe('emberfall');
-    expect(lastScene(g).where).toBe('Emberfall');
-    expect(updates).toBe(1);
     const check = requests.find((r) => r.model === 'bg')!;
     expect(check.tools).toBeUndefined();
     expect(check.messages[0].content).toMatch(/walk back to Emberfall/);
@@ -259,10 +325,14 @@ describe('DM tools for travel, rest and gear', () => {
       return { stop_reason: 'tool_use', content: [scene('You reach the Gilded Anvil, rest an hour by the fire, and Brann sets his spear against the table.')] };
     }, '{"place": "gilded_anvil", "rest": "short"}');
     await dm.respond(g, [{ player: 'Tester', text: 'To the tavern, then rest' }], async () => {});
+    // The trip is only proposed: the party waits until the table confirms it.
+    expect(g.world.placeId).toBeNull();
+    expect(g.s.trip?.locationId).toBe('gilded_anvil');
+    expect(g.confirmTrip('p1')).toBe(true);
+    g.takeBeats();
     expect(g.world.placeId).toBe('gilded_anvil');
     expect(hero(g, 'Brann').hp).toBeGreaterThan(2);
     expect(hero(g, 'Brann').equipment.mainHand?.defId).toBe('spear');
-    expect(g.takeBeats().some((b) => b.kind === 'arrive')).toBe(false);
     const rests = g.s.shortRestsLeft;
     await dm.reconcile(g, async () => {});
     expect(g.s.shortRestsLeft).toBe(rests);

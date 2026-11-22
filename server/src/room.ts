@@ -466,7 +466,7 @@ export class Room {
     if (this.hooks.paused?.(this) && !['chat', 'typing', 'leave_table'].includes(msg.t)) {
       return this.send(ws, { t: 'error', message: PAUSED_MESSAGE });
     }
-    if (ASKS_THE_DM.includes(msg.t)) {
+    if (ASKS_THE_DM.includes(msg.t) || (msg.t === 'trip' && msg.go)) {
       const refused = this.hooks.mayAsk?.(playerId);
       if (refused) return this.send(ws, { t: 'error', message: refused });
     }
@@ -474,6 +474,7 @@ export class Room {
       case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc);
       case 'unsay': return this.unsay(ws, playerId);
       case 'test': return this.testAction(ws, playerId, msg.do);
+      case 'trip': return this.trip(ws, playerId, !!msg.go);
       case 'travel': return this.travel(ws, Math.round(Number(msg.q)), Math.round(Number(msg.r)));
       case 'chat': return this.chat(ws, playerId, String(msg.text ?? ''), msg.to ? String(msg.to) : undefined);
       case 'typing': return this.setTyping(playerId, msg.where === 'story' || msg.where === 'chat' ? msg.where : null);
@@ -576,6 +577,21 @@ export class Room {
       this.dmBusy--;
       if (epoch === this.epoch) this.flush();
     }
+  }
+
+  /** The table answers a trip the Dungeon Master proposed. */
+  private trip(ws: WebSocket, playerId: string, go: boolean) {
+    this.enqueue(async () => {
+      const g = this.game;
+      if (!go) {
+        if (this.attempt(ws, () => g.cancelTrip(playerId))) this.flush();
+        return;
+      }
+      let went = false;
+      if (!this.attempt(ws, () => { went = g.confirmTrip(playerId); })) return;
+      this.flush();
+      if (went) await this.pump();
+    });
   }
 
   /** Walk the party across the map one hex at a time so everyone watches the journey unfold. */
