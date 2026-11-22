@@ -16,7 +16,7 @@ import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLi
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { Narrator, VoiceError, langOf } from './voice';
-import { speechParts } from '../../shared/voice';
+import { speechParts, type VoiceQuality } from '../../shared/voice';
 import { SESSION_HEADER } from './accountApi';
 import { createDM } from './dm/claude';
 import { ScriptedDM } from './dm/scripted';
@@ -653,7 +653,7 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       const part = Math.max(0, Math.floor(Number(url.searchParams.get('part')) || 0));
       if (part >= parts.length) return json(404, { error: 'bad_request' });
       const lang = langOf(room.game.s.language);
-      const paid = (provider: 'openai' | 'elevenlabs', chars: number) => bill(room.name, credits.voiceCost(provider, chars), 'voice');
+      const paid = (chars: number, quality: VoiceQuality) => bill(room.name, credits.voiceCost(chars, quality), 'voice');
       const audio = await narrator.speak(parts[part], lang, undefined, paid);
       // The next part is made while this one plays.
       if (part + 1 < parts.length) void narrator.speak(parts[part + 1], lang, undefined, paid).catch(() => {});
@@ -667,13 +667,13 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         ? 'Der Regen trommelt auf das Dach der Taverne. Am Kamin hebt eine Fremde den Kopf und mustert euch lange. «Ihr seid spät», sagt sie leise. «Setzt euch. Die Strasse nach Norden ist nicht mehr sicher.»'
         : 'Rain drums on the roof of the tavern. By the hearth, a stranger lifts her head and studies you for a long moment. "You are late," she says quietly. "Sit. The north road is no longer safe."';
       const over: Record<string, unknown> = {};
-      for (const k of ['provider', 'openai', 'elevenlabs', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
+      for (const k of ['provider', 'elevenlabs', 'quality', 'speed'] as const) if (url.searchParams.has(k)) over[k] = k === 'speed' ? Number(url.searchParams.get(k)) : url.searchParams.get(k);
       if (url.searchParams.has('piper')) over.piper = { ...narrator.library().choice.piper, [lang]: url.searchParams.get('piper') };
       // The Innkeeper trying voices pays for it like anyone else: it shows in their own costs.
       const me = accounts.account(req.headers[SESSION_HEADER]);
       // Like a picture sample, it counts in the AI costs even when no account is signed in.
-      const audio = await narrator.speak(sample, lang, over, (provider, chars) => {
-        const usd = credits.voiceCost(provider, chars);
+      const audio = await narrator.speak(sample, lang, over, (chars, quality) => {
+        const usd = credits.voiceCost(chars, quality);
         usage.recordExtra('Innkeeper samples', 'voice', usd);
         if (me) credits.charge([me.id], usd, 'voice');
       });

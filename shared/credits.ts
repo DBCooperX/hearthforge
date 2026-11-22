@@ -1,6 +1,6 @@
 // Player credits: what the AI costs, per account, in the one currency the Innkeeper chose. The Innkeeper books what
 // a player has paid in; the server takes off what that player's share of the Dungeon Master (Claude) and the
-// narrator (ElevenLabs or OpenAI voices) cost. When credits are switched on, a player whose credit is used up cannot
+// narrator (ElevenLabs voices) cost. When credits are switched on, a player whose credit is used up cannot
 // start anything that calls the AI until it is topped up. Innkeepers, and accounts marked "free", are never stopped.
 
 /** How the Innkeeper set credits up. Saved in the data folder; changes apply at once. */
@@ -14,8 +14,8 @@ export interface CreditConfig {
   rate: number;
   /** The early warning: a player is told once their credit falls below this amount. */
   warn: number;
-  /** What the narrator costs, in dollars per 1000 characters read aloud. Piper costs nothing. */
-  voiceUsdPer1k: { elevenlabs: number; openai: number };
+  /** What the narrator costs, in dollars per 1000 characters read aloud with the Quality model. Piper costs nothing. */
+  voiceUsdPer1k: { elevenlabs: number };
 }
 
 export const DEFAULT_CREDIT_CONFIG: CreditConfig = {
@@ -23,8 +23,8 @@ export const DEFAULT_CREDIT_CONFIG: CreditConfig = {
   currency: 'USD',
   rate: 1,
   warn: 2,
-  // ElevenLabs Turbo v4 is $0.04 per 1000 characters; OpenAI's mini voice is about $0.015.
-  voiceUsdPer1k: { elevenlabs: 0.04, openai: 0.015 },
+  // What ElevenLabs charges per 1000 characters of the Quality model; Cheaper (Flash) counts half. Set it to your plan's price.
+  voiceUsdPer1k: { elevenlabs: 0.08 },
 };
 
 /** One payment the Innkeeper booked. A negative amount corrects a mistake or pays money back. */

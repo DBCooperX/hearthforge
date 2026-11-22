@@ -1,6 +1,6 @@
 // The narrator on the server: turns the Dungeon Master's story into speech and keeps it on disk.
 // Piper runs here, as a program in the image; its voices are downloaded from Piper's own collection
-// the first time they are needed, never mirrored. OpenAI and ElevenLabs are asked over their APIs.
+// the first time they are needed, never mirrored. ElevenLabs is asked over its API.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebStream } from 'node:stream/web';
 import { isLang, type Lang } from '../../shared/i18n';
 import {
-  DEFAULT_VOICE, ELEVENLABS_MODEL, OPENAI_TTS_MODEL, OPENAI_VOICES, PIPER_BASE, PIPER_VOICES, VOICE_PROVIDERS,
+  DEFAULT_VOICE, ELEVENLABS_MODELS, VOICE_QUALITIES, type VoiceQuality, PIPER_BASE, PIPER_VOICES, VOICE_PROVIDERS,
   piperCard, piperPath, speakable, type VoiceChoice, type VoiceLibrary, type VoiceManifest, type VoiceProvider,
 } from '../../shared/voice';
 
@@ -23,7 +23,6 @@ const CACHE_MAX_BYTES = 400 * 1024 * 1024;
 const MAX_TEXT = 1200;
 
 /** How the hosted voices are told to read. */
-const NARRATOR_STYLE = 'You are the narrator of a fantasy tabletop adventure. Read warmly and vividly, like an audiobook storyteller by a fireside: unhurried, with gentle suspense, never theatrical.';
 
 export interface Audio { file: string; type: string }
 
@@ -80,7 +79,7 @@ export class Narrator {
   /** Set when the Piper program is there but does not start, for example on a processor it was not built for. */
   private piperBroken = false;
   get piperReady() { return !this.piperBroken && existsSync(this.bin); }
-  private key(provider: 'openai' | 'elevenlabs') { return (provider === 'openai' ? this.env.OPENAI_API_KEY : this.env.ELEVENLABS_API_KEY)?.trim() ?? ''; }
+  private key() { return this.env.ELEVENLABS_API_KEY?.trim() ?? ''; }
   private installed(id: string) { return existsSync(join(this.voices, `${id}.onnx`)) && existsSync(join(this.voices, `${id}.onnx.json`)); }
 
   /** The languages the chosen narrator can read right now. */
@@ -89,7 +88,7 @@ export class Narrator {
     const p = this.choice.provider;
     if (p === 'off') return [];
     if (p === 'piper') return this.piperReady ? (['en', 'de'] as Lang[]).filter((l) => this.installed(this.choice.piper[l])) : [];
-    return this.key(p) ? ['en', 'de'] : [];
+    return this.key() ? ['en', 'de'] : [];
   }
 
   manifest(): VoiceManifest {
@@ -102,7 +101,7 @@ export class Narrator {
       choice: this.choice,
       piperReady: this.piperReady,
       piper: PIPER_VOICES.map((v) => ({ ...v, installed: this.installed(v.id), downloading: this.downloading.has(v.id), card: piperCard(v.id) })),
-      keys: { openai: !!this.key('openai'), elevenlabs: !!this.key('elevenlabs') },
+      keys: { elevenlabs: !!this.key() },
       elevenlabsVoices: this.elevenVoices,
       cacheMb: Math.round(this.cacheBytes() / 1024 / 1024),
       error: this.lastError,
@@ -123,13 +122,13 @@ export class Narrator {
       });
       if (ok) { this.piperBroken = true; this.lastError = `Piper does not start: ${ok}`; console.warn(`[voice] ${this.lastError}`); }
     }
-    if (this.key('elevenlabs')) await this.loadElevenVoices().catch(() => {});
+    if (this.key()) await this.loadElevenVoices().catch(() => {});
     if (this.choice.provider !== 'piper' || !this.piperReady) return;
     for (const lang of ['en', 'de'] as Lang[]) await this.download(this.choice.piper[lang]).catch((err) => console.warn(`[voice] ${err instanceof Error ? err.message : err}`));
   }
 
   async loadElevenVoices(): Promise<void> {
-    const res = await this.fetchFn('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': this.key('elevenlabs') }, signal: AbortSignal.timeout(15_000) });
+    const res = await this.fetchFn('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': this.key() }, signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new Error(`ElevenLabs voices: HTTP ${res.status}`);
     const body = await res.json() as { voices?: { voice_id?: string; name?: string }[] };
     this.elevenVoices = (body.voices ?? []).filter((v) => v.voice_id && v.name).map((v) => ({ id: String(v.voice_id), name: String(v.name).slice(0, 80) })).slice(0, 200);
@@ -165,7 +164,7 @@ export class Narrator {
   async action(m: Record<string, unknown>): Promise<void> {
     if (m.do === 'choose') {
       const next = cleanChoice({ ...this.choice, ...(typeof m.choice === 'object' && m.choice ? m.choice : {}), piper: { ...this.choice.piper, ...((m.choice as { piper?: object })?.piper ?? {}) } });
-      if ((next.provider === 'openai' || next.provider === 'elevenlabs') && !this.key(next.provider)) throw new VoiceError('no_key');
+      if (next.provider === 'elevenlabs' && !this.key()) throw new VoiceError('no_key');
       this.choice = next;
       mkdirSync(this.dir, { recursive: true });
       writeFileSync(this.file, JSON.stringify(next, null, 2));
@@ -193,19 +192,19 @@ export class Narrator {
   }
 
   /**
-   * Speech for a piece of story, from the cache or freshly made. `paid` hears when a paid voice (OpenAI or
-   * ElevenLabs) had to read it: speech from the cache, and Piper, cost nothing.
+   * Speech for a piece of story, from the cache or freshly made. `paid` hears when the paid voice
+   * (ElevenLabs) had to read it: speech from the cache, and Piper, cost nothing.
    */
-  async speak(raw: string, lang: Lang, override?: Partial<VoiceChoice>, paid?: (provider: 'openai' | 'elevenlabs', chars: number) => void): Promise<Audio> {
+  async speak(raw: string, lang: Lang, override?: Partial<VoiceChoice>, paid?: (chars: number, quality: VoiceQuality) => void): Promise<Audio> {
     if (!this.enabled) throw new VoiceError('bad_request');
     const choice = override ? cleanChoice({ ...this.choice, ...override }) : this.choice;
     const text = speakable(raw).slice(0, MAX_TEXT);
     if (!text) throw new VoiceError('bad_request');
     const { provider } = choice;
     if (provider === 'off') throw new VoiceError('bad_request');
-    const voice = provider === 'piper' ? choice.piper[lang] : provider === 'openai' ? choice.openai : choice.elevenlabs;
+    const voice = provider === 'piper' ? choice.piper[lang] : choice.elevenlabs;
     const ext = provider === 'piper' ? 'wav' : 'mp3';
-    const hash = createHash('sha256').update(`${provider}\n${voice}\n${choice.speed}\n${lang}\n${text}`).digest('hex').slice(0, 40);
+    const hash = createHash('sha256').update(`${provider}\n${voice}\n${provider === 'elevenlabs' ? choice.quality : ''}\n${choice.speed}\n${lang}\n${text}`).digest('hex').slice(0, 40);
     const file = join(this.cache, `${hash}.${ext}`);
     const type = ext === 'wav' ? 'audio/wav' : 'audio/mpeg';
     if (existsSync(file)) {
@@ -219,11 +218,10 @@ export class Narrator {
       const tmp = `${file}.${process.pid}.tmp`;
       try {
         if (provider === 'piper') await this.viaPiper(voice, choice.speed, text, tmp);
-        else if (provider === 'openai') await this.viaOpenAI(voice, choice.speed, text, tmp);
-        else await this.viaElevenLabs(voice, choice.speed, text, tmp);
+        else await this.viaElevenLabs(voice, choice.speed, choice.quality, text, tmp);
         renameSync(tmp, file);
         // Booking the cost must never lose speech that is already made and paid for.
-        if (provider !== 'piper') try { paid?.(provider, text.length); } catch (err) { console.warn('[voice] cost not booked:', err); }
+        if (provider !== 'piper') try { paid?.(text.length, choice.quality); } catch (err) { console.warn('[voice] cost not booked:', err); }
       } catch (err) {
         rmSync(tmp, { force: true });
         this.lastError = err instanceof Error ? err.message : String(err);
@@ -250,25 +248,13 @@ export class Narrator {
     if (!existsSync(out) || statSync(out).size < 100) throw new Error('piper wrote no audio');
   }
 
-  private async viaOpenAI(voice: string, speed: number, text: string, out: string) {
-    const key = this.key('openai');
-    if (!key) throw new VoiceError('no_key');
-    const res = await this.fetchFn('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: OPENAI_TTS_MODEL, voice, input: text, instructions: NARRATOR_STYLE, response_format: 'mp3', speed }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    await save(res, out, 'OpenAI');
-  }
-
-  private async viaElevenLabs(voice: string, speed: number, text: string, out: string) {
-    const key = this.key('elevenlabs');
+  private async viaElevenLabs(voice: string, speed: number, quality: VoiceQuality, text: string, out: string) {
+    const key = this.key();
     if (!key) throw new VoiceError('no_key');
     const res = await this.fetchFn(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: ELEVENLABS_MODEL, voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, speed: Math.min(1.2, Math.max(0.7, speed)) } }),
+      body: JSON.stringify({ text, model_id: ELEVENLABS_MODELS[quality], voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, speed: Math.min(1.2, Math.max(0.7, speed)) } }),
       signal: AbortSignal.timeout(60_000),
     });
     await save(res, out, 'ElevenLabs');
@@ -311,14 +297,14 @@ export function cleanChoice(raw: unknown): VoiceChoice {
     return PIPER_VOICES.some((v) => v.id === id && v.lang === lang) ? id : DEFAULT_VOICE.piper[lang];
   };
   const provider = VOICE_PROVIDERS.includes(r.provider as VoiceProvider) ? (r.provider as VoiceProvider) : DEFAULT_VOICE.provider;
-  const openai = OPENAI_VOICES.includes(r.openai as (typeof OPENAI_VOICES)[number]) ? String(r.openai) : DEFAULT_VOICE.openai;
+  const quality = VOICE_QUALITIES.includes(r.quality as VoiceQuality) ? (r.quality as VoiceQuality) : DEFAULT_VOICE.quality;
   const eleven = typeof r.elevenlabs === 'string' && /^[A-Za-z0-9]{8,40}$/.test(r.elevenlabs) ? r.elevenlabs : DEFAULT_VOICE.elevenlabs;
   const speed = Number(r.speed);
   return {
     provider,
     piper: { en: piperFor('en'), de: piperFor('de') },
-    openai,
     elevenlabs: eleven,
+    quality,
     speed: Number.isFinite(speed) ? Math.round(Math.min(1.3, Math.max(0.7, speed)) * 100) / 100 : DEFAULT_VOICE.speed,
   };
 }

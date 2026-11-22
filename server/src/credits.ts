@@ -4,6 +4,7 @@
 import { join } from 'node:path';
 import { CURRENCY_CODE, DEFAULT_CREDIT_CONFIG, type CreditConfig, type CreditReport, type CreditRow, type CreditView, type TopUp } from '../../shared/credits';
 import { readJson, writePrivate } from './admin/config';
+import { VOICE_QUALITY_FACTOR, type VoiceQuality } from '../../shared/voice';
 
 const KEEP_DAYS = 90;
 const MAX_TOPUPS = 200;
@@ -79,7 +80,7 @@ export class Credits {
         currency: CURRENCY_CODE.test(String(c.currency)) ? String(c.currency) : DEFAULT_CREDIT_CONFIG.currency,
         rate: Number(c.rate) > 0 ? Number(c.rate) : DEFAULT_CREDIT_CONFIG.rate,
         warn: Number.isFinite(Number(c.warn)) && c.warn !== undefined ? Number(c.warn) : DEFAULT_CREDIT_CONFIG.warn,
-        voiceUsdPer1k: { ...DEFAULT_CREDIT_CONFIG.voiceUsdPer1k, ...(c.voiceUsdPer1k ?? {}) },
+        voiceUsdPer1k: { elevenlabs: Number(c.voiceUsdPer1k?.elevenlabs) >= 0 && c.voiceUsdPer1k?.elevenlabs !== undefined ? Number(c.voiceUsdPer1k.elevenlabs) : DEFAULT_CREDIT_CONFIG.voiceUsdPer1k.elevenlabs },
       },
       accounts,
     };
@@ -105,7 +106,6 @@ export class Credits {
       warn: raw.warn === undefined || (switching && Number(raw.warn) === c.warn) ? (switching ? Math.round(c.warn * (rate / c.rate) * 100) / 100 : c.warn) : num(raw.warn, 0, 100000),
       voiceUsdPer1k: {
         elevenlabs: v.elevenlabs === undefined ? c.voiceUsdPer1k.elevenlabs : num(v.elevenlabs, 0, 10),
-        openai: v.openai === undefined ? c.voiceUsdPer1k.openai : num(v.openai, 0, 10),
       },
     };
     // The one conversion: money already booked moves from the old currency into the new one, so balances keep their
@@ -120,8 +120,8 @@ export class Credits {
   }
 
   /** What a voice costs for this many characters, in dollars. */
-  voiceCost(provider: 'elevenlabs' | 'openai', chars: number): number {
-    return (Math.max(0, chars) / 1000) * (this.s.config.voiceUsdPer1k[provider] ?? 0);
+  voiceCost(chars: number, quality: VoiceQuality = 'quality'): number {
+    return (Math.max(0, chars) / 1000) * this.s.config.voiceUsdPer1k.elevenlabs * VOICE_QUALITY_FACTOR[quality];
   }
 
   /**

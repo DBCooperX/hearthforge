@@ -801,8 +801,7 @@ function CreditsPane({ fail, say }: PaneProps) {
         </label>
         {c.currency !== 'USD' && field(t('{currency} per US dollar (your fixed rate)', { currency: c.currency }), c.rate, (n) => edit({ rate: n }), '0.01')}
         {field(t('Warn players below ({currency})', { currency: c.currency }), c.warn, (n) => edit({ warn: n }), '0.5')}
-        {field(t('ElevenLabs voice, {currency} per 1000 characters', { currency: c.currency }), round6(c.voiceUsdPer1k.elevenlabs * c.rate), (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, elevenlabs: n / c.rate } }), '0.001')}
-        {field(t('OpenAI voice, {currency} per 1000 characters', { currency: c.currency }), round6(c.voiceUsdPer1k.openai * c.rate), (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, openai: n / c.rate } }), '0.001')}
+        {field(t('ElevenLabs voice, Quality model, {currency} per 1000 characters', { currency: c.currency }), round6(c.voiceUsdPer1k.elevenlabs * c.rate), (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, elevenlabs: n / c.rate } }), '0.001')}
         <p className="muted small">{c.currency === 'USD'
           ? t('Dollars: every price is the provider\'s own price, with no conversion.')
           : t('The AI providers bill in dollars. Every dollar price is multiplied once by your fixed rate; nothing is fetched from the internet. When you change the currency, the money already booked is converted once at the new rate.')}</p>

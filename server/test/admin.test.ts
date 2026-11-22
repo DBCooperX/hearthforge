@@ -359,7 +359,7 @@ describe('innkeeper API', () => {
     r.ctx.creditsChanged = (ids) => void told.push(ids);
     const mira = r.ctx.accounts.create('Mira', 'player').account;
     let rep = (await call(r, '/credits')).body;
-    expect(rep.config).toMatchObject({ on: false, currency: 'USD', rate: 1, warn: 2, voiceUsdPer1k: { elevenlabs: 0.04 } });
+    expect(rep.config).toMatchObject({ on: false, currency: 'USD', rate: 1, warn: 2, voiceUsdPer1k: { elevenlabs: 0.08 } });
     expect(rep.rows.map((x: { username: string }) => x.username)).toEqual(['innkeeper', 'Mira']);
     rep = (await call(r, '/credits', { do: 'top_up', id: mira.id, amount: 10, note: 'TWINT' })).body;
     expect(rep.rows[1]).toMatchObject({ paid: 10, limited: false, topUps: [{ amount: 10, note: 'TWINT' }] });

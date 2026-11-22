@@ -20,10 +20,12 @@ const chris = { id: 'acc_chris', username: 'Chris', role: 'innkeeper' as const }
 describe('credits', () => {
   it('counts costs per account in the global currency, shared among those at the table', () => {
     const c = new Credits(dir());
-    c.setConfig({ currency: 'CHF', rate: 0.8 });
+    c.setConfig({ currency: 'CHF', rate: 0.8, voiceUsdPer1k: { elevenlabs: 0.04 } });
     c.charge([mira.id, jonas.id], 1, 'claude');
-    c.charge([mira.id], c.voiceCost('elevenlabs', 5000), 'voice');
-    expect(c.voiceCost('elevenlabs', 5000)).toBeCloseTo(0.2);
+    // The cheaper model counts half.
+    expect(c.voiceCost(1000, 'cheaper')).toBeCloseTo(0.02);
+    c.charge([mira.id], c.voiceCost(5000), 'voice');
+    expect(c.voiceCost(5000)).toBeCloseTo(0.2);
     const r = c.report([mira, jonas]);
     expect(r.rows[0]).toMatchObject({ username: 'Mira', spentClaude: 0.4, last30: 0.56 });
     expect(r.rows[0].spentVoice).toBeCloseTo(0.16);
@@ -65,7 +67,7 @@ describe('credits', () => {
     c.charge([mira.id], 1, 'claude');
     c.flush();
     const again = new Credits(d);
-    expect(again.config).toMatchObject({ on: true, currency: 'USD', rate: 1, voiceUsdPer1k: { elevenlabs: 0.05, openai: 0.015 } });
+    expect(again.config).toMatchObject({ on: true, currency: 'USD', rate: 1, voiceUsdPer1k: { elevenlabs: 0.05 } });
     expect(again.view(mira).balance).toBeCloseTo(19);
     // A backup brings back accounts this server does not know, and leaves the others alone.
     const fresh = new Credits(dir());
@@ -106,7 +108,7 @@ describe('credits', () => {
   it('reads credits saved in francs by an older version', () => {
     const d = dir();
     writeFileSync(join(d, 'credits.json'), JSON.stringify({
-      config: { on: true, chfPerUsd: 0.85, warnChf: 3, voiceUsdPer1k: { elevenlabs: 0.04, openai: 0.015 } },
+      config: { on: true, chfPerUsd: 0.85, warnChf: 3, voiceUsdPer1k: { elevenlabs: 0.04 } },
       accounts: { [mira.id]: { topUps: [{ at: 1, chf: 10, note: 'TWINT' }], claude: 1, voice: 0.5, days: {} } },
     }));
     const c = new Credits(d);

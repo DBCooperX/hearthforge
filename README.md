@@ -160,7 +160,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
 | `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Assets → Narrator. |
-| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | For hosted narrator voices (OpenAI also for story illustrations). See [Voice and HTTPS](#voice-and-https). |
+| `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | ElevenLabs for the hosted narrator voice, OpenAI for story illustrations. See [Voice and HTTPS](#voice-and-https). |
 | `GEMINI_API_KEY`, `FAL_KEY`, `REPLICATE_API_TOKEN` | empty | For story illustrations; can also be typed in the Innkeeper. See [Story illustrations](#story-illustrations). |
 | `COMPOSE_PROFILES=https`, `HEARTHFORGE_DOMAIN`, `HEARTHFORGE_LOCAL_HOSTS`, `HEARTHFORGE_DNS_PROVIDER`, `HEARTHFORGE_DNS_TOKEN`, `HEARTHFORGE_ACME_EMAIL` | off | HTTPS through Caddy (`.env` only). See [HTTPS](#https). |
 | `HEARTHFORGE_PORT` | `3000` | Port on the host (`.env` only). |
@@ -253,8 +253,7 @@ Each picture is billed to the player credits like the rest of the AI, shared amo
 | Voice | Cost | |
 | --- | --- | --- |
 | **Piper** (default) | free | Runs on the server's CPU. Part of the image; its voices (about 60 to 120 MB each) are downloaded once from [Piper's collection](https://huggingface.co/rhasspy/piper-voices) into `/data/voice`. Clear, a little like an audiobook robot. Defaults: *northern English man* and *Thorsten* for German. Each voice links to its licence card. |
-| **OpenAI** (`OPENAI_API_KEY`) | a few cents an evening | `gpt-4o-mini-tts`, told to read like a fireside storyteller. Every voice speaks both languages. |
-| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. |
+| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. Quality is *Best quality* (multilingual v2) or *Cheaper* (Flash v2.5, half the credits per character). |
 
 Put the keys under **Settings → Voice** and restart. Speech is stored on the server (up to 400 MB, oldest first), so a scene read once is never paid for twice, and only the Dungeon Master's own story can be read, by players sitting at that table. Long scenes are read in parts, so the first sentences start while the rest is still being made. On two cores Piper needs a second or two per part.
 
