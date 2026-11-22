@@ -137,7 +137,7 @@ export function NarratorLibrary() {
         </div>
       )}
 
-      {c.provider !== 'off' && (
+      {c.provider === 'piper' && (
         <div className="setting">
           <span>{t('Reading speed')}</span>
           <span className="setting-controls">

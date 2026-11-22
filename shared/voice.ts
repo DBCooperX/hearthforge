@@ -47,10 +47,10 @@ export const PIPER_VOICES: PiperVoice[] = [
 
 /** George, one of ElevenLabs' own voices: a warm British storyteller. */
 export const ELEVENLABS_DEFAULT_VOICE = 'JBFqnCBsd6RMkjVDRZzb';
-/** Quality is the multilingual model (one credit per character); Cheaper is Flash, which costs half as much. */
+/** Quality is Eleven v4 ($0.08 per 1000 characters); Cheaper is Eleven v4 Turbo, which costs half as much. Both speak German. */
 export const VOICE_QUALITIES = ['quality', 'cheaper'] as const;
 export type VoiceQuality = (typeof VOICE_QUALITIES)[number];
-export const ELEVENLABS_MODELS: Record<VoiceQuality, string> = { quality: 'eleven_multilingual_v2', cheaper: 'eleven_flash_v2_5' };
+export const ELEVENLABS_MODELS: Record<VoiceQuality, string> = { quality: 'eleven_v4', cheaper: 'eleven_v4_turbo' };
 /** What a character costs next to the Quality model. */
 export const VOICE_QUALITY_FACTOR: Record<VoiceQuality, number> = { quality: 1, cheaper: 0.5 };
 

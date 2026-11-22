@@ -107,7 +107,7 @@ describe('narrator on the server', () => {
     expect(existsSync(a.file)).toBe(false);
   });
 
-  it('sends ElevenLabs the voice and the multilingual model', async () => {
+  it('sends ElevenLabs the voice and the v4 model', async () => {
     const dir = tmp();
     const log: { url: string; init?: RequestInit }[] = [];
     const n = new Narrator(dir, { ELEVENLABS_API_KEY: 'xi-test' }, okFetch(log));
@@ -115,14 +115,14 @@ describe('narrator on the server', () => {
     await n.speak('Ein Schatten huscht über die Mauer.', 'de');
     const call = log.find((l) => l.url.startsWith('https://api.elevenlabs.io/v1/text-to-speech/'))!;
     expect(call.url).toContain(DEFAULT_VOICE.elevenlabs);
-    // Cheaper switches to the Flash model and is paid half, and it is cached apart from the other.
+    // Cheaper switches to the v4 Turbo model and is paid half, and it is cached apart from the other.
     const paid: [number, string][] = [];
     await n.action({ do: 'choose', choice: { provider: 'elevenlabs', quality: 'cheaper' } });
     await n.speak('Ein Schatten huscht über die Mauer.', 'de', undefined, (chars, q) => paid.push([chars, q]));
     const flash = log.filter((l) => l.url.startsWith('https://api.elevenlabs.io/'))[1];
-    expect(JSON.parse(String(flash.init!.body)).model_id).toBe('eleven_flash_v2_5');
+    expect(JSON.parse(String(flash.init!.body)).model_id).toBe('eleven_v4_turbo');
     expect(paid).toEqual([[35, 'cheaper']]);
-    expect(JSON.parse(String(call.init!.body))).toMatchObject({ text: 'Ein Schatten huscht über die Mauer.', model_id: 'eleven_multilingual_v2' });
+    expect(JSON.parse(String(call.init!.body))).toMatchObject({ text: 'Ein Schatten huscht über die Mauer.', model_id: 'eleven_v4', voice_settings: { stability: 0.5, similarity_boost: 0.75 } });
     expect((call.init!.headers as Record<string, string>)['xi-api-key']).toBe('xi-test');
   });
 
