@@ -65,6 +65,8 @@ export interface RoomHooks {
   pictures?: {
     gate(room: Room, moment: Parameters<PictureHooks['gate']>[0]): ReturnType<PictureHooks['gate']>;
     paint(room: Room, entryId: number, ask: PictureAsk): void;
+    /** What came of a request for a picture, for the Innkeeper's list. */
+    note?(room: Room, moment: Parameters<NonNullable<PictureHooks['note']>>[0], outcome: Parameters<NonNullable<PictureHooks['note']>>[1]): void;
     /** A hero has no portrait for their current look yet: paint one if the server may. */
     portrait?(room: Room, hero: Character): void;
     /** Someone the party met has no portrait for their current looks yet: paint one if the server may. */
@@ -145,7 +147,7 @@ export class Room {
     this.lastGold = this.game.s.gold;
     this.lastPhase = this.game.s.phase;
     const pictures = hooks.pictures;
-    if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask), figure: (subject) => pictures.figure?.(subject) ?? null };
+    if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask), figure: (subject) => pictures.figure?.(subject) ?? null, note: (moment, outcome) => pictures.note?.(this, moment, outcome) };
     // A picture that was being painted when the server stopped will not arrive.
     for (const l of this.game.s.log) if (l.scene?.painting) delete l.scene.painting;
     this.game.tally = (heroId, what) => {

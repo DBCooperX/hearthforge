@@ -3,7 +3,7 @@
 // Art → Switches and keys, next to the other art settings, the way the narrator's keys live under Sound and voice.
 import { useEffect, useState } from 'react';
 import {
-  PICTURE_ERRORS, PICTURE_MODELS, PICTURE_MOMENTS, PICTURE_MOMENT_LABELS, PICTURE_PROVIDERS, PICTURE_PROVIDER_LABELS, PICTURE_STYLES, PICTURE_STYLE_LABELS,
+  PICTURE_ERRORS, PICTURE_MODELS, PICTURE_MOMENTS, PICTURE_MOMENT_LABELS, PICTURE_OUTCOME_LABELS, PICTURE_PROVIDERS, PICTURE_PROVIDER_LABELS, PICTURE_STYLES, PICTURE_STYLE_LABELS,
   pictureUsd, type PictureConfig, type PictureInfo, type PictureLibrary as Library,
 } from '../../../shared/illustrations';
 import { useLang, useT } from '../i18n';
@@ -192,6 +192,19 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
         <button type="button" className="primary" disabled={!draft || !!busy} onClick={() => void act({ do: 'config', config: c }, 'save').then((ok) => { if (ok) { setDraft(null); sfx('equip'); } })}>{t('Save')}</button>
         {draft && <button type="button" onClick={() => setDraft(null)}>{t('Discard')}</button>}
       </div>
+
+      <section>
+        <h3>{t('Why pictures were or were not made')}</h3>
+        {lib.asks.length === 0 ? <p className="muted small">{t('Nothing yet. Every scene the Dungeon Master writes shows up here with the reason it did or did not get a picture.')}</p> : (
+          <ul className="picture-asks small">
+            {lib.asks.slice(0, 14).map((a, i) => (
+              <li key={i}>
+                <span className="muted">{new Date(a.at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</span> <b>{a.title}</b> · {a.moment === 'none' ? t('Scene') : t(PICTURE_MOMENT_LABELS[a.moment])}: {t(PICTURE_OUTCOME_LABELS[a.outcome])}{a.count > 1 ? ` (×${a.count})` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section>
         <h3>{t('Latest pictures')}</h3>

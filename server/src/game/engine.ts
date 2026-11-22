@@ -82,7 +82,8 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
-import { heroFigureSubject, monsterFigureSubject, npcFigureSubject, type PictureAsk, type PictureHooks } from './pictures';
+import { heroFigureSubject, monsterFigureSubject, npcFigureSubject, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
+import { PICTURE_MOMENTS } from '../../../shared/illustrations';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
@@ -5353,8 +5354,17 @@ export class Game {
     this.spoilsOpen = false;
     const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
-    const ask = this.pictureAsk;
+    let ask = this.pictureAsk;
     this.pictureAsk = null;
+    if (!ask && this.pictures) {
+      ask = placeAsk(this, scene.text);
+      if (ask) { this.newPlace = null; this.pictures.note?.('place', 'made_by_server'); }
+      else if (this.s.phase !== 'lobby') {
+        // Say why nothing was painted, so the Innkeeper can see it: a limit, or the Dungeon Master simply did not ask.
+        const open = PICTURE_MOMENTS.some((m) => !this.pictures!.gate(m));
+        this.pictures.note?.('none', open ? 'dm_skipped' : (this.pictures.gate('boss') ?? 'moment'));
+      }
+    }
     if (ask && this.pictures) meta.painting = true;
     // The opening and the end of a fight, and answers during one, are big moments.
     this.log('dm', scene.text.trim(), { scene: meta, ...(opts.battle || this.s.phase === 'combat' ? { battle: 'key' as const } : {}) });

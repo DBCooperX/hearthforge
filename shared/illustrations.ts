@@ -205,6 +205,8 @@ export interface PictureLibrary {
   month: { count: number; usd: number };
   today: { count: number; usd: number };
   recent: PictureInfo[];
+  /** The latest requests for pictures and why each was or was not painted, newest first. */
+  asks: PictureAskNote[];
   /** Megabytes of pictures kept on disk. */
   diskMb: number;
   /** The last thing that went wrong, for the Innkeeper. */
@@ -233,3 +235,32 @@ export const PICTURE_GATES = {
   busy: 'A picture is already being painted for this table.',
 } as const;
 export type PictureGate = keyof typeof PICTURE_GATES;
+
+/** What came of a request for a picture, or of a scene that could have had one. */
+export type PictureAskOutcome = 'painting' | 'made_by_server' | 'dm_skipped' | 'not_first_arrival' | PictureGate;
+
+/** For the Innkeeper: why a picture was made, or was not. */
+export const PICTURE_OUTCOME_LABELS: Record<PictureAskOutcome, string> = {
+  painting: 'Asked for by the Dungeon Master, being painted',
+  made_by_server: 'Painted for the first arrival, chosen by the server',
+  dm_skipped: 'A picture was possible, but the Dungeon Master did not ask for one',
+  not_first_arrival: 'Refused: a picture of a place is for the first arrival only',
+  off: 'Not made: illustrations are switched off',
+  no_key: 'Not made: no picture service is set up',
+  moment: 'Not made: this kind of moment is switched off',
+  day: 'Not made: the table has had its pictures for today',
+  gap: 'Not made: the last picture at this table was too recent',
+  month: 'Not made: the monthly budget is spent',
+  credit: 'Not made: a player at this table has no credit left',
+  busy: 'Not made: another picture is being painted for this table',
+};
+
+/** One line of the Innkeeper's log of picture requests. Repeats in a row are counted, not listed again. */
+export interface PictureAskNote {
+  at: number;
+  table: string;
+  title: string;
+  moment: PictureMoment | 'none';
+  outcome: PictureAskOutcome;
+  count: number;
+}

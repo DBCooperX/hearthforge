@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { join } from 'node:path';
 import {
   DEFAULT_PICTURE_CONFIG, PICTURE_KEYS, PORTRAIT_STYLE, PICTURE_MOMENTS, PICTURE_PROVIDERS, PICTURE_STYLES, STYLE_PROMPTS, pictureRefs, pictureUsd,
-  type FigureKey, type PictureConfig, type PictureGate, type PictureInfo, type PictureLibrary, type PictureMoment, type PictureProvider,
+  type FigureKey, type PictureAskNote, type PictureConfig, type PictureGate, type PictureInfo, type PictureLibrary, type PictureMoment, type PictureProvider,
 } from '../../shared/illustrations';
 import { readJson, writePrivate } from './admin/config';
 import { PAINTERS, PictureFailure, type PaintRequest } from './pictureServices';
@@ -52,6 +52,8 @@ export class Illustrator {
   private readonly indexFile: string;
   /** Tables with a picture being painted right now. */
   private busy = new Set<string>();
+  /** The latest requests for pictures and what came of them (kept in memory only). */
+  private asks: PictureAskNote[] = [];
   /** Portraits that failed in this run, by hero and look, so a refusal is not paid for again and again. */
   private failedPortraits = new Set<string>();
   /** The same for the portraits of people the party met, by table, person and look. */
@@ -140,6 +142,17 @@ export class Illustrator {
     const now = since(this.now());
     const list = this.index.filter((p) => since(p.at) === now);
     return { count: list.length, usd: Math.round(list.reduce((n, p) => n + p.usd, 0) * 1000) / 1000 };
+  }
+
+  /** Remember a request, or a scene that could have had a picture, for the Innkeeper's list. A repeat in a row is counted. */
+  noteAsk(note: Omit<PictureAskNote, 'at' | 'count'>) {
+    const last = this.asks[this.asks.length - 1];
+    if (last && last.table === note.table && last.moment === note.moment && last.outcome === note.outcome) { last.count++; last.at = this.now(); }
+    else {
+      this.asks.push({ ...note, at: this.now(), count: 1 });
+      if (this.asks.length > 40) this.asks.shift();
+      if (note.outcome !== 'painting' && note.outcome !== 'made_by_server') console.log(`[pictures] ${note.table}: ${note.moment} ${note.outcome}`);
+    }
   }
 
   /** Why no picture may be painted at this table now, or null. Credits are checked by whoever bills. */
@@ -358,6 +371,7 @@ export class Illustrator {
       month: this.spent(monthOf),
       today: this.spent(dayOf),
       recent: this.index.slice(-24).reverse().map(view),
+      asks: [...this.asks].reverse(),
       diskMb: Math.round((bytes / 1024 / 1024) * 10) / 10,
       error: this.lastError,
     };
