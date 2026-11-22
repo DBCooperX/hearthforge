@@ -9,6 +9,7 @@ import {
   BEAST_FORMS, CLASS_FEATURES, CLASS_IDS, GROUPS, OPTIONS, RESOURCES, SUBCLASS_LEVEL, cantripScale, chosenIn, classAbilities, critFrom, extraAttacks, featureRank,
   SLOT_COST, grantedChoices, hasFeature, inspirationDie, martialDie, maxSpellLevelFor, optionLine, optionsFor, rageDamage, resourceLeft, resourceMax, saveProfs, sneakDice, speedBonus, type BeastForm,
 } from '../../../shared/classes';
+import { cleanTraits } from '../../../shared/traits';
 import { DEFAULT_PREMADE, PREMADE_BY_ID } from '../../../shared/premades';
 import { BEST_TYPES, SPELL_BUFFS, castLevel, diceAtLevel, type SpellBuff } from '../../../shared/spells';
 import { heroLook } from '../../../shared/heroLook';
@@ -941,6 +942,7 @@ export class Game {
       look: heroLook({ speciesId: spec.speciesId, gender: GENDERS.includes(spec.gender) ? spec.gender : 'neutral', classId: spec.classId, name: clean, look: spec.look }),
       appearance: String(spec.appearance ?? '').trim().slice(0, 400),
       backstory: String(spec.backstory ?? '').trim().slice(0, 1200),
+      ...(cleanTraits(spec.traits) ? { traits: cleanTraits(spec.traits)! } : {}),
       pending: [],
       premadeId: spec.premadeId && PREMADE_BY_ID[spec.premadeId] ? spec.premadeId : null,
       templateId: templateId ?? null,
@@ -983,7 +985,7 @@ export class Game {
     if (c.ownerId !== playerId) throw new GameError(this.t`That hero belongs to another player`);
     const origin = this.s.origins?.[characterId];
     if (!origin) return null;
-    return { ...origin, name: c.name, gender: c.gender, look: c.look, appearance: c.appearance, backstory: c.backstory };
+    return { ...origin, name: c.name, gender: c.gender, look: c.look, appearance: c.appearance, backstory: c.backstory, ...(c.traits ? { traits: c.traits } : {}) };
   }
 
   removeCharacter(playerId: string, characterId: string) {

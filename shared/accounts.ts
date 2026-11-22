@@ -4,6 +4,7 @@
 
 import type { CreditView } from './credits';
 import type { CharacterSpec } from './types';
+import { cleanTraits } from './traits';
 
 export type Role = 'player' | 'innkeeper';
 export const ROLES: Role[] = ['player', 'innkeeper'];
@@ -144,12 +145,14 @@ export interface HeroTemplate {
 export function cleanSpec(raw: unknown): CharacterSpec | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
-  const keys = ['name', 'gender', 'speciesId', 'classId', 'backgroundId', 'method', 'base', 'boosts', 'skills', 'speciesSkill', 'expertise', 'fightingStyle', 'classOptions', 'originFeat', 'backgroundFeat', 'spells', 'kit', 'look', 'appearance', 'backstory'];
+  const keys = ['name', 'gender', 'speciesId', 'classId', 'backgroundId', 'method', 'base', 'boosts', 'skills', 'speciesSkill', 'expertise', 'fightingStyle', 'classOptions', 'originFeat', 'backgroundFeat', 'spells', 'kit', 'look', 'appearance', 'backstory', 'traits'];
   const out: Record<string, unknown> = {};
   for (const k of keys) if (r[k] !== undefined) out[k] = r[k];
   if (JSON.stringify(out).length > 8000) return null;
   out.name = String(out.name ?? '').trim().slice(0, 20);
   out.appearance = String(out.appearance ?? '').trim().slice(0, 400);
   out.backstory = String(out.backstory ?? '').trim().slice(0, 1200);
+  const traits = cleanTraits(out.traits);
+  if (traits) out.traits = traits; else delete out.traits;
   return out as unknown as CharacterSpec;
 }
