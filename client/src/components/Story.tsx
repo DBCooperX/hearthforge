@@ -1,7 +1,7 @@
 import { itemArtUrl } from '../game/itemArt';
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
-import { HEX_MILES, direction, hexDistance } from '../../../shared/hex';
+import { HEX_MILES, direction, formatHours, hexDistance } from '../../../shared/hex';
 import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl, monsterVariant } from '../game/monsterArt';
 import { artOfCharacter, heroPortraitUrl, paintedPortraitUrl } from '../game/heroArt';
@@ -375,6 +375,27 @@ interface FeedProps {
 }
 
 /** The story: scene cards, what players said, dice and system notes, plus the box to act in. */
+/** The Dungeon Master proposed a trip to another place. Nothing moves until the table confirms it. */
+function TripCard({ state, conn }: { state: GameState; conn: Connection }) {
+  const t = useT();
+  const { lang } = useLang();
+  const trip = state.trip!;
+  const voted = trip.yes.includes(playerId);
+  const host = state.hostId === playerId;
+  const solo = state.players.filter((p) => p.connected).length <= 1;
+  return (
+    <div className="trip-card" role="group" aria-label={t('Travel to {place}?', { place: trip.name })}>
+      <b>{t('Travel to {place}?', { place: trip.name })}</b>
+      <span className="muted small">{t('{n} miles', { n: trip.miles })} · {formatHours(trip.hours, lang)}</span>
+      {!solo && <span className="muted small">{t('{n} of {m} agree', { n: trip.yes.length, m: trip.needed })}</span>}
+      <div className="trip-buttons">
+        <button className="primary" disabled={voted && !host} onClick={() => conn.send({ t: 'trip', go: true })}>{voted && !host ? t('Waiting for the others…') : t('Set out')}</button>
+        <button onClick={() => conn.send({ t: 'trip', go: false })}>{t('Stay here')}</button>
+      </div>
+    </div>
+  );
+}
+
 export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
   const t = useT();
   const { lang } = useLang();
@@ -428,6 +449,7 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
         {writing.length > 0 && <p className="line typing">{writing.length === 1 ? t('{name} is writing…', { name: writing[0] }) : t('{names} are writing…', { names: writing.join(', ') })}</p>}
         <div ref={end} />
       </div>
+      {state.trip && exploring && !state.travelling && <TripCard state={state} conn={conn} />}
       {chips.length > 0 && (
         <div className="chips">
           {chips.map((a, i) => <button key={i} className="chip-action" data-pick={i + 1} onClick={() => say(a)}>{i < 9 && <kbd className="kbd">{i + 1}</kbd>}{a}</button>)}

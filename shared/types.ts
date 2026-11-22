@@ -769,6 +769,8 @@ export interface GameState {
    */
   scene: { where: string; present: ScenePerson[] } | null;
   travelling: boolean;
+  /** A trip the Dungeon Master proposed, waiting for the table to confirm it. */
+  trip: { locationId: string; name: string; miles: number; hours: number; yes: string[]; needed: number } | null;
   dmBusy: boolean;
   dmMode: 'claude' | 'scripted';
   dmModel: string | null;
@@ -863,6 +865,7 @@ export type ClientMessage =
   | { t: 'escape'; characterId: string }
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
+  | { t: 'trip'; go: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
   /** `qty` moves only part of a stack. */
   | { t: 'inv_move'; characterId: string; from: InvLoc; to: InvLoc; qty?: number }
