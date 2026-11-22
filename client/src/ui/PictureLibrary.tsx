@@ -8,23 +8,8 @@ import {
 } from '../../../shared/illustrations';
 import { useLang, useT } from '../i18n';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
-import { ask } from './Confirm';
 import { sfx } from './sound';
-import { cutOut } from '../game/paintedFigures';
-
-/** A battle figure as it stands on the map: its key-colour background taken out, on a dark ground. */
-function FigureImg({ url, alt }: { url: string; alt: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    const img = new Image();
-    img.onload = () => { if (!live) return; try { setSrc(cutOut(img)?.toDataURL() ?? url); } catch { setSrc(url); } };
-    img.onerror = () => { if (live) setSrc(url); };
-    img.src = url;
-    return () => { live = false; };
-  }, [url]);
-  return src ? <img className="picture-figure" src={src} alt={alt} loading="lazy" /> : <span className="picture-figure" aria-label={alt} />;
-}
+import { FigureImg, PictureGallery } from './PictureGallery';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -37,6 +22,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   return out as T;
 }
 
+const ASK_GOOD = new Set<string>(['painting', 'made_by_server']);
 const usd = (n: number) => `$${n < 0.1 ? n.toFixed(3) : n.toFixed(2)}`;
 
 export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
@@ -47,7 +33,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'save' | 'sample' | null>(null);
   const [sample, setSample] = useState<(PictureInfo & { kind: 'scene' | 'portrait' | 'figure' }) | null>(null);
-  const [open, setOpen] = useState<PictureInfo | null>(null);
+  const [allAsks, setAllAsks] = useState(false);
 
   useEffect(() => { api<Library>('/api/pictures/library').then(setLib).catch(() => setError('failed')); }, []);
 
@@ -196,37 +182,25 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
       <section>
         <h3>{t('Why pictures were or were not made')}</h3>
         {lib.asks.length === 0 ? <p className="muted small">{t('Nothing yet. Every scene the Dungeon Master writes shows up here with the reason it did or did not get a picture.')}</p> : (
-          <ul className="picture-asks small">
-            {lib.asks.slice(0, 14).map((a, i) => (
-              <li key={i}>
-                <span className="muted">{new Date(a.at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</span> <b>{a.title}</b> · {a.moment === 'none' ? t('Scene') : t(PICTURE_MOMENT_LABELS[a.moment])}: {t(PICTURE_OUTCOME_LABELS[a.outcome])}{a.count > 1 ? ` (×${a.count})` : ''}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="picture-asks">
+              {lib.asks.slice(0, allAsks ? 60 : 8).map((a, i) => (
+                <li key={i} className={`pa ${ASK_GOOD.has(a.outcome) ? 'pa-good' : a.outcome === 'dm_skipped' || a.outcome === 'not_first_arrival' ? 'pa-maybe' : 'pa-skip'}`}>
+                  <span className="pa-time muted small">{new Date(a.at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="pa-what"><b>{a.title}</b><small className="muted"> · {a.moment === 'none' ? t('Scene') : t(PICTURE_MOMENT_LABELS[a.moment])}{a.count > 1 ? ` (×${a.count})` : ''}</small></span>
+                  <span className="pa-why small">{t(PICTURE_OUTCOME_LABELS[a.outcome])}</span>
+                </li>
+              ))}
+            </ul>
+            {lib.asks.length > 8 && <button type="button" className="link pa-more" onClick={() => setAllAsks(!allAsks)}>{allAsks ? t('Show fewer') : t('Show more ({n})', { n: Math.min(lib.asks.length, 60) - 8 })}</button>}
+          </>
         )}
       </section>
 
       <section>
         <h3>{t('Latest pictures')}</h3>
-        {lib.recent.length === 0 ? <p className="muted small">{t('No picture has been painted yet.')}</p> : (
-          <ul className="picture-grid">
-            {lib.recent.map((p) => (
-              <li key={p.id}>
-                <button type="button" className={`picture-thumb${p.moment === 'figure' ? ' figure' : ''}`} onClick={() => setOpen(p)} title={p.caption}>{p.moment === 'figure' ? <FigureImg url={p.url} alt={p.caption} /> : <img src={p.url} alt={p.caption} loading="lazy" />}</button>
-                <span className="small"><b>{p.moment === 'sample' ? t('Sample') : p.moment === 'portrait' || p.moment === 'npc' || p.moment === 'figure' ? p.caption : p.tableTitle}</b> · {p.moment === 'sample' ? p.model : p.moment === 'portrait' ? t('Hero portrait') : p.moment === 'npc' ? t('Portrait of a person') : p.moment === 'figure' ? t('Battle figure') : (PICTURE_MOMENT_LABELS[p.moment] ? t(PICTURE_MOMENT_LABELS[p.moment]) : p.moment)}</span>
-                <span className="muted small">{new Date(p.at).toLocaleDateString(lang)} · {usd(p.usd)}</span>
-                {p.moment === 'figure' && <button type="button" className="link" disabled={!!busy || !hasKey} onClick={() => { void ask(t('Repaint this battle figure? It is painted anew now, and the picture is billed like any other.')).then((yes) => { if (yes) void act({ do: 'repaint', id: p.id }); }); }}>{t('Repaint')}</button>}
-                <button type="button" className="link danger" onClick={() => { void ask(p.moment === 'figure' ? t('Delete this battle figure? The drawn one stands in until it is painted anew.') : t('Delete this picture? It disappears from the story of its table too.'), { danger: true }).then((yes) => { if (yes) void act({ do: 'delete', id: p.id }); }); }}>{t('Delete')}</button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <PictureGallery pictures={lib.recent} canRepaint={hasKey} busy={!!busy} act={act} />
       </section>
-      {open && (
-        <div className="picture-lightbox" role="dialog" aria-label={open.caption} onClick={() => setOpen(null)}>
-          <figure>{open.moment === 'figure' ? <FigureImg url={open.url} alt={open.caption} /> : <img src={open.url} alt={open.caption} />}<figcaption>{open.caption}</figcaption></figure>
-        </div>
-      )}
     </div>
   );
 }

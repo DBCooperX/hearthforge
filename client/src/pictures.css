@@ -33,11 +33,6 @@
 .picture-sample { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .picture-sample-img { margin: 0; display: grid; gap: 4px; max-width: 520px; }
 .picture-sample-img img { width: 100%; border-radius: 4px; border: 1px solid rgba(120, 96, 60, 0.55); }
-.picture-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
-.picture-grid li { display: grid; gap: 3px; align-content: start; }
-.picture-grid .link { justify-self: start; }
-.picture-thumb { padding: 0; border: 1px solid rgba(120, 96, 60, 0.55); border-radius: 4px; overflow: hidden; aspect-ratio: 3 / 2; background: #e9dfca; cursor: zoom-in; }
-.picture-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; }
 .picture-sample-img.portrait { max-width: 260px; }
 
 /* The charcoal reveal: the real picture waits, hidden, while a canvas on top draws it stroke by stroke. */
@@ -49,6 +44,50 @@
 /* Battle figures: the cut-out figure on the dark ground of the battle map. */
 .picture-sample-img.figure { max-width: 220px; }
 .picture-sample-img.figure .picture-figure { width: 100%; aspect-ratio: 2 / 3; object-fit: contain; background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); border-radius: 4px; border: 1px solid rgba(120, 96, 60, 0.55); display: block; }
-.picture-thumb.figure { background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }
-.picture-thumb.figure img { object-fit: contain; object-position: center bottom; }
-.picture-lightbox .picture-figure { max-height: 80vh; background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }
+.picture-lightbox .picture-figure { max-height: 70vh; max-width: 100%; object-fit: contain; display: block; background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }
+
+/* The picture library: tabs, a table filter and one even grid per kind. Every tile has a fixed shape, so nothing overflows. */
+.gallery { display: grid; gap: 12px; }
+.gallery-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; }
+.gallery-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.gallery-tabs button { padding: 6px 12px; border-radius: 16px; font-size: 14px; }
+.gallery-tabs button.on { border-color: var(--gold); color: var(--gold); background: rgba(230, 183, 101, 0.12); }
+.gallery-tabs .count { margin-left: 4px; font-size: 12px; opacity: 0.75; }
+.gallery-filter { display: flex; align-items: center; gap: 8px; }
+.gallery-filter select { max-width: 220px; }
+.gallery-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px 12px; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+.gallery-grid.heroes, .gallery-grid.people { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+.gallery-grid.figures { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+.gallery-grid li { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.gallery-tile { width: 100%; padding: 0; margin: 0 0 4px; overflow: hidden; border: 1px solid rgba(120, 96, 60, 0.55); border-radius: 4px; background: #e9dfca; cursor: zoom-in; aspect-ratio: 3 / 2; display: block; }
+.gallery-grid.heroes .gallery-tile, .gallery-grid.people .gallery-tile { aspect-ratio: 1 / 1; }
+.gallery-grid.figures .gallery-tile { aspect-ratio: 2 / 3; }
+.gallery-tile:hover, .gallery-tile:focus-visible { border-color: var(--gold); }
+.gallery-tile img, .gallery-tile .picture-figure { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+.gallery-tile.figure, .gallery-box-img .figure-ground { background: radial-gradient(ellipse at 50% 85%, #3a3128 0%, #16120f 70%); }
+.gallery-tile.figure img, .gallery-tile.figure .picture-figure { object-fit: contain; object-position: center bottom; }
+.gallery-name, .gallery-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-name { font-size: 14px; }
+.gallery-more { justify-self: center; }
+.gallery-box { cursor: default; }
+.gallery-box figure { max-height: 94vh; justify-items: center; }
+.gallery-box-img { display: grid; place-items: center; max-width: 100%; }
+.gallery-box figcaption { display: grid; gap: 8px; justify-items: center; font-style: normal; color: var(--text); }
+.gallery-box figcaption b { font-family: var(--font-head); font-size: 17px; }
+.gallery-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+/* Why pictures were or were not made: one row per scene, the reason in its own column. */
+.picture-asks { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.picture-asks .pa { display: grid; grid-template-columns: 52px minmax(120px, 1fr) minmax(0, 2fr); gap: 4px 12px; align-items: baseline; padding: 6px 10px; border-left: 3px solid transparent; }
+.picture-asks .pa + .pa { border-top: 1px solid var(--line); }
+.picture-asks .pa.pa-good { border-left-color: #6cc06c; }
+.picture-asks .pa.pa-maybe { border-left-color: var(--gold); }
+.picture-asks .pa.pa-skip { border-left-color: var(--line); }
+.picture-asks .pa-what { overflow-wrap: anywhere; }
+.picture-asks .pa-why { color: var(--muted); }
+.pa-more { justify-self: start; }
+@media (max-width: 640px) {
+  .picture-asks .pa { grid-template-columns: 44px 1fr; }
+  .picture-asks .pa-why { grid-column: 2; }
+}
+.gallery-box img { max-height: 68vh; }

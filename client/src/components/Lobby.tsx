@@ -23,6 +23,8 @@ import { classLabel, heroTitle } from '../game/util';
 import { ask } from '../ui/Confirm';
 import { copyText } from '../ui/clipboard';
 
+const OLDER_AFTER = 6;
+
 /** The list of tables: sit down at one, come back to your seat, or open a new table. */
 export interface Me { account: AccountView; onProfile: () => void; onSignOut: () => void }
 
@@ -39,13 +41,23 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   const [seats, setSeats] = useState(MAX_SEATS);
   const me = name.replace(/\s+/g, ' ').trim();
   const tables = conn.tables ?? [];
-  /** Solo tables (one seat) and multiplayer tables, each the most recently played first. Without both kinds there is one plain list. */
+  /** What is typed in the search box, which sections are folded away, and which sections show their older tables. */
+  const [query, setQuery] = useState('');
+  const [folded, setFolded] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('hf.lobby.folded') || '[]'); } catch { return []; } });
+  const [allOf, setAllOf] = useState<string[]>([]);
+  const [manageOpen, setManageOpen] = useState<string | null>(null);
+  const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const fold = (id: string) => setFolded((f) => { const next = toggle(f, id); try { localStorage.setItem('hf.lobby.folded', JSON.stringify(next)); } catch { /* a remembered fold is only a convenience */ } return next; });
+  const searching = query.trim().length > 0;
+  /** Solo tables (one seat) and multiplayer tables, each the most recently played first, narrowed by the search. */
   const groups = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase();
+    const hit = (x: TableSummary) => !q || [x.title, LANGS.find((l) => l.id === x.language)?.label ?? '', ...x.players.map((p) => p.name)].some((s) => s.toLocaleLowerCase().includes(q));
     const byRecent = (a: TableSummary, b: TableSummary) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0);
-    const multi = tables.filter((x) => x.maxPlayers > 1).sort(byRecent);
-    const solo = tables.filter((x) => x.maxPlayers <= 1).sort(byRecent);
+    const multi = tables.filter((x) => x.maxPlayers > 1 && hit(x)).sort(byRecent);
+    const solo = tables.filter((x) => x.maxPlayers <= 1 && hit(x)).sort(byRecent);
     return [{ id: 'multi', label: t('Multiplayer'), list: multi }, { id: 'solo', label: t('Solo'), list: solo }].filter((g) => g.list.length > 0);
-  }, [tables, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tables, lang, query]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The table being renamed or deleted from this list, and what has been typed so far. */
   const [editing, setEditing] = useState<{ id: string; mode: 'rename' | 'delete'; text: string } | null>(null);
   const [binError, setBinError] = useState('');
@@ -105,21 +117,38 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
         {conn.joinError && <p className="notice error" role="alert">{t(conn.joinError)}</p>}
         {!conn.connected && <p className="notice">{t('Connecting…')}</p>}
 
-        <h2>{t('Tables')}</h2>
+        <div className="lobby-cols">
+        <div className="lobby-main">
+        <div className="tables-bar">
+          <h2>{t('Tables')} <span className="muted">({tables.length})</span></h2>
+          {tables.length > 4 && <input type="search" className="table-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search tables or players')} aria-label={t('Search tables or players')} />}
+        </div>
         {conn.tables && tables.length === 0 && <p className="muted">{t('Nobody has opened a table yet. Open the first one below.')}</p>}
-        {groups.map((g) => (
+        {searching && groups.length === 0 && <p className="muted">{t('No table matches your search.')}</p>}
+        {groups.map((g) => {
+          const isFolded = folded.includes(g.id) && !searching;
+          const everything = searching || allOf.includes(g.id);
+          const keep = (tb: TableSummary) => tb.players.some((p) => p.id === playerId) || tb.id === link.room;
+          const shown = everything ? g.list : g.list.filter((tb, i) => i < OLDER_AFTER || keep(tb));
+          const hidden = g.list.length - shown.length;
+          return (
         <section key={g.id} className="table-group" aria-label={g.label}>
-        {groups.length > 1 && <h3 className="table-group-title">{g.label} <span className="muted">({g.list.length})</span></h3>}
-        <ul className="tables">
-          {g.list.map((tb) => {
+        <h3 className="table-group-title">
+          <button type="button" className="fold" aria-expanded={!isFolded} onClick={() => fold(g.id)}>
+            <span className="chev" aria-hidden="true">{isFolded ? '▸' : '▾'}</span> {g.label} <span className="muted">({g.list.length})</span>
+          </button>
+        </h3>
+        {!isFolded && <ul className="tables">
+          {shown.map((tb) => {
             const mine = tb.players.some((p) => p.id === playerId);
             const solo = !mine && tb.maxPlayers <= 1 && tb.players.length > 0;
             const full = !mine && !solo && tb.players.length >= tb.maxPlayers;
             const clash = !mine && !!me && tb.players.some((p) => p.name.toLocaleLowerCase() === me.toLocaleLowerCase());
+            const managing = editing?.id === tb.id || manageOpen === tb.id;
             return (
               <li key={tb.id} className={['table-card', mine && 'mine', tb.id === link.room && 'invited'].filter(Boolean).join(' ')}>
-                <div className="table-head">
-                  <b>{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}
+                <div className="table-main">
+                  <b className="table-title">{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}
                     {mayManage(tb) ? (
                       <button type="button" className="table-name" disabled={!conn.connected} title={t('Click to rename this table')} aria-label={`${t('Rename')}: ${tb.title}`}
                         onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>
@@ -127,12 +156,12 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                       </button>
                     ) : tb.title}
                   </b>
-                  <span className={tb.playing ? 'status playing' : 'status'}>{tb.playing ? t('Adventure under way') : t('Gathering the party')}</span>
-                </div>
-                <div className="table-meta">
-                  <span>{LANGS.find((l) => l.id === tb.language)?.label}</span>
-                  <span>{t('{n} of {max} seats taken', { n: tb.players.length, max: tb.maxPlayers })}</span>
-                  <span>{t('{n} heroes', { n: tb.heroes })}</span>
+                  <span className="table-meta">
+                    <span className={tb.playing ? 'status playing' : 'status'}>{tb.playing ? t('Adventure under way') : t('Gathering the party')}</span>
+                    <span>{LANGS.find((l) => l.id === tb.language)?.label}</span>
+                    <span>{t('{n} of {max} seats taken', { n: tb.players.length, max: tb.maxPlayers })}</span>
+                    <span>{t('{n} heroes', { n: tb.heroes })}</span>
+                  </span>
                 </div>
                 <div className="table-players">
                   {tb.players.map((p) => (
@@ -142,7 +171,19 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                   ))}
                   {tb.players.length === 0 && <span className="muted">{t('Nobody sits here.')}</span>}
                 </div>
-                {mayManage(tb) && (
+                <div className="table-join">
+                  {asking === tb.id && !mine && (
+                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter' && ready && code.trim()) sit(tb); }} />
+                  )}
+                  {clash && <small className="warn">{t('Someone called {name} already sits here.', { name: me })}</small>}
+                  <button className={mine ? 'primary' : ''} disabled={!ready || full || solo || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
+                    title={!me ? t('Enter your name first.') : undefined}>
+                    {mine ? t('Back to your seat') : solo ? t('Private') : full ? t('Full') : t('Sit down')}
+                  </button>
+                  {mayManage(tb) && <button type="button" className="more" aria-expanded={managing} aria-label={`${t('Manage')}: ${tb.title}`} title={t('Manage')} onClick={() => { setManageOpen(manageOpen === tb.id ? null : tb.id); if (editing?.id === tb.id) setEditing(null); }}>⋯</button>}
+                </div>
+                {mayManage(tb) && managing && (
                   <div className="table-manage">
                     {editing?.id === tb.id ? (
                       <form onSubmit={(e) => { e.preventDefault(); if (editing.mode === 'rename' ? editing.text.trim() : editing.text.trim() === tb.title) manage(); }}>
@@ -157,7 +198,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                         {editing.mode === 'delete' && <small className="muted">{t('Its story and heroes are kept in the list of deleted tables, so you can bring it back later.')}</small>}
                         <span className="row">
                           <button className={editing.mode === 'delete' ? 'danger' : 'primary'} disabled={editing.mode === 'rename' ? !editing.text.trim() : editing.text.trim() !== tb.title}>{editing.mode === 'rename' ? t('Rename') : t('Delete the table')}</button>
-                          <button type="button" className="link" onClick={() => setEditing(null)}>{t('Cancel')}</button>
+                          <button type="button" className="link" onClick={() => { setEditing(null); setManageOpen(null); }}>{t('Cancel')}</button>
                         </span>
                       </form>
                     ) : (
@@ -168,38 +209,35 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
                     )}
                   </div>
                 )}
-                <div className="table-join">
-                  {asking === tb.id && !mine && (
-                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} autoFocus
-                      onKeyDown={(e) => { if (e.key === 'Enter' && ready && code.trim()) sit(tb); }} />
-                  )}
-                  {clash && <small className="warn">{t('Someone called {name} already sits here.', { name: me })}</small>}
-                  <button className={mine ? 'primary' : ''} disabled={!ready || full || solo || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
-                    title={!me ? t('Enter your name first.') : undefined}>
-                    {mine ? t('Back to your seat') : solo ? t('Private') : full ? t('Full') : t('Sit down')}
-                  </button>
-                </div>
               </li>
             );
           })}
-        </ul>
+        </ul>}
+        {!isFolded && !searching && g.list.length > OLDER_AFTER && (
+          <button type="button" className="link older" onClick={() => setAllOf((a) => toggle(a, g.id))}>
+            {everything ? t('Show fewer') : t('Show older tables ({n})', { n: hidden })}
+          </button>
+        )}
         </section>
-        ))}
+          );
+        })}
 
-        <section className="online-now" aria-label={t('Who is here')}>
+        {binError && <p className="notice error" role="alert">{binError}</p>}
+        <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />
+        </div>
+
+        <aside className="online-now" aria-label={t('Who is here')}>
           <h3 className="table-group-title">{t('Who is here')} <span className="muted">({conn.online.length})</span></h3>
           <ul className="online-list">
             {conn.online.map((o) => (
               <li key={o.id} className={o.seated ? 'who here' : 'who here lobby'}>
                 <b>{o.name}</b>{o.id === playerId && <span className="muted"> ({t('you')})</span>}
-                <small className="muted"> · {o.table ? t('at {table}', { table: o.tableTitle || o.table }) : o.seated ? t('at a table') : t('choosing a table')}</small>
+                <small className="muted">{o.table ? t('at {table}', { table: o.tableTitle || o.table }) : o.seated ? t('at a table') : t('choosing a table')}</small>
               </li>
             ))}
           </ul>
-        </section>
-
-        {binError && <p className="notice error" role="alert">{binError}</p>}
-        <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />
+        </aside>
+        </div>
 
         <div className="lobby-foot">
           <form className="open-table" onSubmit={open}>

@@ -370,7 +370,7 @@ export class Illustrator {
       keys: Object.fromEntries(PICTURE_PROVIDERS.map((p) => [p, !!this.key(p)])) as PictureLibrary['keys'],
       month: this.spent(monthOf),
       today: this.spent(dayOf),
-      recent: this.index.slice(-24).reverse().map(view),
+      recent: this.index.slice(-400).reverse().map(view),
       asks: [...this.asks].reverse(),
       diskMb: Math.round((bytes / 1024 / 1024) * 10) / 10,
       error: this.lastError,
