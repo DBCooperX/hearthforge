@@ -216,6 +216,12 @@ export class Illustrator {
     }
   }
 
+  /** Whether a player's own picture can steer a portrait now: portraits are painted and the painter takes pictures. */
+  canUseReference(): boolean {
+    const cfg = this.config;
+    return cfg.on && cfg.portraits && !!this.key(cfg.provider) && pictureRefs(cfg.provider, this.model) > 0;
+  }
+
   /** Why no portrait may be painted for this hero now, or null. */
   portraitGate(account: string, c: Character): PictureGate | 'portraits' | 'done' | null {
     const cfg = this.config;
@@ -230,7 +236,7 @@ export class Illustrator {
   }
 
   /** Paint a hero's portrait from the choices made in the creator, in the one portrait style every hero shares. */
-  async paintPortrait(job: { table: string; tableTitle: string; account: string; hero: Character }, bill: (usd: number) => void): Promise<PictureInfo & { key: string }> {
+  async paintPortrait(job: { table: string; tableTitle: string; account: string; hero: Character; /** The owner's own picture of the hero, as a reference for the painter. */ reference?: { mime: string; data: Buffer } | null }, bill: (usd: number) => void): Promise<PictureInfo & { key: string }> {
     const cfg = this.config;
     const provider = cfg.provider, model = this.model, key = this.key(provider);
     const look = portraitKey(job.hero);
@@ -241,7 +247,9 @@ export class Illustrator {
     try {
       let painted;
       try {
-        painted = await PAINTERS[provider](this.fetchFn, model, key, { prompt: portraitPrompt(PORTRAIT_STYLE, job.hero), refs: [], square: true });
+        // The player's own picture goes along when the painter takes pictures; it is repainted, never kept in the portrait.
+        const reference = job.reference && pictureRefs(provider, model) > 0 ? [job.reference] : [];
+        painted = await PAINTERS[provider](this.fetchFn, model, key, { prompt: portraitPrompt(PORTRAIT_STYLE, job.hero, reference.length > 0), refs: reference, square: true });
       } catch (err) {
         this.failedPortraits.add(`${job.hero.id}|${look}`);
         this.lastError = err instanceof Error ? err.message : String(err);

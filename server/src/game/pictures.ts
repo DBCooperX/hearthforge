@@ -133,16 +133,17 @@ export function picturePrompt(style: string, ask: Pick<PictureAsk, 'picture' | '
 /** What a portrait is painted from. A hero whose key changes gets a new portrait. */
 export function portraitKey(c: Character): string {
   const l = heroLook(c);
-  return [c.speciesId, c.classId, c.gender, l.skin, l.hair, l.hairColor, l.beard, l.color, clean(c.appearance, 220)].join('|');
+  return [c.speciesId, c.classId, c.gender, l.skin, l.hair, l.hairColor, l.beard, l.color, clean(c.appearance, 220), c.refId ?? ''].join('|');
 }
 
 /** The prompt for a hero's portrait. */
-export function portraitPrompt(style: string, c: Character): string {
+export function portraitPrompt(style: string, c: Character, withReference = false): string {
   return [
     `Style: ${style}`,
     `Subject: ${describeHero(c).replace(/ \(fallen\)/, '')}`,
+    withReference ? 'The attached image is the player\'s own picture of this character. Use it ONLY as a reference for who they look like: face, hair, build, and the clothes and gear that are visible. Paint a new portrait of this same character in the style above. Do not copy the picture\'s style, background, lighting, pose or any text in it. Where it differs from the description, the picture wins for looks and the description wins for class and gear.' : '',
     'Show the class through clothing and gear (armour, robes, holy symbol, bow, staff) without a weapon covering the face. No text, no letters, no frame, no border, no watermark, no signature.',
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 type NpcLook = Pick<Npc, 'name' | 'role' | 'description' | 'visual'>;

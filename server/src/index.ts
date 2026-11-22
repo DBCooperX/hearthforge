@@ -38,6 +38,7 @@ import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
 import { companionFigureSubject, companionLook, heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, npcFigurePrompt, npcFigureSubject, npcPortraitKey, portraitKey, tallFigure } from './game/pictures';
+import { HeroRefs } from './heroRefs';
 import { cleanSpec, isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
@@ -101,6 +102,7 @@ const store = new Store(DATA_DIR);
 setLedger(new StoryLedger(store));
 const narrator = new Narrator(VOICE_DIR, env);
 // Picture keys are read as they are saved in the Innkeeper, so a new key works without a restart.
+const heroRefs = new HeroRefs(env.HERO_REFS_DIR ?? join(DATA_DIR, 'hero-refs'));
 const illustrator = new Illustrator(env.PICTURES_DIR ?? join(DATA_DIR, 'pictures'), (key) => config.next(key));
 const claude = createDM(env, (sample) => {
   usage.record(sample);
@@ -246,7 +248,7 @@ const hooks: RoomHooks = {
       // Paid by the player whose hero it is; seats from before accounts get the drawn bust.
       const owner = creditAccount(hero.ownerId);
       if (!owner || !credits.mayPlay(owner) || illustrator.portraitGate(owner.id, hero)) return;
-      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero }, (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
+      illustrator.paintPortrait({ table: room.name, tableTitle: room.game.s.table.title, account: owner.id, hero, reference: hero.refId ? heroRefs.read(owner.id, hero.refId) : null }, (usd) => { usage.recordExtra(room.name, 'images', usd); tellCredits(credits.charge([owner.id], usd, 'images')); })
         .then((p) => {
           const now = room.game.s.characters.find((c) => c.id === hero.id);
           // The look may have changed while it was painted; then the next flush asks for another.
@@ -767,7 +769,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/account/')) {
-    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; } }, req, res, url);
+    void accountApi({ accounts, rooms, bin, restoreTable, ipOf, tablesChanged: pushTables, creditOf: (id) => { const a = creditAccount(id); return a ? credits.view(a) : null; }, heroRefs, refsUsable: () => illustrator.canUseReference() }, req, res, url);
     return;
   }
   if (url.pathname.startsWith('/api/admin/')) {

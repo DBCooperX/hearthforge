@@ -93,6 +93,8 @@ export const ACCOUNT_ERRORS = {
   not_found: 'That account does not exist any more.',
   bad_hero: 'That hero is not complete, or has choices the rules do not allow.',
   too_many_heroes: 'You keep 30 heroes already. Delete one first.',
+  bad_picture: 'That picture did not work. Use a PNG, JPEG or WebP picture.',
+  picture_too_big: 'That picture is too big.',
   no_recipe: 'This hero was made before heroes could be kept. Make it again in the creator to keep it.',
   bad_request: 'That did not work.',
   failed: 'That did not work.',
@@ -126,6 +128,13 @@ export interface BinItem {
 /** How many deleted tables each host keeps in the bin. The oldest one goes when an eleventh arrives. */
 export const BIN_KEEP = 10;
 
+/** A player's reference picture of a hero: a random id. The file is private to the account and never shown in play. */
+export const REF_ID = /^[a-f0-9]{16}$/;
+/** The biggest reference picture the server takes (the browser shrinks it first, to about a tenth of this). */
+export const HERO_REF_MAX_BYTES = 1_500_000;
+/** How many reference pictures an account keeps; the oldest unused ones go first. */
+export const MAX_HERO_REFS = 40;
+
 /** How many heroes an account may keep as templates. */
 export const MAX_TEMPLATES = 30;
 
@@ -145,7 +154,7 @@ export interface HeroTemplate {
 export function cleanSpec(raw: unknown): CharacterSpec | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
-  const keys = ['name', 'gender', 'speciesId', 'classId', 'backgroundId', 'method', 'base', 'boosts', 'skills', 'speciesSkill', 'expertise', 'fightingStyle', 'classOptions', 'originFeat', 'backgroundFeat', 'spells', 'kit', 'look', 'appearance', 'backstory', 'traits'];
+  const keys = ['name', 'gender', 'speciesId', 'classId', 'backgroundId', 'method', 'base', 'boosts', 'skills', 'speciesSkill', 'expertise', 'fightingStyle', 'classOptions', 'originFeat', 'backgroundFeat', 'spells', 'kit', 'look', 'appearance', 'backstory', 'traits', 'refId'];
   const out: Record<string, unknown> = {};
   for (const k of keys) if (r[k] !== undefined) out[k] = r[k];
   if (JSON.stringify(out).length > 8000) return null;
@@ -154,5 +163,6 @@ export function cleanSpec(raw: unknown): CharacterSpec | null {
   out.backstory = String(out.backstory ?? '').trim().slice(0, 1200);
   const traits = cleanTraits(out.traits);
   if (traits) out.traits = traits; else delete out.traits;
+  if (typeof out.refId !== 'string' || !REF_ID.test(out.refId)) delete out.refId;
   return out as unknown as CharacterSpec;
 }

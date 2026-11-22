@@ -164,6 +164,8 @@ export interface CharacterSpec {
   backstory: string;
   /** How the hero acts, as their player set it. Only for the Dungeon Master's non-player people and flavour; never speaks for the hero. */
   traits?: HeroTraits;
+  /** The player's own picture of the hero, kept privately on their account. A reference for the painter only; never shown in play. */
+  refId?: string;
   /** Set when the hero was taken from the premade roster. */
   premadeId?: string;
 }
@@ -249,6 +251,8 @@ export interface Character {
   backstory: string;
   /** Personality traits set by the player. Missing: none set (heroes from before). */
   traits?: HeroTraits;
+  /** The owner's reference picture (see CharacterSpec.refId). Only the painter reads it, and only for the owner. */
+  refId?: string;
   /** Level-up choices the player has not made yet. */
   pending: PendingChoice[];
   /** How much of each class resource is spent: rages, focus points, the Lay on Hands pool. Missing in old saves: nothing. */
