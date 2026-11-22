@@ -26,8 +26,8 @@ describe('challenge and monster targets', () => {
   });
 
   it('tells the Dungeon Master how monsters fight at this table', () => {
-    expect(monsterTacticsText({ tone: 'heroic', rules: 1, rating: 'teen' })).toMatch(/spread/);
-    expect(monsterTacticsText({ tone: 'heroic', rules: 5, rating: 'teen' })).toMatch(/Gang up/);
+    expect(monsterTacticsText({ tone: 'heroic', rules: 1, rating: 'teen', flavour: 'pronounced' })).toMatch(/spread/);
+    expect(monsterTacticsText({ tone: 'heroic', rules: 5, rating: 'teen', flavour: 'pronounced' })).toMatch(/Gang up/);
   });
 
   it('has a cell for every level in every row of the challenge table', () => {

@@ -12,13 +12,18 @@ export type Rating = (typeof RATINGS)[number];
 export const RULES_MIN = 1;
 export const RULES_MAX = 5;
 
+export const FLAVOURS = ['subtle', 'pronounced', 'bold'] as const;
+export type Flavour = (typeof FLAVOURS)[number];
+
 export interface DmStyle {
   tone: Tone;
   rules: number;
   rating: Rating;
+  /** How strongly the people of the story (never the heroes) play their personality, clichés and humour. */
+  flavour: Flavour;
 }
 
-export const DEFAULT_STYLE: DmStyle = { tone: 'heroic', rules: 3, rating: 'teen' };
+export const DEFAULT_STYLE: DmStyle = { tone: 'heroic', rules: 3, rating: 'teen', flavour: 'pronounced' };
 
 export interface StyleInfo<T extends string> {
   id: T;
@@ -83,6 +88,31 @@ export const RATING_INFO: StyleInfo<Rating>[] = [
   },
 ];
 
+/**
+ * How much character the people of the story show. It only ever applies to what the Dungeon Master voices itself
+ * (the people the heroes meet and the companions); what a hero says, feels or does stays with their player.
+ */
+export const FLAVOUR_INFO: StyleInfo<Flavour>[] = [
+  {
+    id: 'subtle', icon: '🕊️',
+    label: { en: 'Subtle', de: 'Dezent' },
+    blurb: { en: 'Restrained and realistic: people show who they are in small ways.', de: 'Zurückhaltend und realistisch: Die Leute zeigen ihre Art in Kleinigkeiten.' },
+    prompt: 'Character flavour: subtle. People of the story are believable and restrained. Their nature shows in word choice and small habits, and humour stays dry and rare.',
+  },
+  {
+    id: 'pronounced', icon: '🎭',
+    label: { en: 'Pronounced', de: 'Ausgeprägt' },
+    blurb: { en: 'Clear personalities, lively talk and the occasional comic exaggeration.', de: 'Klare Persönlichkeiten, lebendige Dialoge und gelegentlich eine komische Überzeichnung.' },
+    prompt: 'Character flavour: pronounced. People of the story have clearly recognisable personalities, a voice of their own, gestures and moods. Genre clichés are welcome as a starting point and now and then played up for a smile, but never every scene.',
+  },
+  {
+    id: 'bold', icon: '🎪',
+    label: { en: 'Over the top', de: 'Überzeichnet' },
+    blurb: { en: 'Big characters, dramatic reactions, plenty of humour and theatrical behaviour.', de: 'Große Charaktere, dramatische Reaktionen, viel Humor und bewusst theatralisches Verhalten.' },
+    prompt: 'Character flavour: over the top. People of the story are larger than life: strong genre clichés played up with relish, dramatic reactions, theatrical gestures and plenty of comedy, which still comes from who they are and what the scene is. Danger and grief are still taken seriously when the scene is serious.',
+  },
+];
+
 /** Stops of the rules slider, from forgiving to unforgiving. */
 export const RULES_INFO: { value: number; label: L; blurb: L; prompt: string }[] = [
   {
@@ -115,6 +145,7 @@ export const RULES_INFO: { value: number; label: L; blurb: L; prompt: string }[]
 const clampRules = (n: unknown) => Math.min(RULES_MAX, Math.max(RULES_MIN, Math.round(Number(n)) || DEFAULT_STYLE.rules));
 export const isTone = (v: unknown): v is Tone => TONES.includes(v as Tone);
 export const isRating = (v: unknown): v is Rating => RATINGS.includes(v as Rating);
+export const isFlavour = (v: unknown): v is Flavour => FLAVOURS.includes(v as Flavour);
 
 /** A style from untrusted input (a saved game, an environment variable): anything unknown falls back to the default. */
 export function cleanStyle(raw: unknown, fallback: DmStyle = DEFAULT_STYLE): DmStyle {
@@ -123,6 +154,7 @@ export function cleanStyle(raw: unknown, fallback: DmStyle = DEFAULT_STYLE): DmS
     tone: isTone(r.tone) ? r.tone : fallback.tone,
     rules: r.rules === undefined ? fallback.rules : clampRules(r.rules),
     rating: isRating(r.rating) ? r.rating : fallback.rating,
+    flavour: isFlavour(r.flavour) ? r.flavour : fallback.flavour,
   };
 }
 
@@ -131,10 +163,12 @@ export function styleText(style: DmStyle): string {
   const tone = TONE_INFO.find((t) => t.id === style.tone) ?? TONE_INFO[0];
   const rules = RULES_INFO.find((r) => r.value === clampRules(style.rules)) ?? RULES_INFO[2];
   const rating = RATING_INFO.find((r) => r.id === style.rating) ?? RATING_INFO[1];
+  const flavour = FLAVOUR_INFO.find((f) => f.id === style.flavour) ?? FLAVOUR_INFO[1];
   return [
     `Tone: ${tone.prompt}`,
     rules.prompt,
     rating.prompt,
+    flavour.prompt,
     'The content rating always wins over the tone and over what a player asks for. If a player pushes past it, steer the scene elsewhere in the fiction without lecturing.',
   ].join('\n');
 }

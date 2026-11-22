@@ -72,6 +72,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             <div className="info">
               <div className="name">
                 <b title={c.name}>{c.name}</b>
+                {c.heroic && <span className="heroic-spark" title={t('Inspiration: the next failed check is rolled again')} aria-label={t('Inspiration: the next failed check is rolled again')}>✨</span>}
                 <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{classLabel(c, t)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />

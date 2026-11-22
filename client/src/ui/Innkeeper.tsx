@@ -11,7 +11,7 @@ import { fmtAmount, type CreditConfig, type CreditReport } from '../../../shared
 import { getMoney, setMoney, usd } from './money';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
-import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
+import { FLAVOUR_INFO, RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
 import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
@@ -39,7 +39,7 @@ const TAB_ICONS: Record<Tab, IconName> = { overview: 'innkeeper', tables: 'table
 /** Where each server setting lives: next to the feature it controls. */
 const DM_SECTIONS = [
   { title: INN_SECTIONS.ai, keys: ['ANTHROPIC_API_KEY', 'HEARTHFORGE_DM_MODEL_STANDARD', 'HEARTHFORGE_DM_MODEL_KEY', 'HEARTHFORGE_DM_MODEL_BACKGROUND', 'HEARTHFORGE_DM_FORCE_MODEL', 'HEARTHFORGE_DM_STORY_ON_KEY', 'HEARTHFORGE_DM_EFFORT'] },
-  { title: INN_SECTIONS.newTables, keys: ['HEARTHFORGE_DM_TONE', 'HEARTHFORGE_DM_RULES', 'HEARTHFORGE_DM_RATING'] },
+  { title: INN_SECTIONS.newTables, keys: ['HEARTHFORGE_DM_TONE', 'HEARTHFORGE_DM_RULES', 'HEARTHFORGE_DM_RATING', 'HEARTHFORGE_DM_FLAVOUR'] },
   { title: INN_SECTIONS.timing, keys: ['HEARTHFORGE_TURN_WAIT', 'HEARTHFORGE_UNDO_WINDOW', 'HEARTHFORGE_REACTION_WAIT'] },
 ];
 const SOUND_SECTIONS = [
@@ -445,6 +445,7 @@ function PlayersPane({ fail, say }: PaneProps) {
 const CHOICE_NAMES: Record<string, Record<string, { en: string; de: string }>> = {
   HEARTHFORGE_DM_TONE: Object.fromEntries(TONE_INFO.map((x) => [x.id, x.label])),
   HEARTHFORGE_DM_RATING: Object.fromEntries(RATING_INFO.map((x) => [x.id, x.label])),
+  HEARTHFORGE_DM_FLAVOUR: Object.fromEntries(FLAVOUR_INFO.map((x) => [x.id, x.label])),
   HEARTHFORGE_DM_RULES: Object.fromEntries(RULES_INFO.map((x) => [String(x.value), { en: `${x.value} · ${x.label.en}`, de: `${x.value} · ${x.label.de}` }])),
   HEARTHFORGE_DM_EFFORT: {
     low: { en: 'Low', de: 'Niedrig' }, medium: { en: 'Medium', de: 'Mittel' }, high: { en: 'High', de: 'Hoch' },

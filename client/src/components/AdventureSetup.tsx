@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { loc } from '../../../shared/rules';
 import { CUSTOM, CUSTOM_MAX, PREMISES, SEED_MAX, SURPRISE, normalizeSeed, type StartOptions } from '../../../shared/start';
-import { CHALLENGE_ROWS, RATING_INFO, RULES_INFO, TONE_INFO, type DmStyle } from '../../../shared/style';
+import { CHALLENGE_ROWS, FLAVOUR_INFO, RATING_INFO, RULES_INFO, TONE_INFO, type DmStyle } from '../../../shared/style';
 import { LANGS, type Lang } from '../../../shared/i18n';
 import type { GameState } from '../../../shared/types';
 import { useLang, useT } from '../i18n';
@@ -16,7 +16,7 @@ import { sfx } from '../ui/sound';
 import { WherePicker } from './CampaignShelf';
 import { copyText } from '../ui/clipboard';
 
-type Pick = 'where' | 'begin' | 'tone' | 'challenge' | 'rating' | 'language' | 'details';
+type Pick = 'where' | 'begin' | 'tone' | 'challenge' | 'rating' | 'flavour' | 'language' | 'details';
 
 interface Option { id: string; icon: string; label: string; blurb: string }
 
@@ -43,6 +43,7 @@ export function AdventureCards({ state, conn, world }: { state: GameState; conn:
   ];
   const tones: Option[] = TONE_INFO.map((x) => ({ id: x.id, icon: x.icon, label: loc(x.label, lang), blurb: loc(x.blurb, lang) }));
   const ratings: Option[] = RATING_INFO.map((x) => ({ id: x.id, icon: x.icon, label: loc(x.label, lang), blurb: loc(x.blurb, lang) }));
+  const flavours: Option[] = FLAVOUR_INFO.map((x) => ({ id: x.id, icon: x.icon, label: loc(x.label, lang), blurb: loc(x.blurb, lang) }));
   const levels: Option[] = RULES_INFO.map((x, i) => ({ id: String(x.value), icon: CHALLENGE_ICONS[i], label: loc(x.label, lang), blurb: loc(x.blurb, lang) }));
   const languages: Option[] = LANGS.map((l) => ({ id: l.id, icon: '💬', label: l.label, blurb: t('The Dungeon Master tells the story in {lang}. Everyone picks their own interface language.', { lang: l.label }) }));
 
@@ -61,12 +62,13 @@ export function AdventureCards({ state, conn, world }: { state: GameState; conn:
     { id: 'tone', label: t('Story style'), o: pick(tones, style.tone) },
     { id: 'challenge', label: t('Challenge'), o: pick(levels, String(style.rules)) },
     { id: 'rating', label: t('Content'), o: pick(ratings, style.rating) },
+    { id: 'flavour', label: t('Characters'), o: pick(flavours, style.flavour) },
     ...(!world ? [{ id: 'language' as const, label: t('Story language'), o: pick(languages, state.language) }] : []),
   ];
   const close = () => setOpen(null);
   return (
     <>
-      <ul className={world ? 'adv-cards five' : 'adv-cards four'}>
+      <ul className={world ? 'adv-cards six' : 'adv-cards five'}>
         {cards.map((c) => (
           <li key={c.id}>
             <button type="button" className="adv-card" onClick={() => { setOpen(c.id); sfx('open'); }} aria-haspopup="dialog">
@@ -91,6 +93,7 @@ export function AdventureCards({ state, conn, world }: { state: GameState; conn:
       )}
       {open === 'tone' && <Choice title={t('Story style')} options={tones} value={style.tone} host={host} onPick={(id) => setStyle({ tone: id as DmStyle['tone'] })} onClose={close} />}
       {open === 'rating' && <Choice title={t('Content')} options={ratings} value={style.rating} host={host} onPick={(id) => setStyle({ rating: id as DmStyle['rating'] })} onClose={close} />}
+      {open === 'flavour' && <Choice title={t('Characters and clichés')} options={flavours} value={style.flavour} host={host} onPick={(id) => setStyle({ flavour: id as DmStyle['flavour'] })} onClose={close} />}
       {open === 'language' && <Choice title={t('Story language')} options={languages} value={state.language} host={host} onPick={(id) => conn.send({ t: 'set_language', lang: id as Lang })} onClose={close} />}
       {open === 'challenge' && <ChallengePicker value={style.rules} host={host} onPick={(rules) => setStyle({ rules })} onClose={close} />}
       {open === 'details' && <TableDetails state={state} conn={conn} onClose={close} />}
