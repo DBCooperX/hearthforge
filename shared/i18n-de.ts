@@ -1274,6 +1274,11 @@ export const DE: Record<string, string> = {
   'host': 'Gastgeber',
   // Campaign overview (Innkeeper)
   'See the story of this table: quests, clues, people, places and what the Dungeon Master holds back.': 'Die Geschichte dieses Tischs ansehen: Quests, Hinweise, Personen, Orte und was der Dungeon Master noch zurückhält.',
+  'Forget the names and quests of earlier stories? New tables will then not be nudged away from them.': 'Die Namen und Aufträge früherer Geschichten vergessen? Neue Tische werden dann nicht mehr von ihnen weggelenkt.',
+  'Fresh stories': 'Frische Geschichten',
+  'The server remembers the people, places and quests that earlier tables made up, even after you delete them. A new table\'s Dungeon Master is nudged to pick different ones. It is only a hint, so the story always comes first.': 'Der Server merkt sich die Personen, Orte und Aufträge, die frühere Tische erfunden haben, auch wenn du sie löschst. Der Spielleiter eines neuen Tisches wird angeregt, andere zu wählen. Das ist nur ein Hinweis, die Geschichte geht immer vor.',
+  'Nothing is remembered yet.': 'Noch wird nichts gemerkt.',
+  'Forget all': 'Alles vergessen',
   'Show what the party does not know yet': 'Zeigen, was die Gruppe noch nicht weiss',
   'The adventure has not started yet, so there is no story to show.': 'Das Abenteuer hat noch nicht begonnen, also gibt es noch keine Geschichte.',
   'Setting': 'Schauplatz',

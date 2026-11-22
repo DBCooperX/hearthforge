@@ -16,6 +16,7 @@ import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
 import { DeletedTables } from './Bin';
+import { Variety } from './Variety';
 import { Campaign } from './Campaign';
 import type { BinItem } from '../../../shared/accounts';
 import { Icon, type IconName } from './icons';
@@ -209,7 +210,7 @@ function Tables({ fail, say }: PaneProps) {
   const actBin = useCallback((what: 'restore' | 'purge', id: number) => inn<{ tables: BinItem[] }>('/bin', { body: { do: what, id } }).then((r) => r.tables), []);
   if (!data) return <p className="muted">{t('Loading…')}</p>;
   if (story) return <Campaign id={story} onBack={() => setStory(null)} onError={fail} />;
-  const bin = <DeletedTables everyone always load={loadBin} act={actBin} onError={fail} watch={data.tables.length} />;
+  const bin = <><DeletedTables everyone always load={loadBin} act={actBin} onError={fail} watch={data.tables.length} /><Variety onError={fail} /></>;
   if (!data.tables.length) return <><p className="muted">{t('No table has been opened yet.')}</p>{bin}</>;
   return (
     <>

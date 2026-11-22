@@ -27,6 +27,28 @@ export class Store {
       meta TEXT NOT NULL,
       payload TEXT NOT NULL
     )`);
+    // What earlier tables made up (names, quests), kept when a table is deleted so new stories do not repeat them.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS story_ledger (
+      room TEXT PRIMARY KEY,
+      saved_at INTEGER NOT NULL,
+      data TEXT NOT NULL
+    )`);
+  }
+
+  ledgerPut(room: string, savedAt: number, data: string) {
+    this.db.prepare(`INSERT INTO story_ledger (room, saved_at, data) VALUES (?, ?, ?)
+      ON CONFLICT(room) DO UPDATE SET saved_at = excluded.saved_at, data = excluded.data`).run(room, savedAt, data);
+    // Only the newest tables count, so older rows can go.
+    this.db.prepare('DELETE FROM story_ledger WHERE room NOT IN (SELECT room FROM story_ledger ORDER BY saved_at DESC LIMIT 60)').run();
+  }
+
+  ledgerAll(): { room: string; savedAt: number; data: string }[] {
+    return (this.db.prepare('SELECT room, saved_at AS savedAt, data FROM story_ledger').all() as { room: string; savedAt: number; data: string }[])
+      .map((r) => ({ room: r.room, savedAt: Number(r.savedAt), data: r.data }));
+  }
+
+  ledgerClear() {
+    this.db.prepare('DELETE FROM story_ledger').run();
   }
 
   load(room: string): InternalState | undefined {

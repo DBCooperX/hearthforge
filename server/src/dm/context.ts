@@ -355,7 +355,7 @@ function feels(game: Game, n: Parameters<typeof attitude>[1]): string {
 /** The setting's hidden background, as the Dungeon Master reads it. */
 function settingLine(game: Game): string {
   const setting = settingOf(game);
-  return `Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}${setting.plot ? `\nPlot, for you only: ${setting.plot}` : ''}`;
+  return `Setting: ${setting.name}. Background for you only, which the party does not know yet unless the journal, quests or people listed below say so: ${setting.premise}${setting.plot ? `\nPlot, for you only: ${setting.plot}` : ''}${game.s.setting?.avoid ? `\n${game.s.setting.avoid}` : ''}`;
 }
 
 /**
