@@ -11,7 +11,7 @@ import { TILE, packSprites, spriteCanvas } from './sprites';
 import { tileWalkable } from '../../../shared/battlemap';
 import { inFootprint, lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { monsterCanvas, monsterFigure, monsterVariant } from './monsterArt';
-import { armedFigure, artOfCharacter, heroCanvas, heroStanding, offWeaponOf } from './heroArt';
+import { armedFigure, artOfCharacter, baseBoxOf, heroCanvas, heroStanding, offWeaponOf } from './heroArt';
 import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
@@ -146,6 +146,8 @@ function monsterTex(look: MonsterLook, variant: number): Texture {
 
 /** A figure on a transparent canvas, cropped to what is drawn, so its feet sit on the base. */
 const figureTextures = new Map<string, Texture>();
+/** For a figure with room round it (weapons added), where the figure itself stands inside the texture. */
+const texBase = new WeakMap<Texture, { cx: number; bottom: number; w: number; h: number }>();
 function figureTex(key: string, make: () => HTMLCanvasElement, pixel = false): Texture {
   let t = figureTextures.get(key);
   if (t) return t;
@@ -163,6 +165,8 @@ function figureTex(key: string, make: () => HTMLCanvasElement, pixel = false): T
   const base = pixel ? Texture.from(c) : smoothTexture(c);
   if (pixel) base.source.scaleMode = 'nearest';
   t = new Texture({ source: base.source, frame: new Rectangle(x0, y0, x1 - x0 + 1, y1 - y0 + 1) });
+  const box = baseBoxOf(c);
+  if (box) texBase.set(t, { cx: box.x + box.w / 2 - x0, bottom: box.y + box.h - y0, w: box.w, h: box.h });
   figureTextures.set(key, t);
   return t;
 }
@@ -198,9 +202,10 @@ function flatFigureTex(id: string, fig: HTMLCanvasElement, kind: 'pc' | 'monster
   g.beginPath(); g.arc(0, 0, S * 0.4, 0, Math.PI * 2); g.fillStyle = '#2b241d'; g.fill();
   g.lineWidth = 7; g.strokeStyle = rim; g.stroke();
   g.restore();
-  const k2 = Math.min((S * 0.94) / fig.height, (S * 0.94) / fig.width);
-  const w = fig.width * k2, h = fig.height * k2;
-  g.drawImage(fig, (S - w) / 2, S * 0.9 - h, w, h);
+  const box = baseBoxOf(fig) ?? { x: 0, y: 0, w: fig.width, h: fig.height };
+  const k2 = Math.min((S * 0.94) / box.h, (S * 0.94) / box.w);
+  // The figure itself keeps its size and place; a weapon may reach past it.
+  g.drawImage(fig, S / 2 - (box.x + box.w / 2) * k2, S * 0.9 - (box.y + box.h) * k2, fig.width * k2, fig.height * k2);
   t = smoothTexture(c);
   flatFigures.set(k, t);
   return t;
@@ -604,7 +609,11 @@ export class MapRenderer {
       s.fig.texture = t;
       s.figKey = key;
       // Heroes stand about one and a half squares tall; a monster fills its squares, as tall as its shape asks.
-      const aspect = t.width / Math.max(1, t.height);
+      // A hero with a weapon drawn on has room round the painting: the size follows the painting, not that room.
+      const tb = texBase.get(t);
+      const bw = tb?.w ?? t.width, bh = tb?.h ?? t.height;
+      s.fig.anchor.set(tb ? tb.cx / t.width : 0.5, tb ? tb.bottom / t.height : 1);
+      const aspect = bw / Math.max(1, bh);
       const r = (e.size * TILE) / 2;
       let w: number, h: number;
       if (e.kind === 'pc') { h = TILE * 1.75; w = h * aspect; if (w > TILE * 1.4) { w = TILE * 1.4; h = w / aspect; } }
@@ -613,8 +622,8 @@ export class MapRenderer {
         const cap = e.size * TILE * 1.7;
         if (h > cap) { h = cap; w = h * aspect; }
       }
-      s.fig.width = w;
-      s.fig.height = h;
+      s.fig.width = (w / bw) * t.width;
+      s.fig.height = (h / bh) * t.height;
       s.figH = h;
       s.fig.position.set(0, r * GROUND_SQUASH * 0.25);
       const rim = e.kind === 'pc' ? 0xc9a45c : 0xa5483a;
@@ -1182,7 +1191,7 @@ export class MapRenderer {
       st.fig.tint = e.flash > 0 ? mixColor(e.tint, 0xff4a3a, Math.min(1, e.flash / 0.2) * 0.7) : e.tint;
       // A slow breath, so the table feels alive.
       if (!this.reduced && !e.down && !e.unseen) {
-        const sy = st.figH / Math.max(1, st.fig.texture.height);
+        const sy = (st.figH / Math.max(1, texBase.get(st.fig.texture)?.h ?? st.fig.texture.height));
         st.fig.scale.y = sy * (1 + 0.014 * Math.sin(this.pulse * 2.1 + e.phase));
       }
     }

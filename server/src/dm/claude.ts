@@ -240,7 +240,7 @@ const STORY_TOOLS: Tool[] = [
     minutes: int('Minutes to advance, 1 to 720.'),
   }),
   // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
-  looseTool('travel_to', "Take the party to a known place when the story walks them there: back to town, on to the mill, into the tavern of the town they reach. Works within a few hexes along a route they know; the server adds the time on the road and moves the map, the music and the side panel with them. For longer journeys, tell the players to travel on the map.", {
+  looseTool('travel_to', "Take the party to a known place when the story walks them there: back to town, on to the mill, into the tavern of the town they reach. A place in the party's own hex is reached at once. Anywhere else only PROPOSES the trip: the players see a confirm card and the party stays put, no time passes, until they confirm. Scouting ahead or a short look around is not a trip: narrate it, and never narrate the party arriving. For longer journeys, tell the players to travel on the map.", {
     place: str('Id or exact name of the place, as listed in the state.'),
   }),
   looseTool('rest', 'The party rests in the story. An hour or more is a short rest (hit dice, some mana, short-rest features), a night of about eight hours a long rest (everything back). The server restores it by the rules and tells the players what came back. Call it whenever you narrate a rest; time already added this reply counts toward it.', {
@@ -488,8 +488,8 @@ export class ClaudeDM implements DungeonMaster {
             game.advanceTime(Math.max(1, Math.min(720, Number(i.minutes) || 0)));
             return { ok: true };
           case 'travel_to': {
-            const r = game.journeyTo(String(i.place ?? ''));
-            game.dropBeats('arrive'); // the DM is already narrating this arrival
+            const r = game.proposeJourney(String(i.place ?? ''));
+            if (r.moved) game.dropBeats('arrive'); // a step within the hex: the DM is already narrating this arrival
             return { ...r, ...placePictureHint(game), people_here: game.presentNpcs().map((n) => `${n.name} (${n.role})`) };
           }
           case 'rest': {
