@@ -2,7 +2,7 @@
 // picks everything else to suit the class. "Decide everything myself" opens all eight steps, each
 // with explained options, recommended picks, a random pick and a live preview of the hero. The server checks and builds the result
 // with the same shared code the preview uses.
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import {
   POINT_BUDGET, POINT_COST, STANDARD_ARRAY, applyFeat, boostMap, buildSheet, checkSpec, classSpellList, pointsSpent, spellOptions, startBuild, startGroups, startOptions,
@@ -27,12 +27,13 @@ import { refreshTemplates, saveTemplate } from '../templates';
 import { accountErrorText } from './SignIn';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 import { TraitsPicker } from './TraitsPicker';
+import { HeroPicture } from './HeroPicture';
 import { AbilityGlyph, OptionGlyph, SkillGlyph } from '../ui/Glyph';
 
 const STEPS: StepId[] = ['class', 'species', 'background', 'abilities', 'skills', 'talents', 'equipment', 'identity'];
 /** The short creator asks only for these; the rest is chosen to suit the class. */
 const SHORT_STEPS: StepId[] = ['class', 'species', 'identity'];
-const IDENTITY_FIELDS: (keyof CharacterSpec)[] = ['name', 'gender', 'appearance', 'backstory', 'traits'];
+const IDENTITY_FIELDS: (keyof CharacterSpec)[] = ['name', 'gender', 'appearance', 'backstory', 'traits', 'refId'];
 
 const pickOne = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 /** `n` different entries in random order. */
@@ -141,6 +142,8 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   /** What "recommended" would pick, given everything chosen so far. */
   const rec = useMemo(() => (d.classId ? recommend({ ...d, classId: d.classId }, ['classId', 'speciesId', 'backgroundId', 'method', 'base', 'gender']) : null), [d.classId, d.speciesId, d.backgroundId, d.method, d.base]);
 
+  /** Set once the hero is made or saved, so a picture sent in this creator is kept. */
+  const committed = useRef(false);
   const update = (patch: Draft) => setD((cur) => { const next = tidy({ ...cur, ...patch }); return detailed ? next : complete(next, rolled); });
   const setMode = (all: boolean) => {
     setDetailed(all);
@@ -576,6 +579,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
                 <span>{t('Backstory')} <small className="muted">({t('optional')})</small></span>
                 <textarea value={d.backstory ?? ''} maxLength={1200} rows={detailed ? 6 : 3} onChange={(e) => update({ backstory: e.target.value })} placeholder={t('Where do you come from, what do you want, who or what did you leave behind? A few sentences are enough.')} />
               </label>
+              <HeroPicture value={d.refId} onChange={(refId) => update({ refId })} committed={committed} />
               <TraitsPicker value={d.traits} onChange={(traits) => update({ traits })} />
             </div>
           </>
@@ -589,7 +593,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   const canRecommend = !!d.classId && STEP_FIELDS[step].length > 0;
   const recommendStep = () => {
     if (!d.classId) return;
-    const keep: (keyof CharacterSpec)[] = ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits', ...ALL_FIELDS.filter((f) => !STEP_FIELDS[step].includes(f))];
+    const keep: (keyof CharacterSpec)[] = ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits', 'refId', ...ALL_FIELDS.filter((f) => !STEP_FIELDS[step].includes(f))];
     if (step === 'abilities' && d.method === 'roll' && rolled) {
       // Rolled scores stay rolled: lay them out by priority and re-pick only the background bonus.
       const sorted = [...rolled].sort((x, y) => y - x);
@@ -665,7 +669,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
   const canRandom = step === 'class' || step === 'identity' || (!!d.classId && (step !== 'abilities' || !!d.base));
   const quickBuild = () => {
     if (!d.classId) return;
-    setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits'])));
+    setD(tidy(recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'name', 'gender', 'appearance', 'backstory', 'traits', 'refId'])));
     go('identity');
   };
   const create = async () => {
@@ -673,9 +677,10 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
     const spec = { ...(d as CharacterSpec), name: (d.name ?? '').trim() };
     if (template) {
       // Only the saved hero changes. Heroes already at a table are copies and stay as they are.
-      try { await saveTemplate(spec, state.room, template.id); onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
+      try { await saveTemplate(spec, state.room, template.id); committed.current = true; onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
       return;
     }
+    committed.current = true;
     conn.send({ t: 'create_character', spec, keep });
     // The server keeps the hero when it makes it; the list catches up a moment later.
     if (keep) window.setTimeout(() => void refreshTemplates(), 600);

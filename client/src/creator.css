@@ -182,3 +182,10 @@
 .traits h5 small { margin-left: 6px; font-weight: normal; }
 .traits .chips button.on { border-color: var(--gold); background: rgba(212, 175, 55, 0.18); }
 .traits label { margin-top: 8px; }
+
+/* Your own picture of the hero (a reference for the painter only) */
+.hero-picture { display: grid; gap: 6px; margin: 10px 0; }
+.hero-picture .ref-note { margin: 0; padding: 8px 12px; border: 1px solid var(--gold); border-left-width: 4px; border-radius: 8px; background: rgba(212, 175, 55, 0.1); font-size: 13.5px; line-height: 1.45; }
+.hero-picture .ref-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.hero-picture .ref-thumb { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line, #3a3226); }
+.hero-picture .ref-actions { display: flex; gap: 8px; flex-wrap: wrap; }

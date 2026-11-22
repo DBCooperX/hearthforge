@@ -92,7 +92,7 @@ export function recommendedBoosts(classId: ClassId, base: Abilities, allowed: Ab
  * Complete a draft with recommended picks. Anything listed in `keep` that the draft already
  * has is left alone; everything else is chosen to suit the class.
  */
-export function recommend(d: Draft & { classId: ClassId }, keep: (keyof CharacterSpec)[] = ['speciesId', 'backgroundId', 'name', 'gender', 'appearance', 'backstory', 'traits', 'method', 'base', 'premadeId']): CharacterSpec {
+export function recommend(d: Draft & { classId: ClassId }, keep: (keyof CharacterSpec)[] = ['speciesId', 'backgroundId', 'name', 'gender', 'appearance', 'backstory', 'traits', 'refId', 'method', 'base', 'premadeId']): CharacterSpec {
   const g = CLASS_GUIDE[d.classId], cls = CLASSES[d.classId];
   const kept = <K extends keyof CharacterSpec>(k: K): CharacterSpec[K] | undefined => (keep.includes(k) ? (d[k] as CharacterSpec[K] | undefined) : undefined);
   const speciesId = kept('speciesId') ?? g.recSpecies;
@@ -107,6 +107,7 @@ export function recommend(d: Draft & { classId: ClassId }, keep: (keyof Characte
     spells: [], kit: kept('kit') ?? (kitsFor(d.classId).some((k) => k.id === g.recKit) ? g.recKit : kitsFor(d.classId)[0].id),
     appearance: kept('appearance') ?? '', backstory: kept('backstory') ?? '',
     ...(kept('traits') ? { traits: kept('traits') } : {}),
+    ...(kept('refId') ? { refId: kept('refId') } : {}),
     ...(d.premadeId && keep.includes('premadeId') ? { premadeId: d.premadeId } : {}),
     ...(d.look ? { look: d.look } : {}),
   };

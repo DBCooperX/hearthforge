@@ -10,6 +10,8 @@ import { AccountsError, type Accounts } from './accounts';
 import { hashToken, readBody as readRaw } from './http';
 import { BinError, type TableBin } from './bin';
 import type { Room } from './room';
+import { HeroRefError, type HeroRefs } from './heroRefs';
+import { HERO_REF_MAX_BYTES, REF_ID } from '../../shared/accounts';
 
 export const SESSION_HEADER = 'x-hearthforge-session';
 
@@ -23,6 +25,10 @@ export interface AccountApiContext {
   tablesChanged(): void;
   /** An account's AI credit. */
   creditOf?(id: string): CreditView | null;
+  /** Players' own pictures of their heroes, for the painter only. */
+  heroRefs?: HeroRefs;
+  /** Whether the painter can use such a picture right now. */
+  refsUsable?(): boolean;
 }
 
 
@@ -92,6 +98,15 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
         if (!me) return send(401, { error: 'signed_out' });
         return send(200, { heroes: accounts.templates(me.id) });
       }
+      if (path === '/hero-ref') {
+        // Only the account the picture belongs to ever gets it back.
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        const pic = ctx.heroRefs?.read(me.id, String(url.searchParams.get('id') ?? ''));
+        if (!pic) return send(404, { error: 'not_found' });
+        res.writeHead(200, { 'content-type': pic.mime, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-length': pic.data.length });
+        return void res.end(pic.data);
+      }
       if (path === '/bin') {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
@@ -100,6 +115,14 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       return send(404, { error: 'bad_request' });
     }
     if (req.method !== 'POST') return send(405, { error: 'bad_request' });
+    if (path === '/hero-ref/upload') {
+      const me = accounts.account(token);
+      if (!me || !ctx.heroRefs) { req.resume(); return send(401, { error: 'signed_out' }); }
+      const bytes = await readRaw(req, HERO_REF_MAX_BYTES, () => new HeroRefError('picture_too_big'));
+      const inUse = new Set(accounts.templates(me.id).map((h) => h.spec.refId).filter((x): x is string => !!x));
+      const id = ctx.heroRefs.save(me.id, bytes, inUse);
+      return send(200, { id, used: ctx.refsUsable?.() ?? false });
+    }
     const body = await readBody(req);
     switch (path) {
       case '/login': {
@@ -142,14 +165,26 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
         else return send(400, { error: 'bad_request' });
         return send(200, { tables: ctx.bin.list(me.id) });
       }
+      case '/hero-ref/delete': {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        // A picture a saved hero still uses is only removed by changing that hero.
+        const id = String(body.id ?? '');
+        if (REF_ID.test(id) && !accounts.templates(me.id).some((h) => h.spec.refId === id)) ctx.heroRefs?.remove(me.id, id);
+        return send(200, null);
+      }
       case '/heroes': {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
+        /** Forget a picture, unless another saved hero of the account uses it too. */
+        const dropRef = (account: string, id: string) => { if (!accounts.templates(account).some((h) => h.spec.refId === id)) ctx.heroRefs?.remove(account, id); };
         const room = ctx.rooms.get(String(body.table ?? ''));
         const own = (id: unknown) => (typeof id === 'string' ? accounts.template(me.id, id) : undefined);
         if (body.do === 'delete') {
           if (typeof body.id !== 'string') return send(400, { error: 'bad_request' });
+          const gone = own(body.id)?.spec.refId;
           accounts.removeTemplate(me.id, body.id);
+          if (gone) dropRef(me.id, gone);
         } else if (body.do === 'save') {
           const spec = cleanSpec(body.spec);
           const old = own(body.id);
@@ -159,6 +194,8 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
           const kept = old?.spec.method === 'roll' && old.spec.base ? ABILITY_KEYS.map((k) => old.spec.base[k]) : undefined;
           if (!spec || !spec.name || (checkSpec(spec, rolled).length && checkSpec(spec, kept).length)) return send(400, { error: 'bad_hero' });
           accounts.saveTemplate(me.id, spec, old?.id);
+          // A picture the saved hero no longer has goes away with the change.
+          if (old?.spec.refId && old.spec.refId !== spec.refId) dropRef(me.id, old.spec.refId);
         } else if (body.do === 'from_hero') {
           if (!room) return send(404, { error: 'not_found' });
           let spec: CharacterSpec | null;
@@ -187,6 +224,7 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
     }
     return send(404, { error: 'bad_request' });
   } catch (err) {
+    if (err instanceof HeroRefError) return send(err.code === 'picture_too_big' ? 413 : 400, { error: err.code });
     if (err instanceof AccountsError) {
       const status = err.code === 'too_many' ? 429 : err.code === 'signed_out' || err.code === 'wrong_login' ? 401 : 400;
       return send(status, { error: err.code });
