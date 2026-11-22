@@ -224,6 +224,7 @@ const hooks: RoomHooks = {
       const broke = payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
       return broke ? 'credit' : null;
     },
+    note: (room, moment, outcome) => illustrator.noteAsk({ table: room.name, title: room.game.s.table.title, moment, outcome }),
     paint: (room, entryId, ask) => {
       const scene = room.game.s.log.find((l) => l.id === entryId)?.scene;
       illustrator.paint({ table: room.name, tableTitle: room.game.s.table.title, entry: entryId, ask, where: scene?.where, time: scene?.time }, (usd) => bill(room.name, usd, 'images'))

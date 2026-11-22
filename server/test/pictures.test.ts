@@ -177,6 +177,36 @@ describe('the services', () => {
 });
 
 describe('the Dungeon Master and the scene card', () => {
+  it('paints the first arrival at a new place even when the Dungeon Master does not ask, and says why when it does not', () => {
+    const g = newGame();
+    const notes: string[] = [];
+    const painted: { moment: string; picture: string; cast: number }[] = [];
+    let gate: string | null = null;
+    g.pictures = { gate: () => gate as never, paint: (_e, ask) => painted.push({ moment: ask.moment, picture: ask.picture, cast: ask.cast.length }), note: (m, o) => notes.push(`${m}:${o}`) };
+    const here = g.place()!;
+    g.s.phase = 'explore';
+    g.newPlace = { id: here.id, name: here.name };
+    // The state tells the Dungeon Master to ask.
+    expect(pictureState(g)).toContain(`has just arrived at ${here.name} for the first time`);
+    // It did not ask: the server does, from the place and the scene.
+    g.addScene({ title: 'Arrival', mood: 'calm', text: 'Smoke rises from the chimneys.', actions: [] });
+    expect(painted).toHaveLength(1);
+    expect(painted[0]).toMatchObject({ moment: 'place', cast: 0 });
+    expect(painted[0].picture).toContain(here.name);
+    expect(g.newPlace).toBeNull();
+    expect(notes).toContain('place:made_by_server');
+    // A revisit gets nothing, and the next scene says the Dungeon Master simply did not ask.
+    g.addScene({ title: 'Later', mood: 'calm', text: 'Nothing happens.', actions: [] });
+    expect(painted).toHaveLength(1);
+    expect(notes[notes.length - 1]).toBe('none:dm_skipped');
+    expect(askPicture(g, { moment: 'place', picture: 'A village at dusk, smoke from chimneys.' })).toMatchObject({ painted: false });
+    expect(notes).toContain('place:not_first_arrival');
+    // A limit shows as the reason.
+    gate = 'gap';
+    g.addScene({ title: 'Still later', mood: 'calm', text: 'More nothing.', actions: [] });
+    expect(notes[notes.length - 1]).toBe('none:gap');
+  });
+
   it('offers illustrate as a small tool without a strict schema', () => {
     const tool = DM_TOOLS.find((t) => t.name === 'illustrate') as { strict?: boolean; input_schema: { properties: Record<string, { type: string }> } };
     expect(tool).toBeTruthy();

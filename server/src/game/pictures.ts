@@ -2,7 +2,7 @@
 // whether a picture may be painted, and the scene card written in the same reply gets it. Who is in the picture is
 // described from the fixed facts the game keeps (a hero's species, class and looks; a person's appearance), so the
 // heroes look the same from one picture to the next even before earlier pictures are passed along.
-import { FIGURE_STYLE, PICTURE_GATES, PICTURE_MOMENTS, figureBackdrop, type FigureKey, type PictureMoment } from '../../../shared/illustrations';
+import { FIGURE_STYLE, PICTURE_GATES, PICTURE_MOMENTS, figureBackdrop, type FigureKey, type PictureAskOutcome, type PictureMoment } from '../../../shared/illustrations';
 import { createHash } from 'node:crypto';
 import { lookKey, type MonsterLook } from '../../../shared/monsterLook';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
@@ -32,6 +32,8 @@ export interface PictureHooks {
   paint(entryId: number, ask: PictureAsk): void;
   /** The painted battle figure for a subject (see heroFigureSubject), if there is one and figures are on. */
   figure?(subject: string): string | null;
+  /** Tell the Innkeeper what came of a request for a picture, or of a scene that could have had one. */
+  note?(moment: PictureMoment | 'none', outcome: PictureAskOutcome): void;
 }
 
 const clean = (raw: unknown, max: number) => String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -86,7 +88,8 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
   if (game.s.phase === 'lobby') return { painted: false, reason: 'The adventure has not begun.' };
   const gate = game.pictures ? game.pictures.gate(moment) : 'off';
   // A picture of a place is for the first arrival only, never a revisit.
-  if (moment === 'place' && !game.newPlace) return { painted: false, reason: 'Only the first arrival at a new place gets a picture.', note: 'Carry on with the scene as usual.' };
+  if (moment === 'place' && !game.newPlace) { game.pictures?.note?.(moment, 'not_first_arrival'); return { painted: false, reason: 'Only the first arrival at a new place gets a picture.', note: 'Carry on with the scene as usual.' }; }
+  if (gate) game.pictures?.note?.(moment, gate);
   if (gate) return { painted: false, reason: PICTURE_GATES[gate], note: 'Carry on with the scene as usual.' };
   if (game.pictureAsk) return { painted: false, reason: 'This reply already has a picture.' };
   const names = String(raw.who ?? '').split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -98,6 +101,7 @@ export function askPicture(game: Game, raw: { moment?: unknown; picture?: unknow
     ...(game.s.memory?.npcs ?? []).filter((n) => n.portraitId && lower.includes(n.name.toLocaleLowerCase())).map((n) => n.portraitId!),
   ];
   game.pictureAsk = { moment, picture, cast: castOf(game, who), ...(portraits.length ? { portraits } : {}) };
+  game.pictures?.note?.(moment, 'painting');
   if (moment === 'place') game.newPlace = null; // this arrival has its picture
   return { painted: true, note: 'The picture is painted while the players read your scene, and shown above it. Do not mention it in the narration.' };
 }
@@ -110,7 +114,8 @@ export function pictureState(game: Game): string | null {
   const gate = hooks.gate('boss');
   if (gate === 'off' || gate === 'no_key') return null;
   if (!allowed.length) return 'Illustrations: none available right now.';
-  return `Illustrations: available for these moments: ${allowed.join(', ')}. Call illustrate only for one of them.`;
+  const arrived = game.newPlace && allowed.includes('place') ? ` The party has just arrived at ${game.newPlace.name} for the first time: call illustrate with moment "place" in this reply, before scene, to show the place.` : '';
+  return `Illustrations: available for these moments: ${allowed.join(', ')}. Call illustrate only for one of them.${arrived}`;
 }
 
 /** Everything the image model is told, apart from the earlier pictures it gets along. */
@@ -291,4 +296,20 @@ export function monsterFigurePrompt(def: Pick<MonsterDef, 'id' | 'name' | 'type'
       figureBackdrop(key),
     ].join('\n\n'),
   };
+}
+
+/**
+ * The first arrival at a new place gets its picture even when the Dungeon Master did not ask: the server builds an
+ * establishing view from the place and the scene just written. Null when no picture may be made now.
+ */
+export function placeAsk(game: Game, sceneText: string): PictureAsk | null {
+  const hooks = game.pictures;
+  const arrived = game.newPlace;
+  if (!hooks || !arrived || game.s.phase === 'combat' || game.s.phase === 'lobby' || hooks.gate('place')) return null;
+  const loc = game.place();
+  if (!loc || loc.id !== arrived.id) return null;
+  const look = clean(loc.visual?.description || loc.description, 300);
+  const scene = clean(sceneText, 260);
+  const picture = clean(`An establishing view of ${loc.name}, a ${loc.kind}, as the party first sees it. ${look} ${scene} The heroes are small figures in the scene or seen from behind.`, 700);
+  return { moment: 'place', picture, cast: [] };
 }
