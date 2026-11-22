@@ -15,6 +15,7 @@ import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
 import { Journal } from './components/Journal';
+import { MobileTabs, type Pane } from './components/MobileTabs';
 import { Trade } from './components/Trade';
 import { MapOverlay, WorldPanel } from './components/WorldPanel';
 import type { ViewOptions } from './game/MapRenderer';
@@ -174,6 +175,15 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     }
   }, [fightEnd?.outcome.seq, !fightEnd]);
   useEffect(() => { if (combat) setAfterFight(null); }, [!!combat]);
+  // Phones and tablets held upright show one pane at a time (MobileTabs). A fight opens on the battle and
+  // its end goes back to the story; a pane that does not exist right now falls back to the main one.
+  const fighting = !!combat || !!fightEnd;
+  const [pane, setPane] = useState<Pane>('story');
+  useEffect(() => setPane(fighting ? 'fight' : 'story'), [fighting]);
+  const shownPane: Pane = fighting ? (pane === 'place' ? 'fight' : pane) : pane === 'fight' ? 'story' : pane;
+  const logLength = state?.log.length ?? 0;
+  const storySeen = useRef(logLength);
+  useEffect(() => { if (shownPane === 'story') storySeen.current = logLength; }, [shownPane, logLength]);
   const activeId = combat?.order[combat.turnIndex]?.id ?? null;
   const turnChar = playable.find((c) => c.id === activeId) ?? null;
   const selected = state?.characters.find((c) => c.id === selectedId) ?? null;
@@ -345,7 +355,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
 
   return (
     <EntityProvider state={state}>
-      <div className={combat ? 'game fighting' : afterFight?.arriving ? 'game after-fight' : 'game'}>
+      <div className={combat ? 'game fighting' : afterFight?.arriving ? 'game after-fight' : 'game'} data-pane={shownPane} data-battle={fighting ? '' : undefined}>
         <header className="topbar">
           <Wordmark />
           <button className="link table-name" onClick={() => setOverlay('table')} title={t('Who sits at this table')}>{state.table.title}</button>
@@ -461,6 +471,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         )}
         {chatOpen && state.table.maxPlayers > 1 && <ChatWindow state={state} conn={conn} onClose={() => setChatOpen(false)} />}
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
+        <MobileTabs pane={shownPane} fighting={fighting} storyNew={logLength > storySeen.current} onPane={setPane} />
         {inn}
         <Toasts conn={conn} />
       </div>

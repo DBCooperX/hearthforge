@@ -1,0 +1,14 @@
+{
+  "name": "Hearthforge",
+  "short_name": "Hearthforge",
+  "description": "Dungeons & Dragons at your own hearth, with an AI Dungeon Master.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121110",
+  "theme_color": "#121110",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
