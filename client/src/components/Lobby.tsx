@@ -5,6 +5,9 @@ import { PREMADES, type Premade } from '../../../shared/premades';
 import { ABILITY_KEYS, BACKGROUNDS, CLASSES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { Creator } from './Creator';
+import { MyHeroes } from './MyHeroes';
+import { keepHero, useHeroTemplates } from '../templates';
+import type { HeroTemplate } from '../../../shared/accounts';
 import { AdventureCards } from './AdventureSetup';
 import { artOfCharacter, artOfDraft, heroPortraitUrl } from '../game/heroArt';
 import { inviteLink, linkedTable, playerId, type Connection } from '../net';
@@ -331,6 +334,10 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
   const { lang } = useLang();
   const [picked, setPicked] = useState<string | null>(null);
   const [creating, setCreating] = useState<Draft | null>(null);
+  /** A saved hero opened in the creator. */
+  const [editing, setEditing] = useState<HeroTemplate | null>(null);
+  const { heroes: mine } = useHeroTemplates();
+  const [kept, setKept] = useState<string | null>(null);
   const full = state.characters.length >= 4;
   const host = state.hostId === playerId;
   const hostName = state.players.find((p) => p.id === state.hostId)?.name ?? '';
@@ -375,6 +382,10 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
                         <small>{heroTitle(c, t)}</small>
                         {shared && <small className="muted">{state.players.find((p) => p.id === c.ownerId)?.name}</small>}
                       </span>
+                      {c.ownerId === playerId && !mine.some((m) => m.id === c.templateId) && (
+                        <button type="button" className="slot-keep" title={kept === c.id ? t('Kept in My heroes') : t('Keep in My heroes')} aria-label={`${t('Keep in My heroes')}: ${c.name}`} disabled={kept === c.id}
+                          onClick={() => { setKept(c.id); void keepHero(state.room, c.id).catch(() => setKept(null)); }}>{kept === c.id ? '✓' : '★'}</button>
+                      )}
                       {c.ownerId === playerId && <button type="button" className="slot-x" title={t('remove')} aria-label={`${t('remove')}: ${c.name}`} onClick={() => conn.send({ t: 'remove_character', characterId: c.id })}>×</button>}
                     </li>
                   );
@@ -407,6 +418,7 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
                   onAdd={() => addPremade(shown.id)} onCustomize={() => setCreating({ ...shown.spec, premadeId: undefined, appearance: loc(shown.appearance, lang), backstory: loc(shown.bio, lang) })} />
               )}
             </section>
+            <MyHeroes heroes={mine} state={state} conn={conn} onEdit={setEditing} />
             <section className="adventure">
               <h2>{t('Your adventure')} {host ? null : <small className="muted">· {t('Set by the host')}</small>}</h2>
               <AdventureCards state={state} conn={conn} world />
@@ -445,6 +457,7 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
         </footer>
       </div>
       {creating && <Creator state={state} conn={conn} initial={creating} onClose={() => setCreating(null)} />}
+      {editing && <Creator state={state} conn={conn} initial={editing.spec} template={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

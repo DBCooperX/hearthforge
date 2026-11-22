@@ -1,6 +1,6 @@
 // A room is one table: a Game, the players sitting at it and its Dungeon Master.
 import type { WebSocket } from 'ws';
-import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
+import type { Character, CharacterSpec, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
 import { storyLedger } from './story/ledger';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
@@ -62,6 +62,10 @@ export interface RoomHooks {
   stats?(playerId: string, delta: Partial<PlayStats>, heroes: HeroRef[]): void;
   /** Why this player may not ask the AI for anything new right now (their credit is used up), or null. */
   mayAsk?(playerId: string): string | null;
+  /** A hero this player keeps on their account (My heroes), or null. */
+  template?(playerId: string, templateId: string): CharacterSpec | null;
+  /** Keep a new hero on this player's account (My heroes): the id of the template, or null when it cannot be kept. */
+  keep?(playerId: string, spec: CharacterSpec): string | null;
   /** Story illustrations: whether one may be painted at this table now, and painting it. */
   pictures?: {
     gate(room: Room, moment: Parameters<PictureHooks['gate']>[0]): ReturnType<PictureHooks['gate']>;
@@ -514,7 +518,7 @@ export class Room {
       this.flush();
       if (began) await this.prepareWorld();
       // A hero who joins an adventure already under way gets a personal thread too, without holding up play.
-      else if ((msg.t === 'create_character' || msg.t === 'add_premade') && this.game.s.setting && this.dm.weaveThreads) {
+      else if ((msg.t === 'create_character' || msg.t === 'add_premade' || msg.t === 'add_template') && this.game.s.setting && this.dm.weaveThreads) {
         const g = this.game, epoch = this.epoch;
         void this.dm.weaveThreads(g).then(() => { if (epoch === this.epoch) this.flush(); });
       }
@@ -527,7 +531,16 @@ export class Room {
     switch (msg.t) {
       case 'add_character': return void g.addCharacter(playerId, msg.classId, String(msg.name ?? ''));
       case 'add_premade': return void g.addPremade(playerId, String(msg.premadeId), String(msg.name ?? ''));
-      case 'create_character': return void g.createCharacter(playerId, msg.spec);
+      case 'add_template': {
+        const spec = this.hooks.template?.(playerId, String(msg.templateId ?? ''));
+        return void g.addTemplate(playerId, String(msg.templateId), spec ?? null);
+      }
+      case 'create_character': {
+        const c = g.createCharacter(playerId, msg.spec);
+        const recipe = msg.keep ? g.recipe(playerId, c.id) : null;
+        if (recipe) c.templateId = this.hooks.keep?.(playerId, recipe) ?? null;
+        return;
+      }
       case 'roll_abilities': return void g.rollAbilities(playerId);
       case 'choose': return g.choose(playerId, String(msg.characterId), String(msg.choiceId), msg.pick);
       case 'remove_character': return g.removeCharacter(playerId, String(msg.characterId));

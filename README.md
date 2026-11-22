@@ -25,7 +25,7 @@ It is built to feel like a pen-and-paper evening, not a video game with a chat w
   <img src="docs/screenshots/battle.webp" alt="A fight in a forest: three orcs approach four heroes on a tilted battle map; initiative order on top, action bar and hotbar below" width="860">
 </p>
 
-**Heroes you build or borrow.** Sixteen premade heroes, or a guided creator with all twelve SRD classes, nine species, backgrounds, skills, talents and gear. Levels 1 to 20, subclasses, feats, and every class feature running on its own counter. Paper-doll inventory, merchants in every town, magic items and the full SRD spell list.
+**Heroes you build or borrow.** Sixteen premade heroes, or a guided creator with all twelve SRD classes, nine species, backgrounds, skills, talents and gear. Levels 1 to 20, subclasses, feats, and every class feature running on its own counter. Keep favourites in *My heroes* and bring a fresh copy to any table. Paper-doll inventory, merchants in every town, magic items and the full SRD spell list.
 
 <table>
   <tr>

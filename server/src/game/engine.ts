@@ -12,7 +12,7 @@ import {
 import { DEFAULT_PREMADE, PREMADE_BY_ID } from '../../../shared/premades';
 import { BEST_TYPES, SPELL_BUFFS, castLevel, diceAtLevel, type SpellBuff } from '../../../shared/spells';
 import { heroLook } from '../../../shared/heroLook';
-import { BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, STYLES, classFeatureLines, loc, type L } from '../../../shared/rules';
+import { ABILITY_KEYS, BACKGROUNDS, EFFECT_LINES, FEATS, SPECIES, STYLES, classFeatureLines, loc, type L } from '../../../shared/rules';
 import { pickIcon } from '../../../shared/items';
 import {
   COMPASS, HEX_MILES, TERRAIN, direction, encounterChance, findRoute, formatHours, formatTime, hexDistance, hoursFor, sameHex, timeOfDay,
@@ -250,6 +250,8 @@ export interface InternalState {
   language: Lang;
   /** Ability scores rolled in the character creator, by player id. */
   rolled: Record<string, number[]>;
+  /** The creator's choices behind each hero (by hero id), so a hero can be kept as a template. Missing for heroes from before. */
+  origins?: Record<string, CharacterSpec>;
   /** Where and how the story is set. Missing before the adventure starts and in saves from before start options. */
   setting?: SettingState;
   /** Missing in saves from before the lobby. */
@@ -887,7 +889,7 @@ export class Game {
   }
 
   /** Build a hero from the choices made in the character creator, after checking every one of them. */
-  createCharacter(playerId: string, spec: CharacterSpec): Character {
+  createCharacter(playerId: string, spec: CharacterSpec, templateId?: string): Character {
     if (this.s.phase !== 'lobby') throw new GameError(this.t`The adventure has already begun`);
     if (this.s.characters.length >= 4) throw new GameError(this.t`The party is full (4 heroes)`);
     if (!spec || typeof spec !== 'object') throw new GameError(this.t`Unknown hero`);
@@ -941,6 +943,7 @@ export class Game {
       backstory: String(spec.backstory ?? '').trim().slice(0, 1200),
       pending: [],
       premadeId: spec.premadeId && PREMADE_BY_ID[spec.premadeId] ? spec.premadeId : null,
+      templateId: templateId ?? null,
       light: null,
       opportunity: 'ask',
       uses: {},
@@ -953,8 +956,34 @@ export class Game {
     c.hp = c.maxHp;
     c.mana = c.maxMana;
     this.s.characters.push(c);
+    (this.s.origins ??= {})[c.id] = { ...spec, name: clean, premadeId: undefined };
     this.s.ready = this.s.ready.filter((x) => x !== playerId);
     return c;
+  }
+
+  /**
+   * A saved hero joins the party as a fresh level 1 copy, built and checked like any new hero. Rolled
+   * scores were checked when the template was saved, so they count again here without a new roll.
+   */
+  addTemplate(playerId: string, templateId: string, spec: CharacterSpec | null): Character {
+    if (!spec) throw new GameError(this.t`Unknown hero`);
+    if (this.s.characters.some((c) => c.ownerId === playerId && c.templateId === templateId)) throw new GameError(this.t`That hero is already in the party`);
+    const before = this.s.rolled[playerId];
+    if (spec.method === 'roll' && spec.base) this.s.rolled[playerId] = ABILITY_KEYS.map((k) => spec.base[k]);
+    try {
+      return this.createCharacter(playerId, { ...spec, premadeId: undefined }, templateId);
+    } finally {
+      if (before) this.s.rolled[playerId] = before; else delete this.s.rolled[playerId];
+    }
+  }
+
+  /** The creator's choices behind a hero of this player, as they are now named and drawn: what a template keeps. */
+  recipe(playerId: string, characterId: string): CharacterSpec | null {
+    const c = this.char(characterId);
+    if (c.ownerId !== playerId) throw new GameError(this.t`That hero belongs to another player`);
+    const origin = this.s.origins?.[characterId];
+    if (!origin) return null;
+    return { ...origin, name: c.name, gender: c.gender, look: c.look, appearance: c.appearance, backstory: c.backstory };
   }
 
   removeCharacter(playerId: string, characterId: string) {
@@ -962,6 +991,7 @@ export class Game {
     const c = this.char(characterId);
     if (c.ownerId !== playerId) throw new GameError(this.t`That hero belongs to another player`);
     this.s.characters = this.s.characters.filter((x) => x.id !== characterId);
+    if (this.s.origins) delete this.s.origins[characterId];
     this.s.ready = this.s.ready.filter((x) => x !== playerId);
   }
 

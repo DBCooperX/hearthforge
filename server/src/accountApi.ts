@@ -1,7 +1,10 @@
 // Everything under /api/account: signing in and out, invite links, your own password and profile,
 // and taking over the seats this browser had before accounts existed.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isAccountId, type LegacySeat } from '../../shared/accounts';
+import { isAccountId, cleanSpec, type LegacySeat } from '../../shared/accounts';
+import { checkSpec } from '../../shared/build';
+import { ABILITY_KEYS } from '../../shared/rules';
+import type { CharacterSpec } from '../../shared/types';
 import type { CreditView } from '../../shared/credits';
 import { AccountsError, type Accounts } from './accounts';
 import { hashToken, readBody as readRaw } from './http';
@@ -84,6 +87,11 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
         if (!me) return send(401, { error: 'signed_out' });
         return send(200, { ...accounts.profile(me.id), credit: ctx.creditOf?.(me.id) ?? undefined });
       }
+      if (path === '/heroes') {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        return send(200, { heroes: accounts.templates(me.id) });
+      }
       if (path === '/bin') {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
@@ -133,6 +141,38 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
         } else if (body.do === 'purge') ctx.bin.purge(id, by);
         else return send(400, { error: 'bad_request' });
         return send(200, { tables: ctx.bin.list(me.id) });
+      }
+      case '/heroes': {
+        const me = accounts.account(token);
+        if (!me) return send(401, { error: 'signed_out' });
+        const room = ctx.rooms.get(String(body.table ?? ''));
+        const own = (id: unknown) => (typeof id === 'string' ? accounts.template(me.id, id) : undefined);
+        if (body.do === 'delete') {
+          if (typeof body.id !== 'string') return send(400, { error: 'bad_request' });
+          accounts.removeTemplate(me.id, body.id);
+        } else if (body.do === 'save') {
+          const spec = cleanSpec(body.spec);
+          const old = own(body.id);
+          if (body.id && !old) return send(404, { error: 'not_found' });
+          // Rolled scores count only if the server rolled them: at this table, or already in the hero being edited.
+          const rolled = room?.game.s.rolled[me.id];
+          const kept = old?.spec.method === 'roll' && old.spec.base ? ABILITY_KEYS.map((k) => old.spec.base[k]) : undefined;
+          if (!spec || !spec.name || (checkSpec(spec, rolled).length && checkSpec(spec, kept).length)) return send(400, { error: 'bad_hero' });
+          accounts.saveTemplate(me.id, spec, old?.id);
+        } else if (body.do === 'from_hero') {
+          if (!room) return send(404, { error: 'not_found' });
+          let spec: CharacterSpec | null;
+          try { spec = room.game.recipe(me.id, String(body.characterId ?? '')); } catch { return send(400, { error: 'bad_request' }); }
+          if (!spec) return send(400, { error: 'no_recipe' });
+          const clean = cleanSpec(spec);
+          const hero = room.game.s.characters.find((c) => c.id === body.characterId);
+          // The recipe was checked when the hero was made, rolled scores included.
+          const rolled = clean?.method === 'roll' && clean.base ? ABILITY_KEYS.map((k) => clean.base[k]) : undefined;
+          if (!clean || !clean.name || checkSpec(clean, rolled).length) return send(400, { error: 'bad_hero' });
+          const saved = accounts.saveTemplate(me.id, clean, own(hero?.templateId)?.id);
+          if (hero && hero.templateId !== saved.id) { hero.templateId = saved.id; room.flush(); }
+        } else return send(400, { error: 'bad_request' });
+        return send(200, { heroes: accounts.templates(me.id) });
       }
       case '/claim': {
         const me = accounts.account(token);

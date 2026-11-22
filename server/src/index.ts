@@ -38,7 +38,7 @@ import { Usage, sampleCost } from './admin/usage';
 import { Credits, type CostKind } from './credits';
 import { Illustrator, PictureError } from './illustrations';
 import { companionFigureSubject, companionLook, heroFigurePrompt, heroFigureSubject, monsterFigurePrompt, monsterFigureSubject, npcFigurePrompt, npcFigureSubject, npcPortraitKey, portraitKey, tallFigure } from './game/pictures';
-import { isAccountId } from '../../shared/accounts';
+import { cleanSpec, isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
 import { setShelf } from './campaign/registry';
@@ -218,6 +218,11 @@ const hooks: RoomHooks = {
   newCode,
   paused: (room) => auth.paused(room.name),
   stats: (playerId, delta, heroes) => accounts.credit(playerId, delta, heroes),
+  keep: (playerId, spec) => {
+    const clean = cleanSpec(spec);
+    try { return clean ? accounts.saveTemplate(playerId, clean).id : null; } catch { return null; }
+  },
+  template: (playerId, templateId) => accounts.template(playerId, templateId)?.spec ?? null,
   mayAsk: (playerId) => {
     const a = isAccountId(playerId) ? creditAccount(playerId) : null;
     return !a || credits.mayPlay(a) ? null : OUT_OF_CREDIT;
