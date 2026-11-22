@@ -6,7 +6,7 @@ import { SoundMixer } from '../music';
 import { BATTLE_NARRATION_MODES, type BattleNarrationMode } from '../../../shared/battleNarration';
 import { Info } from './Hint';
 import { SETTINGS_TABS, SHORTCUTS, SIZE_LABELS, TEXT_SIZES } from './labels';
-import { setPrefs, usePrefs } from './prefs';
+import { setPrefs, usePrefs, type StoryPortraits } from './prefs';
 import { sfx } from './sound';
 import { Kbd, TabBar, Window } from './Window';
 import { dictationBlocker } from '../dictation';
@@ -19,6 +19,8 @@ type Tab = keyof typeof SETTINGS_TABS;
 
 /** Choices for the end turn reminder, in seconds; 0 is off. */
 const TURN_REMINDERS = [0, 20, 45, 90];
+
+const STORY_PORTRAITS: Record<StoryPortraits, string> = { large: 'Large', small: 'Small', off: 'Off' };
 
 const BATTLE_NARRATION_LABELS: Record<BattleNarrationMode, string> = { off: 'Off', key: 'Key moments', all: 'Every comment' };
 
@@ -46,6 +48,12 @@ export function Settings({ onClose }: Props) {
               <span>{t('End turn reminder')} <Info text={t('On your turn in a fight, the End turn button glows and a short note appears when you have done nothing for this long, and soon after you have used up your action and movement. The turn never ends by itself.')} /></span>
               <span className="pick">
                 {TURN_REMINDERS.map((s) => <button key={s} type="button" className={prefs.turnReminder === s ? 'on' : ''} aria-pressed={prefs.turnReminder === s} onClick={() => { setPrefs({ turnReminder: s }); sfx('tab'); }}>{s ? t('{n} s', { n: s }) : t('Off')}</button>)}
+              </span>
+            </div>
+            <div className="setting">
+              <span>{t('Portraits in the story')} <Info text={t('A framed face beside what a person says in the story, and beside what your hero says. On small screens the portraits shrink by themselves. Until a portrait is painted, an initial takes its place.')} /></span>
+              <span className="pick">
+                {(Object.keys(STORY_PORTRAITS) as StoryPortraits[]).map((m) => <button key={m} type="button" className={prefs.storyPortraits === m ? 'on' : ''} aria-pressed={prefs.storyPortraits === m} onClick={() => { setPrefs({ storyPortraits: m }); sfx('tab'); }}>{t(STORY_PORTRAITS[m])}</button>)}
               </span>
             </div>
             <div className="setting">

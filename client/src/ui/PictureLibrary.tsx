@@ -73,7 +73,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
 
       <label className="inn-switch">
         <input type="checkbox" checked={c.on} onChange={(e) => edit({ on: e.target.checked })} />
-        <span><b>{t('Paint the big moments')}</b><br /><span className="muted small">{c.on ? t('On: the Dungeon Master may ask for a picture at the moments ticked below, within your limits.') : t('Off: no pictures are painted, and nothing is spent on them.')}</span></span>
+        <span><b>{t('Paint the big moments')}</b><br /><span className="muted small">{c.on ? t('On: the Dungeon Master may ask for a picture at the moments ticked below, within your budget.') : t('Off: no pictures are painted, and nothing is spent on them.')}</span></span>
       </label>
 
       <section>
@@ -125,7 +125,6 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <input type="checkbox" checked={c.portraits} onChange={(e) => edit({ portraits: e.target.checked })} />
           <span><b>{t('Paint a portrait of every new hero')}</b><br /><span className="muted small">{t('From the choices in the character creator: species, class, skin, hair, beard and colours. Every hero gets the same painted look, in colour, made to sit in the round brass frame, whatever style the scenes use. A changed look gets a new portrait. Until it is ready, and without a key, the drawn portrait stays. Paid by the player whose hero it is.')}</span></span>
         </label>
-        {num(t('Portraits per player and day'), c.portraitsPerDay, '1', (n) => edit({ portraitsPerDay: n }))}
         <div className="picture-sample">
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_portrait' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample portrait')}</button>
           <span className="muted small">{t('A dwarf fighter in the portrait style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
@@ -139,7 +138,6 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <input type="checkbox" checked={c.npcPortraits} onChange={(e) => edit({ npcPortraits: e.target.checked })} />
           <span><b>{t('Paint a portrait of every person the party meets')}</b><br /><span className="muted small">{t('When the Dungeon Master first introduces a named person, a small portrait is painted in the same style as the hero portraits. It shows on the hover card of their name and in the journal, goes along to every scene picture they are in, and is the model for their battle figure if they end up fighting. Paid by the table, like the scene pictures.')}</span></span>
         </label>
-        {num(t('Portraits of people per table and day'), c.npcPortraitsPerDay, '1', (n) => edit({ npcPortraitsPerDay: n }))}
       </section>
 
       <section>
@@ -148,7 +146,6 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           <input type="checkbox" checked={c.figures} onChange={(e) => edit({ figures: e.target.checked })} />
           <span><b>{t('Paint the figures on the battle map')}</b><br /><span className="muted small">{t('Every hero with a painted portrait gets a matching painted figure, paid by the player whose hero it is. Every kind of monster is painted once, the first time it shows up, and then used at every table of this server: a goblin costs one picture, however many goblins come. Until a figure is ready, and when this is off, the drawn figures stay. Works in the 2.5D and the flat battle view.')}</span></span>
         </label>
-        {num(t('New figures per day for the whole server'), c.figuresPerDay, '1', (n) => edit({ figuresPerDay: n }))}
         <div className="picture-sample">
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_figure' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample figure')}</button>
           <span className="muted small">{t('A goblin as it would stand on the battle map, about {price}. It goes on your own costs and is not used in play.', { price: usd(price) })}</span>
@@ -167,9 +164,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
       </section>
 
       <section>
-        <h3>{t('Limits')}</h3>
-        {num(t('Pictures per table and day'), c.perTableDay, '1', (n) => edit({ perTableDay: n }))}
-        {num(t('Minutes between two pictures at a table'), c.gapMinutes, '5', (n) => edit({ gapMinutes: n }))}
+        <h3>{t('Budget')}</h3>
         {num(t('Monthly budget for the whole server, in dollars'), c.monthUsd, '1', (n) => edit({ monthUsd: n }), t('(0: no cap)'))}
         <p className="muted small">{t('This month: {n} pictures, {cost}. Today: {today}. On disk: {mb} MB.', { n: lib.month.count, cost: usd(lib.month.usd), today: lib.today.count, mb: lib.diskMb })}</p>
       </section>

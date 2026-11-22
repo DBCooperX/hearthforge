@@ -92,8 +92,6 @@ export class Illustrator {
     if (!this.key(cfg.provider)) return 'no_key';
     if (this.figures.has(subject)) return 'done';
     if (this.busy.has(`figure:${subject}`) || this.failedFigures.has(subject)) return 'busy';
-    const today = dayOf(this.now());
-    if (this.index.filter((p) => p.moment === 'figure' && dayOf(p.at) === today).length >= cfg.figuresPerDay) return 'day';
     if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
     return null;
   }
@@ -162,11 +160,6 @@ export class Illustrator {
     if (!this.key(c.provider)) return 'no_key';
     if (!c.moments[moment]) return 'moment';
     if (this.busy.has(table)) return 'busy';
-    const mine = this.index.filter((p) => p.table === table && p.moment !== 'sample' && p.moment !== 'portrait' && p.moment !== 'npc' && p.moment !== 'figure');
-    const today = dayOf(this.now());
-    if (mine.filter((p) => dayOf(p.at) === today).length >= c.perTableDay) return 'day';
-    const last = mine.reduce((n, p) => Math.max(n, p.at), 0);
-    if (last && this.now() - last < c.gapMinutes * 60_000) return 'gap';
     if (c.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(c, c.provider, this.model) > c.monthUsd) return 'month';
     return null;
   }
@@ -232,8 +225,6 @@ export class Illustrator {
     const key = `${c.id}|${portraitKey(c)}`;
     if (c.portraitKey === portraitKey(c)) return 'done';
     if (this.busy.has(`portrait:${c.id}`) || this.failedPortraits.has(key)) return 'busy';
-    const today = dayOf(this.now());
-    if (this.index.filter((p) => p.moment === 'portrait' && p.account === account && dayOf(p.at) === today).length >= cfg.portraitsPerDay) return 'day';
     if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
     return null;
   }
@@ -275,8 +266,6 @@ export class Illustrator {
     const look = npcPortraitKey(n);
     if (!look || n.portraitKey === look) return 'done';
     if (this.busy.has(`npc:${table}:${n.id}`) || this.failedNpcs.has(`${table}|${n.id}|${look}`)) return 'busy';
-    const today = dayOf(this.now());
-    if (this.index.filter((p) => p.moment === 'npc' && p.table === table && dayOf(p.at) === today).length >= cfg.npcPortraitsPerDay) return 'day';
     if (cfg.monthUsd > 0 && this.spent(monthOf).usd + pictureUsd(cfg, cfg.provider, this.model) > cfg.monthUsd) return 'month';
     return null;
   }
@@ -435,15 +424,10 @@ export function cleanConfig(raw: Partial<PictureConfig>, base: PictureConfig): P
     models,
     style: PICTURE_STYLES.includes(r.style) ? r.style : base.style,
     portraits: typeof r.portraits === 'boolean' ? r.portraits : base.portraits ?? true,
-    portraitsPerDay: bound(r.portraitsPerDay, 0, 20, base.portraitsPerDay ?? 3),
     npcPortraits: typeof r.npcPortraits === 'boolean' ? r.npcPortraits : base.npcPortraits ?? true,
-    npcPortraitsPerDay: bound(r.npcPortraitsPerDay, 0, 50, base.npcPortraitsPerDay ?? 6),
     figures: typeof r.figures === 'boolean' ? r.figures : base.figures ?? true,
-    figuresPerDay: bound(r.figuresPerDay, 0, 200, base.figuresPerDay ?? 20),
     customStyle: typeof r.customStyle === 'string' ? r.customStyle.replace(/\s+/g, ' ').trim().slice(0, 600) : base.customStyle,
     moments,
-    perTableDay: bound(r.perTableDay, 0, 50, base.perTableDay),
-    gapMinutes: bound(r.gapMinutes, 0, 600, base.gapMinutes),
     monthUsd: bound(r.monthUsd, 0, 1000, base.monthUsd),
     usd,
   };

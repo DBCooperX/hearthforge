@@ -110,15 +110,14 @@ describe('the illustrator paints figures', () => {
     expect(ill.gate('figs', 'boss')).toBeNull();
   });
 
-  it('stops at the daily limit, on refusals and when switched off, and shows none while off', async () => {
-    const { ill, later } = setup({ figuresPerDay: 1 });
+  it('has no count limit, stops on refusals and when switched off, and shows none while off', async () => {
+    const { ill } = setup({});
     const look = MONSTERS.goblin.look;
     const goblin = monsterFigureSubject('goblin', look);
     const { prompt, key } = monsterFigurePrompt(MONSTERS.goblin, look);
     await ill.paintFigure({ table: 'figs', tableTitle: 'Figs', subject: goblin, caption: 'Goblin', prompt, key, tall: true }, () => {});
     const wolf = monsterFigureSubject('wolf', MONSTERS.wolf.look);
-    expect(ill.figureGate(wolf)).toBe('day');
-    later(24 * 60);
+    // No limit by count: the budget is the only cap.
     expect(ill.figureGate(wolf)).toBeNull();
     ill.action({ do: 'config', config: { figures: false } });
     expect(ill.figureGate(wolf)).toBe('figures');
@@ -140,11 +139,10 @@ describe('the illustrator paints figures', () => {
   });
 
   it('keeps the new settings valid', () => {
-    const c = cleanConfig({ figures: 'yes' as never, figuresPerDay: 9999 }, DEFAULT_PICTURE_CONFIG);
+    const c = cleanConfig({ figures: 'yes' as never }, DEFAULT_PICTURE_CONFIG);
     expect(c.figures).toBe(true);
-    expect(c.figuresPerDay).toBe(200);
     // Saved setups from before battle figures get them on.
-    const { figures: _f, figuresPerDay: _d, ...old } = DEFAULT_PICTURE_CONFIG;
+    const { figures: _f, ...old } = DEFAULT_PICTURE_CONFIG;
     expect(cleanConfig({}, old as PictureConfig).figures).toBe(true);
   });
 });

@@ -32,10 +32,10 @@ function newGame() {
 }
 
 describe('portraits of people', () => {
-  it('paints the person in the shared portrait style, once per look, and counts them per table and day', async () => {
+  it('paints the person in the shared portrait style, once per look, with no count limit', async () => {
     const g = newGame();
     const varo = g.s.memory.npcs.find((n) => n.name === 'Varo Kessel')!;
-    const { ill, calls, later } = illustrator({ npcPortraitsPerDay: 1 });
+    const { ill, calls } = illustrator();
     expect(ill.npcPortraitGate('t1', varo)).toBeNull();
     let billed = 0;
     const p = await ill.paintNpcPortrait({ table: 't1', tableTitle: 'T', npc: varo }, (usd) => { billed += usd; });
@@ -49,12 +49,10 @@ describe('portraits of people', () => {
     expect(prompt).toContain('grey moustache');
     varo.portraitId = p.id; varo.portraitKey = p.key;
     expect(ill.npcPortraitGate('t1', varo)).toBe('done');
-    // The limit is per table: another table has its own, and the next day starts afresh.
+    // No limit by count: only the budget and the players' credit cap the pictures.
     const other = { ...varo, portraitKey: undefined };
-    expect(ill.npcPortraitGate('t1', other)).toBe('day');
-    expect(ill.npcPortraitGate('t2', other)).toBeNull();
-    later(24 * 60);
     expect(ill.npcPortraitGate('t1', other)).toBeNull();
+    expect(ill.npcPortraitGate('t2', other)).toBeNull();
     // They do not count against the scene pictures, and can be switched off.
     expect(ill.gate('t1', 'boss')).toBeNull();
     ill.action({ do: 'config', config: { npcPortraits: false } });
@@ -83,9 +81,8 @@ describe('portraits of people', () => {
   });
 
   it('keeps the setting valid', () => {
-    const c = cleanConfig({ npcPortraits: false, npcPortraitsPerDay: 999 }, DEFAULT_PICTURE_CONFIG);
+    const c = cleanConfig({ npcPortraits: false }, DEFAULT_PICTURE_CONFIG);
     expect(c.npcPortraits).toBe(false);
-    expect(c.npcPortraitsPerDay).toBe(50);
     expect(DEFAULT_PICTURE_CONFIG.npcPortraits).toBe(true);
   });
 
