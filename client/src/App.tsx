@@ -81,7 +81,10 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   }, [acct.claimed]);
   const { state, send } = conn;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The companion whose gear the inventory shows, instead of the selected hero. */
+  const [gearOf, setGearOf] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
+  useEffect(() => { if (overlay !== 'inventory') setGearOf(null); }, [overlay]);
   const [targeting, setTargeting] = useState<Targeting>(null);
   const [travelTarget, setTravelTarget] = useState<Hex | null>(null);
   /** A move that would provoke opportunity attacks waits for a second click on the same tile. */
@@ -223,7 +226,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     (x: number, y: number) => {
       if (!state || !combat) return;
       const monster = state.monsters.find((m) => m.alive && inFootprint(m, m.tiles, x, y));
-      const hero = state.characters.find((c) => !c.dead && c.x === x && c.y === y);
+      const hero = [...state.characters, ...(state.companions ?? [])].find((c) => !c.dead && c.x === x && c.y === y);
       if (monster) {
         if (!actor) return conn.toast(t('Wait for your turn'));
         if (targeting?.kind === 'ability' && targeting.item && targetAbility?.target === 'enemy') send({ t: 'use_item', characterId: actor.id, uid: targeting.item, targetId: monster.id });
@@ -289,7 +292,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     const reach = state && combat && turnChar ? reachable(state, turnChar, combat.movementLeft) : new Set<string>();
     const targetIds = new Set<string>();
     if (state && wantsEnemy) for (const m of state.monsters) if (m.alive) targetIds.add(m.id);
-    if (state && wantsAlly) for (const c of state.characters) if (!c.dead) targetIds.add(c.id);
+    if (state && wantsAlly) for (const c of [...state.characters, ...(state.companions ?? [])]) if (!c.dead) targetIds.add(c.id);
     // In the dark, a monster is a shape until one of the player's heroes (or anyone's, for a spectator) can make it out.
     const unseenIds = new Set<string>();
     if (state && combat && state.light?.ambient !== 'bright') {
@@ -333,7 +336,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   else if (targeting?.kind === 'item') hint = t('Potion: click the hero who should drink it. Esc to cancel.');
   else if (risky && state) hint = t('Leaving the reach of {names} invites an opportunity attack. Click the same square again to go anyway, or Disengage first.', { names: risky.ids.map((id) => state.monsters.find((m) => m.id === id)?.name ?? '?').join(', ') });
   else if (combat && turnChar) hint = `${turnChar.ownerId === playerId ? t("{name}'s turn", { name: turnChar.name }) : t("{name}'s turn. Their player is away, so anyone may act for them.", { name: turnChar.name })}`;
-  else if (combat) hint = t('Waiting for {name}…', { name: state.characters.find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
+  else if (combat) hint = t('Waiting for {name}…', { name: [...state.characters, ...(state.companions ?? [])].find((c) => c.id === activeId)?.name ?? state.monsters.find((m) => m.id === activeId)?.name ?? t('the Dungeon Master') });
   else hint = '';
 
   const focus = selected ?? mine[0] ?? state.characters[0];
@@ -382,6 +385,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
           onGive={(fromId, from, to) => send({ t: 'give', characterId: fromId, from, toCharacterId: to.id })}
           onSheet={(c) => { setSelectedId(c.id); setOverlay('sheet'); }}
           onLevelUp={(c) => { setSelectedId(c.id); setOverlay('levelup'); }}
+          onCompanion={(c) => { setGearOf(c.id); setOverlay('inventory'); }}
         />
         {combat || fightEnd ? (
           <>
@@ -421,7 +425,9 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         )}
         {overlay === 'test' && state.testMode && <TestToolbox state={state} conn={conn} host={state.hostId === playerId} onClose={() => setOverlay(null)} />}
         {overlay === 'trade' && focus && shop && <Trade state={state} shop={shop} character={focus} mine={playable.includes(focus)} conn={conn} onSelect={setSelectedId} onShop={setShopId} onClose={() => setOverlay(null)} />}
-        {overlay === 'inventory' && focus && <Inventory state={state} character={focus} conn={conn} onSelect={setSelectedId} onClose={() => setOverlay(null)} />}
+        {overlay === 'inventory' && focus && <Inventory state={state} character={(state.companions ?? []).find((c) => c.id === gearOf) ?? focus} conn={conn}
+          onSelect={(id) => { if ((state.companions ?? []).some((c) => c.id === id)) setGearOf(id); else { setGearOf(null); setSelectedId(id); } }}
+          onClose={() => { setOverlay(null); setGearOf(null); }} />}
         {overlay === 'sheet' && focus && <CharacterSheet state={state} character={focus} onSelect={setSelectedId} onClose={() => setOverlay(null)} mine={focus.ownerId === playerId} onLevelUp={() => setOverlay('levelup')}
           onCast={focus.ownerId === playerId ? (abilityId, targetId, level) => send({ t: 'ability', characterId: focus.id, abilityId, ...(targetId ? { targetId } : {}), ...(level ? { level } : {}) }) : undefined} />}
         {overlay === 'levelup' && focus && focus.ownerId === playerId && focus.pending.length > 0 && <LevelUp key={focus.pending[0].id} character={focus} items={state.items} conn={conn} onClose={() => setOverlay(null)} />}

@@ -160,6 +160,8 @@ export interface MonsterDef {
   perception?: number;
   stealth?: number;
   saves: Partial<Record<AbilityKey, number>>;
+  /** The six ability scores, Strength first. Only on SRD 5.2.1 entries; companions are built from them. */
+  scores?: number[];
   attacks: MonsterAttack[];
   specials?: MonsterSpecial[];
   multi?: Multiattack;
@@ -762,7 +764,7 @@ function fromSrd(m: SrdMonster, legacy?: Legacy): MonsterDef {
     id: m.id, name: m.name, sprite: legacy?.sprite ?? m.id, type: m.type as CreatureType, size: m.size as Size, cr: m.cr, xp: m.xp,
     look: legacy?.look ?? fixLook(m.id, m.look), ac: m.ac, hp: m.hp, speed: m.speed,
     ...(m.fly ? { fly: m.fly } : {}), ...(m.swim ? { swim: m.swim } : {}), ...(m.climb ? { climb: m.climb } : {}), ...(m.burrow ? { burrow: m.burrow } : {}),
-    dexMod: mod(m.abilities[1]), saves, attacks, specials,
+    dexMod: mod(m.abilities[1]), scores: m.abilities, saves, attacks, specials,
     perception: m.perception ?? 10 + mod(m.abilities[4]), stealth: m.stealth ?? mod(m.abilities[1]),
     ...(m.multi ? { multi: m.multi } : {}), ...(m.legendary ? { legendary: m.legendary } : {}),
     traits, flags: m.flags ?? {}, ...(m.swarm ? { swarm: true } : {}),

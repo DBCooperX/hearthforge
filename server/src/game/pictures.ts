@@ -203,6 +203,20 @@ export function npcFigureSubject(n: Pick<Npc, 'id' | 'portraitId'>, look: Monste
   return n.portraitId ? `n:${n.id}|${n.portraitId}|${look.weapon ?? 'none'}|${look.armor ?? 'none'}|v1` : null;
 }
 
+/**
+ * The look a companion's figure is painted in: their stat block's, but empty-handed and without armour, because the
+ * battle map draws what they hold now on top of it, as for the heroes.
+ */
+export function companionLook(template: string): MonsterLook {
+  const look = MONSTERS[template]?.look ?? MONSTERS.commoner.look;
+  return { ...look, weapon: null, armor: null };
+}
+
+/** What a companion's battle figure is painted from: the portrait of the person they are. */
+export function companionFigureSubject(n: Pick<Npc, 'id' | 'portraitId'>, template: string): string | null {
+  return npcFigureSubject(n, companionLook(template));
+}
+
 /** The prompt for the battle figure of a named person, with their portrait as the only reference. */
 export function npcFigurePrompt(n: NpcLook, look: MonsterLook): { prompt: string; key: FigureKey } {
   const key = keyFor(look.color);

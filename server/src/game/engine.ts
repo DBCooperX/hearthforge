@@ -24,6 +24,7 @@ import {
   ITEM_CATEGORIES,
   JOIN_ERRORS,
   MAX_SEATS,
+  MAX_COMPANIONS,
   MAX_LEVEL,
   SLOT_IDS,
   XP_THRESHOLDS,
@@ -82,8 +83,9 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
-import { heroFigureSubject, monsterFigureSubject, npcFigureSubject, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
+import { companionFigureSubject, heroFigureSubject, monsterFigureSubject, npcFigureSubject, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
 import { PICTURE_MOMENTS } from '../../../shared/illustrations';
+import { COMPANION_TEMPLATES, COMPANION_TEMPLATE_IDS, companionTemplate, parseStance } from '../../../shared/companions';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
 import { addRumour, attitude, changeStanding, checkTrophies, factionViews, guildFactor, hearRumour, makeFactions, rumourViews, shiftStanding, trophyViews, type FactionState } from './reputation';
 import { DEFAULT_STYLE, cleanStyle, type DmStyle } from '../../../shared/style';
@@ -211,6 +213,8 @@ export interface InternalState {
   ambient?: LightLevel;
   lights?: LightSource[];
   characters: Character[];
+  /** People of the story travelling with the party. Missing in saves from before companions. */
+  companions: Character[];
   monsters: Monster[];
   combat: CombatState | null;
   encounter: EncounterState | null;
@@ -431,6 +435,7 @@ export class Game {
       this.refresh(c);
       this.reconcile(c);
     }
+    this.s.companions ??= []; // saves from before companions
     // A restart drops an unanswered reaction prompt; the monsters' turn runs again from its start.
     if (this.s.combat?.reaction) this.s.combat.reaction = null;
   }
@@ -441,6 +446,7 @@ export class Game {
       phase: 'lobby',
       rows: [],
       characters: [],
+      companions: [],
       monsters: [],
       combat: null,
       encounter: null,
@@ -586,7 +592,7 @@ export class Game {
   private coverBonus(from: Pt, to: Pt) { return cheb(from, to) > 1 && hasCover(this.s.rows, from, to) ? COVER_BONUS : 0; }
 
   char(id: string): Character {
-    const c = this.s.characters.find((c) => c.id === id);
+    const c = this.s.characters.find((c) => c.id === id) ?? this.s.companions.find((c) => c.id === id);
     if (!c) throw new GameError(this.t`Unknown character`);
     return c;
   }
@@ -603,11 +609,16 @@ export class Game {
 
   /** A conscious hero standing here. The fallen do not block movement. */
   private charAt(x: number, y: number, except?: string) {
-    return this.s.characters.find((c) => !c.dead && c.hp > 0 && c.x === x && c.y === y && c.id !== except);
+    return this.party().find((c) => !c.dead && c.hp > 0 && c.x === x && c.y === y && c.id !== except);
   }
 
   conscious(c: Character) { return !c.dead && c.hp > 0; }
-  consciousChars() { return this.s.characters.filter((c) => this.conscious(c)); }
+  /** Everyone on the party's side who can still fight: the heroes and their companions. Monsters pick targets from these. */
+  consciousChars() { return this.party().filter((c) => this.conscious(c)); }
+  /** The heroes still on their feet. A fight is lost when none are left, whoever else still stands. */
+  consciousHeroes() { return this.s.characters.filter((c) => this.conscious(c)); }
+  /** The heroes and their companions. */
+  party(): Character[] { return [...this.s.characters, ...this.s.companions]; }
 
   /** Line of sight between two tiles (Bresenham). End tiles do not block. */
   los(a: Pt, b: Pt): boolean {
@@ -1033,7 +1044,7 @@ export class Game {
     if (this.s.phase === 'defeat') throw new GameError(this.t`The party has fallen. Start a new adventure.`);
     if (this.s.phase === 'combat') throw new GameError(this.t`Finish the fight first`);
     if (this.s.travel) throw new GameError(this.t`The party is on the road`);
-    if (!this.consciousChars().length) throw new GameError(this.t`Nobody in the party can act`);
+    if (!this.consciousHeroes().length) throw new GameError(this.t`Nobody in the party can act`);
   }
 
   advanceTime(minutes: number) { this.world.minutes += Math.max(0, Math.round(minutes)); }
@@ -1287,7 +1298,7 @@ export class Game {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
-    if (!this.consciousChars().length) throw new GameError(this.t`Nobody in the party can fight`);
+    if (!this.consciousHeroes().length) throw new GameError(this.t`Nobody in the party can fight`);
     const scale = Math.min(1, heroes.length / 4);
     const chosen: MonsterDef[] = [];
     const specs: GroupSpec[] = [];
@@ -1315,6 +1326,10 @@ export class Game {
     };
     const heroSpots = column([3, 2]);
     heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
+    // Companions stand behind the heroes, or beside them when the column is full.
+    const allies = s.companions.filter((c) => !c.dead);
+    const allySpots = column([1, 2, 3]).filter((p) => !heroes.some((c) => c.x === p.x && c.y === p.y) && p.y >= 1 && p.y < this.height - 1);
+    allies.forEach((c, i) => { const p = allySpots[i] ?? heroSpots[heroes.length + i]; c.x = p.x; c.y = p.y; });
     const boss = chosen.some((d) => d.boss || d.legendary) || specs.some((g) => g.boss);
     const label = (i: number) => specs[i].name?.trim().slice(0, 40) || this.n(chosen[i].name);
     s.monsters = chosen.map((def, i) => {
@@ -1341,8 +1356,9 @@ export class Game {
     const mark = (id: string) => (caught.has(id) ? { surprised: true } : {});
     const order: Combatant[] = [
       ...heroes.map((c) => ({ id: c.id, kind: 'pc' as const, initiative: this.heroInitiative(c, caught.has(c.id)), ...mark(c.id) })),
+      ...allies.map((c) => ({ id: c.id, kind: 'ally' as const, initiative: this.heroInitiative(c, caught.has(c.id)), ...mark(c.id) })),
       ...s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: this.initiativeFor(MONSTERS[m.defId].dexMod, caught.has(m.id)), ...mark(m.id) })),
-    ].sort((a, b) => b.initiative - a.initiative || (a.kind === 'pc' ? -1 : 1));
+    ].sort((a, b) => b.initiative - a.initiative || (a.kind === 'monster' ? 1 : 0) - (b.kind === 'monster' ? 1 : 0) || (a.kind === 'pc' ? -1 : b.kind === 'pc' ? 1 : 0));
     // The hero who strikes from hiding takes the first turn, and that turn's attack is the strike.
     const opener = ambush?.opener;
     if (opener) {
@@ -1465,14 +1481,14 @@ export class Game {
     s.ambient = isLightLevel(asked) ? asked : ambientLight(biome, this.world.minutes);
     s.lights = s.ambient === 'bright' ? [] : placeFixedLights(biome, s.rows, this.rng);
     this.lightCache = null;
-    for (const c of s.characters) {
+    for (const c of this.party()) {
       c.light = null;
       if (s.ambient === 'bright' || c.dead || this.heroSenses(c).darkvision > 0) continue;
       const kind = this.lightItemOf(c);
       if (kind) c.light = kind;
     }
     for (const m of s.monsters) m.light = s.ambient !== 'bright' ? MONSTERS[m.defId].carriesLight ?? null : null;
-    const lit = s.characters.filter((c) => c.light);
+    const lit = this.party().filter((c) => c.light);
     if (s.ambient !== 'bright') {
       const level = this.n(s.ambient === 'dark' ? 'Darkness' : 'Dim light');
       this.log('system', lit.length ? this.t`${level} on the battlefield. Lights held up: ${lit.map((c) => c.name).join(', ')}.` : this.t`${level} on the battlefield.`);
@@ -1492,7 +1508,7 @@ export class Game {
   /** Every light on the battle map; carried ones stand where their holder stands. */
   lightSources(): LightSource[] {
     const out: LightSource[] = [...(this.s.lights ?? [])];
-    for (const c of this.s.characters) if (c.light && !c.dead) out.push({ kind: c.light, x: c.x, y: c.y, holder: c.id });
+    for (const c of this.party()) if (c.light && !c.dead) out.push({ kind: c.light, x: c.x, y: c.y, holder: c.id });
     for (const m of this.s.monsters) if (m.light && m.alive) out.push({ kind: m.light, x: m.x, y: m.y, holder: m.id });
     return out;
   }
@@ -1597,7 +1613,7 @@ export class Game {
   }
 
   nameOf(id: string): string {
-    return this.s.characters.find((c) => c.id === id)?.name ?? this.s.monsters.find((m) => m.id === id)?.name ?? id;
+    return this.party().find((c) => c.id === id)?.name ?? this.s.monsters.find((m) => m.id === id)?.name ?? id;
   }
 
   current() {
@@ -1606,6 +1622,8 @@ export class Game {
   }
 
   isMonsterTurn() { return this.s.phase === 'combat' && this.current()?.kind === 'monster'; }
+  /** A companion is up: the server plays their turn with companionAct. */
+  isAllyTurn() { return this.s.phase === 'combat' && this.current()?.kind === 'ally'; }
 
   /** Advance to the next combatant able to act, resolving death saves on the way. */
   nextTurn() {
@@ -1629,7 +1647,7 @@ export class Game {
       combat.moved = false;
       // A reaction comes back at the start of one's own turn.
       combat.reacted = (combat.reacted ?? []).filter((id) => id !== cur.id);
-      if (cur.kind === 'pc') {
+      if (cur.kind === 'pc' || cur.kind === 'ally') {
         const c = this.char(cur.id);
         if (c.dead) continue;
         if (c.hp <= 0) { this.deathSave(c); continue; }
@@ -1683,9 +1701,9 @@ export class Game {
     const boss = !!s.encounter?.boss;
     const ending = (result: FightOutcome['result'], extra: Partial<FightOutcome> = {}): FightOutcome =>
       ({ seq, result, xp: 0, xpEach: 0, gold: 0, loot: [], slain: slainNames, rounds, boss, leveled: [], ...extra });
-    if (!this.consciousChars().length) {
+    if (!this.consciousHeroes().length) {
       this.clearEffects();
-      for (const c of s.characters) this.leaveFight(c);
+      for (const c of this.party()) this.leaveFight(c);
       s.combat = null;
       s.encounter = null;
       s.monsters = [];
@@ -1699,7 +1717,7 @@ export class Game {
         return true;
       }
       // Left for dead, the survivors are carried back to the nearest safe place.
-      for (const c of survivors) { c.hp = 1; c.conditions = []; c.deathSaves = { successes: 0, failures: 0 }; }
+      for (const c of [...survivors, ...s.companions.filter((x) => !x.dead)]) { c.hp = 1; c.conditions = []; c.deathSaves = { successes: 0, failures: 0 }; }
       const w = this.world;
       const haven = w.locations.filter((l) => !l.parentId && l.visited && SAFE_KINDS.includes(l.kind)).sort((a, b) => hexDistance(a, w.party) - hexDistance(b, w.party))[0];
       const lost = Math.floor(s.gold / 2);
@@ -1718,7 +1736,7 @@ export class Game {
     s.encounter = null;
     s.phase = 'explore';
     this.clearEffects();
-    for (const c of s.characters) {
+    for (const c of this.party()) {
       this.leaveFight(c);
       c.conditions = c.conditions.filter((x) => x !== 'dodging');
       if (!c.dead && c.hp <= 0) {
@@ -1910,7 +1928,11 @@ export class Game {
   /** Validates that this player may act with this character right now. */
   private actor(playerId: string, characterId: string, needsTurn = true): Character {
     const c = this.char(characterId);
-    if (!this.mayControl(playerId, c)) throw new GameError(this.t`That hero belongs to another player`);
+    if (c.companion) {
+      // Any player may sort out a companion's gear between fights. In a fight they act on their own.
+      if (this.s.phase === 'combat') throw new GameError(this.t`${c.name} acts on their own in a fight`);
+      if (!this.player(playerId)) throw new GameError(this.t`Sit down at the table first`);
+    } else if (!this.mayControl(playerId, c)) throw new GameError(this.t`That hero belongs to another player`);
     if (this.s.phase === 'lobby') throw new GameError(this.t`The adventure has not started`);
     if (this.s.phase === 'defeat') throw new GameError(this.t`The party has fallen. Start a new adventure.`);
     if (!this.conscious(c)) throw new GameError(c.dead ? this.t`${c.name} is dead` : this.t`${c.name} is unconscious`);
@@ -1955,7 +1977,11 @@ export class Game {
   // --------------------------------------------------------------- movement
 
   move(playerId: string, characterId: string, tx: number, ty: number) {
-    const c = this.actor(playerId, characterId);
+    this.moveChar(this.actor(playerId, characterId), tx, ty);
+  }
+
+  /** Walk a hero or companion toward a square on their turn, as far as their movement goes. */
+  private moveChar(c: Character, tx: number, ty: number) {
     const s = this.s;
     if (s.phase !== 'combat' || !s.combat) throw new GameError(this.t`There is no battle to move in right now`);
     if (!this.walkable(tx, ty)) throw new GameError(this.t`You can't go there`);
@@ -2544,7 +2570,7 @@ export class Game {
         let targets: Character[];
         if (many) {
           // Mass healing: the chosen ally first, then whoever is hurt worst, within reach.
-          targets = this.s.characters.filter((t) => !t.dead && t.hp < t.maxHp && (!inCombat || cheb(c, t) * 5 <= reach))
+          targets = this.party().filter((t) => !t.dead && t.hp < t.maxHp && (!inCombat || cheb(c, t) * 5 <= reach))
             .sort((a, b) => Number(b.id === first.id) - Number(a.id === first.id) || a.hp / a.maxHp - b.hp / b.maxHp).slice(0, ab.count);
           if (!targets.length) throw new GameError(this.t`Nobody nearby needs healing`);
         } else {
@@ -2866,7 +2892,7 @@ export class Game {
     c.conc = null;
     if (c.zone?.spell === conc.spell) c.zone = null;
     if (c.sustain?.spell === conc.spell) c.sustain = null;
-    for (const t of this.s.characters) this.removeBuffs(t, (b) => b.by === c.id && b.spell === conc.spell);
+    for (const t of this.party()) this.removeBuffs(t, (b) => b.by === c.id && b.spell === conc.spell);
     for (const m of this.s.monsters) this.liftMonster(m, (e) => e.by === c.id && e.spell === conc.spell);
     if (why) this.log('roll', this.t`${c.name} loses concentration on ${this.n(ABILITIES[conc.spell]?.name ?? conc.spell)} (${why}).`);
   }
@@ -2894,14 +2920,14 @@ export class Game {
     const reach = Math.max(5, range);
     const near = (t: Character) => !inCombat || cheb(c, t) * 5 <= reach;
     let targets: Character[];
-    if (ab.count === 99) targets = this.s.characters.filter((t) => !t.dead);
+    if (ab.count === 99) targets = this.party().filter((t) => !t.dead);
     else if (ab.target === 'self') targets = [c];
     else {
       const first = this.char(targetId ?? c.id);
       if (first.dead) throw new GameError(this.t`${first.name} is dead`);
       if (!near(first)) throw new GameError(this.t`${first.name} is too far away`);
       const n = (ab.count ?? 1) + (ab.countUp ?? 0) * Math.max(0, lvl - (ab.spellLevel ?? 0));
-      const others = this.s.characters.filter((t) => t !== first && !t.dead && near(t) && !(t.buffs ?? []).some((b) => b.id === ab.buff))
+      const others = this.party().filter((t) => t !== first && !t.dead && near(t) && !(t.buffs ?? []).some((b) => b.id === ab.buff))
         .sort((a, b) => Number(b.id === c.id) - Number(a.id === c.id) || cheb(a, c) - cheb(b, c));
       targets = [first, ...others].slice(0, n);
     }
@@ -3003,6 +3029,284 @@ export class Game {
     this.nextTurn();
   }
 
+  // ------------------------------------------------------------- companions
+
+  /** A companion by id or name. */
+  companionNamed(ref: string): Character | null {
+    const k = String(ref ?? '').trim().toLocaleLowerCase();
+    if (!k) return null;
+    return this.s.companions.find((c) => c.id === k || c.name.toLocaleLowerCase() === k)
+      ?? this.s.companions.find((c) => c.name.toLocaleLowerCase().split(/\s+/).includes(k)) ?? null;
+  }
+
+  /** The stat block names a companion can be asked for by, German included. */
+  private templateNames(): Record<string, string[]> {
+    return Object.fromEntries(COMPANION_TEMPLATES.map((t) => [t.id, [MONSTERS[t.id]?.name ?? t.id, tr('de', MONSTERS[t.id]?.name ?? t.id)]]));
+  }
+
+  /**
+   * The Dungeon Master's companion tool: someone of the story joins the party, leaves it, or changes how they help.
+   * Every argument is a plain string the engine checks.
+   */
+  companionTool(input: { action?: string; name?: string; role?: string; stats?: string; stance?: string; gear?: string }) {
+    const action = String(input.action ?? '').trim().toLowerCase();
+    if (action === 'join') return this.addCompanion(input);
+    if (action === 'leave') return this.dismissCompanion(String(input.name ?? ''));
+    if (action === 'update') return this.updateCompanion(input);
+    throw new GameError('action must be "join", "leave" or "update".');
+  }
+
+  addCompanion(input: { name?: string; role?: string; stats?: string; stance?: string; gear?: string }) {
+    const s = this.s;
+    if (s.phase === 'lobby' || !s.world) throw new GameError(this.t`The adventure has not started`);
+    const name = cleanName(input.name).slice(0, 40);
+    if (!name) throw new GameError(this.t`A companion needs a name`);
+    if (this.companionNamed(name)) return { ...this.updateCompanion(input), note: `${name} already travels with the party; their entry was updated.` };
+    if (s.characters.some((c) => sameName(c.name, name))) throw new GameError(`${name} is one of the heroes.`);
+    if (s.companions.filter((c) => !c.dead).length >= MAX_COMPANIONS) throw new GameError(`The party already has ${MAX_COMPANIONS} companions. Let one leave first.`);
+    const asked = String(input.stats ?? '').trim();
+    const template = companionTemplate(asked || 'commoner', this.templateNames());
+    if (!template) throw new GameError(`Unknown stat block "${asked}". Use one of: ${COMPANION_TEMPLATE_IDS.join(', ')}.`);
+    const def = MONSTERS[template.id];
+    const scores = def.scores ?? [10, 10, 10, 10, 10, 10];
+    const role = String(input.role ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    // They are someone of the story: the party's memory knows them, and their portrait is theirs.
+    const known = this.npcNamed(name);
+    const npcId = known?.id ?? this.rememberNpc({ name, role }).id;
+    const npc = this.s.memory.npcs.find((n) => n.id === npcId)!;
+    npc.locationId = null;
+    if (npc.disposition === 'wary' || npc.disposition === 'hostile') npc.disposition = 'neutral';
+    const equipment = Object.fromEntries(SLOT_IDS.map((x) => [x, null])) as Record<SlotId, ItemInstance | null>;
+    const bag: (ItemInstance | null)[] = Array(BAG_SIZE).fill(null);
+    const c: Character = {
+      id: this.uid('ally'), ownerId: '', name: npc.name.slice(0, 40), classId: 'fighter', className: this.n(def.name), gender: 'neutral', level: 1,
+      abilities: { str: scores[0], dex: scores[1], con: scores[2], int: scores[3], wis: scores[4], cha: scores[5] },
+      profBonus: 2, maxHp: def.hp, hp: def.hp, maxMana: 0, mana: 0, ac: def.ac, speed: def.speed, conditions: [], equipment, bag,
+      x: 0, y: 0, deathSaves: { successes: 0, failures: 0 }, dead: false, hitDice: 1, abilityIds: [], spent: [], skills: [], xp: 0, features: [],
+      speciesId: 'human', backgroundId: 'soldier', subclass: null, feats: [], expertise: [], resist: [],
+      look: heroLook({ speciesId: 'human', gender: 'neutral', classId: 'fighter', name: npc.name }),
+      appearance: npc.visual.description, backstory: '', pending: [], premadeId: null, light: null, opportunity: 'always', uses: {}, options: [], tempHp: 0, form: null, mark: null,
+      companion: { npcId: npc.id, role: role || npc.role || this.n(def.name), template: template.id, kind: this.n(def.name), stance: parseStance(input.stance) ?? template.stance, baseAc: def.ac, joinedDay: this.day() },
+    };
+    const gear = this.companionGear(String(input.gear ?? ''), template.kit);
+    gear.forEach((id, i) => {
+      const item = this.newItem(id);
+      const slot = i === 0 ? this.slotFor(this.def(id)) : null;
+      if (slot && !c.equipment[slot]) c.equipment[slot] = item;
+      else { const free = c.bag.indexOf(null); if (free >= 0) c.bag[free] = item; }
+    });
+    this.refreshCompanion(c);
+    c.hp = c.maxHp;
+    s.companions.push(c);
+    this.log('system', this.t`${c.name} joins the party as a companion.`);
+    return this.companionReport(c);
+  }
+
+  /** Catalogue items for a new companion: "kit" for what the stat block carries, a comma list of ids, or nothing. */
+  private companionGear(raw: string, kit: string[]): string[] {
+    const k = raw.trim().toLowerCase();
+    if (!k || k === 'none' || k === 'nothing') return [];
+    if (k === 'kit' || k === 'own' || k === 'default') return kit;
+    const out: string[] = [];
+    for (const part of k.split(/[,;]+/).map((x) => x.trim()).filter(Boolean)) {
+      if (part === 'kit') { out.push(...kit); continue; }
+      const def = this.findItemDef(part);
+      if (!def || def.story || def.value > 100) throw new GameError(`Unknown or too valuable item "${part}" for a companion's own gear. Use catalogue ids such as "spear", or "kit".`);
+      out.push(def.id);
+    }
+    return out.slice(0, 4);
+  }
+
+  updateCompanion(input: { name?: string; role?: string; stats?: string; stance?: string }) {
+    const c = this.companionNamed(String(input.name ?? ''));
+    if (!c) throw new GameError(`${input.name} is not a companion of the party. Companions: ${this.s.companions.map((x) => x.name).join(', ') || 'none'}.`);
+    const info = c.companion!;
+    const role = String(input.role ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (role) info.role = role;
+    const stance = parseStance(input.stance);
+    if (String(input.stance ?? '').trim() && !stance) throw new GameError('stance must be "fight", "guard" or "back".');
+    if (stance) info.stance = stance;
+    const asked = String(input.stats ?? '').trim();
+    if (asked) {
+      const template = companionTemplate(asked, this.templateNames());
+      if (!template) throw new GameError(`Unknown stat block "${asked}". Use one of: ${COMPANION_TEMPLATE_IDS.join(', ')}.`);
+      if (template.id !== info.template) {
+        const def = MONSTERS[template.id], scores = def.scores ?? [10, 10, 10, 10, 10, 10];
+        const hurt = c.maxHp - c.hp;
+        info.template = template.id; info.kind = this.n(def.name); info.baseAc = def.ac;
+        c.className = info.kind;
+        c.abilities = { str: scores[0], dex: scores[1], con: scores[2], int: scores[3], wis: scores[4], cha: scores[5] };
+        c.maxHp = def.hp;
+        if (!c.dead) c.hp = Math.max(c.hp > 0 ? 1 : 0, def.hp - hurt);
+        this.refreshCompanion(c);
+      }
+    }
+    return this.companionReport(c);
+  }
+
+  /** A companion parts from the party. What they carry goes with them, except quest items, which stay with a hero. */
+  dismissCompanion(ref: string) {
+    const c = this.companionNamed(ref);
+    if (!c) throw new GameError(`${ref} is not a companion of the party. Companions: ${this.s.companions.map((x) => x.name).join(', ') || 'none'}.`);
+    if (this.s.phase === 'combat' && !c.dead) throw new GameError(this.t`${c.name} cannot leave in the middle of a fight`);
+    const kept = this.handBack(c, (def) => !!def.story?.quest || c.dead);
+    this.s.companions = this.s.companions.filter((x) => x !== c);
+    const npc = this.s.memory.npcs.find((n) => n.id === c.companion?.npcId);
+    if (npc && !c.dead) npc.locationId = this.s.world?.placeId ?? null;
+    this.log('system', c.dead ? this.t`The party lays ${c.name} to rest.` : this.t`${c.name} leaves the party.`);
+    return { left: c.name, ...(kept.length ? { handed_to_heroes: kept } : {}) };
+  }
+
+  /** Give what a companion carries back to the heroes, as far as there is room. Returns what went over. */
+  private handBack(c: Character, which: (def: ItemDef) => boolean): string[] {
+    const out: string[] = [];
+    for (const { item, loc } of this.carried(c)) {
+      const def = this.def(item.defId);
+      if (!which(def)) continue;
+      const taker = this.s.characters.find((h) => !h.dead && this.addToBag(h, item.defId, item.qty));
+      if (!taker) continue;
+      this.setLoc(c, loc, null);
+      out.push(`${this.countOf(def, item.qty)} (${taker.name})`);
+    }
+    return out;
+  }
+
+  /** What the Dungeon Master is told about a companion after a change. */
+  private companionReport(c: Character) {
+    const w = this.weaponOf(c);
+    return {
+      companion: c.name, id: c.id, stats: c.companion!.template, role: c.companion!.role, stance: c.companion!.stance,
+      hp: `${c.hp}/${c.maxHp}`, ac: c.ac, weapon: w ? w.name : 'none (unarmed)',
+      note: 'They show in the party panel. In a fight the server plays their turns by their stance; you narrate them. Give and take their things with give_item and take_item using their id.',
+    };
+  }
+
+  /** A companion's sheet follows from their stat block and what they hold: no class, no levels. */
+  private refreshCompanion(c: Character) {
+    this.applyBoosts(c);
+    c.uses ??= {};
+    c.options = [];
+    c.tempHp ??= 0;
+    c.form = null;
+    c.mark ??= null;
+    c.subclass = null;
+    c.abilityIds = [];
+    c.features = [];
+    c.maxMana = 0;
+    c.mana = 0;
+    c.resist = [...new Set(this.worn(c).flatMap((d) => d.resist ?? []))];
+    c.speed = (MONSTERS[c.companion!.template]?.speed ?? 30) + this.worn(c).reduce((n, d) => n + (d.speed ?? 0), 0);
+    c.buffs ??= [];
+    for (const b of this.buffsOf(c)) c.speed = (c.speed + (b.speed ?? 0)) * (b.speedMul ?? 1);
+    c.ac = this.computeAc(c);
+  }
+
+  /**
+   * Play a companion's turn. "fight" goes for the nearest enemy; "guard" strikes what comes within reach and steps
+   * in when a hero is attacked; "back" stays out of harm's way and dodges when cornered.
+   */
+  companionAct(): { companion: string; did: string } | null {
+    const cur = this.current();
+    const combat = this.s.combat;
+    if (!cur || cur.kind !== 'ally' || !combat || this.s.phase !== 'combat') return null;
+    const c = this.char(cur.id);
+    let did = 'waits';
+    try {
+      did = this.companionTurn(c, combat);
+    } catch (err) {
+      if (!(err instanceof GameError)) throw err;
+    }
+    // A blow on the way may have felled them or ended the fight; then the turn has already moved on.
+    if (this.s.phase === 'combat' && this.current()?.id === c.id) {
+      this.heroTurnEnd(c);
+      this.legendaryActions();
+      this.nextTurn();
+    }
+    return { companion: c.name, did };
+  }
+
+  private companionTurn(c: Character, combat: CombatState): string {
+    const stance = c.companion?.stance ?? 'guard';
+    const charmedBy = (m: Monster) => (c.effects ?? []).some((e) => e.condition === 'charmed' && e.sourceId === m.id);
+    const foes = () => this.s.monsters.filter((m) => m.alive && !this.mHas(m, 'banished') && !charmedBy(m) && this.heroSees(c, m));
+    const shot = this.weaponOf(c)?.weapon?.ranged;
+    const reach = shot ? shot.normal : 5;
+    const inReach = (m: Monster, from: Pt = c) => this.mdist(m, from) * 5 <= reach && this.los(from, this.mpoint(m, from));
+    const still = () => this.s.phase === 'combat' && this.current()?.id === c.id && this.conscious(c);
+    if (!foes().length) {
+      this.log('system', this.t`${c.name} looks for an enemy and finds none in sight.`);
+      return 'no enemy in sight';
+    }
+    if (stance === 'back') {
+      if (this.s.monsters.some((m) => m.alive && this.mdist(m, c) <= 1)) {
+        combat.actionUsed = true;
+        c.conditions.push('dodging');
+        this.log('roll', this.t`${c.name} keeps their head down and dodges.`);
+        return 'dodges';
+      }
+      const spot = this.saferSpot(c);
+      if (spot) this.moveChar(c, spot.x, spot.y);
+      if (still()) this.log('system', this.t`${c.name} stays back, out of harm's way.`);
+      return 'keeps back';
+    }
+    let targets = foes().filter((m) => inReach(m));
+    if (!targets.length) {
+      // A guard only steps in for a hero under attack; a fighter goes for whoever is closest.
+      const goal = stance === 'fight' ? foes() : foes().filter((m) => this.party().some((h) => h !== c && this.conscious(h) && this.mdist(m, h) <= 1));
+      if (goal.length && combat.movementLeft > 0) {
+        const canEnter = (p: Pt) => !this.monsterAt(p.x, p.y) && !this.charAt(p.x, p.y, c.id);
+        const path = this.bfs(c, (p) => goal.some((m) => inReach(m, p)) && (p.x === c.x && p.y === c.y || !this.charAt(p.x, p.y, c.id)), canEnter);
+        const steps = path ? this.afford(path, combat.movementLeft).walked : [];
+        // A guard does not leave the heroes' side for a fight further than one move away.
+        if (steps.length && (stance === 'fight' || steps.length === path!.length)) {
+          const end = steps[steps.length - 1];
+          this.moveChar(c, end.x, end.y);
+          if (!still()) return 'moved';
+        }
+      }
+      targets = foes().filter((m) => inReach(m));
+    }
+    if (!targets.length) {
+      this.log('system', stance === 'guard' ? this.t`${c.name} stays by the heroes, on guard.` : this.t`${c.name} closes in.`);
+      return stance === 'guard' ? 'guards' : 'closes in';
+    }
+    const m = [...targets].sort((a, b) => a.hp - b.hp || this.mdist(a, c) - this.mdist(b, c))[0];
+    combat.actionUsed = true;
+    combat.attacksLeft = 0;
+    this.strike(c, m);
+    this.checkCombatOver();
+    return `attacks ${m.name}`;
+  }
+
+  /** The square within a move that lies furthest from every enemy, if it is further than where they stand. */
+  private saferSpot(c: Character): Pt | null {
+    const combat = this.s.combat;
+    if (!combat || combat.movementLeft <= 0) return null;
+    const foes = this.s.monsters.filter((m) => m.alive);
+    const away = (p: Pt) => Math.min(...foes.map((m) => this.mdist(m, p)));
+    let best: Pt | null = null, bestD = away(c);
+    const r = combat.movementLeft;
+    for (let y = c.y - r; y <= c.y + r; y++) for (let x = c.x - r; x <= c.x + r; x++) {
+      if (!this.walkable(x, y) || this.monsterAt(x, y) || this.charAt(x, y, c.id)) continue;
+      const d = away({ x, y });
+      if (d > bestD || (best && d === bestD && cheb({ x, y }, c) < cheb(best, c))) { best = { x, y }; bestD = d; }
+    }
+    return best && (best.x !== c.x || best.y !== c.y) ? best : null;
+  }
+
+  /** Companions who fell for good are buried at a long rest; the heroes take what they carried. */
+  private buryCompanions() {
+    for (const c of this.s.companions.filter((x) => x.dead)) this.dismissCompanion(c.id);
+  }
+
+  /** A companion as players see them: with their portrait and painted battle figure, when there are those. */
+  private companionView(c: Character): Character {
+    const npc = this.s.memory.npcs.find((n) => n.id === c.companion?.npcId);
+    const subject = npc ? companionFigureSubject(npc, c.companion!.template) : null;
+    const figureId = subject ? this.pictures?.figure?.(subject) ?? null : null;
+    return { ...c, companion: { ...c.companion!, portraitId: npc?.portraitId ?? null }, ...(figureId ? { figureId } : {}) };
+  }
+
   // -------------------------------------------------------------- monsters
 
   /** Consecutive living monsters starting at the current turn. */
@@ -3012,7 +3316,7 @@ export class Game {
     const out: Monster[] = [];
     for (let i = combat.turnIndex; i < combat.order.length; i++) {
       const o = combat.order[i];
-      if (o.kind === 'pc') {
+      if (o.kind !== 'monster') {
         const c = this.char(o.id);
         if (this.conscious(c)) break;
         continue;
@@ -3335,14 +3639,14 @@ export class Game {
     m.movedFt = 0;
     if (this.s.combat) this.s.combat.once = [];
     // Holy Nimbus: enemies that start their turn in the paladin's aura burn.
-    for (const p of this.s.characters) {
+    for (const p of this.party()) {
       if (!m.alive || !p.conditions.includes('holy nimbus') || !this.conscious(p) || this.mdist(m, p) > (this.feat(p, 'aura_expansion') ? 6 : 2)) continue;
       const res = this.damageMonster(m, Math.max(1, this.mod(p, 'cha') + p.profBonus), 'radiant');
       this.log('roll', this.t`${m.name} burns in ${p.name}'s holy nimbus for ${res.dealt} ${this.n('radiant damage')}.${res.note}`);
     }
     if (!m.alive) return;
     if (def.legendary) { m.legLeft = def.legendary.uses; m.legCooldown = []; }
-    for (const c of this.s.characters) this.endEffects(c, (e) => e.sourceId === m.id && e.ends === 'source_start');
+    for (const c of this.party()) this.endEffects(c, (e) => e.sourceId === m.id && e.ends === 'source_start');
     const regen = def.flags?.regeneration;
     if (regen && m.hp < m.maxHp) {
       if (m.noRegen) this.log('roll', this.t`${m.name}'s wounds do not close this turn.`);
@@ -3382,7 +3686,7 @@ export class Game {
         if (e.turns !== undefined && --e.turns <= 0) this.liftMonster(m, (x) => x === e);
       }
       // "Until the end of its next turn": effects it caused on this very turn stay for one more.
-      for (const c of this.s.characters) {
+      for (const c of this.party()) {
         const fresh = (c.effects ?? []).filter((e) => e.sourceId === m.id && e.ends === 'source_end' && e.skip);
         this.endEffects(c, (e) => e.sourceId === m.id && e.ends === 'source_end' && !e.skip);
         for (const e of fresh) e.skip = false;
@@ -3499,7 +3803,7 @@ export class Game {
   /** Everything a monster does after moving: its action (one attack, a multiattack or a special), then a bonus action if it has one to use. */
   private monsterActs(m: Monster, plan: MonsterPlan): Partial<MonsterActResult> {
     const def = MONSTERS[m.defId];
-    const prefer = () => this.s.characters.find((c) => c.id === plan.targetId && this.conscious(c));
+    const prefer = () => this.party().find((c) => c.id === plan.targetId && this.conscious(c));
     const names = plan.attack === 'Multiattack' && def.multi ? this.multiSteps(m, def, prefer()) : [plan.attack];
     const attacks: NonNullable<MonsterActResult['attack']>[] = [];
     const specials: string[] = [];
@@ -3527,7 +3831,7 @@ export class Game {
 
   /** One step of a monster's action by name: a special if it is ready and catches someone, otherwise an attack. */
   private monsterUse(m: Monster, def: MonsterDef, name: string, plan: MonsterPlan): { attack?: NonNullable<MonsterActResult['attack']>; special?: string; note?: string; stop?: boolean } {
-    let target = this.s.characters.find((c) => c.id === plan.targetId && this.conscious(c));
+    let target = this.party().find((c) => c.id === plan.targetId && this.conscious(c));
     const sp = (def.specials ?? []).find((s) => s.name === name && s.slot !== 'aura' && s.slot !== 'death');
     if (sp && this.ready(m, sp)) {
       const caught = this.specialTargets(m, sp, target);
@@ -3672,7 +3976,7 @@ export class Game {
       const m = this.s.monsters.find((x) => x.id === this.fallen[0]);
       this.fallen.shift();
       if (!m) continue;
-      for (const c of this.s.characters) this.endEffects(c, (e) => e.sourceId === m.id && (['escape', 'source_start', 'source_end'].includes(e.ends) || e.condition === 'charmed' || e.condition === 'frightened'));
+      for (const c of this.party()) this.endEffects(c, (e) => e.sourceId === m.id && (['escape', 'source_start', 'source_end'].includes(e.ends) || e.condition === 'charmed' || e.condition === 'frightened'));
       if (this.s.phase !== 'combat') continue;
       for (const sp of (MONSTERS[m.defId].specials ?? []).filter((s) => s.slot === 'death')) {
         const caught = this.consciousChars().filter((c) => this.mdist(m, c) * 5 <= (sp.area?.size ?? 5));
@@ -3729,7 +4033,7 @@ export class Game {
 
   /** When a fight is over, what the monsters did to the heroes wears off. */
   private clearEffects() {
-    for (const c of this.s.characters) {
+    for (const c of this.party()) {
       if (!c.effects?.length) continue;
       c.effects = [];
       this.syncConditions(c);
@@ -4203,6 +4507,7 @@ export class Game {
 
   /** Everything about a hero that follows from class, level, options and gear. Run after any of them changes, and when a save is loaded. */
   private refresh(c: Character) {
+    if (c.companion) return this.refreshCompanion(c);
     this.applyBoosts(c);
     c.uses ??= {};
     c.options ??= [];
@@ -4529,7 +4834,7 @@ export class Game {
         break;
       }
       case 'preserve_life': {
-        const hurt = this.s.characters.filter((t) => !t.dead && t.hp * 2 < t.maxHp && (!inCombat || cheb(c, t) <= 6)).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+        const hurt = this.party().filter((t) => !t.dead && t.hp * 2 < t.maxHp && (!inCombat || cheb(c, t) <= 6)).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
         if (!hurt.length) throw new GameError(this.t`Nobody nearby is below half their hit points`);
         spend();
         let pool = 5 * c.level;
@@ -4572,7 +4877,7 @@ export class Game {
           const res = this.damageMonster(m, ok ? Math.floor(full / 2) : full, 'necrotic');
           this.log('roll', this.t`${m.name} takes ${res.dealt} ${this.n('necrotic damage')}.${res.note}`);
         }
-        const t = this.s.characters.filter((x) => !x.dead && x.hp < x.maxHp && cheb(c, x) <= 12).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        const t = this.party().filter((x) => !x.dead && x.hp < x.maxHp && cheb(c, x) <= 12).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
         if (t) this.log('roll', this.t`The land restores ${this.healChar(t, roll(dice, this.rng).total)} HP to ${t.name}.`);
         break;
       }
@@ -4775,6 +5080,8 @@ export class Game {
 
   computeAc(c: Character): number {
     let ac = armorClass(c, Object.fromEntries(SLOT_IDS.map((slot) => [slot, c.equipment[slot] ? this.def(c.equipment[slot]!.defId) : null])));
+    // A companion keeps the Armor Class of their stat block unless what they were handed is better.
+    if (c.companion) ac = Math.max(ac, c.companion.baseAc);
     for (const b of this.buffsOf(c)) { ac += b.ac ?? 0; if (b.acMin) ac = Math.max(ac, b.acMin); }
     return ac;
   }
@@ -4902,6 +5209,39 @@ export class Game {
     this.log('system', part > 1
       ? this.t`${c.name} hands ${part} × ${this.n(this.def(item.defId).name)} to ${t.name}.`
       : this.t`${c.name} hands ${this.n(this.def(item.defId).name)} to ${t.name}.`);
+    this.armCompanion(t, item.defId);
+  }
+
+  /** A companion with empty hands takes up a weapon or shield they are handed. */
+  private armCompanion(t: Character, defId: string) {
+    if (!t.companion || t.dead) return;
+    const def = this.def(defId);
+    const slot = this.slotFor(def);
+    if ((slot !== 'mainHand' && slot !== 'offHand') || t.equipment[slot]) return;
+    if (slot === 'offHand' && t.equipment.mainHand && this.def(t.equipment.mainHand.defId).weapon?.twoHanded) return;
+    try { this.equipItem(t.id, def.id); } catch { /* it stays in the backpack */ }
+  }
+
+  /**
+   * The story hands something from one member of the party to another, such as a hero giving a companion a spear.
+   * Used by the check that keeps the game in step with the narration; it has no player behind it.
+   */
+  handItem(fromId: string, toId: string, ref: string, qty = 1) {
+    const from = this.char(fromId), to = this.char(toId);
+    if (from.id === to.id) throw new GameError('Giver and receiver are the same.');
+    if (to.dead) throw new GameError(this.t`${to.name} is dead`);
+    const def = this.findItemDef(ref);
+    if (!def) throw new GameError(this.t`Unknown item "${ref}"`);
+    const found = this.carried(from).find((x) => x.item.defId === def.id);
+    if (!found) throw new GameError(`${from.name} does not carry ${def.name}.`);
+    const part = Math.max(1, Math.min(found.item.qty, Math.floor(qty) || 1));
+    if (!this.addToBag(to, def.id, part)) throw new GameError(this.t`${to.name}'s bag is full`);
+    if (part < found.item.qty) found.item.qty -= part;
+    else this.setLoc(from, found.loc, null);
+    this.refresh(from);
+    this.log('system', part > 1 ? this.t`${from.name} hands ${part} × ${this.n(def.name)} to ${to.name}.` : this.t`${from.name} hands ${this.n(def.name)} to ${to.name}.`);
+    this.armCompanion(to, def.id);
+    return { from: from.name, to: to.name, item: def.name, quantity: part };
   }
 
   useItem(playerId: string, characterId: string, uid: string, targetId?: string) {
@@ -5009,7 +5349,7 @@ export class Game {
   private recoverShort(): string {
     this.s.shortRestsLeft--;
     const parts: string[] = [];
-    for (const c of this.s.characters) {
+    for (const c of this.party()) {
       if (c.dead) continue;
       this.dropConcentration(c);
       this.expireBuffs(c, 'short');
@@ -5048,11 +5388,12 @@ export class Game {
 
   /** Everything back to full after a long rest, as one line for the log. */
   private recoverLong(): string {
+    this.buryCompanions();
     const w = this.world;
     this.s.lastLongRest = w.minutes;
     this.s.shortRestsLeft = 2;
     const parts: string[] = [];
-    for (const c of this.s.characters) {
+    for (const c of this.party()) {
       if (c.dead) continue;
       const hp = c.maxHp - c.hp, mana = c.maxMana - c.mana;
       const back = Object.entries(c.uses ?? {}).filter(([id, used]) => used && RESOURCES[id]?.show).map(([id]) => (this.lang === 'de' ? RESOURCES[id].de : RESOURCES[id].name));
@@ -5681,7 +6022,7 @@ export class Game {
   /** Story items the party holds right now, with who has them. */
   heldStoryItems(): { def: ItemDef; holder: Character; qty: number }[] {
     const out: { def: ItemDef; holder: Character; qty: number }[] = [];
-    for (const c of this.s.characters) {
+    for (const c of this.party()) {
       for (const { item } of this.carried(c)) {
         const def = this.s.items[item.defId];
         if (def) out.push({ def, holder: c, qty: item.qty });
@@ -5789,7 +6130,7 @@ export class Game {
   takeItem(input: { characterId?: string; item: string; quantity?: number; allowQuest?: boolean }) {
     const def = this.findItemDef(input.item);
     if (!def) throw new GameError(this.t`Unknown item "${input.item}"`);
-    const owners = input.characterId ? [this.char(input.characterId)] : this.s.characters;
+    const owners = input.characterId ? [this.char(input.characterId)] : this.party();
     let found: { c: Character; item: ItemInstance; loc: InvLoc } | null = null;
     for (const c of owners) {
       const hit = this.carried(c).find((x) => x.item.defId === def.id);
@@ -5983,6 +6324,7 @@ export class Game {
       map: { width: this.width, height: this.height, rows: s.rows, biome: s.biome ?? 'dungeon' },
       light: s.phase === 'combat' ? { ambient: s.ambient ?? 'bright', sources: this.lightSources() } : { ambient: 'bright', sources: [] },
       characters: this.pictures?.figure ? s.characters.map((c) => this.withFigure(c)) : s.characters,
+      companions: s.companions.map((c) => this.companionView(c)),
       monsters: s.monsters.map((m) => ({
         id: m.id, defId: m.defId, name: m.name, x: m.x, y: m.y, hp: m.hp, maxHp: m.maxHp,
         ac: MONSTERS[m.defId].ac, alive: m.alive, conditions: m.conditions,
