@@ -160,3 +160,19 @@ describe('a table with credits', () => {
     expect(a.sent.slice(before)).not.toContainEqual({ t: 'error', message: OUT_OF_CREDIT });
   });
 });
+
+describe('usage', () => {
+  it('sums the last seven days by type and table', () => {
+    let t = Date.UTC(2026, 10, 10);
+    const c = new Credits(dir(), () => t);
+    c.charge([mira.id], 1, 'claude', { id: 'a', title: 'Alpha' });
+    c.charge([mira.id], 0.5, 'images', { id: 'a', title: 'Alpha' });
+    c.charge([mira.id], 0.25, 'voice');
+    t += 8 * 86400000;
+    c.charge([mira.id, jonas.id], 1, 'claude', { id: 'b', title: 'Beta' });
+    const u = c.usage(mira);
+    expect(u).toMatchObject({ days: 7, total: 0.5, claude: 0.5, images: 0, voice: 0, byTable: [{ id: 'b', title: 'Beta', amount: 0.5 }], elsewhere: 0 });
+    t -= 8 * 86400000;
+    expect(c.usage(mira)).toMatchObject({ total: 2.25, elsewhere: 0.25 });
+  });
+});

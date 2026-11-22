@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { PASSWORD_MIN, type PlayStats, type Profile } from '../../../shared/accounts';
 import { CLASSES } from '../../../shared/rules';
 import type { ClassId } from '../../../shared/types';
-import { fmtAmount, type CreditView } from '../../../shared/credits';
+import { fmtAmount, type CreditView, type UsageView } from '../../../shared/credits';
 import { accountCall } from '../account';
 import { accountErrorText } from '../components/SignIn';
 import { useLang, useT, type Translate } from '../i18n';
@@ -42,6 +42,30 @@ function CreditTiles({ credit }: { credit: CreditView }) {
       <p className="muted small">{credit.limited
         ? t('The Dungeon Master and the narrator cost the innkeeper real money. Your share is taken off what you paid in: at a table with friends the cost is split among everyone sitting there.')
         : t('What your share of the Dungeon Master and the narrator has cost so far. At a table with friends the cost is split among everyone sitting there.')}</p>
+    </section>
+  );
+}
+
+/** The last seven days of that cost: by type and by table. */
+function UsageSection({ usage }: { usage: UsageView }) {
+  const t = useT();
+  const m = (n: number) => fmtAmount(n, usage.currency, true);
+  const kinds: [string, number][] = [[t('Story'), usage.claude], [t('Pictures'), usage.images], [t('Voice'), usage.voice]];
+  const rows = [...usage.byTable.map((x) => [x.id, x.title, x.amount] as const), ...(usage.elsewhere > 0.0005 ? [['', t('Elsewhere'), usage.elsewhere] as const] : [])];
+  return (
+    <section>
+      <h3>{t('Spent in the last {n} days', { n: usage.days })}</h3>
+      <div className="inn-stats">
+        <div className="inn-stat"><small>{t('Total')}</small><b>{m(usage.total)}</b></div>
+        {kinds.map(([label, v]) => <div key={label} className="inn-stat"><small>{label}</small><b>{m(v)}</b></div>)}
+      </div>
+      {rows.length > 0 && (
+        <table className="inn-table">
+          <thead><tr><th>{t('Table')}</th><th className="num">{t('Spent')}</th></tr></thead>
+          <tbody>{rows.map(([id, title, amount]) => <tr key={id || 'else'}><td>{title}</td><td className="num">{m(amount)}</td></tr>)}</tbody>
+        </table>
+      )}
+      <p className="muted small">{t('At a table with friends the cost is split among everyone sitting there, so this is your share.')}</p>
     </section>
   );
 }
@@ -99,6 +123,7 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
       <div className="inn-stack profile-body">
         {account.mustChange && <div className="inn-note is-warn"><span>{t('You are still using a password you did not choose. Choose your own below.')}</span></div>}
         {profile.credit && (profile.credit.limited || profile.credit.spent > 0 || profile.credit.paid !== 0) && <CreditTiles credit={profile.credit} />}
+        {profile.usage && profile.usage.total > 0 && <UsageSection usage={profile.usage} />}
         <section>
           <h3>{t('At the tables')}</h3>
           <StatTiles stats={stats} />

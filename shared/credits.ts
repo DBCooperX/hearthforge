@@ -48,6 +48,22 @@ export interface CreditView {
   warn: number;
 }
 
+/** What one account spent over the last few days, in the global currency. */
+export interface UsageView {
+  currency: string;
+  /** The window, in days (today included). */
+  days: number;
+  total: number;
+  /** By type: the Dungeon Master's story, the narrator's voice, pictures. */
+  claude: number;
+  voice: number;
+  images: number;
+  /** By table, biggest first. A table's name is its id. */
+  byTable: { id: string; title: string; amount: number }[];
+  /** Spent away from any table (trying voices or pictures in the Innkeeper area) or before tables were tracked. */
+  elsewhere: number;
+}
+
 /** An account in the Innkeeper's list of credits. */
 export interface CreditRow extends CreditView {
   id: string;

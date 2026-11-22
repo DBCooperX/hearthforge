@@ -5,7 +5,7 @@ import { isAccountId, cleanSpec, type LegacySeat } from '../../shared/accounts';
 import { checkSpec } from '../../shared/build';
 import { ABILITY_KEYS } from '../../shared/rules';
 import type { CharacterSpec } from '../../shared/types';
-import type { CreditView } from '../../shared/credits';
+import type { CreditView, UsageView } from '../../shared/credits';
 import { AccountsError, type Accounts } from './accounts';
 import { hashToken, readBody as readRaw } from './http';
 import { BinError, type TableBin } from './bin';
@@ -36,6 +36,8 @@ export interface AccountApiContext {
   tablesChanged(): void;
   /** An account's AI credit. */
   creditOf?(id: string): CreditView | null;
+  /** What an account spent in the last seven days. */
+  usageOf?(id: string): UsageView | null;
   /** Players' own pictures of their heroes, for the painter only. */
   heroRefs?: HeroRefs;
   /** Whether the painter can use such a picture right now. */
@@ -102,7 +104,7 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
       if (path === '/me') {
         const me = accounts.account(token);
         if (!me) return send(401, { error: 'signed_out' });
-        return send(200, { ...accounts.profile(me.id), credit: ctx.creditOf?.(me.id) ?? undefined });
+        return send(200, { ...accounts.profile(me.id), credit: ctx.creditOf?.(me.id) ?? undefined, usage: ctx.usageOf?.(me.id) ?? undefined });
       }
       if (path === '/heroes') {
         const me = accounts.account(token);
