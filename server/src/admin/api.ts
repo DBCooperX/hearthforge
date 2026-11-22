@@ -1,10 +1,11 @@
 // The Innkeeper's side of the server: everything under /api/admin. Only a request that carries
 // a live session may do anything beyond asking whether the panel exists and signing in.
 import { campaignShelf } from '../campaign/registry';
+import { storyLedger } from '../story/ledger';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { SETTINGS, type AdminCampaign, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo, type HttpsRequest } from '../../../shared/admin';
+import { SETTINGS, type AdminCampaign, type AdminVariety, type AdminConnection, type AdminError, type AdminOverview, type AdminStatus, type AdminTable, type BackupInfo, type HttpsRequest } from '../../../shared/admin';
 import type { InternalState } from '../game/engine';
 import type { Room } from '../room';
 import type { Auth } from './auth';
@@ -169,6 +170,7 @@ export class AdminApi {
         case '/overview': return this.overview();
         case '/tables': return this.tables();
         case '/bin': return { tables: ctx.bin.list() };
+        case '/variety': return this.variety();
         case '/campaign': return this.campaign(url.searchParams.get('id') ?? '');
         case '/players': return { connections: ctx.connections(), bans: ctx.auth.bans };
         case '/accounts': return this.accountList();
@@ -276,6 +278,13 @@ export class AdminApi {
         else throw new Refused(400, 'bad_request');
         ctx.tablesChanged();
         return this.tables();
+      }
+      case '/variety': {
+        const body = await this.json(req);
+        if (body.do !== 'clear') throw new Refused(400, 'bad_request');
+        storyLedger()?.clear();
+        console.log(`[innkeeper] ${me.username} cleared the memory of earlier stories.`);
+        return this.variety();
       }
       case '/bin': {
         const body = await this.json(req);
@@ -430,6 +439,11 @@ export class AdminApi {
     });
     tables.sort((a, b) => Number(b.players.some((p) => p.connected)) - Number(a.players.some((p) => p.connected)) || (a.savedAt < b.savedAt ? 1 : -1));
     return { tables };
+  }
+
+  /** The names and quests of earlier tables, which new stories are nudged away from. */
+  private variety(): AdminVariety {
+    return storyLedger()?.summary() ?? { tables: 0, npcs: [], places: [], quests: [] };
   }
 
   /** The story of one table: what the Dungeon Master set up and what the party has found so far. */

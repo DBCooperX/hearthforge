@@ -42,6 +42,7 @@ import { isAccountId } from '../../shared/accounts';
 import { OUT_OF_CREDIT } from '../../shared/credits';
 import { CampaignError, CampaignLibrary } from './campaign/library';
 import { setShelf } from './campaign/registry';
+import { StoryLedger, setLedger } from './story/ledger';
 import { CAMPAIGN_MAX_BYTES, CAMPAIGN_SOURCES } from '../../shared/campaign';
 
 import pkg from '../../package.json';
@@ -96,6 +97,8 @@ const MIME: Record<string, string> = {
 };
 
 const store = new Store(DATA_DIR);
+// What earlier tables made up, kept after they are deleted, so new stories get fresh names.
+setLedger(new StoryLedger(store));
 const narrator = new Narrator(VOICE_DIR, env);
 // Picture keys are read as they are saved in the Innkeeper, so a new key works without a restart.
 const illustrator = new Illustrator(env.PICTURES_DIR ?? join(DATA_DIR, 'pictures'), (key) => config.next(key));

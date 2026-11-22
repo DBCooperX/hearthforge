@@ -14,5 +14,9 @@ export class MemoryStore {
   binList(owner?: string): BinRow[] { return this.bins.filter((b) => owner === undefined || b.owner === owner).sort((a, b) => b.id - a.id).map(({ payload: _p, ...row }) => row); }
   binPayload(id: number) { return this.bins.find((b) => b.id === id)?.payload; }
   binDrop(id: number) { this.bins = this.bins.filter((b) => b.id !== id); }
+  ledger = new Map<string, { savedAt: number; data: string }>();
+  ledgerPut(room: string, savedAt: number, data: string) { this.ledger.set(room, { savedAt, data }); }
+  ledgerAll() { return [...this.ledger].map(([room, v]) => ({ room, ...v })); }
+  ledgerClear() { this.ledger.clear(); }
   close() {}
 }

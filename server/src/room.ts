@@ -2,6 +2,7 @@
 import type { WebSocket } from 'ws';
 import type { Character, ChatMessage, ClientMessage, ServerMessage, TableSummary, TestAction, TypingWhere } from '../../shared/types';
 import type { Store } from './db';
+import { storyLedger } from './story/ledger';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
 import { battleLineFor, highlightOf } from '../../shared/battleNarration';
 import type { NpcState } from './game/world';
@@ -440,6 +441,7 @@ export class Room {
     this.bookPlayTime();
     try {
       this.store.save(this.name, this.game.s);
+      storyLedger()?.record(this.name, this.game.s);
     } catch (err) {
       console.error('[store] save failed:', err);
     }
