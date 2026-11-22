@@ -13,6 +13,7 @@ import { Invite, LobbyScreen, PartySetup, Players } from './components/Lobby';
 import { MapView } from './components/MapView';
 import { FightEndBanner, SurpriseBanner, useFightEnd } from './components/FightEnd';
 import { TurnCallout } from './components/TurnCallout';
+import { CheckRoll } from './components/CheckRoll';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
@@ -516,6 +517,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         {overlay === 'map' && !combat && <MapOverlay {...travel} onClose={() => setOverlay(null)} />}
         <MobileTabs pane={shownPane} fighting={fighting} storyNew={logLength > storySeen.current} onPane={setPane} />
         {inn}
+        <CheckRoll state={state} playerId={playerId} send={send} />
         <Toasts conn={conn} />
       </div>
     </EntityProvider>

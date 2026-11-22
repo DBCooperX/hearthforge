@@ -416,11 +416,12 @@ export class ClaudeDM implements DungeonMaster {
     return async (name: string, raw: unknown): Promise<unknown> => {
       const i = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
       record?.calls.push({ name, input: i });
-      const result = ((): unknown => {
+      // A check may wait for the player to press Roll, so the result can be a promise.
+      const result = await Promise.resolve(((): unknown => {
         switch (name) {
           case 'skill_check':
             if (!ABILITY_KEYS.includes(i.ability)) throw new Error('Unknown ability');
-            return game.skillCheck(String(i.character_id), i.ability as AbilityKey, String(i.skill ?? ''), Math.max(1, Math.min(30, Math.round(i.dc))));
+            return game.requestCheck(String(i.character_id), i.ability as AbilityKey, String(i.skill ?? ''), Math.max(1, Math.min(30, Math.round(i.dc))));
           case 'remember_npc':
             return game.rememberNpc({ name: String(i.name), role: i.role, description: i.description, appearance: i.appearance, disposition: i.disposition as Disposition, locationId: i.location_id, note: i.note });
           case 'create_location':
@@ -518,7 +519,7 @@ export class ClaudeDM implements DungeonMaster {
           default:
             throw new Error(`Unknown tool ${name}`);
         }
-      })();
+      })());
       await onUpdate();
       return result;
     };

@@ -2531,4 +2531,13 @@ export const DE: Record<string, string> = {
   'Opportunity attack from {names}': 'Gelegenheitsangriff von {names}',
   '{n} ft, {m} ft left after this.': '{n} ft, danach noch {m} ft.',
   'Short by {n}': 'Um {n} verfehlt',
+  // The dice moment: a check waits for its player to press Roll.
+  '{hero}: {label}': '{hero}: {label}',
+  'Difficulty': 'Schwierigkeit',
+  'roll twice': 'zweimal würfeln',
+  'Waiting for {name} to roll…': 'Warte, bis {name} würfelt …',
+  'After that, the game rolls for you.': 'Danach würfelt das Spiel für dich.',
+  'Modifier {n}': 'Modifikator {n}',
+  'Jack of All Trades': 'Alleskönner',
+  'There is nothing to roll right now': 'Gerade gibt es nichts zu würfeln',
 };

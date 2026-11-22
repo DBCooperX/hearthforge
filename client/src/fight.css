@@ -176,3 +176,40 @@
 .move-tip .muted { color: var(--muted); }
 .move-tip .risk { color: #f3a48a; }
 .dice-why { margin-top: 4px; }
+
+/* ---- The dice moment: a check waits for its player to press Roll ---- */
+.check-roll { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.72)); animation: fade 0.18s ease; padding: 16px; }
+.cr-card { width: min(380px, 100%); display: grid; gap: 14px; justify-items: center; padding: 22px 22px 18px; border-radius: 12px; background: var(--iron); border: 1px solid var(--gold); box-shadow: 0 0 0 1px #0f0d0c, 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(238, 143, 60, 0.18); text-align: center; }
+.cr-card.success { border-color: var(--ok); box-shadow: 0 0 0 1px #0f0d0c, 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 48px rgba(108, 192, 108, 0.35); }
+.cr-card.failure { border-color: #d0614a; box-shadow: 0 0 0 1px #0f0d0c, 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 48px rgba(208, 97, 74, 0.35); }
+.cr-head { display: grid; gap: 2px; }
+.cr-head b { font-family: var(--font-head); font-size: 22px; letter-spacing: 0.04em; color: var(--gold); }
+.cr-head span { color: var(--muted); font-size: 15px; }
+.cr-body { display: flex; align-items: center; gap: 26px; }
+.cr-die { width: 112px; height: 124px; display: grid; place-items: center; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: linear-gradient(160deg, #f3e6c4, #cdb98a); color: #24160a; font-family: var(--font-head); font-weight: 800; font-size: 46px; transition: background 0.25s; }
+.cr-die.tumbling { animation: tumble 0.28s linear infinite; }
+.cr-card.success .cr-die { background: linear-gradient(160deg, #b6e7b0, #6cbf66); }
+.cr-card.failure .cr-die { background: linear-gradient(160deg, #eaa597, #c0563f); }
+.cr-die.nat20 { background: linear-gradient(160deg, #ffe58a, #f0b52c) !important; }
+.cr-die.nat1 { background: linear-gradient(160deg, #c84a3c, #7d1d14) !important; color: #fff; }
+.cr-dc { display: grid; gap: 2px; }
+.cr-dc small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+.cr-dc b { font-family: var(--font-head); font-size: 30px; color: var(--text); }
+.cr-parts { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 3px; font-size: 15px; }
+.cr-parts li { display: flex; justify-content: space-between; padding: 3px 8px; border-bottom: 1px dashed var(--line); }
+.cr-parts li b { font-variant-numeric: tabular-nums; }
+.cr-parts li.advantage { color: #9fdc9f; } .cr-parts li.disadvantage { color: #f3a48a; }
+.cr-parts li span { text-transform: none; }
+.cr-roll { min-width: 180px; font-size: 18px; padding: 10px 22px; display: inline-flex; gap: 10px; align-items: center; justify-content: center; }
+.cr-roll kbd { font-size: 12px; opacity: 0.7; }
+.cr-wait { color: var(--muted); font-style: italic; }
+.cr-result { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.cr-result b { font-family: var(--font-head); font-size: 34px; }
+.cr-result span { color: var(--muted); }
+.cr-result strong { font-family: var(--font-head); font-size: 20px; letter-spacing: 0.06em; text-transform: uppercase; }
+.cr-card.success .cr-result strong { color: var(--ok); } .cr-card.failure .cr-result strong { color: #ef7a5a; }
+.cr-timer { width: 100%; height: 3px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+.cr-timer span { display: block; height: 100%; background: var(--gold); transition: width 0.25s linear; }
+.cr-total { color: var(--muted); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .cr-die.tumbling { animation: none; } .check-roll { animation: none; } }
+@media (hover: none) { .cr-roll kbd { display: none; } }

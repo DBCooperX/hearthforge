@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### The dice moment
+- **You roll your own checks.** When the Dungeon Master asks for a check, it opens in the middle of the table: the hero, the check, the DC, and every part of the modifier (ability, proficiency or expertise, Guidance), plus advantage or disadvantage. The hero's player presses **Roll** (or Space); the die tumbles, lands and shows success or failure, then the story goes on. Everyone else at the table sees it too, with *Waiting for Mira to roll…*. If the player is away or does nothing for 45 seconds, the game rolls for them, as before.
+
 ### Know before you click
 - **Hit chance, damage and the reasons, before you commit.** Pointing at a monster on your turn (or tapping it once on a phone) adds your odds to its card: the chance to hit in percent, the damage range after its resistances, and chips for every reason, such as *Disadvantage: an enemy is next to you*, *Half cover: +2 AC* or *Bless: +1d4*. While you aim a spell, the card shows that spell instead: its hit chance, or the chance the monster fails its save against your DC. The numbers come from the same rules the server rolls with, including advantage, cover, Halfling Luck, Bless and Improved Critical.
 - **Movement preview.** Pointing at a square shows the path there as dots, what it costs in feet, what is left after, whether rough ground doubles it, and in red who would make an opportunity attack. On a phone the first tap on a square says the same in the line above the action bar.

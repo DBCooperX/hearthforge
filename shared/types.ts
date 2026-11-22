@@ -571,8 +571,29 @@ export interface RollInfo {
   target: { kind: 'AC' | 'DC'; value: number; name?: string };
   outcome: 'hit' | 'miss' | 'crit' | 'success' | 'failure';
   damage?: { amount: number; type: string };
+  /** Set on a check the player rolled themselves, so the table can show the result big. */
+  checkId?: string;
   /** What shaped the roll: advantage, cover, a blessing. Shown on the roll card, most of all on a miss. */
   why?: { code: OddsReason; n?: number }[];
+}
+
+/** A check waiting for its roll: what it is, the DC, and every part of the modifier, shown before the die is cast. */
+export interface PendingCheck {
+  id: string;
+  characterId: string;
+  hero: string;
+  label: string;
+  ability: AbilityKey;
+  skill: string;
+  dc: number;
+  mode: 'normal' | 'advantage' | 'disadvantage';
+  /** The parts of the modifier: name and value ("+2") or die ("+1d4"). */
+  parts: { label: string; value: string }[];
+  /** The flat modifier, dice left out. */
+  modifier: number;
+  /** When the check was asked for, and when the game rolls by itself if nobody has. */
+  since: number;
+  until: number;
 }
 
 export interface LevelUpInfo {
@@ -849,6 +870,8 @@ export interface GameState {
   lastFight: FightOutcome | null;
   /** Hit chances and damage for the hero who may act now, before anything is committed. */
   odds?: CombatOdds | null;
+  /** A check the Dungeon Master asked for, waiting for the hero's player to press Roll. */
+  check?: PendingCheck | null;
   /** Set while the owner has the table in test mode: the host gets a toolbox, everyone sees the badge. `since` is the time it was switched on. */
   testMode: { since: number } | null;
 }
@@ -921,6 +944,7 @@ export type ClientMessage =
   | { t: 'escape'; characterId: string }
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
+  | { t: 'roll_check'; id: string }
   | { t: 'trip'; go: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
   /** `qty` moves only part of a stack. */

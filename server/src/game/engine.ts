@@ -32,6 +32,7 @@ import {
   XP_THRESHOLDS,
   abilityMod,
   type AbilityDef,
+  type PendingCheck,
   type AbilityKey,
   type Character,
   type ChatMessage,
@@ -5723,7 +5724,58 @@ export class Game {
   // validate, clamp and apply, so the server stays the owner of the state.
 
   /** Ability check requested by the Dungeon Master. */
-  skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
+  /** A check that waits for its player to press Roll: set by the room, and the one waiting now. */
+  checkWaiter: ((check: PendingCheck) => Promise<void>) | null = null;
+  pendingCheck: PendingCheck | null = null;
+  checkWaitMs = 45000;
+  private checkSeq = 0;
+
+  /** What a check will add to the d20, part by part, before anything is rolled. */
+  checkPreview(c: Character, ability: AbilityKey, skill: string): { parts: PendingCheck['parts']; modifier: number; mode: RollMode; label: string } {
+    const name = skill.trim().toLowerCase();
+    const proficient = c.skills.includes(name);
+    const parts: PendingCheck['parts'] = [{ label: this.n(ABILITY_NAMES[ability]), value: signed(abilityMod(c.abilities[ability])) }];
+    let modifier = abilityMod(c.abilities[ability]);
+    const prof = proficient ? c.profBonus * (c.expertise.includes(name) ? 2 : 1) : this.feat(c, 'jack_of_all_trades') ? Math.floor(c.profBonus / 2) : 0;
+    if (prof) { parts.push({ label: proficient && c.expertise.includes(name) ? this.n('Expertise') : proficient ? this.n('Proficiency') : this.n('Jack of All Trades'), value: signed(prof) }); modifier += prof; }
+    const guide = (c.buffs ?? []).find((b) => SPELL_BUFFS[b.id]?.check);
+    if (guide) parts.push({ label: this.n(ABILITIES[guide.id]?.name ?? 'Guidance'), value: `+${SPELL_BUFFS[guide.id].check}` });
+    if ((this.opted(c, 'order_thaumaturge') && ['arcana', 'religion'].includes(name)) || (this.opted(c, 'primal_magician') && ['arcana', 'nature'].includes(name))) {
+      const w = Math.max(1, this.mod(c, 'wis'));
+      parts.push({ label: this.n(ABILITY_NAMES.wis), value: signed(w) });
+      modifier += w;
+    }
+    const adv = (name === 'athletics' && this.feat(c, 'remarkable_athlete')) || (ability === 'str' && c.conditions.includes('raging'));
+    const mode = rollMode(adv, c.conditions.includes('poisoned'));
+    const skillName = name ? this.n(name) : '';
+    const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
+    return { parts, modifier, mode, label };
+  }
+
+  /**
+   * A check the Dungeon Master asks for. When the hero's player is at the table, the game waits
+   * for them to press Roll (or for the time to run out) before the die is cast: the pen-and-paper moment.
+   */
+  async requestCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
+    const c = this.char(characterId);
+    if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
+    const waiter = this.checkWaiter;
+    if (!waiter || !this.player(c.ownerId)?.connected || this.pendingCheck) return this.skillCheck(characterId, ability, skill, dc);
+    const preview = this.checkPreview(c, ability, skill);
+    const check: PendingCheck = { id: `check-${Date.now().toString(36)}-${++this.checkSeq}`, characterId, hero: c.name, label: preview.label, ability, skill: skill.trim().toLowerCase(), dc, mode: preview.mode, parts: preview.parts, modifier: preview.modifier, since: Date.now(), until: Date.now() + this.checkWaitMs };
+    this.pendingCheck = check;
+    try { await waiter(check); } finally { this.pendingCheck = null; }
+    return this.skillCheck(characterId, ability, skill, dc, check.id);
+  }
+
+  /** A player presses Roll: only someone who may play the hero. */
+  pressRoll(playerId: string, id: string) {
+    const p = this.pendingCheck;
+    if (!p || p.id !== id) throw new GameError(this.t`There is nothing to roll right now`);
+    if (!this.mayControl(playerId, this.char(p.characterId))) throw new GameError(this.t`That hero belongs to another player`);
+  }
+
+  skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number, checkId?: string) {
     const c = this.char(characterId);
     if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
     const name = skill.trim().toLowerCase();
@@ -5745,7 +5797,7 @@ export class Game {
     let success = total >= dc;
     const skillName = name ? this.n(name) : '';
     const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
-    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
+    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure', ...(checkId ? { checkId } : {}) };
     this.log('roll', this.t`${c.name}: ${label}, ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
     // Heroic Inspiration: the first failed check is rerolled once, and the new roll counts.
     if (!success && c.heroic) {
@@ -6618,6 +6670,7 @@ export class Game {
       unanswered: dm.unanswered ?? [],
       lastFight: s.lastFight ?? null,
       odds: this.combatOdds(),
+      check: this.pendingCheck,
       testMode: s.testMode ? { since: s.testMode.since } : null,
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),
