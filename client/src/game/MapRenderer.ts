@@ -98,6 +98,8 @@ export interface ViewOptions {
   /** The way to the square the mouse points at, before any click: gold, or ember when it provokes. */
   hoverPath?: Set<string>;
   hoverRisk?: boolean;
+  /** The creature pointed at in the initiative bar: lit up on the board so the eye finds it. */
+  highlightId?: string | null;
 }
 
 export const EMPTY_VIEW: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set(), unseenIds: new Set(), danger: new Set(), warnIds: new Set(), reaction: null };
@@ -315,6 +317,8 @@ export class MapRenderer {
   private groundRT: RenderTexture | null = null;
   private rtRes = 0;
   private standLayer = new Container();
+  /** Nameplates in the 2.5D view: above every miniature, so a figure in front never hides the name. */
+  private plateLayer = new Container();
   private shadeSprite = new Sprite(Texture.EMPTY);
   private dying: Dying[] = [];
   private frame = 0;
@@ -365,7 +369,7 @@ export class MapRenderer {
       this.entLayer.visible = false;
       this.shadeSprite.texture = vignette();
       this.standLayer.sortableChildren = true;
-      this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.fx.layer, this.floatLayer);
+      this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.plateLayer, this.fx.layer, this.floatLayer);
       const img = new Image();
       img.onload = () => {
         if (this.destroyed) return;
@@ -463,7 +467,7 @@ export class MapRenderer {
         this.tiles.push(s);
       }
     }
-    for (const e of this.ents.values()) { e.root.destroy({ children: true }); e.stand?.root.destroy({ children: true }); }
+    for (const e of this.ents.values()) { e.root.destroy({ children: true }); e.stand?.root.destroy({ children: true }); if (e.plate && !e.plate.destroyed) e.plate.destroy({ children: true }); }
     this.ents.clear();
     for (const d of this.dying) d.node.destroy({ children: true });
     this.dying = [];
@@ -585,7 +589,7 @@ export class MapRenderer {
       if (seen.has(id)) continue;
       // Slain monsters get a last damage number, then vanish.
       if (e.kind === 'monster' && e.hp > 0) this.hpChanged(e, -e.hp);
-      if (e.plate) e.plate.visible = false;
+      if (e.plate) { e.plate.visible = false; if (e.plate.parent === this.plateLayer) { e.plate.destroy({ children: true }); e.plate = null; } }
       if (this.reduced && e.incoming === 0) {
         e.stand?.root.destroy({ children: true });
         e.root.destroy({ children: true });
@@ -619,7 +623,6 @@ export class MapRenderer {
         this.standLayer.addChild(root);
         s = { root, shadow, base, fig, bar, figKey: key, figH: TILE };
         e.stand = s;
-        if (e.plate) { root.addChild(e.plate); }
       }
       s.fig.texture = t;
       s.figKey = key;
@@ -777,13 +780,12 @@ export class MapRenderer {
       g.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, (h - 4) / 2, 5).fill({ color: 0xf6dc96, alpha: 0.45 });
       for (const sx of [-1, 1]) g.circle(sx * (w / 2 - 8), 0, 2.5).fill(0x6a4a1c);
       plate.addChild(g, text);
-      (e.stand ? e.stand.root : e.root).addChild(plate);
+      (this.tilt ? this.plateLayer : e.root).addChild(plate);
       e.plate = plate;
     }
-    if (e.stand) {
-      // On the front rim of the miniature's base.
-      e.plate.scale.set(0.2);
-      e.plate.position.set(0, ((e.size * TILE) / 2) * 0.8 * GROUND_SQUASH + 2);
+    if (this.tilt) {
+      // On the front rim of the miniature's base; placed with the miniature each frame.
+      if (!e.stand) { e.plate.visible = false; return; }
     } else {
       // Sits on the bottom rim of the token's frame, like the plate on a miniature's base.
       e.plate.scale.set(1 / this.scale / 2.2);
@@ -1004,6 +1006,15 @@ export class MapRenderer {
     if (this.opts.reaction) { ring(this.opts.reaction.monsterId, 0xff8a3d, beat); ring(this.opts.reaction.heroId, 0xffd54f, beat); }
     if (this.opts.activeId && this.opts.activeId !== this.opts.selectedId) ring(this.opts.activeId, 0xffd54f, beat);
     ring(this.opts.selectedId, 0xffffff, 0.9);
+    const lit = this.opts.highlightId ? this.ents.get(this.opts.highlightId) : undefined;
+    if (lit && lit.root.visible) {
+      const r = (lit.size * TILE) / 2;
+      const foe = lit.kind === 'monster';
+      const color = foe ? 0xff6a5a : 0x9fe0a0;
+      if (this.tilt) {
+        g.circle(lit.root.x + r, lit.root.y + r, r * 1.05).fill({ color, alpha: 0.28 }).stroke({ width: 2.4, color, alpha: 0.95 });
+      } else g.rect(lit.root.x - 0.5, lit.root.y - 0.5, lit.size * TILE + 1, lit.size * TILE + 1).fill({ color, alpha: 0.22 }).stroke({ width: 2, color, alpha: 0.95 });
+    }
     if (this.hover && tileWalkable(tileAt(state, this.hover.x, this.hover.y))) {
       g.rect(this.hover.x * TILE + 0.5, this.hover.y * TILE + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color: 0xd4a857, alpha: 0.8 });
     }
@@ -1238,6 +1249,11 @@ export class MapRenderer {
       st.root.position.set(foot.x + ox, foot.y);
       st.root.scale.set(cam.k * foot.s);
       st.root.zIndex = foot.y + (e.id === this.opts.activeId ? 0.5 : 0);
+      if (e.plate?.visible) {
+        const k = cam.k * foot.s;
+        e.plate.position.set(foot.x + ox, foot.y + (((e.size * TILE) / 2) * 0.8 * GROUND_SQUASH + 2) * k);
+        e.plate.scale.set(0.2 * k);
+      }
       if (e.flash > 0) e.flash -= dt;
       st.fig.tint = e.flash > 0 ? mixColor(e.tint, 0xff4a3a, Math.min(1, e.flash / 0.2) * 0.7) : e.tint;
       // A slow breath, so the table feels alive.

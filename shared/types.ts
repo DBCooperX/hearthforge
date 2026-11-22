@@ -523,6 +523,9 @@ export interface CombatState {
   reaction?: ReactionPrompt | null;
   /** Set when the fight began with one side caught unawares. */
   surprise?: SurpriseInfo | null;
+  /** The first log entry of this fight, and of each round (index 0 is round 1): the battle log beside the map. */
+  logFrom?: number;
+  roundFrom?: number[];
 }
 
 /** The fight waits for one player: take the opportunity attack or let the enemy go. */

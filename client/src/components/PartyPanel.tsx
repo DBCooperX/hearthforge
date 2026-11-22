@@ -41,6 +41,30 @@ function Bar({ kind, value, max, temp }: { kind: 'hp' | 'mana'; value: number; m
   );
 }
 
+/**
+ * In a fight, what a hero still has: action, bonus action and reaction on the hero whose turn it
+ * is, and the reaction on everyone else, as the same pips as the hotbar. Spent ones empty.
+ */
+function TurnPips({ state, c, active }: { state: GameState; c: Character; active: boolean }) {
+  const t = useT();
+  const combat = state.phase === 'combat' ? state.combat : null;
+  if (!combat || c.dead || c.hp <= 0 || !combat.order.some((o) => o.id === c.id)) return null;
+  const reaction = !combat.reacted?.includes(c.id);
+  const pips: { kind: 'action' | 'bonus' | 'reaction'; left: boolean; label: string }[] = [
+    ...(active ? [
+      { kind: 'action' as const, left: !combat.actionUsed || combat.attacksLeft > 0, label: t('Action') },
+      { kind: 'bonus' as const, left: !combat.bonusUsed, label: t('Bonus action') },
+    ] : []),
+    { kind: 'reaction', left: reaction, label: t('Reaction') },
+  ];
+  const say = pips.map((p) => `${p.label}: ${p.left ? t('ready') : t('used')}`).join(' · ');
+  return (
+    <span className="turn-pips" title={say} aria-label={say}>
+      {pips.map((p) => <i key={p.kind} className={`pip ${p.kind}${p.left ? '' : ' spent'}`} />)}
+    </span>
+  );
+}
+
 export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet, onLevelUp, onCompanion }: Props) {
   const t = useT();
   return (
@@ -87,6 +111,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
                 </div>
               )}
               <div className="conditions">
+                <TurnPips state={state} c={c} active={c.id === activeId} />
                 {c.form && BEAST_FORMS[c.form] && <span className="chip form" title={t('Wild Shape')}>{BEAST_FORMS[c.form].icon} {t(BEAST_FORMS[c.form].name)}</span>}
                 {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}
                 {down && !c.conditions.includes('stable') && (
@@ -134,6 +159,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
                   </div>
                   <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />
                   <div className="conditions">
+                    <TurnPips state={state} c={c} active={c.id === activeId} />
                     {c.dead ? <span className="chip">{t('fallen')}</span> : <span className={`chip stance ${info.stance}`} title={t(STANCE_HELP[info.stance])}>{t(STANCE_LABELS[info.stance])}</span>}
                     <span className="chip weapon" title={t('Weapon in hand')}>{weapon ? t(weapon) : t('unarmed')}</span>
                     {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}

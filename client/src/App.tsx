@@ -96,6 +96,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   /** On a touch screen the first tap on a square or an enemy only plans the move or the blow; a second tap goes. */
   const [planned, setPlanned] = useState<{ x: number; y: number } | null>(null);
   const [hoverTile, setHoverTile] = useState<{ x: number; y: number } | null>(null);
+  // The face pointed at in the initiative bar: its figure lights up on the board.
+  const [initHover, setInitHover] = useState<string | null>(null);
   /** The owner's panel. It sits above everything, also above the list of tables; ?innkeeper opens it directly. */
   const [innkeeper, setInnkeeper] = useState(() => new URLSearchParams(location.search).has('innkeeper'));
   const closeInnkeeper = useCallback(() => {
@@ -348,8 +350,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     const plannedPath = new Set<string>();
     const foe = planned && state ? state.monsters.some((m) => m.alive && inFootprint(m, m.tiles, planned.x, planned.y)) : false;
     if (planned && !foe && state && combat && actor) for (const p of pathTo(state, actor, combat.movementLeft, planned.x, planned.y) ?? []) plannedPath.add(key(p.x, p.y));
-    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction, planned, plannedPath, hoverPath: moveAhead?.path, hoverRisk: !!moveAhead?.foes.length };
-  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky, planned, actor, moveAhead]);
+    return { selectedId, activeId, reach, targetIds, myIds: new Set(mine.map((c) => c.id)), unseenIds, danger, warnIds, reaction, planned, plannedPath, hoverPath: moveAhead?.path, hoverRisk: !!moveAhead?.foes.length, highlightId: initHover };
+  }, [state, combat, turnChar, selectedId, activeId, wantsEnemy, wantsAlly, mine, risky, planned, actor, moveAhead, initHover]);
 
   const inn = <>
     {innkeeper && <Innkeeper account={profile.account} onClose={closeInnkeeper} />}
@@ -446,7 +448,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
             {/* One battle map from the first blow to the closing screen: it stays a moment after the
                 last blow, under the victory or defeat screen, and still plays that blow. */}
             <main className={combat ? 'stage' : fightEnd!.leaving ? 'stage fight-over leaving' : 'stage fight-over'}>
-              <TurnBar state={combat ? state : fightEnd!.frozen} />
+              <TurnBar state={combat ? state : fightEnd!.frozen} unseen={view.unseenIds} onHover={combat ? setInitHover : undefined} />
               <MapView state={combat ? state : fightEnd!.frozen} view={view} onTile={combat ? onTile : noTile} onMoved={conn.onMoved} aim={combat ? aim : null} onHoverTile={setHoverTile} moveTip={moveTip} />
               {combat ? (
                 <>
@@ -459,7 +461,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
                 <FightEndBanner end={fightEnd!} onContinue={endFight} writing={state.dmBusy} />
               )}
             </main>
-            <StoryFeed state={state} conn={conn} compact />
+            <StoryFeed state={state} conn={conn} compact battle={(combat ? state : fightEnd!.frozen).combat} />
           </>
         ) : (
           <>

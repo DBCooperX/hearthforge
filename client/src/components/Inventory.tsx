@@ -259,6 +259,7 @@ export function Inventory({ state, character: c, conn, onSelect, onClose }: Prop
             <span className="icon"><ItemIcon def={def} /></span>
             {def.story?.quest && <span className="quest-mark" aria-label={t('Quest item')} />}
             {item.qty > 1 && <span className="qty">{item.qty}</span>}
+            {!isSlot && <span className="item-name">{t(def.name)}</span>}
           </div>
         )}
       </div>

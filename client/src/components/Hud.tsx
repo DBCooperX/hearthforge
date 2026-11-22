@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
 import { partyOf } from '../game/util';
+import { combatantFace } from '../game/faces';
+import { onFigureLoaded } from '../game/paintedFigures';
+import { onPortraitLoaded } from '../game/heroArt';
 import { ABILITIES, ABILITY_NAMES } from '../../../shared/content';
 import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from '../../../shared/classes';
 import { castLevel, upcastable } from '../../../shared/spells';
@@ -27,29 +30,44 @@ const ACTIVE: Record<string, string> = {
 
 export type Targeting = { kind: 'attack' } | { kind: 'offhand' } | { kind: 'ability'; abilityId: string; level?: number; item?: string } | { kind: 'item'; uid: string } | null;
 
-export function TurnBar({ state }: { state: GameState }) {
+/**
+ * The initiative order as a row of faces: friends in green, foes in red, the one acting now larger
+ * and lit, each with a sliver of hit points. Pointing at a face lights up that figure on the board.
+ */
+export function TurnBar({ state, unseen, onHover }: { state: GameState; unseen?: Set<string>; onHover?: (id: string | null) => void }) {
   const t = useT();
+  const [, tick] = useState(0);
+  useEffect(() => onFigureLoaded(() => tick((n) => n + 1)), []);
+  useEffect(() => onPortraitLoaded(() => tick((n) => n + 1)), []);
   const combat = state.combat;
   if (!combat) return null;
-  const name = (id: string) => partyOf(state).find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
   return (
     <div className="turnbar">
       <span className="phase combat">{t('Round {n}', { n: combat.round })}</span>
-      <div className="order">
+      <ol className="order" onMouseLeave={() => onHover?.(null)}>
         {combat.order.map((o, i) => {
           const m = state.monsters.find((x) => x.id === o.id);
           const c = partyOf(state).find((x) => x.id === o.id);
           const out = m ? !m.alive : c ? c.dead || c.hp <= 0 : true;
+          const hidden = !!m && !!unseen?.has(m.id);
+          const name = c?.name ?? (hidden ? t('Something in the dark') : m?.name) ?? '???';
+          const hp = c ? c.hp : m?.hp ?? 0, max = c ? c.maxHp : m?.maxHp ?? 1;
+          const pct = Math.max(0, Math.min(100, (hp / Math.max(1, max)) * 100));
+          const face = hidden ? null : combatantFace(state, o.id);
+          const tip = [name, o.ambush ? t('Struck first, from hiding') : `${t('Initiative')} ${o.initiative}`, hidden ? '' : `${t('Hit points')} ${hp} / ${max}`, o.surprised ? t('Caught unawares: rolled initiative with Disadvantage') : ''].filter(Boolean).join(' · ');
           return (
-            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
-              title={[o.ambush ? t('Struck first, from hiding') : `${t('Initiative')} ${o.initiative}`, o.surprised ? t('Caught unawares: rolled initiative with Disadvantage') : ''].filter(Boolean).join(' · ')}>
+            <li key={o.id} className={['init', o.kind, m ? 'foe' : 'friend', i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
+              title={tip} aria-label={tip} aria-current={i === combat.turnIndex ? 'step' : undefined}
+              onMouseEnter={() => onHover?.(out ? null : o.id)}>
+              <span className="init-face">{face ? <img src={face} alt="" /> : <b aria-hidden>?</b>}</span>
+              {!hidden && <span className={pct <= 25 ? 'init-hp low' : 'init-hp'}><i style={{ width: `${pct}%` }} /></span>}
+              <span className="init-name">{name}</span>
               {o.ambush && <span className="init-mark" aria-hidden>🗡</span>}
-              {name(o.id)}
               {o.surprised && <span className="init-mark surprised" aria-label={t('Caught unawares')}>!</span>}
-            </span>
+            </li>
           );
         })}
-      </div>
+      </ol>
       {state.dmBusy && <span className="thinking">{t('The Dungeon Master is thinking…')}</span>}
     </div>
   );
@@ -392,6 +410,12 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
           })}
         </div>
         <div className="hb-end">
+          {nudge && (
+            <div className="endturn-nudge" role="status" aria-live="polite">
+              <b>{nudge === 'spent' ? t('Nothing left to do?') : t('Still there?')}</b>
+              <span>{t('End your turn when you are done.')} <kbd>{t('Space')}</kbd></span>
+            </div>
+          )}
           <OpportunitySwitch actor={c} conn={conn} />
           <Hint title={t('End turn')} text={<>{t('Hand the turn to the next in the initiative order.')}<em>{t('Space')}</em></>}>
             <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>

@@ -1354,6 +1354,8 @@ export class Game {
       for (let i = 0; i < count && chosen.length < 8; i++) { chosen.push(def); specs.push(g); }
     }
     if (!chosen.length) throw new GameError(this.t`An encounter needs at least one monster`);
+    // The battle log beside the map starts here, with any ambush roll.
+    const logFrom = s.logSeq + 1;
     s.travel = null;
     const place = this.place();
     const terrain = trueTerrain(this.world, this.world.party);
@@ -1365,7 +1367,11 @@ export class Game {
       for (const x of xs) for (const dy of [0, -1, 1, -2, 2, -3, 3, -4, 4]) out.push({ x, y: midY + dy });
       return out;
     };
-    const heroSpots = column([3, 2]);
+    // Heroes stand on a diagonal, never two in one column next to each other, so the miniatures in
+    // the 2.5D view (taller than a square) do not hide one another.
+    const spaced = [[3, 0], [2, -1], [4, 1], [2, 1], [4, -1], [3, -2], [3, 2], [2, -3], [4, 3]].map(([x, dy]) => ({ x, y: midY + dy }))
+      .filter((p) => p.y >= 1 && p.y < this.height - 1);
+    const heroSpots = [...spaced, ...column([3, 2]).filter((p) => !spaced.some((q) => q.x === p.x && q.y === p.y))];
     heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
     // Companions stand behind the heroes, or beside them when the column is full.
     const allies = s.companions.filter((c) => !c.dead);
@@ -1407,7 +1413,7 @@ export class Game {
       const [entry] = order.splice(i, 1);
       order.unshift({ ...entry, ambush: true });
     }
-    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
+    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, logFrom, roundFrom: [logFrom], ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
     s.phase = 'combat';
     this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.ambush ? `(${this.t`first, from hiding`})` : o.initiative}`).join(', ')}.`);
     this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
@@ -1674,7 +1680,7 @@ export class Game {
       if (!combat || s.phase !== 'combat') return;
       if (this.checkCombatOver()) return;
       combat.turnIndex++;
-      if (combat.turnIndex >= combat.order.length) { combat.turnIndex = 0; combat.round++; }
+      if (combat.turnIndex >= combat.order.length) { combat.turnIndex = 0; combat.round++; (combat.roundFrom ??= []).push(s.logSeq + 1); }
       const cur = combat.order[combat.turnIndex];
       combat.actionUsed = false;
       combat.bonusUsed = false;

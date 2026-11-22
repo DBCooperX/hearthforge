@@ -736,3 +736,11 @@
 /* What a finger does with a pinned item instead of dragging it: equip, take off, give. */
 .item-touch { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--edge); }
 .item-touch button { flex: 1 1 auto; min-height: 40px; }
+
+/* Items in the bag carry their name, so the bag reads without pointing at each one. */
+.bag-grid .item-name {
+  position: absolute; left: 2px; right: 2px; bottom: 2px; padding: 1px 3px; border-radius: 0 0 5px 5px;
+  font-size: 9.5px; line-height: 12px; text-align: center; color: #e8dcc6; background: linear-gradient(transparent, rgba(8, 6, 4, 0.85) 35%);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+.bag-grid .qty { bottom: auto; top: 3px; }

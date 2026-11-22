@@ -2540,4 +2540,10 @@ export const DE: Record<string, string> = {
   'Modifier {n}': 'Modifikator {n}',
   'Jack of All Trades': 'Alleskönner',
   'There is nothing to roll right now': 'Gerade gibt es nichts zu würfeln',
+  // Battle structure (UX phase C)
+  'Something in the dark': 'Etwas im Dunkeln',
+  ready: 'bereit',
+  used: 'verbraucht',
+  'Show only the battle': 'Nur den Kampf zeigen',
+  'Show the story before the battle': 'Die Geschichte vor dem Kampf zeigen',
 };

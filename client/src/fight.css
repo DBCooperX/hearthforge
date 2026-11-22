@@ -1,14 +1,48 @@
 /* The moments that frame a fight: the surprise banner over a fresh battle map, the
    initiative marks, and the victory or defeat screen before the story takes over. Loaded last. */
 
-/* ---------- initiative marks ---------- */
-.init .init-mark { margin-right: 4px; font-size: 11px; }
-.init .init-mark.surprised {
-  margin: 0 0 0 5px; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%;
-  background: #c0392b; color: #fff; font-weight: 800; font-size: 10px; line-height: 1; vertical-align: 1px;
+/* ---------- the initiative bar: a row of faces ---------- */
+.turnbar { min-height: 74px; padding-top: 6px; padding-bottom: 4px; }
+.turnbar .order { list-style: none; margin: 0; padding: 0 2px; display: flex; align-items: flex-end; gap: 4px; }
+.turnbar .init {
+  position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 54px;
+  padding: 0; border: none; border-radius: 0; background: none; font-size: 10.5px; font-weight: 400; color: #cdbfa8; cursor: var(--cursor, default);
 }
-.init.surprised { border-style: dashed; }
-.init.ambush { border-color: #b98cf0; box-shadow: 0 0 6px rgba(185, 140, 240, 0.45); }
+.init-face {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  border: 2px solid #5f9a58; background: radial-gradient(#3a332c, #15120f); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.init.foe .init-face { border-color: #b8432f; }
+.init-face img { width: 100%; height: 100%; object-fit: cover; }
+.init-face b { color: #8a7d6c; font: 700 18px var(--font-head); }
+.init-hp { width: 36px; height: 4px; border-radius: 2px; overflow: hidden; background: #0d0c0b; box-shadow: inset 0 0 0 1px #3d3833; }
+.init-hp i { display: block; height: 100%; background: #6cc05a; transition: width 0.3s; }
+.init-hp.low i { background: #e0a03a; }
+.init.foe .init-hp i { background: #d6533c; }
+.init-name { max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
+.turnbar .init.now { background: none; color: #f5d48c; font-weight: 700; }
+.init.now .init-face { width: 50px; height: 50px; border-color: #f5d48c; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 16px var(--ember-glow); }
+.init.now .init-hp { width: 44px; }
+.init:not(.out):hover .init-face { transform: translateY(-2px); box-shadow: 0 0 0 2px #f6e3b0, 0 4px 10px rgba(0, 0, 0, 0.6); }
+.turnbar .init.out { opacity: 0.45; text-decoration: none; }
+.init.out .init-face { filter: grayscale(1) brightness(0.7); }
+.init .init-mark { position: absolute; top: -2px; left: 2px; font-size: 12px; filter: drop-shadow(0 1px 2px #000); }
+.init .init-mark.surprised {
+  left: auto; right: 4px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%;
+  background: #c0392b; color: #fff; font-weight: 800; font-size: 10px; line-height: 1; filter: none;
+}
+.init.surprised .init-face { border-style: dashed; }
+.init.ambush .init-face { border-color: #b98cf0; box-shadow: 0 0 8px rgba(185, 140, 240, 0.6); }
+@media (max-width: 640px) {
+  .turnbar { min-height: 60px; }
+  .turnbar .init { width: 44px; font-size: 9.5px; }
+  .init-face { width: 32px; height: 32px; }
+  .init.now .init-face { width: 40px; height: 40px; }
+  .init-hp { width: 30px; }
+  .init.now .init-hp { width: 36px; }
+  .init-name { max-width: 44px; }
+}
 
 /* ---------- "Surprise!" / "Ambush!" ---------- */
 .surprise-banner {
@@ -213,3 +247,10 @@
 .cr-total { color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .cr-die.tumbling { animation: none; } .check-roll { animation: none; } }
 @media (hover: none) { .cr-roll kbd { display: none; } }
+
+/* ---------- the battle log beside the map ---------- */
+.story.compact .earlier-story { display: block; margin: 2px auto 8px; font-size: 12px; color: #b9a582; }
+.round-divider { display: flex; align-items: center; gap: 10px; margin: 12px 4px 6px; color: #e0a070; }
+.round-divider::before, .round-divider::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #9a4f2e 50%, #e0a070); }
+.round-divider::after { transform: scaleX(-1); }
+.round-divider span { font-family: var(--font-head); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; }
