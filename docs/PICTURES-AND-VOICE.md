@@ -31,7 +31,7 @@ Each picture is billed to the player credits like the rest of the AI, shared amo
 | Voice | Cost | |
 | --- | --- | --- |
 | **Piper** (default) | free | Runs on the server's CPU. Part of the image; its voices (about 60 to 120 MB each) are downloaded once from [Piper's collection](https://huggingface.co/rhasspy/piper-voices) into `/data/voice`. Clear, a little like an audiobook robot. Defaults: *northern English man* and *Thorsten* for German. Each voice links to its licence card. |
-| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. Quality is *Best quality* (multilingual v2) or *Cheaper* (Flash v2.5, half the credits per character). |
+| **ElevenLabs** (`ELEVENLABS_API_KEY`) | from their free plan | The most natural, like a real narrator. Your account's voices are listed; the default is *George*. Quality is *Best quality* (Eleven v4) or *Cheaper* (Eleven v4 Turbo, half the price per character). Eleven v4 has no speed setting, so the reading-speed slider only affects Piper. |
 
 Put the keys under **Settings → Voice** and restart. Speech is stored on the server (up to 400 MB, oldest first), so a scene read once is never paid for twice, and only the Dungeon Master's own story can be read, by players sitting at that table. Long scenes are read in parts, so the first sentences start while the rest is still being made. On two cores Piper needs a second or two per part.
 

@@ -204,7 +204,7 @@ export class Narrator {
     if (provider === 'off') throw new VoiceError('bad_request');
     const voice = provider === 'piper' ? choice.piper[lang] : choice.elevenlabs;
     const ext = provider === 'piper' ? 'wav' : 'mp3';
-    const hash = createHash('sha256').update(`${provider}\n${voice}\n${provider === 'elevenlabs' ? choice.quality : ''}\n${choice.speed}\n${lang}\n${text}`).digest('hex').slice(0, 40);
+    const hash = createHash('sha256').update(`${provider}\n${voice}\n${provider === 'elevenlabs' ? ELEVENLABS_MODELS[choice.quality] : ''}\n${provider === 'elevenlabs' ? '' : choice.speed}\n${lang}\n${text}`).digest('hex').slice(0, 40);
     const file = join(this.cache, `${hash}.${ext}`);
     const type = ext === 'wav' ? 'audio/wav' : 'audio/mpeg';
     if (existsSync(file)) {
@@ -218,7 +218,7 @@ export class Narrator {
       const tmp = `${file}.${process.pid}.tmp`;
       try {
         if (provider === 'piper') await this.viaPiper(voice, choice.speed, text, tmp);
-        else await this.viaElevenLabs(voice, choice.speed, choice.quality, text, tmp);
+        else await this.viaElevenLabs(voice, choice.quality, text, tmp);
         renameSync(tmp, file);
         // Booking the cost must never lose speech that is already made and paid for.
         if (provider !== 'piper') try { paid?.(text.length, choice.quality); } catch (err) { console.warn('[voice] cost not booked:', err); }
@@ -248,13 +248,14 @@ export class Narrator {
     if (!existsSync(out) || statSync(out).size < 100) throw new Error('piper wrote no audio');
   }
 
-  private async viaElevenLabs(voice: string, speed: number, quality: VoiceQuality, text: string, out: string) {
+  /** Eleven v4 has no Style or Speed setting, so only Stability and Similarity are sent. */
+  private async viaElevenLabs(voice: string, quality: VoiceQuality, text: string, out: string) {
     const key = this.key();
     if (!key) throw new VoiceError('no_key');
     const res = await this.fetchFn(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: ELEVENLABS_MODELS[quality], voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, speed: Math.min(1.2, Math.max(0.7, speed)) } }),
+      body: JSON.stringify({ text, model_id: ELEVENLABS_MODELS[quality], voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
       signal: AbortSignal.timeout(60_000),
     });
     await save(res, out, 'ElevenLabs');
