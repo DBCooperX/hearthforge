@@ -23,6 +23,32 @@ export const saveTemplate = (spec: CharacterSpec, table: string, id?: string) =>
 /** Keep a hero that is already in the party of `table`. */
 export const keepHero = (table: string, characterId: string) => call({ do: 'from_hero', table, characterId });
 export const deleteTemplate = (id: string) => call({ do: 'delete', id });
+/** A second saved hero with the same choices, under a new name. */
+export const copyTemplate = (id: string, name: string) => call({ do: 'copy', id, name });
+
+/** Ability scores rolled by the server for a hero made away from any table. */
+export async function rollForHero(): Promise<number[]> {
+  const { heroes, rolled } = await accountCall<{ heroes: HeroTemplate[]; rolled: number[] }>('/heroes', { do: 'roll' });
+  publish(heroes);
+  return rolled;
+}
+
+/**
+ * A saved hero on its way to a table: the Heroes tab sets it, then sits down at (or opens) the table, and
+ * the table room adds the hero once it is there. Forgotten after a minute, so it never surprises later.
+ */
+const BRING_KEY = 'hf.bringHero';
+export function bringHero(templateId: string) {
+  try { sessionStorage.setItem(BRING_KEY, JSON.stringify({ id: templateId, at: Date.now() })); } catch { /* without storage the hero is added by hand */ }
+}
+export function takeBroughtHero(): string | null {
+  try {
+    const raw = sessionStorage.getItem(BRING_KEY);
+    sessionStorage.removeItem(BRING_KEY);
+    const v = raw ? JSON.parse(raw) as { id?: unknown; at?: unknown } : null;
+    return v && typeof v.id === 'string' && typeof v.at === 'number' && Date.now() - v.at < 60_000 ? v.id : null;
+  } catch { return null; }
+}
 
 export async function refreshTemplates() {
   try {

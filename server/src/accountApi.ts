@@ -15,6 +15,17 @@ import { HERO_REF_MAX_BYTES, REF_ID } from '../../shared/accounts';
 
 export const SESSION_HEADER = 'x-hearthforge-session';
 
+/** Ability scores rolled for a saved hero made away from any table (the Heroes tab), by account id. Kept in memory only: a restart means rolling again. */
+const homeRolls = new Map<string, number[]>();
+
+/** Roll 4d6 and drop the lowest, six times. */
+export function rollScores(rng: () => number = Math.random): number[] {
+  return Array.from({ length: 6 }, () => {
+    const dice = Array.from({ length: 4 }, () => 1 + Math.floor(rng() * 6)).sort((a, b) => b - a);
+    return dice[0] + dice[1] + dice[2];
+  });
+}
+
 
 export interface AccountApiContext {
   accounts: Accounts;
@@ -190,12 +201,24 @@ export async function accountApi(ctx: AccountApiContext, req: IncomingMessage, r
           const old = own(body.id);
           if (body.id && !old) return send(404, { error: 'not_found' });
           // Rolled scores count only if the server rolled them: at this table, or already in the hero being edited.
-          const rolled = room?.game.s.rolled[me.id];
+          // Away from a table, the scores rolled in the Heroes tab count instead.
+          const rolled = room ? room.game.s.rolled[me.id] : homeRolls.get(me.id);
           const kept = old?.spec.method === 'roll' && old.spec.base ? ABILITY_KEYS.map((k) => old.spec.base[k]) : undefined;
           if (!spec || !spec.name || (checkSpec(spec, rolled).length && checkSpec(spec, kept).length)) return send(400, { error: 'bad_hero' });
           accounts.saveTemplate(me.id, spec, old?.id);
           // A picture the saved hero no longer has goes away with the change.
           if (old?.spec.refId && old.spec.refId !== spec.refId) dropRef(me.id, old.spec.refId);
+        } else if (body.do === 'roll') {
+          // Rolled by the server, like at a table, so the creator cannot bring its own numbers.
+          const rolled = rollScores();
+          homeRolls.set(me.id, rolled);
+          return send(200, { heroes: accounts.templates(me.id), rolled });
+        } else if (body.do === 'copy') {
+          // A second saved hero with the same choices, its own picture link included.
+          const old = own(body.id);
+          if (!old) return send(404, { error: 'not_found' });
+          const name = String(body.name ?? '').trim().slice(0, 20) || old.name;
+          accounts.saveTemplate(me.id, { ...old.spec, name });
         } else if (body.do === 'from_hero') {
           if (!room) return send(404, { error: 'not_found' });
           let spec: CharacterSpec | null;

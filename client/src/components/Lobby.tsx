@@ -6,7 +6,9 @@ import { ABILITY_KEYS, BACKGROUNDS, CLASSES, loc } from '../../../shared/rules';
 import { MAX_SEATS, type GameState, type TableSummary } from '../../../shared/types';
 import { Creator } from './Creator';
 import { MyHeroes } from './MyHeroes';
-import { keepHero, useHeroTemplates } from '../templates';
+import { HeroesTab } from './HeroesTab';
+import { Icon } from '../ui/icons';
+import { keepHero, takeBroughtHero, useHeroTemplates } from '../templates';
 import type { HeroTemplate } from '../../../shared/accounts';
 import { AdventureCards } from './AdventureSetup';
 import { artOfCharacter, artOfDraft, heroPortraitUrl } from '../game/heroArt';
@@ -28,8 +30,11 @@ import { copyText } from '../ui/clipboard';
 
 const OLDER_AFTER = 6;
 
-/** The list of tables: sit down at one, come back to your seat, or open a new table. */
+/** The main screen: two tabs, Tables (sit down, come back to your seat, open a new table) and Heroes (the heroes your account keeps). */
 export interface Me { account: AccountView; onProfile: () => void; onSignOut: () => void }
+
+type HomeTab = 'tables' | 'heroes';
+const TAB_KEY = 'hf.home.tab';
 
 export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Connection; me: Me; onInnkeeper: () => void; onMenu: () => void }) {
   const t = useT();
@@ -37,12 +42,136 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   const link = useMemo(linkedTable, []);
   // At a table you are your account's name.
   const name = who.account.username;
+  const me = name.replace(/\s+/g, ' ').trim();
+  const tables = conn.tables ?? [];
+  const { heroes, loaded } = useHeroTemplates();
+  /** The tab you used last; an invite link always opens on the tables. */
+  const [tab, setTabState] = useState<HomeTab>(() => {
+    if (link.room) return 'tables';
+    try { return localStorage.getItem(TAB_KEY) === 'heroes' ? 'heroes' : 'tables'; } catch { return 'tables'; }
+  });
+  const setTab = (next: HomeTab) => { setTabState(next); try { localStorage.setItem(TAB_KEY, next); } catch { /* remembering the tab is only a convenience */ } };
+  const ready = conn.connected && !!me && !conn.joining;
+  const mine = tables.filter((tb) => tb.players.some((p) => p.id === playerId)).length;
+
+  // An invite link, or a reload while seated, goes straight to that table once we know who is asking.
+  const tried = useRef(false);
+  useEffect(() => {
+    if (tried.current || !conn.connected || !link.room) return;
+    tried.current = true;
+    if (me) conn.join(link.room, me, link.code || undefined);
+  }, [conn.connected]);
+
+  // Name and story language are set in the table room, under "Table details". Tables for several players start with an invite code, which the host can switch off there.
+  const openTable = (seats: number) => conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: seats > 1 });
+  const sitAt = (tb: TableSummary) => conn.join(tb.id, me);
+
+  const tabs: { id: HomeTab; label: string; icon: 'table' | 'character'; count: number; note: string }[] = [
+    { id: 'tables', label: t('Tables'), icon: 'table', count: tables.length, note: t('{n} of them yours', { n: mine }) },
+    { id: 'heroes', label: t('Heroes'), icon: 'character', count: heroes.length, note: t('kept on your account') },
+  ];
+  const walk = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    setTab(tab === 'tables' ? 'heroes' : 'tables');
+  };
+
+  return (
+    <div className="splash tavern home-screen">
+      <Backdrop />
+      <Embers />
+      <div className="splash-tools"><MusicControl /><MenuButton onClick={onMenu} /></div>
+      <div className="panel lobby home">
+        <header className="home-head">
+          <h1 className="home-logo"><Logo /></h1>
+          <nav className="home-tabs" role="tablist" aria-label={t('Main screen')} onKeyDown={walk}>
+            {tabs.map((x) => (
+              <button key={x.id} type="button" role="tab" id={`home-tab-${x.id}`} aria-selected={tab === x.id} aria-controls={`home-panel-${x.id}`} tabIndex={tab === x.id ? 0 : -1}
+                className={tab === x.id ? 'home-tab-btn on' : 'home-tab-btn'} onClick={() => setTab(x.id)}>
+                <Icon name={x.icon} size={22} />
+                <span className="home-tab-text"><span>{x.label} <span className="count">{x.count}</span></span><small>{x.note}</small></span>
+              </button>
+            ))}
+          </nav>
+          <div className="home-who">
+            <LangSwitch />
+            {who.account.role === 'innkeeper' && (
+              <button type="button" className="inn-door" onClick={onInnkeeper} title={t('For whoever runs this server')}><Icon name="innkeeper" size={18} /> <span className="inn-label">{t('Innkeeper')}</span></button>
+            )}
+            <AccountMenu who={who} />
+          </div>
+        </header>
+        {who.account.mustChange && <p className="notice">{t('You are still using a password you did not choose.')} <button type="button" className="link" onClick={who.onProfile}>{t('Choose your own')}</button></p>}
+        {conn.joinError && <p className="notice error" role="alert">{t(conn.joinError)}</p>}
+        {!conn.connected && <p className="notice">{t('Connecting…')}</p>}
+        <div role="tabpanel" id={`home-panel-${tab}`} aria-labelledby={`home-tab-${tab}`} className="home-panel">
+          {tab === 'tables'
+            ? <TablesTab conn={conn} who={who} me={me} link={link} ready={ready} onOpen={openTable} />
+            : <HeroesTab heroes={heroes} loaded={loaded} tables={tables} ready={ready} onSit={sitAt} onOpen={openTable} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Closes a small popup or panel with Esc (before the game menu takes the key) and, given `box`, with a click outside it.
+ */
+export function useDismiss(open: boolean, close: () => void, box?: React.RefObject<HTMLElement>) {
+  const shut = useRef(close);
+  shut.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (box?.current && !box.current.contains(e.target as Node)) shut.current(); };
+    const esc = (e: KeyboardEvent) => {
+      // A dialog on top (the creator, a question) handles its own Esc.
+      if (e.key !== 'Escape' || document.querySelector('.overlay')) return;
+      e.stopPropagation();
+      shut.current();
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc, true);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc, true); };
+  }, [open, box]);
+}
+
+/** Your name with a small menu: your account and signing out. */
+function AccountMenu({ who }: { who: Me }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useDismiss(open, () => setOpen(false), box);
+  return (
+    <div className="account-menu" ref={box}>
+      <button type="button" className="account-chip" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)} title={t('Your seats and heroes belong to your account, so you can pick them up on any device.')}>
+        <span className="avatar" aria-hidden="true">{who.account.username.slice(0, 1).toUpperCase()}</span>
+        <b>{who.account.username}</b> <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="account-pop" role="menu">
+          <small className="muted">{t('Signed in as')} <b>{who.account.username}</b></small>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); who.onProfile(); }}>{t('Your account')}</button>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); who.onSignOut(); }}>{t('Sign out')}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface TablesProps { conn: Connection; who: Me; me: string; link: ReturnType<typeof linkedTable>; ready: boolean; onOpen: (seats: number) => void }
+
+/** The Tables tab: your tables, the ones open to join, and the bin, with who is here beside them. */
+function TablesTab({ conn, who, me, link, ready, onOpen }: TablesProps) {
+  const t = useT();
+  const { lang } = useLang();
   /** The locked table whose invite code is being asked for. */
   const [asking, setAsking] = useState<string | null>(null);
   const [code, setCode] = useState(link.code);
   const [anyCode, setAnyCode] = useState('');
   const [seats, setSeats] = useState(MAX_SEATS);
-  const me = name.replace(/\s+/g, ' ').trim();
+  const [opening, setOpening] = useState(false);
+  const openBox = useRef<HTMLDivElement>(null);
+  useDismiss(opening, () => setOpening(false), openBox);
   const tables = conn.tables ?? [];
   /** What is typed in the search box, which sections are folded away, and which sections show their older tables. */
   const [query, setQuery] = useState('');
@@ -52,14 +181,19 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   const fold = (id: string) => setFolded((f) => { const next = toggle(f, id); try { localStorage.setItem('hf.lobby.folded', JSON.stringify(next)); } catch { /* a remembered fold is only a convenience */ } return next; });
   const searching = query.trim().length > 0;
-  /** Solo tables (one seat) and multiplayer tables, each the most recently played first, narrowed by the search. */
+  const isMine = (x: TableSummary) => x.players.some((p) => p.id === playerId);
+  /** Your tables, the tables you could join, and the rest (full or private), each the most recently played first, narrowed by the search. */
   const groups = useMemo(() => {
     const q = query.trim().toLocaleLowerCase();
     const hit = (x: TableSummary) => !q || [x.title, LANGS.find((l) => l.id === x.language)?.label ?? '', ...x.players.map((p) => p.name)].some((s) => s.toLocaleLowerCase().includes(q));
     const byRecent = (a: TableSummary, b: TableSummary) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0);
-    const multi = tables.filter((x) => x.maxPlayers > 1 && hit(x)).sort(byRecent);
-    const solo = tables.filter((x) => x.maxPlayers <= 1 && hit(x)).sort(byRecent);
-    return [{ id: 'multi', label: t('Multiplayer'), list: multi }, { id: 'solo', label: t('Solo'), list: solo }].filter((g) => g.list.length > 0);
+    const joinable = (x: TableSummary) => x.maxPlayers > 1 && x.players.length < x.maxPlayers;
+    const list = tables.filter(hit).sort(byRecent);
+    return [
+      { id: 'mine', label: t('Your tables'), list: list.filter(isMine) },
+      { id: 'open', label: t('Open to join'), list: list.filter((x) => !isMine(x) && joinable(x)) },
+      { id: 'other', label: t('Other tables'), list: list.filter((x) => !isMine(x) && !joinable(x)) },
+    ].filter((g) => g.list.length > 0);
   }, [tables, lang, query]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The table being renamed or deleted from this list, and what has been typed so far. */
   const [editing, setEditing] = useState<{ id: string; mode: 'rename' | 'delete'; text: string } | null>(null);
@@ -75,158 +209,155 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
     else conn.send({ t: 'delete_table', session: accountSession(), room: editing.id, confirm: text });
     setEditing(null);
   };
-  const ready = conn.connected && !!me && !conn.joining;
-
-  // An invite link, or a reload while seated, goes straight to that table once we know who is asking.
-  const tried = useRef(false);
-  useEffect(() => {
-    if (tried.current || !conn.connected || !link.room) return;
-    tried.current = true;
-    if (me) conn.join(link.room, me, link.code || undefined);
-  }, [conn.connected]);
 
   const sit = (tb: TableSummary) => {
-    const mine = tb.players.some((p) => p.id === playerId);
+    const mine = isMine(tb);
     if (tb.locked && !mine && asking !== tb.id) { setAsking(tb.id); setCode(tb.id === link.room ? link.code : ''); return; }
     conn.join(tb.id, me, tb.locked && !mine ? code.trim() : undefined);
   };
-  const open = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Name and story language are set in the table room, under "Table details". Tables for several players start with an invite code, which the host can switch off there.
-    conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: seats > 1 });
-  };
 
   return (
-    <div className="splash tavern">
-      <Backdrop />
-      <Embers />
-      <div className="splash-tools"><MusicControl /><MenuButton onClick={onMenu} /></div>
-      <div className="panel lobby">
-        <header className="join">
-          <h1><Logo /></h1>
-          <div className="rune-line" aria-hidden="true" />
-          <div className="join-lang"><LangSwitch /></div>
-          <p className="tagline">{t('Dungeons & Dragons at your own hearth, with an AI Dungeon Master.')}</p>
-        </header>
-        <div className="account-bar">
-          <span>{t('Signed in as')} <b>{name}</b></span>
-          {who.account.role === 'innkeeper' && <button type="button" className="role" onClick={onInnkeeper} title={t('For whoever runs this server')}>{t('Innkeeper')}</button>}
-          <Info text={t('Your seats and heroes belong to your account, so you can pick them up on any device.')} />
-          <span className="spacer" />
-          <button type="button" className="link" onClick={who.onProfile}>{t('Your account')}</button>
-          <button type="button" className="link" onClick={who.onSignOut}>{t('Sign out')}</button>
+    <div className="home-tab tables-tab">
+      <div className="home-bar">
+        {tables.length > 4 && (
+          <label className="home-search">
+            <Icon name="search" />
+            <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search tables or players')} aria-label={t('Search tables or players')} />
+          </label>
+        )}
+        <form className="by-code" onSubmit={(e) => { e.preventDefault(); if (anyCode.trim()) conn.join('', me, anyCode.trim()); }}>
+          <input value={anyCode} onChange={(e) => setAnyCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} aria-label={t('Invite code')} />
+          <button disabled={!ready || !anyCode.trim()}>{t('Join with a code')}</button>
+        </form>
+        <span className="spacer" />
+        <div className="open-wrap" ref={openBox}>
+          <button type="button" className="primary" aria-expanded={opening} onClick={() => setOpening(!opening)}>＋ {t('Open a new table')}</button>
+          {opening && (
+            <form className="open-pop" onSubmit={(e) => { e.preventDefault(); setOpening(false); onOpen(seats); }}>
+              <b>{t('How many players?')}</b>
+              <span className="pick" role="group" aria-label={t('Players')}>
+                {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} title={n === 1 ? undefined : t('{n} players', { n })} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
+              </span>
+              <small className="muted">{seats === 1 ? t('Only you sit at a solo table. You can still play up to four heroes.') : t('Friends join with the invite link or code.')}</small>
+              <span className="row">
+                <button className="primary" disabled={!ready} autoFocus>{t('Open the table')}</button>
+                <button type="button" className="link" onClick={() => setOpening(false)}>{t('Cancel')}</button>
+              </span>
+            </form>
+          )}
         </div>
-        {who.account.mustChange && <p className="notice">{t('You are still using a password you did not choose.')} <button type="button" className="link" onClick={who.onProfile}>{t('Choose your own')}</button></p>}
-        {conn.joinError && <p className="notice error" role="alert">{t(conn.joinError)}</p>}
-        {!conn.connected && <p className="notice">{t('Connecting…')}</p>}
+      </div>
 
-        <div className="lobby-cols">
+      <div className="lobby-cols">
         <div className="lobby-main">
-        <div className="tables-bar">
-          <h2>{t('Tables')} <span className="muted">({tables.length})</span></h2>
-          {tables.length > 4 && <input type="search" className="table-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search tables or players')} aria-label={t('Search tables or players')} />}
-        </div>
-        {conn.tables && tables.length === 0 && <p className="muted">{t('Nobody has opened a table yet. Open the first one below.')}</p>}
-        {searching && groups.length === 0 && <p className="muted">{t('No table matches your search.')}</p>}
-        {groups.map((g) => {
-          const isFolded = folded.includes(g.id) && !searching;
-          const everything = searching || allOf.includes(g.id);
-          const keep = (tb: TableSummary) => tb.players.some((p) => p.id === playerId) || tb.id === link.room;
-          const shown = everything ? g.list : g.list.filter((tb, i) => i < OLDER_AFTER || keep(tb));
-          const hidden = g.list.length - shown.length;
-          return (
-        <section key={g.id} className="table-group" aria-label={g.label}>
-        <h3 className="table-group-title">
-          <button type="button" className="fold" aria-expanded={!isFolded} onClick={() => fold(g.id)}>
-            <span className="chev" aria-hidden="true">{isFolded ? '▸' : '▾'}</span> {g.label} <span className="muted">({g.list.length})</span>
-          </button>
-        </h3>
-        {!isFolded && <ul className="tables">
-          {shown.map((tb) => {
-            const mine = tb.players.some((p) => p.id === playerId);
-            const solo = !mine && tb.maxPlayers <= 1 && tb.players.length > 0;
-            const full = !mine && !solo && tb.players.length >= tb.maxPlayers;
-            const clash = !mine && !!me && tb.players.some((p) => p.name.toLocaleLowerCase() === me.toLocaleLowerCase());
-            const managing = editing?.id === tb.id || manageOpen === tb.id;
+          {conn.tables && tables.length === 0 && (
+            <div className="home-empty">
+              <span className="home-empty-icon" aria-hidden="true"><Icon name="table" size={40} /></span>
+              <h3>{t('No tables yet')}</h3>
+              <p className="muted">{t('Open a table to start an adventure, alone or with friends.')}</p>
+              <button type="button" className="primary" disabled={!ready} onClick={() => onOpen(1)}>{t('Open a solo table')}</button>
+            </div>
+          )}
+          {searching && groups.length === 0 && <p className="muted">{t('No table matches your search.')}</p>}
+          {groups.map((g) => {
+            const isFolded = folded.includes(g.id) && !searching;
+            const everything = searching || allOf.includes(g.id);
+            const keep = (tb: TableSummary) => isMine(tb) || tb.id === link.room;
+            const shown = everything ? g.list : g.list.filter((tb, i) => i < OLDER_AFTER || (g.id !== 'mine' && keep(tb)));
+            const hidden = g.list.length - shown.length;
             return (
-              <li key={tb.id} className={['table-card', mine && 'mine', tb.id === link.room && 'invited'].filter(Boolean).join(' ')}>
-                <div className="table-main">
-                  <b className="table-title">{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}
-                    {mayManage(tb) ? (
-                      <button type="button" className="table-name" disabled={!conn.connected} title={t('Click to rename this table')} aria-label={`${t('Rename')}: ${tb.title}`}
-                        onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>
-                        {tb.title} <span className="pencil" aria-hidden="true">✏️</span>
-                      </button>
-                    ) : tb.title}
-                  </b>
-                  <span className="table-meta">
-                    <span className={tb.playing ? 'status playing' : 'status'}>{tb.playing ? t('Adventure under way') : t('Gathering the party')}</span>
-                    <span>{LANGS.find((l) => l.id === tb.language)?.label}</span>
-                    <span>{t('{n} of {max} seats taken', { n: tb.players.length, max: tb.maxPlayers })}</span>
-                    <span>{t('{n} heroes', { n: tb.heroes })}</span>
-                  </span>
-                </div>
-                <div className="table-players">
-                  {tb.players.map((p) => (
-                    <span key={p.id} className={p.connected ? 'who here' : 'who'} title={p.connected ? t('At the table') : t('Away')}>
-                      {p.id === tb.hostId && <span title={t('Host')}>👑 </span>}{p.name}
-                    </span>
-                  ))}
-                  {tb.players.length === 0 && <span className="muted">{t('Nobody sits here.')}</span>}
-                </div>
-                <div className="table-join">
-                  {asking === tb.id && !mine && (
-                    <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} autoFocus
-                      onKeyDown={(e) => { if (e.key === 'Enter' && ready && code.trim()) sit(tb); }} />
-                  )}
-                  {clash && <small className="warn">{t('Someone called {name} already sits here.', { name: me })}</small>}
-                  <button className={mine ? 'primary' : ''} disabled={!ready || full || solo || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
-                    title={!me ? t('Enter your name first.') : undefined}>
-                    {mine ? t('Back to your seat') : solo ? t('Private') : full ? t('Full') : t('Sit down')}
+              <section key={g.id} className="table-group" aria-label={g.label}>
+                <h3 className="table-group-title">
+                  <button type="button" className="fold" aria-expanded={!isFolded} onClick={() => fold(g.id)}>
+                    <span className="chev" aria-hidden="true">{isFolded ? '▸' : '▾'}</span> {g.label} <span className="muted">({g.list.length})</span>
                   </button>
-                  {mayManage(tb) && <button type="button" className="more" aria-expanded={managing} aria-label={`${t('Manage')}: ${tb.title}`} title={t('Manage')} onClick={() => { setManageOpen(manageOpen === tb.id ? null : tb.id); if (editing?.id === tb.id) setEditing(null); }}>⋯</button>}
-                </div>
-                {mayManage(tb) && managing && (
-                  <div className="table-manage">
-                    {editing?.id === tb.id ? (
-                      <form onSubmit={(e) => { e.preventDefault(); if (editing.mode === 'rename' ? editing.text.trim() : editing.text.trim() === tb.title) manage(); }}>
-                        {editing.mode === 'rename' ? (
-                          <label>{t('New name of the table')}<input value={editing.text} maxLength={40} autoFocus onChange={(e) => setEditing({ ...editing, text: e.target.value })} /></label>
-                        ) : (
-                          <label>
-                            {t('To delete this table, type its name: {title}', { title: tb.title })}
-                            <input value={editing.text} maxLength={40} autoFocus autoComplete="off" onChange={(e) => setEditing({ ...editing, text: e.target.value })} />
-                          </label>
+                </h3>
+                {!isFolded && <ul className="tables">
+                  {shown.map((tb) => {
+                    const mine = isMine(tb);
+                    const solo = !mine && tb.maxPlayers <= 1 && tb.players.length > 0;
+                    const full = !mine && !solo && tb.players.length >= tb.maxPlayers;
+                    const clash = !mine && !!me && tb.players.some((p) => p.name.toLocaleLowerCase() === me.toLocaleLowerCase());
+                    const managing = editing?.id === tb.id || manageOpen === tb.id;
+                    return (
+                      <li key={tb.id} className={['table-card', mine && 'mine', tb.id === link.room && 'invited'].filter(Boolean).join(' ')}>
+                        <div className="table-main">
+                          <b className="table-title">{tb.locked && <span title={t('Needs an invite code')}>🔒 </span>}
+                            {mayManage(tb) ? (
+                              <button type="button" className="table-name" disabled={!conn.connected} title={t('Click to rename this table')} aria-label={`${t('Rename')}: ${tb.title}`}
+                                onClick={() => { setManageOpen(tb.id); setEditing({ id: tb.id, mode: 'rename', text: tb.title }); }}>
+                                {tb.title}
+                              </button>
+                            ) : tb.title}
+                          </b>
+                          <span className="table-meta">
+                            <span className={tb.playing ? 'status playing' : 'status'}>{tb.playing ? t('Adventure under way') : t('Gathering the party')}</span>
+                            <span>{LANGS.find((l) => l.id === tb.language)?.label}</span>
+                            <span>{tb.maxPlayers <= 1 ? t('Solo') : t('{n} of {max} seats taken', { n: tb.players.length, max: tb.maxPlayers })}</span>
+                            <span>{t('{n} heroes', { n: tb.heroes })}</span>
+                          </span>
+                        </div>
+                        <div className="table-players">
+                          {tb.players.map((p) => (
+                            <span key={p.id} className={p.connected ? 'who here' : 'who'} title={p.connected ? t('At the table') : t('Away')}>
+                              {p.id === tb.hostId && <span title={t('Host')}>👑 </span>}{p.name}
+                            </span>
+                          ))}
+                          {tb.players.length === 0 && <span className="muted">{t('Nobody sits here.')}</span>}
+                        </div>
+                        <div className="table-join">
+                          {asking === tb.id && !mine && (
+                            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} autoFocus
+                              onKeyDown={(e) => { if (e.key === 'Enter' && ready && code.trim()) sit(tb); }} />
+                          )}
+                          {clash && <small className="warn">{t('Someone called {name} already sits here.', { name: me })}</small>}
+                          <button className={mine ? 'seat-back' : ''} disabled={!ready || full || solo || clash || (asking === tb.id && !mine && !code.trim())} onClick={() => sit(tb)}
+                            title={!me ? t('Enter your name first.') : undefined}>
+                            {mine ? t('Back to your seat') : solo ? t('Private') : full ? t('Full') : t('Sit down')}
+                          </button>
+                          {mayManage(tb) && <button type="button" className="more" aria-expanded={managing} aria-label={`${t('Manage')}: ${tb.title}`} title={t('Manage')} onClick={() => { setManageOpen(manageOpen === tb.id ? null : tb.id); if (editing?.id === tb.id) setEditing(null); }}>⋯</button>}
+                        </div>
+                        {mayManage(tb) && managing && (
+                          <div className="table-manage">
+                            {editing?.id === tb.id ? (
+                              <form onSubmit={(e) => { e.preventDefault(); if (editing.mode === 'rename' ? editing.text.trim() : editing.text.trim() === tb.title) manage(); }}>
+                                {editing.mode === 'rename' ? (
+                                  <label>{t('New name of the table')}<input value={editing.text} maxLength={40} autoFocus onChange={(e) => setEditing({ ...editing, text: e.target.value })} /></label>
+                                ) : (
+                                  <label>
+                                    {t('To delete this table, type its name: {title}', { title: tb.title })}
+                                    <input value={editing.text} maxLength={40} autoFocus autoComplete="off" onChange={(e) => setEditing({ ...editing, text: e.target.value })} />
+                                  </label>
+                                )}
+                                {editing.mode === 'delete' && <small className="muted">{t('Its story and heroes are kept in the list of deleted tables, so you can bring it back later.')}</small>}
+                                <span className="row">
+                                  <button className={editing.mode === 'delete' ? 'danger' : 'primary'} disabled={editing.mode === 'rename' ? !editing.text.trim() : editing.text.trim() !== tb.title}>{editing.mode === 'rename' ? t('Rename') : t('Delete the table')}</button>
+                                  <button type="button" className="link" onClick={() => { setEditing(null); setManageOpen(null); }}>{t('Cancel')}</button>
+                                </span>
+                              </form>
+                            ) : (
+                              <span className="row">
+                                <button type="button" className="link" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>✏️ {t('Rename')}</button>
+                                <button type="button" className="link danger" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'delete', text: '' })}>{t('Delete the table')}</button>
+                              </span>
+                            )}
+                          </div>
                         )}
-                        {editing.mode === 'delete' && <small className="muted">{t('Its story and heroes are kept in the list of deleted tables, so you can bring it back later.')}</small>}
-                        <span className="row">
-                          <button className={editing.mode === 'delete' ? 'danger' : 'primary'} disabled={editing.mode === 'rename' ? !editing.text.trim() : editing.text.trim() !== tb.title}>{editing.mode === 'rename' ? t('Rename') : t('Delete the table')}</button>
-                          <button type="button" className="link" onClick={() => { setEditing(null); setManageOpen(null); }}>{t('Cancel')}</button>
-                        </span>
-                      </form>
-                    ) : (
-                      <span className="row">
-                        <button type="button" className="link" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'rename', text: tb.title })}>✏️ {t('Rename')}</button>
-                        <button type="button" className="link danger" disabled={!conn.connected} onClick={() => setEditing({ id: tb.id, mode: 'delete', text: '' })}>{t('Delete the table')}</button>
-                      </span>
-                    )}
-                  </div>
+                      </li>
+                    );
+                  })}
+                </ul>}
+                {!isFolded && !searching && g.list.length > OLDER_AFTER && (
+                  <button type="button" className="link older" onClick={() => setAllOf((a) => toggle(a, g.id))}>
+                    {everything ? t('Show fewer') : t('Show older tables ({n})', { n: hidden })}
+                  </button>
                 )}
-              </li>
+              </section>
             );
           })}
-        </ul>}
-        {!isFolded && !searching && g.list.length > OLDER_AFTER && (
-          <button type="button" className="link older" onClick={() => setAllOf((a) => toggle(a, g.id))}>
-            {everything ? t('Show fewer') : t('Show older tables ({n})', { n: hidden })}
-          </button>
-        )}
-        </section>
-          );
-        })}
 
-        {binError && <p className="notice error" role="alert">{binError}</p>}
-        <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />
+          {binError && <p className="notice error" role="alert">{binError}</p>}
+          <DeletedTables load={loadBin} act={actBin} onError={binFailed} watch={tables.length} />
         </div>
 
         <aside className="online-now" aria-label={t('Who is here')}>
@@ -240,23 +371,6 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
             ))}
           </ul>
         </aside>
-        </div>
-
-        <div className="lobby-foot">
-          <form className="open-table" onSubmit={open}>
-            <div className="open-row">
-              <b>{t('Open a new table')}</b>
-              <span className="pick" role="group" aria-label={t('Players')}>
-                {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} title={n === 1 ? undefined : t('{n} players', { n })} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
-              </span>
-              <button className="primary" disabled={!ready} title={!me ? t('Enter your name first.') : undefined}>{t('Open the table')}</button>
-            </div>
-          </form>
-          <form className="by-code" onSubmit={(e) => { e.preventDefault(); if (anyCode.trim()) conn.join('', me, anyCode.trim()); }}>
-            <input value={anyCode} onChange={(e) => setAnyCode(e.target.value.toUpperCase())} maxLength={8} placeholder={t('Invite code')} aria-label={t('Invite code')} />
-            <button disabled={!ready || !anyCode.trim()}>{t('Join with a code')}</button>
-          </form>
-        </div>
       </div>
     </div>
   );
@@ -338,6 +452,11 @@ export function PartySetup({ state, conn, onMenu }: { state: GameState; conn: Co
   const [editing, setEditing] = useState<HeroTemplate | null>(null);
   const { heroes: mine } = useHeroTemplates();
   const [kept, setKept] = useState<string | null>(null);
+  // A hero chosen in the Heroes tab ("Play at a table…") joins the party as soon as you sit down.
+  useEffect(() => {
+    const id = takeBroughtHero();
+    if (id && state.characters.length < 4 && !state.characters.some((c) => c.ownerId === playerId && c.templateId === id)) conn.send({ t: 'add_template', templateId: id });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const full = state.characters.length >= 4;
   const host = state.hostId === playerId;
   const hostName = state.players.find((p) => p.id === state.hostId)?.name ?? '';
