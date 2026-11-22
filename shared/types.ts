@@ -631,6 +631,8 @@ export interface TableSummary {
   hostId: string | null;
   /** When the table was last played, in milliseconds since the epoch. */
   lastPlayed: number;
+  /** The heroes here that were copied from a saved hero (My heroes), and the level each has reached, so the Heroes tab can say where a hero plays. */
+  kept?: { templateId: string; level: number }[];
 }
 
 /** One signed-in account that is here right now, as the lobby lists it. */

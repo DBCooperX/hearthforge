@@ -140,7 +140,7 @@ export function ProfileWindow({ profile, onClose, onChanged }: { profile: Profil
                 ))}
               </tbody>
             </table>
-            <p className="muted small">{t('Heroes you keep on your account. A hero joins the party as a fresh level 1 copy, so playing never changes the saved one.')} {t('Pick them when you gather a party: you can add, change and keep them there.')}</p>
+            <p className="muted small">{t('Heroes you keep on your account. Manage them in the Heroes tab of the main screen.')}</p>
           </section>
         )}
         <section>

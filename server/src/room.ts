@@ -255,6 +255,7 @@ export class Room {
       heroes: s.characters.length,
       hostId: s.hostId,
       lastPlayed: this.lastPlayed,
+      kept: s.characters.filter((c) => c.templateId).map((c) => ({ templateId: c.templateId!, level: c.level })),
     };
   }
 

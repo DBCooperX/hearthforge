@@ -23,7 +23,7 @@ import { Hint, Info } from '../ui/Hint';
 import { getPrefs, setPrefs } from '../ui/prefs';
 import { playerId, type Connection } from '../net';
 import type { HeroTemplate } from '../../../shared/accounts';
-import { refreshTemplates, saveTemplate } from '../templates';
+import { refreshTemplates, rollForHero, saveTemplate } from '../templates';
 import { accountErrorText } from './SignIn';
 import { FeatPicker, OptionDetail, PickRow, Preview, Rich, Section, SpellDetail, dice, itemLine, signed, type Focus } from './Guide';
 import { TraitsPicker } from './TraitsPicker';
@@ -112,12 +112,15 @@ function complete(d: Draft, rolled: number[] | undefined): Draft {
   return tidy({ ...recommend({ ...d, classId: d.classId, method: 'array', base: undefined }, ['classId', 'speciesId', 'backgroundId', ...IDENTITY_FIELDS]), look: d.look, premadeId: d.premadeId });
 }
 
-interface Props { state: GameState; conn: Connection; onClose: () => void; /** Start from these choices, for example a premade hero. */ initial?: Draft; /** Change this saved hero (My heroes) instead of making a new one. */ template?: HeroTemplate }
+interface Props { /** The table the hero is made at. Without one (the Heroes tab) the hero is only kept in My heroes. */ state?: GameState; conn?: Connection; onClose: () => void; /** Start from these choices, for example a premade hero. */ initial?: Draft; /** Change this saved hero (My heroes) instead of making a new one. */ template?: HeroTemplate }
 
 export function Creator({ state, conn, onClose, initial, template }: Props) {
   const t = useT();
   const { lang } = useLang();
-  const rolled = state.rolled[playerId];
+  /** Scores the server rolled away from any table, in the Heroes tab. */
+  const [homeRolled, setHomeRolled] = useState<number[] | undefined>(undefined);
+  const rolled = state ? state.rolled[playerId] : homeRolled;
+  const rollDice = () => { if (conn) conn.send({ t: 'roll_abilities' }); else void rollForHero().then(setHomeRolled).catch(() => setSaveError(t('Something went wrong. Try again.'))); };
   /** All eight steps instead of the short three. Remembered in this browser. */
   const [detailed, setDetailed] = useState(() => getPrefs().creatorDetailed);
   const [d, setD] = useState<Draft>(() => {
@@ -250,7 +253,7 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
           {d.method === 'pointbuy' && <p className="muted small">{t('Points left: {n} of {max}. Scores from 8 to 15; 14 and 15 cost two points each step.', { n: POINT_BUDGET - (Number.isFinite(spent) ? spent : 0), max: POINT_BUDGET })}</p>}
           {d.method === 'roll' && (
             <p className="muted small">
-              <button type="button" onClick={() => conn.send({ t: 'roll_abilities' })}>🎲 {rolled ? t('Roll again') : t('Roll 4d6, drop the lowest')}</button>{' '}
+              <button type="button" onClick={rollDice}>🎲 {rolled ? t('Roll again') : t('Roll 4d6, drop the lowest')}</button>{' '}
               {rolled ? t('You rolled {scores}. The dice are rolled by the server.', { scores: [...rolled].sort((a, b) => b - a).join(', ') }) : t('The dice are rolled by the server.')}
             </p>
           )}
@@ -677,7 +680,12 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
     const spec = { ...(d as CharacterSpec), name: (d.name ?? '').trim() };
     if (template) {
       // Only the saved hero changes. Heroes already at a table are copies and stay as they are.
-      try { await saveTemplate(spec, state.room, template.id); committed.current = true; onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
+      try { await saveTemplate(spec, state?.room ?? '', template.id); committed.current = true; onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
+      return;
+    }
+    if (!state || !conn) {
+      // Made in the Heroes tab: the hero goes straight into My heroes.
+      try { await saveTemplate(spec, ''); committed.current = true; onClose(); } catch (err) { setSaveError(accountErrorText(t, err)); }
       return;
     }
     committed.current = true;
@@ -686,7 +694,8 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
     if (keep) window.setTimeout(() => void refreshTemplates(), 600);
     onClose();
   };
-  const full = state.characters.length >= 4;
+  const full = !!state && state.characters.length >= 4;
+  const home = !state;
 
   return (
     <div className="overlay creator-overlay">
@@ -727,12 +736,12 @@ export function Creator({ state, conn, onClose, initial, template }: Props) {
           {step === 'identity'
             ? <>
               {saveError && <span className="muted small" role="alert">{saveError}</span>}
-              {!template && (
+              {!template && !home && (
                 <Hint text={t('Keeps this hero in My heroes, so you can use a fresh copy of them at any table. The copy at the table never changes the saved hero.')}>
                   <label className="check mode"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /><span>{t('Keep in My heroes')}</span></label>
                 </Hint>
               )}
-              <button type="button" className="primary" disabled={!template && full} onClick={() => void create()}>{template ? (problems.length ? t('Finish the open steps') : t('Save changes')) : full ? t('The party is full') : problems.length ? t('Finish the open steps') : t('Create hero')}</button>
+              <button type="button" className="primary" disabled={!template && full} onClick={() => void create()}>{template ? (problems.length ? t('Finish the open steps') : t('Save changes')) : home ? (problems.length ? t('Finish the open steps') : t('Save hero')) : full ? t('The party is full') : problems.length ? t('Finish the open steps') : t('Create hero')}</button>
             </>
             : <button type="button" className="primary" onClick={() => go(steps[stepIndex + 1])}>{t('Next')} →</button>}
         </footer>
