@@ -294,6 +294,16 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
 
   const slots = layout?.slots ?? [];
   const onBar = new Set(slots.filter(Boolean));
+  // A finger cannot drag or right-click: in the spellbook a tap puts a spell on the first free slot, or takes it off.
+  const touchUi = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+  const toggleOnBar = (ref: string) => {
+    if (!layout) return;
+    const at = slots.indexOf(ref);
+    if (at >= 0) { setLayout(removeFromHotbar(layout, at)); return; }
+    const free = slots.findIndex((x) => !x);
+    if (free >= 0) setLayout(placeOnHotbar(layout, ref, free));
+    else conn.toast(t('The hotbar is full. Tap a spell on it to take it off.'));
+  };
   const bookGroups: { label: string; refs: string[] }[] = [
     { label: t('Actions and features'), refs: known.filter((id) => !isSpell(id)).map(abilityRef) },
     { label: t('Cantrips'), refs: known.filter((id) => isSpell(id) && (ABILITIES[id].spellLevel ?? 0) === 0).map(abilityRef) },
@@ -307,7 +317,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
         <div className="hb-book" onDragOver={(e) => e.preventDefault()}>
           <div className="hb-book-head">
             <b>{t('Spellbook')}</b>
-            <span className="muted">{t('Drag onto the hotbar. Right-click a slot to clear it.')}</span>
+            <span className="muted">{touchUi ? t('Tap a spell to put it on the hotbar, or to take it off again.') : t('Drag onto the hotbar. Right-click a slot to clear it.')}</span>
             {top > 0 && (
               <span className="hb-castat">
                 {t('Cast at level')}
@@ -325,7 +335,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
                 <div className="hb-book-slots">
                   {g.refs.map((r) => {
                     const en = entryOf(r);
-                    return en && <Slot key={r} entry={en} small marked={onBar.has(r)} draggable onDragStart={dragStart(r)} />;
+                    return en && <Slot key={r} entry={en} small marked={onBar.has(r)} draggable onDragStart={dragStart(r)} onPlace={touchUi ? () => toggleOnBar(r) : undefined} />;
                   })}
                 </div>
               </div>
@@ -406,10 +416,12 @@ interface SlotProps {
   onDragEnd?: (e: DragEvent) => void;
   onDrop?: (e: DragEvent) => void;
   onContextMenu?: (e: MouseEvent) => void;
+  /** In the spellbook on a touch screen: a tap places the entry on the hotbar instead of using it. */
+  onPlace?: () => void;
 }
 
 /** A square button with an icon, framed in the colour of what it spends. Its name and everything else is in the tooltip. */
-function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDragEnd, onDrop, onContextMenu }: SlotProps) {
+function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDragEnd, onDrop, onContextMenu, onPlace }: SlotProps) {
   const t = useT();
   const blocked = !!en.why || !en.run;
   const cls = ['hb-slot', `cost-${en.cost}`, en.on && 'on', blocked && 'off', en.auto && 'auto', small && 'small', marked && 'marked'].filter(Boolean).join(' ');
@@ -433,7 +445,7 @@ function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDrag
         onDragOver={onDrop ? (e) => e.preventDefault() : undefined}
         onDrop={onDrop}
         onContextMenu={onContextMenu}
-        onClick={() => { if (!blocked) en.run!(); }}
+        onClick={() => { if (onPlace) onPlace(); else if (!blocked) en.run!(); }}
       >
         <span className="hb-icon">{en.icon}</span>
         {hotkey && <i className="hk">{hotkey}</i>}
