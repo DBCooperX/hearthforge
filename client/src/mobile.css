@@ -106,3 +106,43 @@
   .map-controls { top: 6px; right: 6px; }
   .turnbar { padding: 5px 8px; gap: 6px; }
 }
+
+/* ---------- lobby, maps and polish ---------- */
+@media (max-width: 760px) {
+  /* The table list gets the whole width; who is here sits above it as a slim box. */
+  .lobby-cols, .tables-tab .lobby-cols { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .online-now, .tables-tab .online-now { position: static; order: -1; padding: 8px 10px; }
+  /* Journal bookmarks scroll sideways instead of wrapping or squeezing. */
+  .bookmarks { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .bookmarks::-webkit-scrollbar { display: none; }
+  .bookmarks .tabbar-tab { flex: 0 0 auto; white-space: nowrap; }
+  /* The map window: a one-line title and a hex map that fits its box. */
+  .win.bigmap .win-head h1 { font-size: 15px; letter-spacing: 0.08em; overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .win.bigmap .win-body { padding: 10px; }
+  .win.bigmap .hexmap svg, .hexmap svg { width: 100%; height: auto; max-height: calc(100dvh - 300px); }
+  .win.bigmap .maptabs { max-width: none; }
+}
+@media (pointer: coarse) {
+  .hexmap-hint { min-height: 32px; font-size: 14px; display: flex; align-items: center; }
+  .maptabs button, .bookmarks .tabbar-tab, .home-tab-btn, .win-close { min-height: 44px; }
+  .win-close { min-width: 44px; }
+  .kbd, .win-head .hotkey, .hotkey { display: none; }
+  button, .link { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ---------- the Innkeeper and the account window on a phone ---------- */
+@media (max-width: 760px) {
+  .win-body, .win-body > * { min-width: 0; }
+  /* Wide tables scroll sideways inside the window, with the name column kept in view. */
+  .inn-table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .inn-table th:first-child, .inn-table td:first-child { position: sticky; left: 0; background: #1d1916; z-index: 1; }
+  .inn-table tr.inn-subrow td:first-child { position: static; }
+  /* Settings rows that sat in two columns stack. */
+  .win-body .row, .win-body .field-row { flex-wrap: wrap; }
+  .win-body input, .win-body select { max-width: 100%; }
+}
+@media (pointer: coarse) {
+  /* A drop area cannot be dropped on: leave the button, drop the instruction to drop. */
+  .art-drop > b:not(.busy) { display: none; }
+  .art-drop { border-style: solid; }
+}

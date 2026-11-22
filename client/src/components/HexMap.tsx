@@ -47,13 +47,28 @@ export function HexMap({ world, target, route, onPick, local }: Props) {
   const fullW = W * (world.width + 0.5), fullH = SIZE * 1.5 * world.height + SIZE * 0.5;
   // The side panel shows about eleven hexes across, centred on the party (and the destination, once one is picked).
   const viewBox = useMemo(() => {
-    if (!local) return `0 0 ${fullW.toFixed(0)} ${fullH.toFixed(0)}`;
+    if (!local) {
+      // The big map frames what is known (explored hexes, places, the party and any destination) instead of the whole unexplored world.
+      let x0 = party.x, x1 = party.x, y0 = party.y, y1 = party.y;
+      const grow = (p: { x: number; y: number }) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); };
+      for (const e of hexes) if (e.code !== UNKNOWN) grow(e.c);
+      for (const l of top) grow(hexCenter(l, SIZE));
+      if (target) grow(hexCenter(target, SIZE));
+      const pad = W * 1.5;
+      let vx = Math.max(0, x0 - pad), vy = Math.max(0, y0 - pad);
+      let vw = Math.min(fullW, x1 + pad) - vx, vh = Math.min(fullH, y1 + pad) - vy;
+      const minW = W * 8;
+      if (vw < minW) { vx = Math.max(0, Math.min(fullW - minW, vx - (minW - vw) / 2)); vw = Math.min(minW, fullW); }
+      const minH = vw * 0.6;
+      if (vh < minH) { vy = Math.max(0, Math.min(fullH - minH, vy - (minH - vh) / 2)); vh = Math.min(minH, fullH); }
+      return `${vx.toFixed(0)} ${vy.toFixed(0)} ${vw.toFixed(0)} ${vh.toFixed(0)}`;
+    }
     const vw = Math.min(fullW, W * 11), vh = Math.min(fullH, vw * 0.72);
     const aim = target ? hexCenter(target, SIZE) : party;
     const cx = (party.x + aim.x) / 2, cy = (party.y + aim.y) / 2;
     const x = Math.max(0, Math.min(fullW - vw, cx - vw / 2)), y = Math.max(0, Math.min(fullH - vh, cy - vh / 2));
     return `${x.toFixed(0)} ${y.toFixed(0)} ${vw.toFixed(0)} ${vh.toFixed(0)}`;
-  }, [local, party.x, party.y, target?.q, target?.r, fullW, fullH]);
+  }, [local, party.x, party.y, target?.q, target?.r, fullW, fullH, hexes, top]);
   const line = route?.length ? [world.party, ...route].map((h) => { const c = hexCenter(h, SIZE); return `${c.x.toFixed(1)},${c.y.toFixed(1)}`; }).join(' ') : null;
   const hovered = hover && (byHex.get(hexKey(hover))?.name ?? (world.terrain[hover.r * world.width + hover.q] === UNKNOWN ? t('Uncharted') : t(TERRAIN[world.terrain[hover.r * world.width + hover.q] as TerrainCode].name)));
 
@@ -64,7 +79,7 @@ export function HexMap({ world, target, route, onPick, local }: Props) {
           const known = code !== UNKNOWN;
           const reachable = known || byHex.has(hexKey(h));
           return (
-            <g key={hexKey(h)} className={reachable ? 'hex pick' : 'hex'} onMouseEnter={() => setHover(h)} onClick={() => reachable && onPick(h)}>
+            <g key={hexKey(h)} className={reachable ? 'hex pick' : 'hex'} onMouseEnter={() => setHover(h)} onClick={() => { setHover(h); if (reachable) onPick(h); }}>
               <polygon points={points} fill={known ? TERRAIN[code as TerrainCode].color : '#1a1613'} stroke={known ? 'rgba(0,0,0,0.28)' : '#241e19'} strokeWidth={1} />
               {known && TERRAIN[code as TerrainCode].icon && !byHex.has(hexKey(h)) && <text x={c.x} y={c.y + 5} className="terrain-icon">{TERRAIN[code as TerrainCode].icon}</text>}
             </g>

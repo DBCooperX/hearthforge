@@ -101,7 +101,7 @@ export function WherePicker({ options, region, campaign, host, onRegion, onCampa
               </ul>
             )}
             <div className={over ? 'art-drop over' : 'art-drop'}>
-              <b>{busy === 'upload' ? t('Uploading…') : t('Drop a PDF or text file here')}</b>
+              <b className={busy === 'upload' ? 'busy' : undefined}>{busy === 'upload' ? t('Uploading…') : t('Drop a PDF or text file here')}</b>
               <span className="muted small">{t('An adventure you own, up to 64 MB. It stays on this server and only you and the Innkeeper see it.')}</span>
               <button type="button" disabled={!!busy || shelf?.ai === false} onClick={() => file.current?.click()}>{t('Choose a file')}</button>
               <input ref={file} type="file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ''; }} />

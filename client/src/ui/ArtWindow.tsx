@@ -193,7 +193,7 @@ export function ArtWindow({ onClose, embedded }: { onClose?: () => void; embedde
             {!edit && <p className="art-note">{t('The art of this server and its credits. Only the Innkeeper can change it.')}</p>}
             {edit && (
               <div className={over ? 'art-drop over' : 'art-drop'}>
-                <b>{busy === 'upload' ? t('Unpacking…') : t('Drop the zip of an art pack here')}</b>
+                <b className={busy === 'upload' ? 'busy' : undefined}>{busy === 'upload' ? t('Unpacking…') : t('Drop the zip of an art pack here')}</b>
                 <span className="muted small">{t('game-icons.net downloads by itself. For packs from Kenney, itch.io and similar sites, get the zip there, then drop it here. Nothing has to be copied onto the server.')}</span>
                 <button type="button" disabled={!!busy} onClick={() => file.current?.click()}>{t('Choose a file')}</button>
                 <input ref={file} type="file" accept=".zip,application/zip" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
