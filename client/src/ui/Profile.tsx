@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { PASSWORD_MIN, type PlayStats, type Profile } from '../../../shared/accounts';
 import { CLASSES } from '../../../shared/rules';
 import type { ClassId } from '../../../shared/types';
-import { chf, type CreditView } from '../../../shared/credits';
+import { fmtAmount, type CreditView } from '../../../shared/credits';
 import { accountCall } from '../account';
 import { accountErrorText } from '../components/SignIn';
 import { useLang, useT, type Translate } from '../i18n';
@@ -34,9 +34,9 @@ function CreditTiles({ credit }: { credit: CreditView }) {
       {credit.out && <div className="inn-note is-bad"><span>{t('Your credit is used up. Ask the innkeeper to top it up, then carry on.')}</span></div>}
       {credit.low && <div className="inn-note is-warn"><span>{t('Your credit is running low. Ask the innkeeper to top it up before it runs out.')}</span></div>}
       <div className="inn-stats">
-        {credit.limited && <div className="inn-stat"><small>{t('Left')}</small><b>{chf(credit.balance)}</b></div>}
-        <div className="inn-stat"><small>{t('Paid in')}</small><b>{chf(credit.paid)}</b></div>
-        <div className="inn-stat"><small>{t('AI costs so far')}</small><b>{chf(credit.spent)}</b></div>
+        {credit.limited && <div className="inn-stat"><small>{t('Left')}</small><b>{fmtAmount(credit.balance, credit.currency)}</b></div>}
+        <div className="inn-stat"><small>{t('Paid in')}</small><b>{fmtAmount(credit.paid, credit.currency)}</b></div>
+        <div className="inn-stat"><small>{t('AI costs so far')}</small><b>{fmtAmount(credit.spent, credit.currency)}</b></div>
       </div>
       <p className="muted small">{credit.limited
         ? t('The Dungeon Master and the narrator cost the innkeeper real money. Your share is taken off what you paid in: at a table with friends the cost is split among everyone sitting there.')

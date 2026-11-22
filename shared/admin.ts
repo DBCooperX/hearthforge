@@ -2,6 +2,7 @@
 // The settings registry lives here so the browser can label each setting and the
 // translation test can demand German for every label.
 import type { Lang } from './i18n';
+import type { Money } from './credits';
 
 export type SettingKind = 'secret' | 'model' | 'choice' | 'number' | 'text';
 export type SettingGroup = 'dm' | 'play' | 'voice' | 'art' | 'server';
@@ -172,6 +173,8 @@ export interface AdminOverview {
   updater: UpdaterStatus;
   usageToday: UsageTotals;
   usageMonth: UsageTotals;
+  /** What costs are shown in. Their amounts are dollars; the client multiplies by the rate. */
+  money: Money;
 }
 
 export interface AdminTable {
@@ -266,6 +269,7 @@ export interface UsageReport {
   models: ({ model: string } & UsageTotals)[];
   tables: ({ table: string; title: string } & UsageTotals)[];
   total: UsageTotals;
+  money: Money;
   /** Dollars per million tokens the estimate uses. */
   prices: { model: string; input: number; output: number; cacheRead: number }[];
 }

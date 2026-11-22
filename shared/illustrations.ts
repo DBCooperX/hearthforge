@@ -1,3 +1,4 @@
+import type { Money } from './credits';
 // Story illustrations: hand-drawn pictures of the big moments of an adventure (a boss steps out, a fight is won, a
 // secret comes out), painted by an image model when the Dungeon Master marks such a moment. The Innkeeper picks the
 // service, the model, the style and the limits; the cost goes on the players' credit like the rest of the AI.
@@ -185,6 +186,8 @@ export interface PictureInfo {
 /** What the Innkeeper sees. */
 export interface PictureLibrary {
   config: PictureConfig;
+  /** What prices and the budget are shown in. Stored amounts stay dollars; the client multiplies by the rate. */
+  money?: Money;
   /** Which services have a key. */
   keys: Record<PictureProvider, boolean>;
   month: { count: number; usd: number };

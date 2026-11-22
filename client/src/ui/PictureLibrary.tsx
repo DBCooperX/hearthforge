@@ -10,6 +10,7 @@ import { useLang, useT } from '../i18n';
 import { INNKEEPER_HEADER, innkeeperSession } from './innkeeperApi';
 import { sfx } from './sound';
 import { FigureImg, PictureGallery } from './PictureGallery';
+import { getMoney, setMoney, usd } from './money';
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -23,12 +24,13 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
 }
 
 const ASK_GOOD = new Set<string>(['painting', 'made_by_server']);
-const usd = (n: number) => `$${n < 0.1 ? n.toFixed(3) : n.toFixed(2)}`;
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
   const t = useT();
   const { lang } = useLang();
-  const [lib, setLib] = useState<Library | null>(null);
+  const [lib, setLibRaw] = useState<Library | null>(null);
+  const setLib = (l: Library) => { setMoney(l.money); setLibRaw(l); };
   const [draft, setDraft] = useState<PictureConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'save' | 'sample' | null>(null);
@@ -98,7 +100,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
           </span>
         </div>
         <p className="muted small">{known ? `${t(known.label)} · ${known.refs ? t('takes earlier pictures along, so the heroes stay recognisable') : t('text only: the heroes are kept alike by description alone')}` : t('A model this list does not know: it gets no earlier pictures, and is billed at the price you set.')}</p>
-        {num(t('Price per picture in dollars'), price, '0.001', (n) => edit({ usd: { ...c.usd, [priceKey]: (Number.isFinite(n) ? n : null) as number } }), known && c.usd[priceKey] === undefined ? t('(list price)') : undefined)}
+        {num(t('Price per picture in {currency}', { currency: getMoney().currency }), round6(price * getMoney().rate), '0.001', (n) => edit({ usd: { ...c.usd, [priceKey]: (Number.isFinite(n) ? n / getMoney().rate : null) as number } }), known && c.usd[priceKey] === undefined ? t('(list price)') : undefined)}
       </section>
 
       <section>
@@ -114,7 +116,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
         )}
         <div className="picture-sample">
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample')}</button>
-          <span className="muted small">{draft ? t('Save first, then paint a sample.') : t('A test picture in this style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
+          <span className="muted small">{draft ? t('Save first, then paint a sample.') : t('A test picture in this style, about {price}. It goes on your own costs.', { price: usd(price, true) })}</span>
         </div>
         {sample?.kind === 'scene' && <figure className="picture-sample-img"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
       </section>
@@ -127,7 +129,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
         </label>
         <div className="picture-sample">
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_portrait' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample portrait')}</button>
-          <span className="muted small">{t('A dwarf fighter in the portrait style, about {price}. It goes on your own costs.', { price: usd(price) })}</span>
+          <span className="muted small">{t('A dwarf fighter in the portrait style, about {price}. It goes on your own costs.', { price: usd(price, true) })}</span>
         </div>
         {sample?.kind === 'portrait' && <figure className="picture-sample-img portrait"><img src={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
       </section>
@@ -148,7 +150,7 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
         </label>
         <div className="picture-sample">
           <button type="button" disabled={!!busy || !hasKey || !!draft} onClick={() => void act({ do: 'sample_figure' }, 'sample')}>{busy === 'sample' ? t('Painting…') : t('Paint a sample figure')}</button>
-          <span className="muted small">{t('A goblin as it would stand on the battle map, about {price}. It goes on your own costs and is not used in play.', { price: usd(price) })}</span>
+          <span className="muted small">{t('A goblin as it would stand on the battle map, about {price}. It goes on your own costs and is not used in play.', { price: usd(price, true) })}</span>
         </div>
         {sample?.kind === 'figure' && <figure className="picture-sample-img figure"><FigureImg url={sample.url} alt={sample.caption} /><figcaption className="muted small">{sample.model}</figcaption></figure>}
         <p className="muted small">{t('Not happy with a figure, for example one that still holds a weapon? Repaint it below, or delete it, and it is painted anew.')}</p>
@@ -165,8 +167,8 @@ export function PictureLibrary({ onKeys }: { onKeys: () => void }) {
 
       <section>
         <h3>{t('Budget')}</h3>
-        {num(t('Monthly budget for the whole server, in dollars'), c.monthUsd, '1', (n) => edit({ monthUsd: n }), t('(0: no cap)'))}
-        <p className="muted small">{t('This month: {n} pictures, {cost}. Today: {today}. On disk: {mb} MB.', { n: lib.month.count, cost: usd(lib.month.usd), today: lib.today.count, mb: lib.diskMb })}</p>
+        {num(t('Monthly budget for the whole server, in {currency}', { currency: getMoney().currency }), round6(c.monthUsd * getMoney().rate), '1', (n) => edit({ monthUsd: n / getMoney().rate }), t('(0: no cap)'))}
+        <p className="muted small">{t('This month: {n} pictures, {cost}. Today: {today}. On disk: {mb} MB.', { n: lib.month.count, cost: usd(lib.month.usd, true), today: lib.today.count, mb: lib.diskMb })}</p>
       </section>
 
       <div className="inn-savebar">

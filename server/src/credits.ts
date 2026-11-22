@@ -1,8 +1,8 @@
 // Player credits, kept in one private JSON file in the data folder. Every cost of the AI (Claude for the Dungeon
-// Master, a paid voice for the narrator) is shared out among the accounts it was spent for and booked in francs at
-// the rate of the day. The Innkeeper books what players have paid in. See shared/credits.ts.
+// Master, a paid voice for the narrator) is shared out among the accounts it was spent for and booked in the one
+// global currency, at the fixed rate the Innkeeper entered (1 for dollars). The Innkeeper books what players have paid in. See shared/credits.ts.
 import { join } from 'node:path';
-import { DEFAULT_CREDIT_CONFIG, type CreditConfig, type CreditReport, type CreditRow, type CreditView, type TopUp } from '../../shared/credits';
+import { CURRENCY_CODE, DEFAULT_CREDIT_CONFIG, type CreditConfig, type CreditReport, type CreditRow, type CreditView, type TopUp } from '../../shared/credits';
 import { readJson, writePrivate } from './admin/config';
 
 const KEEP_DAYS = 90;
@@ -10,12 +10,12 @@ const MAX_TOPUPS = 200;
 
 interface Ledger {
   topUps: TopUp[];
-  /** Francs spent, ever. */
+  /** Spent, ever, in the global currency. */
   claude: number;
   voice: number;
   /** Story illustrations. Missing in ledgers from before them. */
   images?: number;
-  /** Francs spent per day (YYYY-MM-DD): [claude, voice, illustrations]. Kept for 90 days. */
+  /** Spent per day (YYYY-MM-DD): [claude, voice, illustrations]. Kept for 90 days. */
   days: Record<string, [number, number, number?]>;
   free?: boolean;
 }
@@ -42,6 +42,26 @@ const num = (v: unknown, min: number, max: number) => {
   return n;
 };
 
+/** Ledgers and configs saved before the global currency counted in francs, as chf and chfPerUsd. */
+function legacyConfig(c: Record<string, unknown>): Partial<CreditConfig> {
+  const out: Partial<CreditConfig> = { ...(c as Partial<CreditConfig>) };
+  const old = c as { chfPerUsd?: number; warnChf?: number };
+  if (out.currency === undefined && old.chfPerUsd !== undefined) { out.currency = 'CHF'; out.rate = old.chfPerUsd; }
+  if (out.warn === undefined && old.warnChf !== undefined) out.warn = old.warnChf;
+  return out;
+}
+
+const legacyTopUps = (list: unknown[]): TopUp[] =>
+  list.map((t) => { const x = t as { at: number; amount?: number; chf?: number; note: string }; return { at: x.at, amount: x.amount ?? x.chf ?? 0, note: x.note }; });
+
+/** Every amount in a ledger, times `f`. Used once, when the currency changes. */
+function scaleLedger(l: Ledger, f: number) {
+  l.topUps = l.topUps.map((t) => ({ ...t, amount: Math.round(t.amount * f * 100) / 100 }));
+  l.claude = round(l.claude * f); l.voice = round(l.voice * f);
+  if (l.images) l.images = round(l.images * f);
+  for (const d of Object.values(l.days)) for (let i = 0; i < d.length; i++) d[i] = round((d[i] ?? 0) * f);
+}
+
 export class Credits {
   private file: string;
   private s: Saved;
@@ -50,11 +70,20 @@ export class Credits {
   constructor(dataDir: string, private now: () => number = Date.now) {
     this.file = join(dataDir, 'credits.json');
     const saved = readJson<Partial<Saved>>(this.file, {});
-    const c = saved.config ?? {} as Partial<CreditConfig>;
+    const c = legacyConfig((saved.config ?? {}) as Record<string, unknown>);
+    const accounts = saved.accounts ?? {};
+    for (const l of Object.values(accounts)) l.topUps = legacyTopUps(l.topUps ?? []);
     this.s = {
-      config: { ...DEFAULT_CREDIT_CONFIG, ...c, voiceUsdPer1k: { ...DEFAULT_CREDIT_CONFIG.voiceUsdPer1k, ...(c.voiceUsdPer1k ?? {}) } },
-      accounts: saved.accounts ?? {},
+      config: {
+        on: c.on === true,
+        currency: CURRENCY_CODE.test(String(c.currency)) ? String(c.currency) : DEFAULT_CREDIT_CONFIG.currency,
+        rate: Number(c.rate) > 0 ? Number(c.rate) : DEFAULT_CREDIT_CONFIG.rate,
+        warn: Number.isFinite(Number(c.warn)) && c.warn !== undefined ? Number(c.warn) : DEFAULT_CREDIT_CONFIG.warn,
+        voiceUsdPer1k: { ...DEFAULT_CREDIT_CONFIG.voiceUsdPer1k, ...(c.voiceUsdPer1k ?? {}) },
+      },
+      accounts,
     };
+    if (this.s.config.currency === 'USD') this.s.config.rate = 1;
   }
 
   get config(): CreditConfig { return { ...this.s.config, voiceUsdPer1k: { ...this.s.config.voiceUsdPer1k } }; }
@@ -62,15 +91,26 @@ export class Credits {
   setConfig(raw: Record<string, unknown>) {
     const c = this.s.config;
     const v = (raw.voiceUsdPer1k ?? {}) as Record<string, unknown>;
+    const currency = raw.currency === undefined ? c.currency : String(raw.currency).trim().toUpperCase();
+    if (!CURRENCY_CODE.test(currency)) throw new CreditsError('bad_value');
+    const switching = currency !== c.currency;
+    // Dollars are the providers' own prices: no conversion. Any other currency needs the Innkeeper's own fixed rate.
+    if (switching && currency !== 'USD' && raw.rate === undefined) throw new CreditsError('bad_value');
+    const rate = currency === 'USD' ? 1 : raw.rate === undefined ? c.rate : num(raw.rate, 0.0001, 100000);
     const next: CreditConfig = {
       on: raw.on === undefined ? c.on : raw.on === true,
-      chfPerUsd: raw.chfPerUsd === undefined ? c.chfPerUsd : num(raw.chfPerUsd, 0.1, 10),
-      warnChf: raw.warnChf === undefined ? c.warnChf : num(raw.warnChf, 0, 1000),
+      currency,
+      rate,
+      // A warning line left as it was moves with the money when the currency changes.
+      warn: raw.warn === undefined || (switching && Number(raw.warn) === c.warn) ? (switching ? Math.round(c.warn * (rate / c.rate) * 100) / 100 : c.warn) : num(raw.warn, 0, 100000),
       voiceUsdPer1k: {
         elevenlabs: v.elevenlabs === undefined ? c.voiceUsdPer1k.elevenlabs : num(v.elevenlabs, 0, 10),
         openai: v.openai === undefined ? c.voiceUsdPer1k.openai : num(v.openai, 0, 10),
       },
     };
+    // The one conversion: money already booked moves from the old currency into the new one, so balances keep their
+    // worth. From then on every cost is booked straight in the new currency.
+    if (switching) for (const l of Object.values(this.s.accounts)) scaleLedger(l, next.rate / c.rate);
     this.s.config = next;
     this.save();
   }
@@ -91,7 +131,7 @@ export class Credits {
   charge(ids: string[], usd: number, kind: CostKind): string[] {
     const who = [...new Set(ids)];
     if (!who.length || !(usd > 0)) return [];
-    const share = (usd * this.s.config.chfPerUsd) / who.length;
+    const share = (usd * this.s.config.rate) / who.length;
     const day = dayOf(this.now());
     for (const id of who) {
       const l = this.ledger(id);
@@ -106,14 +146,14 @@ export class Credits {
 
   /** The Innkeeper books a payment (or, negative, a correction). */
   topUp(id: string, amount: unknown, note: unknown) {
-    const chf = Math.round(num(amount, -100000, 100000) * 100) / 100;
-    if (chf === 0) throw new CreditsError('bad_value');
+    const paid = Math.round(num(amount, -1e7, 1e7) * 100) / 100;
+    if (paid === 0) throw new CreditsError('bad_value');
     const l = this.ledger(id);
-    l.topUps.push({ at: this.now(), chf, note: String(note ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) });
+    l.topUps.push({ at: this.now(), amount: paid, note: String(note ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) });
     if (l.topUps.length > MAX_TOPUPS) {
       // The oldest payments fold into one line, so the balance stays right.
       const old = l.topUps.splice(0, l.topUps.length - MAX_TOPUPS + 1);
-      l.topUps.unshift({ at: old[0].at, chf: round(old.reduce((n, t) => n + t.chf, 0)), note: 'earlier payments' });
+      l.topUps.unshift({ at: old[0].at, amount: round(old.reduce((n, t) => n + t.amount, 0)), note: 'earlier payments' });
     }
     this.save();
   }
@@ -132,13 +172,13 @@ export class Credits {
 
   view(a: CreditAccount): CreditView {
     const l = this.s.accounts[a.id];
-    const paid = round((l?.topUps ?? []).reduce((n, t) => n + t.chf, 0));
+    const paid = round((l?.topUps ?? []).reduce((n, t) => n + t.amount, 0));
     const spent = round((l?.claude ?? 0) + (l?.voice ?? 0) + (l?.images ?? 0));
     const balance = round(paid - spent);
     const free = !!l?.free;
     const limited = this.s.config.on && a.role !== 'innkeeper' && !free;
     const out = limited && balance <= 0;
-    return { limited, free, paid, spent, balance, low: limited && !out && balance < this.s.config.warnChf, out, warnChf: this.s.config.warnChf };
+    return { currency: this.s.config.currency, limited, free, paid, spent, balance, low: limited && !out && balance < this.s.config.warn, out, warn: this.s.config.warn };
   }
 
   /** False when credits are on and this account has none left. */
@@ -182,9 +222,13 @@ export class Credits {
     const r = raw as Partial<Saved> | null;
     if (!r || typeof r !== 'object' || !r.accounts || typeof r.accounts !== 'object') return 0;
     let added = 0;
+    // A backup in another currency is converted at the fixed rates of both servers, once.
+    const was = legacyConfig((r.config ?? {}) as Record<string, unknown>);
+    const f = was.currency && was.currency !== this.s.config.currency && Number(was.rate) > 0 ? this.s.config.rate / Number(was.rate) : 1;
     for (const [id, l] of Object.entries(r.accounts)) {
       if (this.s.accounts[id] || !l || !Array.isArray(l.topUps)) continue;
-      this.s.accounts[id] = { topUps: l.topUps, claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.free ? { free: true } : {}) };
+      this.s.accounts[id] = { topUps: legacyTopUps(l.topUps), claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.free ? { free: true } : {}) };
+      if (f !== 1) scaleLedger(this.s.accounts[id], f);
       added++;
     }
     if (added) this.save();

@@ -130,7 +130,7 @@ export class Usage {
     return t;
   }
 
-  report(titleOf: (table: string) => string): UsageReport {
+  report(titleOf: (table: string) => string): Omit<UsageReport, 'money'> {
     const days = new Map<string, UsageTotals>(), models = new Map<string, UsageTotals>(), tables = new Map<string, UsageTotals>();
     const total = zero();
     const slot = (m: Map<string, UsageTotals>, k: string) => m.get(k) ?? (m.set(k, zero()), m.get(k)!);

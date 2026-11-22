@@ -29,7 +29,7 @@ import { useNarrator } from './narrator';
 import { playerId, useConnection } from './net';
 import { useAccount, type AccountState } from './account';
 import type { Profile } from '../../shared/accounts';
-import { OUT_OF_CREDIT, chf, type CreditView } from '../../shared/credits';
+import { OUT_OF_CREDIT, fmtAmount, type CreditView } from '../../shared/credits';
 import { SignInScreen } from './components/SignIn';
 import { sfx as uiSound } from './ui/sound';
 import { ProfileWindow } from './ui/Profile';
@@ -498,7 +498,7 @@ function CreditNote({ credit }: { credit: CreditView | null }) {
   return (
     <div className={`toast credit-note is-${state}`} role="alert">
       <b>{t('AI credit')}</b>
-      <span>{state === 'out' ? t(OUT_OF_CREDIT) : t('Your AI credit is running low: {left} left. Ask the innkeeper to top it up before it runs out.', { left: chf(credit.balance) })}</span>
+      <span>{state === 'out' ? t(OUT_OF_CREDIT) : t('Your AI credit is running low: {left} left. Ask the innkeeper to top it up before it runs out.', { left: fmtAmount(credit.balance, credit.currency) })}</span>
       <button type="button" className="link" onClick={() => setClosed(state)}>{t('OK')}</button>
     </div>
   );

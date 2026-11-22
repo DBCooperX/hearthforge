@@ -189,6 +189,9 @@ function bill(table: string, usd: number, kind: CostKind) {
   tellCredits(credits.charge(payersAt(table), usd, kind));
 }
 
+/** The currency every price is shown in, and its fixed rate per dollar. */
+function moneyNow() { const { currency, rate } = credits.config; return { currency, rate }; }
+
 /** Send these accounts their credit, on every device they are signed in on. Only to those who can run out. */
 function tellCredits(ids: string[], always = false) {
   for (const id of ids) {
@@ -668,7 +671,12 @@ async function voiceApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       if (url.searchParams.has('piper')) over.piper = { ...narrator.library().choice.piper, [lang]: url.searchParams.get('piper') };
       // The Innkeeper trying voices pays for it like anyone else: it shows in their own costs.
       const me = accounts.account(req.headers[SESSION_HEADER]);
-      const audio = await narrator.speak(sample, lang, over, (provider, chars) => { if (me) credits.charge([me.id], credits.voiceCost(provider, chars), 'voice'); });
+      // Like a picture sample, it counts in the AI costs even when no account is signed in.
+      const audio = await narrator.speak(sample, lang, over, (provider, chars) => {
+        const usd = credits.voiceCost(provider, chars);
+        usage.recordExtra('Innkeeper samples', 'voice', usd);
+        if (me) credits.charge([me.id], usd, 'voice');
+      });
       return sendAudio(req, res, audio.file, audio.type);
     }
     if (req.method === 'POST' && url.pathname === '/api/voice/action') {
@@ -692,7 +700,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
   };
   try {
     if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
-    if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, illustrator.library());
+    if (req.method === 'GET' && url.pathname === '/api/pictures/library') return json(200, { ...illustrator.library(), money: moneyNow() });
     if (req.method === 'POST' && url.pathname === '/api/pictures/action') {
       const body = JSON.parse((await readRaw(req, 16 * 1024, () => new PictureError('bad_request'))).toString('utf8') || '{}') as Record<string, unknown>;
       if (body.do === 'sample' || body.do === 'sample_portrait' || body.do === 'sample_figure') {
@@ -700,7 +708,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         const me = accounts.account(req.headers[SESSION_HEADER]);
         const pay = (usd: number) => { usage.recordExtra('Innkeeper samples', 'images', usd); if (me) credits.charge([me.id], usd, 'images'); };
         const picture = body.do === 'sample' ? await illustrator.sample(pay) : body.do === 'sample_figure' ? await illustrator.sampleFigure(pay) : await illustrator.samplePortrait(pay);
-        return json(200, { ...illustrator.library(), sample: picture });
+        return json(200, { ...illustrator.library(), money: moneyNow(), sample: picture });
       }
       // "Repaint" deletes a battle figure and paints it anew at once, at every table where its hero or monster stands.
       const repaint = body.do === 'repaint';
@@ -732,7 +740,7 @@ async function picturesApi(req: IncomingMessage, res: ServerResponse, url: URL) 
         const entry = room.game.s.log.find((l) => l.id === done.removed!.entry);
         if (entry?.scene) { entry.scene.imageId = null; room.flush(); }
       }
-      return json(200, illustrator.library());
+      return json(200, { ...illustrator.library(), money: moneyNow() });
     }
     return json(404, { error: 'bad_request' });
   } catch (err) {

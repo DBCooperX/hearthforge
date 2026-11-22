@@ -7,7 +7,8 @@ import {
   type BackupInfo, type LogLine, type SettingDef, type SettingValue, type UpdaterStatus, type UsageReport, type UsageTotals,
 } from '../../../shared/admin';
 import { CLASS_INFO } from '../../../shared/content';
-import { chf, type CreditConfig, type CreditReport } from '../../../shared/credits';
+import { fmtAmount, type CreditConfig, type CreditReport } from '../../../shared/credits';
+import { getMoney, setMoney, usd } from './money';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
 import { RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
@@ -67,14 +68,20 @@ function span(t: Translate, ms: number): string {
   return t('{d} d {h} h', { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600) });
 }
 const tokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
-const money = (c: number | null) => (c === null ? '?' : c > 0 && c < 0.01 ? '< $0.01' : `$${c.toFixed(2)}`);
+/** Costs are kept in dollars; they are shown in the one global currency at its fixed rate. */
+const money = (c: number | null) => (c === null ? '?' : c > 0 && c * getMoney().rate < 0.01 ? `< ${fmtAmount(0.01, getMoney().currency)}` : usd(c));
 
 /** Ask the server again every few seconds while the section is on screen. */
 function usePoll<T>(path: string, ms: number, onError: (err: unknown) => void): [T | null, (next?: T) => void] {
   const [data, setData] = useState<T | null>(null);
   const load = useCallback((next?: T) => {
-    if (next !== undefined) return setData(next);
-    inn<T>(path).then(setData).catch(onError);
+    const take = (d: T) => {
+      const x = d as { money?: { currency: string; rate: number }; config?: { currency?: string; rate?: number } } | null;
+      setMoney(x?.money ?? (x?.config?.currency ? { currency: x.config.currency, rate: x.config.rate ?? 1 } : undefined));
+      setData(d);
+    };
+    if (next !== undefined) return take(next);
+    inn<T>(path).then(take).catch(onError);
   }, [path, onError]);
   useEffect(() => {
     load();
@@ -753,12 +760,14 @@ function UsageRows<T extends UsageTotals>({ rows, name, head }: { rows: T[]; nam
  * Player credits: what each account's share of the AI has cost, what they paid in, and the switch that stops a
  * player whose credit is used up. Changes apply at once.
  */
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
 function CreditsPane({ fail, say }: PaneProps) {
   const t = useT();
   const { lang } = useLang();
   const [r, set] = usePoll<CreditReport>('/credits', 15000, fail);
   const [draft, setDraft] = useState<CreditConfig | null>(null);
-  const [topUp, setTopUp] = useState<{ id: string; chf: string; note: string } | null>(null);
+  const [topUp, setTopUp] = useState<{ id: string; amount: string; note: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const act = async (body: Record<string, unknown>) => {
     try { const next = await inn<CreditReport>('/credits', { body }); set(next); return next; } catch (err) { fail(err); return null; }
@@ -773,8 +782,8 @@ function CreditsPane({ fail, say }: PaneProps) {
     e.preventDefault();
     if (!topUp) return;
     const who = r.rows.find((x) => x.id === topUp.id)?.username ?? '';
-    const amount = Number(topUp.chf.replace(',', '.'));
-    if (await act({ do: 'top_up', id: topUp.id, chf: amount, note: topUp.note })) { say(t('{amount} booked for {name}.', { amount: chf(amount), name: who })); setTopUp(null); }
+    const amount = Number(topUp.amount.replace(',', '.'));
+    if (await act({ do: 'top_up', id: topUp.id, amount, note: topUp.note })) { say(t('{amount} booked for {name}.', { amount: fmtAmount(amount, r.config.currency), name: who })); setTopUp(null); }
   };
   return (
     <section className="inn-credits">
@@ -786,10 +795,17 @@ function CreditsPane({ fail, say }: PaneProps) {
           : t('Off: what each account costs is counted below, but nobody is stopped. Switch it on once your players have paid in.')}</span></span>
       </label>
       <form className="inn-credit-config" onSubmit={(e) => { e.preventDefault(); void act({ do: 'config', config: c }).then((ok) => { if (ok) { setDraft(null); say(t('Saved.')); } }); }}>
-        {field(t('Francs per US dollar'), c.chfPerUsd, (n) => edit({ chfPerUsd: n }), '0.01')}
-        {field(t('Warn players below (CHF)'), c.warnChf, (n) => edit({ warnChf: n }), '0.5')}
-        {field(t('ElevenLabs voice, $ per 1000 characters'), c.voiceUsdPer1k.elevenlabs, (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, elevenlabs: n } }), '0.001')}
-        {field(t('OpenAI voice, $ per 1000 characters'), c.voiceUsdPer1k.openai, (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, openai: n } }), '0.001')}
+        <label>{t('Currency for everything')}
+          <input value={c.currency} maxLength={3} list="inn-currencies" onChange={(e) => { const cur = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); edit({ currency: cur, ...(cur === 'USD' ? { rate: 1 } : {}) }); }} />
+          <datalist id="inn-currencies">{['USD', 'CHF', 'EUR', 'GBP'].map((x) => <option key={x} value={x} />)}</datalist>
+        </label>
+        {c.currency !== 'USD' && field(t('{currency} per US dollar (your fixed rate)', { currency: c.currency }), c.rate, (n) => edit({ rate: n }), '0.01')}
+        {field(t('Warn players below ({currency})', { currency: c.currency }), c.warn, (n) => edit({ warn: n }), '0.5')}
+        {field(t('ElevenLabs voice, {currency} per 1000 characters', { currency: c.currency }), round6(c.voiceUsdPer1k.elevenlabs * c.rate), (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, elevenlabs: n / c.rate } }), '0.001')}
+        {field(t('OpenAI voice, {currency} per 1000 characters', { currency: c.currency }), round6(c.voiceUsdPer1k.openai * c.rate), (n) => edit({ voiceUsdPer1k: { ...c.voiceUsdPer1k, openai: n / c.rate } }), '0.001')}
+        <p className="muted small">{c.currency === 'USD'
+          ? t('Dollars: every price is the provider\'s own price, with no conversion.')
+          : t('The AI providers bill in dollars. Every dollar price is multiplied once by your fixed rate; nothing is fetched from the internet. When you change the currency, the money already booked is converted once at the new rate.')}</p>
         <button type="submit" disabled={!draft}>{t('Save')}</button>
       </form>
       <table className="inn-table">
@@ -799,21 +815,21 @@ function CreditsPane({ fail, say }: PaneProps) {
             <Fragment key={a.id}>
               <tr className={a.out ? 'is-out' : a.low ? 'is-low' : undefined}>
                 <td><button type="button" className="link" onClick={() => setOpen(open === a.id ? null : a.id)} aria-expanded={open === a.id}><b>{a.username}</b></button>{a.role === 'innkeeper' && <span className="muted small"> · {t('Innkeeper')}</span>}</td>
-                <td className="num">{a.limited ? <b className={a.out ? 'bad' : a.low ? 'warn' : undefined}>{chf(a.balance)}</b> : <span className="muted">{t('no limit')}</span>}</td>
-                <td className="num">{chf(a.paid)}</td>
-                <td className="num">{chf(a.spentClaude)}</td>
-                <td className="num">{chf(a.spentVoice)}</td>
-                <td className="num">{chf(a.spentImages ?? 0)}</td>
-                <td className="num">{chf(a.last30)}</td>
+                <td className="num">{a.limited ? <b className={a.out ? 'bad' : a.low ? 'warn' : undefined}>{fmtAmount(a.balance, a.currency)}</b> : <span className="muted">{t('no limit')}</span>}</td>
+                <td className="num">{fmtAmount(a.paid, a.currency)}</td>
+                <td className="num">{fmtAmount(a.spentClaude, a.currency)}</td>
+                <td className="num">{fmtAmount(a.spentVoice, a.currency)}</td>
+                <td className="num">{fmtAmount(a.spentImages ?? 0, a.currency)}</td>
+                <td className="num">{fmtAmount(a.last30, a.currency)}</td>
                 <td>{a.role === 'innkeeper' ? <span className="muted">—</span> : <input type="checkbox" checked={a.free} aria-label={t('Free')} onChange={(e) => void act({ do: 'free', id: a.id, free: e.target.checked })} />}</td>
-                <td className="inn-actions"><button type="button" onClick={() => setTopUp({ id: a.id, chf: '', note: '' })}>{t('Top up')}</button></td>
+                <td className="inn-actions"><button type="button" onClick={() => setTopUp({ id: a.id, amount: '', note: '' })}>{t('Top up')}</button></td>
               </tr>
               {topUp?.id === a.id && (
                 <tr className="inn-subrow"><td colSpan={9}>
                   <form className="inn-topup" onSubmit={book}>
-                    <label>{t('Amount (CHF)')}<input autoFocus inputMode="decimal" value={topUp.chf} onChange={(e) => setTopUp({ ...topUp, chf: e.target.value })} placeholder="10.00" /></label>
+                    <label>{t('Amount ({currency})', { currency: r.config.currency })}<input autoFocus inputMode="decimal" value={topUp.amount} onChange={(e) => setTopUp({ ...topUp, amount: e.target.value })} placeholder="10.00" /></label>
                     <label>{t('Note')}<input value={topUp.note} maxLength={80} onChange={(e) => setTopUp({ ...topUp, note: e.target.value })} placeholder={t('for example: TWINT, 20 Nov')} /></label>
-                    <button type="submit" className="primary" disabled={!Number(topUp.chf.replace(',', '.'))}>{t('Book')}</button>
+                    <button type="submit" className="primary" disabled={!Number(topUp.amount.replace(',', '.'))}>{t('Book')}</button>
                     <button type="button" className="link" onClick={() => setTopUp(null)}>{t('Cancel')}</button>
                   </form>
                   <p className="muted small">{t('A negative amount corrects a mistake or pays money back.')}</p>
@@ -822,7 +838,7 @@ function CreditsPane({ fail, say }: PaneProps) {
               {open === a.id && (
                 <tr className="inn-subrow"><td colSpan={9}>
                   {a.topUps.length === 0 ? <span className="muted">{t('Nothing paid in yet.')}</span> : (
-                    <ul className="inn-list">{a.topUps.map((p, i) => <li key={i}><span>{new Date(p.at).toLocaleDateString(lang)}</span><b>{chf(p.chf)}</b><span className="muted">{p.note}</span></li>)}</ul>
+                    <ul className="inn-list">{a.topUps.map((p, i) => <li key={i}><span>{new Date(p.at).toLocaleDateString(lang)}</span><b>{fmtAmount(p.amount, a.currency)}</b><span className="muted">{p.note}</span></li>)}</ul>
                   )}
                 </td></tr>
               )}
@@ -830,7 +846,7 @@ function CreditsPane({ fail, say }: PaneProps) {
           ))}
         </tbody>
       </table>
-      <p className="muted small">{t('Each call to the AI is shared equally among the accounts sitting at the table, at the list prices below and your rate of francs per dollar. Piper voices cost nothing. An estimate: your invoices from Anthropic and ElevenLabs are what count.')}</p>
+      <p className="muted small">{t('Each call to the AI is shared equally among the accounts sitting at the table, at the list prices below, in your currency at your fixed rate. Piper voices cost nothing. An estimate: your invoices from Anthropic and ElevenLabs are what count.')}</p>
       <p className="muted small">{t('Scene pictures and hero portraits are billed per picture at the price shown under Art → Illustrations. A hero portrait goes on the account of the player whose hero it is; the portrait of a person the party meets is shared by the table, like a scene picture.')}</p>
     </section>
   );
@@ -854,7 +870,7 @@ function UsagePane({ fail }: PaneProps) {
       <section><h3>{t('By model')}</h3><UsageRows rows={r.models} name={(m) => (m.model === 'images' ? t('Pictures') : m.model === 'voice' ? t('Narrator voice') : m.model)} head={t('Model')} /></section>
       <section><h3>{t('By table')}</h3><UsageRows rows={r.tables} name={(x) => x.title} head={t('Table')} /></section>
       <section><h3>{t('By day')}</h3><UsageRows rows={r.days.slice(0, 30)} name={(d) => d.day} head={t('Day')} /></section>
-      <p className="muted small">{t('An estimate from the tokens the API reported and these list prices per million tokens: {prices}, plus what pictures and the narrator voice cost at the prices set for them. Your invoices are what counts.', { prices: r.prices.map((p) => `${p.model} $${p.input} / $${p.output}`).join(', ') })}</p>
+      <p className="muted small">{t('An estimate from the tokens the API reported and these list prices per million tokens: {prices}, plus what pictures and the narrator voice cost at the prices set for them. Your invoices are what counts.', { prices: r.prices.map((p) => `${p.model} ${usd(p.input, true)} / ${usd(p.output, true)}`).join(', ') })}</p>
     </div>
   );
 }

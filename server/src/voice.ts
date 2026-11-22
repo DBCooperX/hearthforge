@@ -222,7 +222,8 @@ export class Narrator {
         else if (provider === 'openai') await this.viaOpenAI(voice, choice.speed, text, tmp);
         else await this.viaElevenLabs(voice, choice.speed, text, tmp);
         renameSync(tmp, file);
-        if (provider !== 'piper') paid?.(provider, text.length);
+        // Booking the cost must never lose speech that is already made and paid for.
+        if (provider !== 'piper') try { paid?.(provider, text.length); } catch (err) { console.warn('[voice] cost not booked:', err); }
       } catch (err) {
         rmSync(tmp, { force: true });
         this.lastError = err instanceof Error ? err.message : String(err);
