@@ -5,7 +5,7 @@ import { artOfCharacter, companionFace, heroPortraitUrl } from '../game/heroArt'
 import { playerId } from '../net';
 import { useT } from '../i18n';
 import { classLabel, conditionHelp } from '../game/util';
-import { FeatureGlyph } from '../ui/Glyph';
+import { FeatureGlyph, UiGlyph } from '../ui/Glyph';
 import { itemDef } from '../../../shared/items';
 
 interface Props {
@@ -96,7 +96,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             <div className="info">
               <div className="name">
                 <b title={c.name}>{c.name}</b>
-                {c.heroic && <span className="heroic-spark" title={t('Inspiration: the next failed check is rolled again')} aria-label={t('Inspiration: the next failed check is rolled again')}>✨</span>}
+                {c.heroic && <span className="heroic-spark" title={t('Inspiration: the next failed check is rolled again')} aria-label={t('Inspiration: the next failed check is rolled again')}><UiGlyph id="inspiration" emoji="✨" /></span>}
                 <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{classLabel(c, t)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />
@@ -104,7 +104,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
               <div className="xpbar" title={c.level < MAX_LEVEL ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next: XP_THRESHOLDS[c.level], level: c.level + 1 }) : `${c.xp} XP`}>
                 <div style={{ width: `${c.level < MAX_LEVEL ? Math.min(100, ((c.xp - XP_THRESHOLDS[c.level - 1]) / (XP_THRESHOLDS[c.level] - XP_THRESHOLDS[c.level - 1])) * 100) : 100}%` }} />
               </div>
-              {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}>⬆ {t('Level up')}</button>}
+              {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}><UiGlyph id="level_up" emoji="⬆" /> {t('Level up')}</button>}
               {shownResources(c).length > 0 && (
                 <div className="uses">
                   {shownResources(c).map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={`${t(r.def.name)}: ${r.left} / ${r.max}`}><FeatureGlyph id={r.def.id} emoji={r.def.icon} /> {r.left}</span>)}
@@ -175,7 +175,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
           })}
         </section>
       )}
-      <div className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</div>
+      <div className="gold" title={t('Party gold')}><UiGlyph id="gold" emoji="🪙" /> {state.gold} {t('gp')}</div>
     </aside>
   );
 }

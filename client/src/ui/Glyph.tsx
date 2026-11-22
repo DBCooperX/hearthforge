@@ -27,3 +27,10 @@ export const LineGlyph = ({ line }: { line: string }) => <Glyph keys={featureLin
 export function OptionGlyph({ option }: { option: { id: string; icon: ReactNode } }) {
   return <Glyph keys={[`feat:${option.id}`, `feature:${option.id}`, `feature:style_${option.id}`]} emoji={option.icon} />;
 }
+
+/** A kind of place (tavern, temple, cave…). */
+export const PlaceGlyph = ({ kind, emoji }: { kind: string; emoji?: ReactNode }) => <span className="ui-glyph" aria-hidden><Glyph keys={[`place:${kind}`]} emoji={emoji} /></span>;
+/** A kind of merchant. */
+export const ShopGlyph = ({ kind, emoji }: { kind: string; emoji?: ReactNode }) => <span className="ui-glyph" aria-hidden><Glyph keys={[`shop:${kind}`]} emoji={emoji} /></span>;
+/** Rests, gold, level up, inspiration and the marks of a fight, drawn like the hotbar. */
+export const UiGlyph = ({ id, emoji }: { id: string; emoji?: ReactNode }) => <span className="ui-glyph" aria-hidden><Glyph keys={[id.includes(':') ? id : `ui:${id}`]} emoji={emoji} /></span>;

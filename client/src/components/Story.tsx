@@ -2,6 +2,9 @@ import { itemArtUrl } from '../game/itemArt';
 import { GOOD_REASONS } from '../../../shared/odds';
 import { reasonText } from './Odds';
 import { npcBustUrl } from '../game/faces';
+import { skillBonus } from '../../../shared/skillTag';
+import { SkillGlyph } from '../ui/Glyph';
+import { signed as plusMinus } from './Guide';
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, formatHours, hexDistance } from '../../../shared/hex';
@@ -490,6 +493,9 @@ export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProp
   const sceneAt = state.log.reduce((at, l, i) => (l.kind === 'dm' ? i : at), -1);
   const answered = state.log.slice(sceneAt + 1).some((l) => l.kind === 'chat' && l.speaker === me);
   const chips = exploring && !state.dmBusy && !state.travelling && sceneAt >= 0 && !answered ? state.log[sceneAt].scene?.actions ?? [] : [];
+  const chipSkills = sceneAt >= 0 ? state.log[sceneAt].scene?.actionSkills ?? [] : [];
+  // A tagged choice shows the skill and the bonus of the player's own hero (the first one still standing).
+  const myHero = state.characters.find((c) => c.ownerId === playerId && !c.dead && c.hp > 0) ?? state.characters.find((c) => c.ownerId === playerId);
   // The newest line of mine that the Dungeon Master has not started on can still be taken back.
   const takeBackId = state.unanswered.filter((u) => u.playerId === playerId).pop()?.logId;
   const writing = state.players.filter((p) => p.id !== playerId && conn.typing[p.id] === 'story').map((p) => p.name);
@@ -547,7 +553,18 @@ export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProp
       {state.trip && exploring && !state.travelling && <TripCard state={state} conn={conn} />}
       {chips.length > 0 && (
         <div className="chips">
-          {chips.map((a, i) => <button key={i} className="chip-action" data-pick={i + 1} onClick={() => say(a)}>{i < 9 && <kbd className="kbd">{i + 1}</kbd>}{a}</button>)}
+          {chips.map((a, i) => {
+            const skill = chipSkills[i] ?? null;
+            const bonus = skill && myHero ? skillBonus(myHero, skill) : null;
+            const tip = skill ? (bonus !== null && myHero ? t('{skill} check: {name} adds {bonus}. The Dungeon Master decides whether to roll, and how hard it is.', { skill: t(skill), name: myHero.name, bonus: plusMinus(bonus) }) : t('{skill} check', { skill: t(skill) })) : undefined;
+            return (
+              <button key={i} className={skill ? 'chip-action tagged' : 'chip-action'} data-pick={i + 1} title={tip} onClick={() => say(a)}>
+                {i < 9 && <kbd className="kbd">{i + 1}</kbd>}
+                {skill && <span className="chip-skill"><SkillGlyph skill={skill} /><span className="cap">{t(skill)}</span>{bonus !== null && <b>{plusMinus(bonus)}</b>}</span>}
+                {a}
+              </button>
+            );
+          })}
         </div>
       )}
       <form

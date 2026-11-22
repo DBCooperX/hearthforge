@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Scenes, icons and tooltips
+- **Choices that show the skill.** When a suggested action would likely test a skill, the Dungeon Master now tags it, and the chip shows the skill's icon, its name and your hero's bonus, such as *Persuasion −1 · Talk Hendrick round*. The DC stays hidden, and the tag is only a hint: you still decide what to do, and the Dungeon Master still decides whether you roll.
+- **One icon set.** Places, merchants, *Enter…* buttons, rests, gold, level up, inspiration and the marks of a fight now use the same drawn game-icons.net pictures as the hotbar instead of emoji (the emoji stays when the server's art pack is set to Emoji or not installed).
+- **Pin a tooltip with T.** While a tooltip is open, press T to pin it: it stays open, and you can point at its underlined words to read what they mean. Esc, T or a click elsewhere closes it. Spell, ability and skill tooltips now underline their rule words too. Skill tooltips on the character sheet open beside the row instead of over the rows above it. English and German.
+
 ### A clearer battle
 - **Faces in the initiative bar.** The turn order above the battle map is now a row of faces instead of name chips: green rings for heroes and companions, red for foes, a sliver of hit points under each, the one acting now larger and lit. Pointing at a face lights up that figure on the board. Fallen ones turn grey; something nobody can see in the dark is only a *?*.
 - **The battle log takes the right column.** During a fight the column beside the map shows only the fight, with a divider for each round; *Show the story before the battle* brings back the scene before it. After the fight the story is back as before.

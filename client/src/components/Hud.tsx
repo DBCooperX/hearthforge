@@ -13,10 +13,10 @@ import { abilityFigures, damageSpread } from '../../../shared/odds';
 import { OPPORTUNITY_MODES, type AbilityKey, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
-import { dice, signed } from './Guide';
+import { Rich, dice, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { usePrefs } from '../ui/prefs';
-import { AbilityGlyph, Glyph } from '../ui/Glyph';
+import { AbilityGlyph, Glyph, UiGlyph } from '../ui/Glyph';
 import {
   HOTBAR_DRAG, HOTBAR_ROW, abilityRef, itemRef, loadHotbar, parseRef, placeOnHotbar, removeFromHotbar, saveHotbar, syncHotbar,
   type HotbarDrag, type HotbarLayout,
@@ -62,7 +62,7 @@ export function TurnBar({ state, unseen, onHover }: { state: GameState; unseen?:
               <span className="init-face">{face ? <img src={face} alt="" /> : <b aria-hidden>?</b>}</span>
               {!hidden && <span className={pct <= 25 ? 'init-hp low' : 'init-hp'}><i style={{ width: `${pct}%` }} /></span>}
               <span className="init-name">{name}</span>
-              {o.ambush && <span className="init-mark" aria-hidden>🗡</span>}
+              {o.ambush && <span className="init-mark" aria-hidden><UiGlyph id="ambush" emoji="🗡" /></span>}
               {o.surprised && <span className="init-mark surprised" aria-label={t('Caught unawares')}>!</span>}
             </li>
           );
@@ -213,7 +213,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ref: abilityRef(id), name: t(ab.name), icon: <AbilityGlyph def={ab} />, cost, mana: mana > 0 ? mana : undefined,
       uses: left !== null && !(mana > 0) ? left : undefined, why, auto: react, warn,
       on: active || sustained || (targeting?.kind === 'ability' && targeting.abilityId === id && !targeting.item),
-      tip: <>{t(ab.description)}{facts && <em>{facts}</em>}{react && <em className="info-line">{reactWhy}</em>}</>,
+      tip: <><Rich text={t(ab.description)} />{facts && <em>{facts}</em>}{react && <em className="info-line">{reactWhy}</em>}</>,
       run: () => {
         const lv = level > base ? level : undefined;
         if (ab.target === 'self') { conn.send({ t: 'ability', characterId: c.id, abilityId: id, ...(lv ? { level: lv } : {}) }); setTargeting(null); }
@@ -237,7 +237,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ref: itemRef(uid), name: t(def.name), icon: def.icon, cost, uses: left,
       why: general || (left <= 0 ? t('No charges left until a long rest.') : used ? spentWhy(cost) : ''),
       on: targeting?.kind === 'ability' && targeting.item === uid,
-      tip: <>{t(ab.name)}: {t(ab.description)}<em>{facts}</em></>,
+      tip: <>{t(ab.name)}: <Rich text={t(ab.description)} /><em>{facts}</em></>,
       run: () => {
         if (ab.target === 'self') { conn.send({ t: 'use_item', characterId: c.id, uid }); setTargeting(null); }
         else toggle({ kind: 'ability', abilityId: ab.id, item: uid });
@@ -544,7 +544,7 @@ function OpportunitySwitch({ actor, conn }: { actor: Character; conn: Connection
   return (
     <Hint title={t('Opportunity attacks')} text={t('When an enemy {name} can see leaves their reach, they may strike at it with their reaction, once per round. Ask me: you decide each time. Always strike or Never: the game decides for you. Click to switch.', { name: actor.name })}>
       <button className="act small oa-mode" onClick={() => conn.send({ t: 'set_opportunity', characterId: actor.id, mode: next })}>
-        <span className="icon">🛡️</span>{t(MODE_LABELS[mode])}
+        <span className="icon"><UiGlyph id="action:opportunity" emoji="🛡️" /></span>{t(MODE_LABELS[mode])}
       </button>
     </Hint>
   );
@@ -586,7 +586,7 @@ export function ReactionPrompt({ state, playable, conn }: { state: GameState; pl
   return (
     <div className={mine ? 'reaction-prompt panel mine' : 'reaction-prompt panel'} role={mine ? 'alertdialog' : 'status'} aria-live="assertive">
       <div className="rp-head">
-        <span className="icon">⚔️</span>
+        <span className="icon"><UiGlyph id="reaction" emoji="⚔️" /></span>
         <b>{t('{monster} is leaving the reach of {hero}!', { monster: foe.name, hero: hero.name })}</b>
       </div>
       {mine ? (

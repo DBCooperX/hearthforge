@@ -744,3 +744,17 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
 }
 .bag-grid .qty { bottom: auto; top: 3px; }
+
+/* Drawn icons inline with text (places, merchants, rests, gold…): the same game-icons set as the hotbar. */
+.ui-glyph { display: inline-flex; align-items: center; justify-content: center; flex: none; line-height: 1; }
+.ui-glyph .item-art.glyph { width: 1.25em; height: 1.25em; }
+.here-list .ui-glyph .item-art.glyph, .wp-actions .ui-glyph .item-art.glyph { width: 22px; height: 22px; }
+.where-icon .ui-glyph .item-art.glyph { width: 34px; height: 34px; }
+.init-mark .ui-glyph .item-art.glyph { width: 14px; height: 14px; }
+
+/* Pinning a tooltip (T) so its underlined words can be read: the hint shows only where there are such words. */
+.hint-tip .pin-note { display: none; margin-top: 7px; padding-top: 5px; border-top: 1px solid rgba(120, 95, 60, 0.35); font-size: 11px; font-style: italic; opacity: 0.75; }
+.hint-tip:has(.term) .pin-note { display: block; }
+.hint-tip.pinned { box-shadow: 0 0 0 2px rgba(240, 190, 100, 0.75), 0 8px 24px rgba(0, 0, 0, 0.55); }
+.float .term-tip { z-index: 80; }
+@media (hover: none) { .hint-tip .pin-note { display: none !important; } }

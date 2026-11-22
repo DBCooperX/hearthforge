@@ -42,7 +42,7 @@ const SPECIES: [RegExp, SpeciesId][] = [
   [/\b(elf|elven|elfe\w*|elfisch\w*)\b/i, 'elf'], [/\b(orc|ork\w*)/i, 'orc'], [/\b(dragonborn|drachenbl\w*)/i, 'dragonborn'],
   [/\b(tiefling\w*)/i, 'tiefling'], [/\b(goliath\w*)/i, 'goliath'],
 ];
-const FEMALE = /\b(she|her|hers|woman|women|girl|lady|mother|wife|widow|queen|priestess|sie|ihr|ihre|frau|mädchen|mutter|witwe|königin|wirtin|händlerin|zöllnerin|bäuerin)\b/gi;
+const FEMALE = /\b(she|her|hers|woman|women|girl|lady|mother|wife|widow|queen|priestess|sie|ihr|ihre|frau|mädchen|mutter|witwe|königin|wirtin|händlerin|zöllnerin|bäuerin|zwergin|elfin|gnomin|orkin|kriegerin|priesterin|magierin|jägerin)\b/gi;
 const MALE = /\b(he|him|his|man|men|boy|lord|father|husband|king|priest|er|sein|seine|mann|junge|vater|könig|wirt|händler)\b/gi;
 const CLASSES: [RegExp, ClassId][] = [
   [/(guard|soldier|captain|knight|sergeant|warrior|mercenary|wache|soldat|hauptmann|ritter|söldner)/i, 'fighter'],

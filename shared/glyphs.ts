@@ -13,7 +13,7 @@ import { CLASS_FEATURES, OPTIONS, optionLine, featureLine, CLASS_IDS } from './c
 import { EFFECT_LINES, FEATS, SPECIES, STYLES, effectLine } from './rules';
 import { SKILLS } from './content';
 
-export type GlyphKind = 'spell' | 'skill' | 'feat' | 'feature' | 'class' | 'ability' | 'school' | 'condition' | 'action';
+export type GlyphKind = 'spell' | 'skill' | 'feat' | 'feature' | 'class' | 'ability' | 'school' | 'condition' | 'action' | 'place' | 'shop' | 'ui';
 
 type Table = Record<string, string>;
 
@@ -232,7 +232,25 @@ const ACTION: Table = {
   spellbook: 'delapouite/spell-book', end_turn: 'lorc/hourglass', opportunity: 'lorc/shield-reflect',
 };
 
-const TABLES: Record<GlyphKind, Table> = { ability: ABILITY, class: CLASS, school: SCHOOL, skill: SKILL, feat: FEAT, feature: FEATURE, spell: SPELL, condition: CONDITION, action: ACTION };
+/** Kinds of places, on the map and on the buttons that go there. */
+const PLACE: Table = {
+  town: 'delapouite/village', village: 'delapouite/family-house', tavern: 'lorc/beer-stein', shop: 'delapouite/shop', temple: 'delapouite/greek-temple',
+  shrine: 'lorc/candle-light', camp: 'delapouite/camping-tent', dungeon: 'delapouite/dungeon-gate', ruin: 'delapouite/ancient-ruins',
+  cave: 'delapouite/cave-entrance', landmark: 'delapouite/obelisk', wilds: 'lorc/compass',
+};
+
+/** Kinds of merchants. */
+const SHOP: Table = {
+  general: 'delapouite/shopping-cart', smith: 'lorc/anvil', alchemist: 'lorc/bubbling-flask', curio: 'lorc/crystal-ball', peddler: 'lorc/knapsack',
+};
+
+/** The rest of the interface: rests, gold, level up, inspiration and the marks of a fight. */
+const UI: Table = {
+  short_rest: 'lorc/campfire', long_rest: 'lorc/moon', gold: 'delapouite/two-coins', level_up: 'delapouite/upgrade', inspiration: 'delapouite/sparkles',
+  ambush: 'lorc/plain-dagger', reaction: 'lorc/crossed-swords', delve: 'delapouite/stairs', book: 'delapouite/spell-book',
+};
+
+const TABLES: Record<GlyphKind, Table> = { ability: ABILITY, class: CLASS, school: SCHOOL, skill: SKILL, feat: FEAT, feature: FEATURE, spell: SPELL, condition: CONDITION, action: ACTION, place: PLACE, shop: SHOP, ui: UI };
 
 /** Slot key ("spell:fire_bolt") to the path of its icon in github.com/game-icons/icons ("lorc/fire-ray"). */
 export const GLYPH_PATHS: Record<string, string> = Object.fromEntries(

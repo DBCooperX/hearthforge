@@ -78,7 +78,7 @@ const SCENE_TOOL = tool(
     title: str('Short heading for the card: the place or the moment, for example "The Gilded Anvil" or "Ambush on the hill road".'),
     mood: { type: 'string', enum: [...MOODS], description: 'Sets the colour of the card.' },
     narration: str('What the players read. Two to five sentences of plain text, at most two short paragraphs.'),
-    suggested_actions: { type: 'array', items: { type: 'string' }, description: 'Two to four short things the players might do next, each a few words. Empty during combat.' },
+    suggested_actions: { type: 'array', items: { type: 'string' }, description: 'Two to four short things the players might do next, each a few words. Start one with "[Skill] " when it would likely call for that skill check. Empty during combat.' },
     journal_entry: str('One line to remember from this exchange, or an empty string if nothing lasting happened.'),
     important: { type: 'boolean', description: 'True when the story has reached a turning point and the next exchange deserves extra care.' },
   },

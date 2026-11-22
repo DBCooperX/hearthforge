@@ -548,6 +548,8 @@ export interface SceneMeta {
   mood: Mood;
   /** Suggested next actions, shown as chips under the newest card. */
   actions: string[];
+  /** The skill each suggested action would likely test (same order), when the Dungeon Master tagged one: shown with the hero's bonus, never a DC. */
+  actionSkills?: (string | null)[];
   /** Id of the illustration painted for this scene, or null. Loaded from /pictures/<id>. */
   imageId: string | null;
   /** True while that illustration is being painted. */

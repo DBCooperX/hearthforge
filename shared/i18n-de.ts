@@ -2546,4 +2546,9 @@ export const DE: Record<string, string> = {
   used: 'verbraucht',
   'Show only the battle': 'Nur den Kampf zeigen',
   'Show the story before the battle': 'Die Geschichte vor dem Kampf zeigen',
+  // Skill-tagged choices (UX phase D)
+  'Pinned. Point at an underlined word to read it. Esc or T closes.': 'Angeheftet. Zeig auf ein unterstrichenes Wort, um es zu lesen. Esc oder T schliesst.',
+  'T: pin, to read the underlined words': 'T: anheften, um die unterstrichenen Wörter zu lesen',
+  '{skill} check': 'Probe auf {skill}',
+  '{skill} check: {name} adds {bonus}. The Dungeon Master decides whether to roll, and how hard it is.': 'Probe auf {skill}: {name} hat {bonus}. Ob gewürfelt wird und wie schwer es ist, entscheidet der SL.',
 };

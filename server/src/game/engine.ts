@@ -2,6 +2,7 @@
 // The engine is synchronous and deterministic for a given RNG; the AI Dungeon
 // Master only chooses monster intents and narrates what the engine resolved.
 
+import { parseActionTag } from '../../../shared/skillTag';
 import { targetHabit, type TargetHabit } from '../../../shared/style';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isLightWeapon, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
@@ -5836,7 +5837,10 @@ export class Game {
   /** Narration shown to the players as a scene card, headed by where it plays, when, and who is there. */
   addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }, opts: { battle?: boolean } = {}) {
     this.spoilsOpen = false;
-    const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
+    // "[Persuasion] Convince Hendrick": the tag becomes the chip's skill icon and the hero's bonus.
+    const tagged = scene.actions.map((a) => parseActionTag(String(a))).map((a) => ({ text: a.text.slice(0, 80), skill: a.skill })).filter((a) => a.text).slice(0, 5);
+    const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: tagged.map((a) => a.text), imageId: null };
+    if (tagged.some((a) => a.skill)) meta.actionSkills = tagged.map((a) => a.skill);
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
     let ask = this.pictureAsk;
     this.pictureAsk = null;
