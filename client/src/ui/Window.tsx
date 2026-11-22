@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { CLASS_INFO } from '../../../shared/content';
 import type { Character, GameState } from '../../../shared/types';
-import { artOfCharacter, heroPortraitUrl } from '../game/heroArt';
+import { artOfCharacter, companionFace, heroPortraitUrl } from '../game/heroArt';
 import { classLabel } from '../game/util';
 import { useT } from '../i18n';
 import { Icon, type IconName } from './icons';
@@ -77,12 +77,15 @@ interface HeroTabsProps {
   onDropOn?: (c: Character, shift: boolean) => void;
   /** Whether a drop is on offer right now. */
   dropping?: boolean;
+  /** Also list the companions travelling with the party, after the heroes. */
+  companions?: boolean;
 }
 
 /** One tab per hero, with portrait, class and health. The number keys 1 to 4 switch between them. */
-export function HeroTabs({ state, selectedId, onSelect, onDropOn, dropping }: HeroTabsProps) {
+export function HeroTabs({ state, selectedId, onSelect, onDropOn, dropping, companions }: HeroTabsProps) {
   const t = useT();
   const heroes = state.characters;
+  const along = companions ? (state.companions ?? []).filter((c) => !c.dead) : [];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -119,6 +122,26 @@ export function HeroTabs({ state, selectedId, onSelect, onDropOn, dropping }: He
           </button>
         );
       })}
+      {along.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          role="tab"
+          aria-selected={c.id === selectedId}
+          className={['hero-tab', 'companion', c.id === selectedId && 'on', dropping && c.id !== selectedId && 'drop'].filter(Boolean).join(' ')}
+          title={t('Companion')}
+          onClick={() => { if (c.id !== selectedId) { onSelect(c.id); sfx('tab'); } }}
+          onDragOver={(e) => { if (dropping && c.id !== selectedId) e.preventDefault(); }}
+          onDrop={(e) => { e.preventDefault(); if (c.id !== selectedId) onDropOn?.(c, e.shiftKey); }}
+        >
+          <span className="hero-tab-face"><img className="hero-art" src={companionFace(c, state.items)} alt="" /></span>
+          <span className="hero-tab-text">
+            <b>{c.name}</b>
+            <small>{c.companion?.role}</small>
+            <span className="hero-tab-hp"><i style={{ width: `${Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100))}%` }} /></span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

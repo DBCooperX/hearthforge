@@ -15,7 +15,7 @@ import { armedFigure, artOfCharacter, baseBoxOf, heroCanvas, heroStanding, offWe
 import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
-import { heroSenses, lightLevels, shortName, tileAt } from './util';
+import { heroSenses, lightLevels, partyOf, shortName, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
 import tableUrl from '../assets/battle-table.webp';
@@ -524,7 +524,7 @@ export class MapRenderer {
       this.lastPos.set(id, { x: (x + size / 2) * TILE, y: (y + size / 2) * TILE, h: 0 });
       return e;
     };
-    for (const c of state.characters) {
+    for (const c of partyOf(state)) {
       if (c.dead) continue;
       const art = artOfCharacter(c, state.items);
       // The painting is fixed, so the weapon and shield the hero holds now are drawn onto it.
@@ -807,7 +807,7 @@ export class MapRenderer {
     const byName = new Map<string, string>();
     // The living win over a fallen creature that had the same name.
     for (const m of [...state.monsters].sort((a, b) => Number(a.alive) - Number(b.alive))) byName.set(m.name, m.id);
-    for (const c of state.characters) byName.set(c.name, c.id);
+    for (const c of partyOf(state)) byName.set(c.name, c.id);
     for (const entry of fresh) {
       const r = entry.roll;
       if (!r) continue;

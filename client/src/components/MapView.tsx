@@ -9,7 +9,7 @@ import { MapRenderer, type BattleView, type TokenHover, type ViewOptions } from 
 import { getPrefs, usePrefs } from '../ui/prefs';
 import { ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN, clampZoom } from '../game/tilt';
 import { useEntityHover } from './Story';
-import { heroSenses } from '../game/util';
+import { heroSenses, partyOf } from '../game/util';
 import type { MoveListener } from '../net';
 
 interface Props {
@@ -158,12 +158,12 @@ export function MapView({ state, view, onTile, onMoved }: Props) {
 
   const { lang } = useLang();
   const statuses: { id: string; list: TokenStatus[] }[] = state.phase === 'combat' ? [
-    ...state.characters.filter((c) => !c.dead).map((c) => ({ id: c.id, list: heroStatuses(c, state, t, lang) })),
+    ...partyOf(state).filter((c) => !c.dead).map((c) => ({ id: c.id, list: heroStatuses(c, state, t, lang) })),
     ...state.monsters.filter((m) => m.alive && !view.unseenIds.has(m.id)).map((m) => ({ id: m.id, list: monsterStatuses(m, state, t, lang) })),
   ].filter((x) => x.list.length > 0) : [];
   // Whose turn it is, spelled out over their figure: brass for heroes (brighter for your own), red for monsters.
   const activeId = state.phase === 'combat' ? view.activeId : null;
-  const activeHero = activeId ? state.characters.find((c) => c.id === activeId && !c.dead) : undefined;
+  const activeHero = activeId ? partyOf(state).find((c) => c.id === activeId && !c.dead) : undefined;
   const activeMonster = activeId && !activeHero ? state.monsters.find((m) => m.id === activeId && m.alive && !view.unseenIds.has(m.id)) : undefined;
   const turn = activeHero || activeMonster ? {
     id: activeId!, kind: activeHero ? 'hero' : 'monster', mine: !!activeHero && view.myIds.has(activeHero.id),

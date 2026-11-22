@@ -30,6 +30,7 @@ export interface Findings {
   gained?: unknown;
   lost?: unknown;
   equipped?: unknown;
+  handed?: unknown;
   where?: unknown;
   spot?: unknown;
   present?: unknown;
@@ -58,11 +59,11 @@ function stateFor(game: Game, turn: TurnRecord): string {
     const parent = l.parentId ? game.location(l.parentId) : null;
     lines.push(`- [${l.id}] ${l.name} (${l.kind}${parent ? ` in ${parent.name}` : ''}), ${d ? `${d * HEX_MILES} miles ${direction(w.party, l)}` : 'right here'}`);
   }
-  lines.push('Heroes and what they carry:');
-  for (const c of s.characters.filter((c) => !c.dead)) {
+  lines.push('Heroes, the companions travelling with them, and what each carries:');
+  for (const c of game.party().filter((c) => !c.dead)) {
     const worn = SLOT_IDS.flatMap((slot) => (c.equipment[slot] ? [`${slot.replace(/[A-Z]/g, (ch) => ` ${ch.toLowerCase()}`)}: ${game.n(game.def(c.equipment[slot]!.defId).name)}`] : []));
     const bag = c.bag.filter((b) => !!b).map((b) => `${game.n(game.def(b!.defId).name)}${b!.qty > 1 ? ` ×${b!.qty}` : ''}`);
-    lines.push(`- ${c.name} [${c.id}]. Wearing or wielding: ${worn.join(', ') || 'nothing'}. Backpack: ${bag.join(', ') || 'empty'}.`);
+    lines.push(`- ${c.name} [${c.id}]${c.companion ? ' (companion)' : ''}. Wearing or wielding: ${worn.join(', ') || 'nothing'}. Backpack: ${bag.join(', ') || 'empty'}.`);
   }
   lines.push(`Party gold: ${s.gold}.`);
   const stage = game.stage();
@@ -102,13 +103,14 @@ ${tools.length ? tools.map(callLine).join('\n') : '(nothing)'}
 Compare the reply with the game state. List only what the reply plainly says has already happened and the game does not show yet. Leave out anything the tools above already did, anything that is only planned, offered, suggested or thought about, and anything you are not sure of. Most replies need no change at all; then answer with {}.
 
 Answer with one JSON object and nothing else. Every field is optional:
-{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "where": "<where the scene now plays, a few words>", "spot": "<the spot of the place the party is at now, one or two words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"]}
+{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "handed": [{"from": "<hero or companion id>", "to": "<hero or companion id>", "item": "<name exactly as carried>", "quantity": 1}], "where": "<where the scene now plays, a few words>", "spot": "<the spot of the place the party is at now, one or two words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"]}
 
 - place: only when the party went to one of the known places listed, and the game has it somewhere else. The server adds the travel time itself, so do not count the walk in minutes. A place that is not listed: leave place out and use where.
 - minutes: a long talk, a search, a meal, waiting, a rest. 0 or leave out for an ordinary exchange. At most ${MAX_MINUTES}.
 - rest: "short" when the party rested for an hour or more, "long" for a night's sleep of about eight hours. Leave out when it only talked about resting.
 - gold: coin that actually changed hands in the reply, not trade in a shop window.
 - gained: things a hero picked up, was handed or took. lost: things a hero gave away, left behind, used up, threw away or that were taken from them.
+- handed: something that went from one hero or companion listed above to another, such as a hero giving a companion a spear. Use this, not lost and gained, when both are listed.
 - equipped: a hero drew, wielded, put on or switched to something from the backpack.
 - events: only a past event that someone in the reply tells of with a time ("in winter I sent two guards", "three days ago the barge sank") and that is not among the events already on the timeline. Turn a vague time into the closest number and unit ("in winter" in an autumn story: "8 months ago"). Not the scene's own action. At most 2.
 - revealed: a held-back secret that the reply plainly states or lets someone say. Not hints.
@@ -155,8 +157,8 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
       out.skipped.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-  // Heroes by id, or by name when the model wrote that instead.
-  const hero = (v: unknown) => { const t = text(v); return game.s.characters.find((c) => c.id === t || c.name.toLowerCase() === t.toLowerCase())?.id ?? t; };
+  // Heroes and companions by id, or by name when the model wrote that instead.
+  const hero = (v: unknown) => { const t = text(v); return game.party().find((c) => c.id === t || c.name.toLowerCase() === t.toLowerCase())?.id ?? t; };
 
   const place = text(f.place);
   if (place && !used('move_to_place', 'travel_to') && place !== game.world.placeId) tryIt(`place ${place}`, () => game.proposeJourney(place));
@@ -173,7 +175,7 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
   const given = turn.calls.filter((c) => c.name === 'give_item' || c.name === 'give_story_item').map((c) => text(c.input.name ?? c.input.item_id));
   for (const g of list(f.gained)) {
     const item = text(g.item);
-    if (!item || given.some((x) => same(x, item))) continue;
+    if (!item || given.some((x) => same(x, item)) || list(f.handed).some((h) => same(h.item, item))) continue;
     const who = hero(g.hero) || game.s.characters.find((c) => !c.dead)?.id || '';
     tryIt(`gained ${item}`, () => {
       const def = game.findItemDef(item);
@@ -185,9 +187,15 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
   const taken = turn.calls.filter((c) => c.name === 'take_item').map((c) => text(c.input.item));
   for (const l of list(f.lost)) {
     const item = text(l.item);
-    if (!item || taken.some((x) => same(x, item))) continue;
+    if (!item || taken.some((x) => same(x, item)) || list(f.handed).some((h) => same(h.item, item))) continue;
     // Quest items stay: only the DM itself may part the party from one.
     tryIt(`lost ${item}`, () => game.takeItem({ characterId: hero(l.hero), item, quantity: num(l.quantity) || 1, allowQuest: false }));
+  }
+
+  const handed = list(f.handed);
+  for (const h of handed) {
+    const item = text(h.item);
+    if (item && !taken.some((x) => same(x, item))) tryIt(`handed ${item}`, () => game.handItem(hero(h.from), hero(h.to), item, num(h.quantity) || 1));
   }
 
   if (!used('equip_item')) {

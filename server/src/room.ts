@@ -402,7 +402,8 @@ export class Room {
     if (npcPortrait) {
       // People the DM made up are painted when first met; those the region starts with when the party is where they are.
       const here = this.game.s.world?.placeId;
-      for (const n of this.game.s.memory.npcs) { const look = npcPortraitKey(n); if (look && n.met && n.portraitKey !== look && (n.origin === 'dm' || n.locationId === here)) npcPortrait(this, n); }
+      const along = new Set(this.game.s.companions.map((c) => c.companion?.npcId));
+      for (const n of this.game.s.memory.npcs) { const look = npcPortraitKey(n); if (look && n.met && n.portraitKey !== look && (n.origin === 'dm' || n.locationId === here || along.has(n.id))) npcPortrait(this, n); }
     }
     this.hooks.pictures?.figures?.(this);
     this.game.checkTrophies();
@@ -611,11 +612,24 @@ export class Room {
     });
   }
 
-  /** Run monster turns until a hero is up, then hand story beats to the narrator. */
+  /** Run monster and companion turns until a hero is up, then hand story beats to the narrator. */
   private async pump() {
     const g = this.game;
     this.narrateLater(g.takeBeats());
-    while (g.isMonsterTurn()) {
+    while (g.isMonsterTurn() || g.isAllyTurn()) {
+      if (g.isAllyTurn()) {
+        // A companion's turn is played by the server from their stance: no Dungeon Master call, no cost.
+        const epoch = this.epoch;
+        await this.narration;
+        if (epoch !== this.epoch) return;
+        if (!g.isAllyTurn()) continue;
+        g.companionAct();
+        this.flush();
+        await sleep(this.timing.actionDelayMs);
+        if (epoch !== this.epoch) return;
+        this.narrateLater(g.takeBeats());
+        continue;
+      }
       const block = g.monsterBlock();
       const epoch = this.epoch;
       this.dmBusy++;

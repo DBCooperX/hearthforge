@@ -8,8 +8,9 @@ import { LOOK_HELP, applyLookTokens } from '../../../shared/monsterLook';
 import { ITEM_ICON_IDS } from '../../../shared/items';
 import { COMPASS, type Compass } from '../../../shared/hex';
 import { ABILITY_KEYS } from '../../../shared/rules';
-import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
+import { DISPOSITIONS, ITEM_CATEGORIES, LOCATION_KINDS, MAX_COMPANIONS, MOODS, RARITIES, type AbilityKey, type Disposition, type LocationKind, type Mood, type QuestStatus } from '../../../shared/types';
 import { MONSTERS } from '../data/monsters';
+import { COMPANION_TEMPLATE_IDS } from '../../../shared/companions';
 import { difficulty, findMonsters, monsterLine, resolveMonster } from '../data/monsterSearch';
 import type { Beat, Game, Monster, MonsterIntent, Opening } from '../game/engine';
 import { DM_SYSTEM_PROMPT, describeBeats, describeCombat, describeTable, describeWorld, fightBudget, genderRoster, transcriptLines } from './context';
@@ -60,7 +61,7 @@ const MONSTER_TOOL = tool(
   "Take one monster's whole turn: it moves according to the tactic, then uses its action if a target is in reach: one attack, its Multiattack, or a special action such as a breath weapon. The server rolls the dice, applies damage and conditions, and returns what happened. Call this exactly once for each monster whose turn it is; you can call it for several monsters in the same response.",
   {
     monster_id: str('Id of the acting monster, for example "m3".'),
-    target_id: str('Id of the hero to attack, for example "pc1". Unconscious heroes cannot be targeted.'),
+    target_id: str('Id of the hero or companion to attack, for example "pc1" or "ally7". Unconscious ones cannot be targeted.'),
     attack: str("Name of one of the monster's actions as listed in the state, for example \"Scimitar\", \"Fire Breath\" or \"Multiattack\". An empty string lets the server choose."),
     tactic: {
       type: 'string',
@@ -248,6 +249,15 @@ const STORY_TOOLS: Tool[] = [
   looseTool('equip_item', 'A hero draws, wields, puts on or switches to something they carry. It moves into its slot, as if the player had dragged it there, so the battle map uses it.', {
     character_id: str('Id of the hero.'),
     item: str('Name or id of the item, as carried.'),
+  }),
+  // Loose, like every tool added since the grammar limit: plain strings that the engine checks.
+  looseTool('companion', `Someone of the story travels with the party for a while, such as a freed prisoner who guides them or a hired guard. Use action "join" when they agree to come along: they appear in the party panel, carry what they are handed and fight on the party's side, the server playing their turns from their stance. "leave" when they part ways (or to lay a fallen one to rest), "update" when their role or stance changes. At most ${MAX_COMPANIONS} at a time. Companions earn no experience.`, {
+    action: str('"join", "leave" or "update".'),
+    name: str('Their full name, as in your memory. Saved there like with remember_npc if they are new.'),
+    role: str('What they do for the party, a few words in the table language, for example "Guide, no fighter" or "Hired guard". Empty string to keep it.'),
+    stats: str(`The SRD stat block they use, chosen by what they can do: ${COMPANION_TEMPLATE_IDS.join(', ')}. "commoner" for ordinary folk. Empty string to keep it.`),
+    stance: str('How they act in a fight: "fight" (go for the enemy), "guard" (stay by the heroes and strike what comes close) or "back" (keep out of harm\'s way and only dodge). Empty string for what suits their stat block.'),
+    gear: str('For "join": what they bring. "kit" for the weapons of their stat block, catalogue item ids separated by commas, or an empty string for nothing (a freed prisoner). Things the heroes hand them later go through give_item and take_item with their id.'),
   }),
   looseTool('log_event', "Pin something to the timeline the moment the story mentions it: an event before the adventure that someone tells of (when the trouble began, who went missing when), something that just happened in the scene, or something planned ahead. The date is fixed from then on, and an event already listed keeps the date it was given. Returns the fixed date.", {
     what: str('What happened, as one plain sentence in the table language, for example "Mayor Garn sent two toll guards to watch the mill at night; one came back and would not speak, the other never returned."'),
@@ -489,6 +499,8 @@ export class ClaudeDM implements DungeonMaster {
           }
           case 'equip_item':
             return game.equipItem(String(i.character_id ?? ''), String(i.item ?? ''));
+          case 'companion':
+            return game.companionTool({ action: String(i.action ?? ''), name: String(i.name ?? ''), role: String(i.role ?? ''), stats: String(i.stats ?? ''), stance: String(i.stance ?? ''), gear: String(i.gear ?? '') });
           case 'log_event':
             return logEvent(game, { what: String(i.what ?? ''), when: String(i.when ?? ''), where: String(i.where ?? ''), knownBy: String(i.known_by ?? '') });
           case 'campaign':

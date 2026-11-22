@@ -57,6 +57,7 @@ The players see the game next to your story: the map, the music of the place, th
 - Time passes in a way that matters (a long talk, a search, waiting for nightfall): advance_time.
 - The party rests: rest, with "short" for an hour or more and "long" for a night's sleep. The server restores hit points, mana and features by the rules and tells the players what came back, so do not narrate numbers.
 - A hero picks up, is handed, gives away, leaves behind or uses up something: give_item or give_story_item, or take_item. Coin that changes hands: change_gold.
+- Someone of the story agrees to travel with the party (a guide, a freed prisoner, a hired sword): companion with action "join", and "leave" when they part ways. They then show in the party panel and fight on the party's side.
 - A hero draws, wields, puts on or switches to something they carry: equip_item.
 - Someone joins or leaves the scene, or the heroes move to another room or another spot of the place: set_stage, so the header, the side panel and the zone map show who is really there and where. Give the spot a short name the players can find again ("Zollhaus", "Steg", "Schilf"), and reuse it when they come back; name spots they hear of in "nearby".
 After each reply the server double-checks your narration against the game and fixes what it can, but that check is a safety net and it skips anything unclear. Your own tool calls are what keeps the game right.
@@ -326,6 +327,23 @@ function partyLines(game: Game, withBackstory: boolean): string[] {
   });
 }
 
+/** Companions travelling with the party, one line each. Empty when there are none. */
+export function companionLines(game: Game, combat = false): string[] {
+  const list = game.s.companions;
+  if (!list.length) return [];
+  return [
+    combat ? 'Companions (on the party\'s side; the server plays their turns from their stance, you narrate them):' : 'Companions travelling with the party (people of the story, not heroes; you speak and act for them; change them with the companion tool):',
+    ...list.map((c) => {
+      const info = c.companion!;
+      const weapon = c.equipment.mainHand ? game.def(c.equipment.mainHand.defId).name : 'unarmed';
+      const status = c.dead ? 'DEAD' : c.hp <= 0 ? 'unconscious' : c.conditions.join(', ') || 'fine';
+      const bag = c.bag.filter((b) => !!b).map((b) => `${game.def(b!.defId).name}${b!.qty > 1 ? ` ×${b!.qty}` : ''}`).join(', ');
+      const where = combat ? ` at (${c.x},${c.y}),` : '';
+      return `- ${c.name} [${c.id}]: ${info.role}. Stats of a ${MONSTERS[info.template]?.name ?? info.template}, HP ${c.hp}/${c.maxHp}, AC ${c.ac},${where} wielding ${weapon}, stance ${info.stance}, ${status}.${combat ? '' : ` Carries: ${bag || 'nothing else'}.`}`;
+    }),
+  ];
+}
+
 /** How someone feels about the party: what they felt to begin with, and what their faction's opinion makes of it. */
 function feels(game: Game, n: Parameters<typeof attitude>[1]): string {
   const now = attitude(game, n);
@@ -379,7 +397,7 @@ export function describeWorld(game: Game, opts: { live?: boolean } = {}): string
     lines.push('Known places elsewhere on the map:');
     for (const l of elsewhere) lines.push(`- ${l.name} [${l.id}] (${l.kind}), ${hexDistance(l, w.party) * HEX_MILES} miles ${direction(w.party, l)}${l.visited ? ', visited' : ', not yet visited'}. ${l.description}`);
   }
-  lines.push(`Party (${s.gold} gp between them):`, ...partyLines(game, !opts.live));
+  lines.push(`Party (${s.gold} gp between them):`, ...partyLines(game, !opts.live), ...companionLines(game));
   const budget = fightBudget(game);
   if (budget) lines.push(budget);
   const held = game.heldStoryItems();
@@ -407,7 +425,7 @@ export function describeWorld(game: Game, opts: { live?: boolean } = {}): string
     lines.push('People here:');
     for (const n of present) lines.push(`- ${n.name} [${n.id}], ${n.role || 'no known role'}, ${feels(game, n)}. ${n.description}${n.notes.length ? ` Notes: ${n.notes.join(' / ')}` : ''}`);
   }
-  const others = mem.npcs.filter((n) => n.met && !present.includes(n));
+  const others = mem.npcs.filter((n) => n.met && !present.includes(n) && !s.companions.some((c) => c.companion?.npcId === n.id));
   if (others.length) {
     lines.push('Other people the party has met:');
     for (const n of others) lines.push(`- ${n.name} (${n.role || 'no known role'}, ${feels(game, n)}), last seen at ${game.location(n.locationId ?? '')?.name ?? 'an unknown place'}.${n.notes.length ? ` Notes: ${n.notes.slice(-3).join(' / ')}` : ''}`);
@@ -476,6 +494,7 @@ export function describeCombat(game: Game, opts: { live?: boolean } = {}): strin
     const sight = ambient === 'bright' ? '' : ` ${dv ? `Darkvision ${dv} ft.` : 'No darkvision.'}${c.light ? ` Holds a lit ${c.light}.` : ''}`;
     lines.push(`- ${c.name} [${c.id}] ${c.className}, HP ${c.hp}/${c.maxHp}, AC ${c.ac}, at (${c.x},${c.y}), wielding ${weapon}, ${status}.${sight} Gender: ${genderNote(c, game.lang)}`);
   }
+  lines.push(...companionLines(game, true));
   const foes = s.monsters.filter((m) => m.alive);
   if (foes.length) {
     lines.push('Enemies:');
@@ -488,7 +507,7 @@ export function describeCombat(game: Game, opts: { live?: boolean } = {}): strin
       const sees = [senses.darkvision ? `darkvision ${senses.darkvision} ft` : '', senses.blindsight ? `blindsight ${senses.blindsight} ft` : ''].filter(Boolean).join(', ');
       let sight = '';
       if (ambient !== 'bright') {
-        const unseen = s.characters.filter((c) => game.conscious(c) && !game.monsterSees(m, c)).map((c) => c.name);
+        const unseen = game.party().filter((c) => game.conscious(c) && !game.monsterSees(m, c)).map((c) => c.name);
         const hidden = s.characters.filter((c) => game.conscious(c) && !game.heroSees(c, m)).map((c) => c.name);
         sight = ` Senses: ${sees || 'normal sight'}.${m.light ? ` Carries a ${m.light}.` : ''} Standing in ${game.lightAt(game.monsterPoint(m))} light.${unseen.length ? ` Cannot see: ${unseen.join(', ')}.` : ''}${hidden.length ? ` Unseen by: ${hidden.join(', ')}.` : ''}`;
       }
