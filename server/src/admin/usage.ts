@@ -47,7 +47,7 @@ export function sampleCost(u: UsageSample): number | null {
   return costOf(u.model, [1, u.input || 0, u.output || 0, u.cacheRead || 0, u.cacheWrite || 0, u.cacheWrite1h || 0]);
 }
 
-const zero = (): UsageTotals => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, images: 0, voice: 0 });
+const zero = (): UsageTotals => ({ calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, images: 0, voice: 0, sound: 0 });
 
 /** Pictures and voice: counted as calls, with their dollars in their own field and in the cost. */
 function addExtra(into: UsageTotals, kind: ExtraKind, c: [number, number]) {

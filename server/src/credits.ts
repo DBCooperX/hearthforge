@@ -16,8 +16,10 @@ interface Ledger {
   voice: number;
   /** Story illustrations. Missing in ledgers from before them. */
   images?: number;
-  /** Spent per day (YYYY-MM-DD): [claude, voice, illustrations]. Kept for 90 days. */
-  days: Record<string, [number, number, number?]>;
+  /** Sounds and music for the library. Missing in ledgers from before it. */
+  sound?: number;
+  /** Spent per day (YYYY-MM-DD): [claude, voice, illustrations, sounds]. Kept for 90 days. */
+  days: Record<string, [number, number, number?, number?]>;
   /** Spent per table (its name), with its title as last seen and the cost per day. Kept for 90 days. */
   tables?: Record<string, { title: string; days: Record<string, number> }>;
   free?: boolean;
@@ -31,7 +33,7 @@ interface Saved {
 export interface CreditAccount { id: string; username: string; role: 'player' | 'innkeeper' }
 
 /** What a cost was for. */
-export type CostKind = 'claude' | 'voice' | 'images';
+export type CostKind = 'claude' | 'voice' | 'images' | 'sound';
 
 export class CreditsError extends Error {
   constructor(readonly code: 'bad_value' | 'not_found') { super(code); }
@@ -62,6 +64,7 @@ function scaleLedger(l: Ledger, f: number) {
   l.topUps = l.topUps.map((t) => ({ ...t, amount: Math.round(t.amount * f * 100) / 100 }));
   l.claude = round(l.claude * f); l.voice = round(l.voice * f);
   if (l.images) l.images = round(l.images * f);
+  if (l.sound) l.sound = round(l.sound * f);
   for (const d of Object.values(l.days)) for (let i = 0; i < d.length; i++) d[i] = round((d[i] ?? 0) * f);
   for (const t of Object.values(l.tables ?? {})) for (const k of Object.keys(t.days)) t.days[k] = round(t.days[k] * f);
 }
@@ -140,7 +143,7 @@ export class Credits {
       const l = this.ledger(id);
       l[kind] = round((l[kind] ?? 0) + share);
       const d = (l.days[day] ??= [0, 0, 0]);
-      const i = kind === 'claude' ? 0 : kind === 'voice' ? 1 : 2;
+      const i = kind === 'claude' ? 0 : kind === 'voice' ? 1 : kind === 'images' ? 2 : 3;
       d[i] = round((d[i] ?? 0) + share);
       if (table) {
         const t = ((l.tables ??= {})[table.id] ??= { title: table.title, days: {} });
@@ -181,7 +184,7 @@ export class Credits {
   view(a: CreditAccount): CreditView {
     const l = this.s.accounts[a.id];
     const paid = round((l?.topUps ?? []).reduce((n, t) => n + t.amount, 0));
-    const spent = round((l?.claude ?? 0) + (l?.voice ?? 0) + (l?.images ?? 0));
+    const spent = round((l?.claude ?? 0) + (l?.voice ?? 0) + (l?.images ?? 0) + (l?.sound ?? 0));
     const balance = round(paid - spent);
     const free = !!l?.free;
     const limited = this.s.config.on && a.role !== 'innkeeper' && !free;
@@ -193,14 +196,14 @@ export class Credits {
   usage(a: CreditAccount, days = 7): UsageView {
     const l = this.s.accounts[a.id];
     const since = dayOf(this.now() - (days - 1) * 86400000);
-    const sum: [number, number, number] = [0, 0, 0];
-    for (const [d, v] of Object.entries(l?.days ?? {})) if (d >= since) for (let i = 0; i < 3; i++) sum[i] += v[i] ?? 0;
+    const sum: [number, number, number, number] = [0, 0, 0, 0];
+    for (const [d, v] of Object.entries(l?.days ?? {})) if (d >= since) for (let i = 0; i < 4; i++) sum[i] += v[i] ?? 0;
     const byTable = Object.entries(l?.tables ?? {})
       .map(([id, t]) => ({ id, title: t.title, amount: round(Object.entries(t.days).filter(([d]) => d >= since).reduce((n, [, v]) => n + v, 0)) }))
       .filter((t) => t.amount > 0).sort((x, y) => y.amount - x.amount);
-    const total = round(sum[0] + sum[1] + sum[2]);
+    const total = round(sum[0] + sum[1] + sum[2] + sum[3]);
     const tabled = round(byTable.reduce((n, t) => n + t.amount, 0));
-    return { currency: this.s.config.currency, days, total, claude: round(sum[0]), voice: round(sum[1]), images: round(sum[2]), byTable, elsewhere: Math.max(0, round(total - tabled)) };
+    return { currency: this.s.config.currency, days, total, claude: round(sum[0]), voice: round(sum[1]), images: round(sum[2]), sound: round(sum[3]), byTable, elsewhere: Math.max(0, round(total - tabled)) };
   }
 
   /** False when credits are on and this account has none left. */
@@ -212,8 +215,8 @@ export class Credits {
     const since = dayOf(this.now() - 30 * 86400000);
     const rows: CreditRow[] = accounts.map((a) => {
       const l = this.s.accounts[a.id];
-      const last30 = Object.entries(l?.days ?? {}).filter(([d]) => d >= since).reduce((n, [, v]) => n + v[0] + v[1] + (v[2] ?? 0), 0);
-      return { ...this.view(a), id: a.id, username: a.username, role: a.role, spentClaude: round(l?.claude ?? 0), spentVoice: round(l?.voice ?? 0), spentImages: round(l?.images ?? 0), last30: round(last30), topUps: [...(l?.topUps ?? [])].reverse() };
+      const last30 = Object.entries(l?.days ?? {}).filter(([d]) => d >= since).reduce((n, [, v]) => n + v[0] + v[1] + (v[2] ?? 0) + (v[3] ?? 0), 0);
+      return { ...this.view(a), id: a.id, username: a.username, role: a.role, spentClaude: round(l?.claude ?? 0), spentVoice: round(l?.voice ?? 0), spentImages: round(l?.images ?? 0), spentSound: round(l?.sound ?? 0), last30: round(last30), topUps: [...(l?.topUps ?? [])].reverse() };
     });
     return { config: this.config, rows };
   }
@@ -255,7 +258,7 @@ export class Credits {
     const f = was.currency && was.currency !== this.s.config.currency && Number(was.rate) > 0 ? this.s.config.rate / Number(was.rate) : 1;
     for (const [id, l] of Object.entries(r.accounts)) {
       if (this.s.accounts[id] || !l || !Array.isArray(l.topUps)) continue;
-      this.s.accounts[id] = { topUps: legacyTopUps(l.topUps), claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), days: l.days ?? {}, ...(l.tables ? { tables: l.tables } : {}), ...(l.free ? { free: true } : {}) };
+      this.s.accounts[id] = { topUps: legacyTopUps(l.topUps), claude: Number(l.claude) || 0, voice: Number(l.voice) || 0, ...(Number(l.images) ? { images: Number(l.images) } : {}), ...(Number(l.sound) ? { sound: Number(l.sound) } : {}), days: l.days ?? {}, ...(l.tables ? { tables: l.tables } : {}), ...(l.free ? { free: true } : {}) };
       if (f !== 1) scaleLedger(this.s.accounts[id], f);
       added++;
     }

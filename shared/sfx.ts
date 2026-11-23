@@ -48,7 +48,13 @@ export const SFX_SAMPLES: Partial<Record<SfxEvent, string[]>> = {
   turn: ['bong_001'],
 };
 
-export interface SfxManifest { enabled: boolean; pending: boolean; files: { name: string; src: string }[] }
+export interface SfxManifest {
+  enabled: boolean;
+  pending: boolean;
+  files: { name: string; src: string }[];
+  /** Takes from the server's own library, per game moment. They win over the older recordings and the browser's sounds. */
+  events?: Partial<Record<SfxEvent, string[]>>;
+}
 
 const RANGED = /bow|sling|dart|javelin|bogen|armbrust|schleuder|wurfpfeil|speer/i;
 
