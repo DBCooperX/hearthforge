@@ -15,6 +15,7 @@ import { armedFigure, artOfCharacter, baseBoxOf, heroCanvas, heroStanding, offWe
 import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
+import { paintedGround } from './paintedGround';
 import { heroSenses, lightLevels, partyOf, shortName, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
@@ -95,6 +96,11 @@ export interface ViewOptions {
   /** On a touch screen the first tap only plans: the square it picked, and the way there for a move. */
   planned?: { x: number; y: number } | null;
   plannedPath?: Set<string>;
+  /** The way to the square the mouse points at, before any click: gold, or ember when it provokes. */
+  hoverPath?: Set<string>;
+  hoverRisk?: boolean;
+  /** The creature pointed at in the initiative bar: lit up on the board so the eye finds it. */
+  highlightId?: string | null;
 }
 
 export const EMPTY_VIEW: ViewOptions = { selectedId: null, activeId: null, reach: new Set(), targetIds: new Set(), myIds: new Set(), unseenIds: new Set(), danger: new Set(), warnIds: new Set(), reaction: null };
@@ -105,7 +111,11 @@ export interface RendererOptions {
   zoom: number;
   reducedMotion: boolean;
   labels: { miss: string };
+  /** The ground as one painted picture, or as the pixel tiles (which art packs can replace). */
+  ground?: BattleGround;
 }
+
+export type BattleGround = 'painted' | 'pixel';
 
 const textures = new Map<string, Texture>();
 function tex(name: string): Texture {
@@ -312,11 +322,15 @@ export class MapRenderer {
   private groundRT: RenderTexture | null = null;
   private rtRes = 0;
   private standLayer = new Container();
+  /** Nameplates in the 2.5D view: above every miniature, so a figure in front never hides the name. */
+  private plateLayer = new Container();
   private shadeSprite = new Sprite(Texture.EMPTY);
   private dying: Dying[] = [];
   private frame = 0;
   /** Weaker machines: a lighter ground texture, fewer particles. Decided after a few seconds of play. */
   private lite = false;
+  private groundKind: BattleGround = 'painted';
+  private paintedTex: Texture | null = null;
   private perf = { t: 0, frames: 0 };
 
   private zoom: number;
@@ -338,6 +352,9 @@ export class MapRenderer {
   /** Two fingers pinched the map: zoom by this factor. */
   onZoom: (factor: number) => void = () => {};
   onHoverMonster: (hover: TokenHover | null) => void = () => {};
+  /** The square under the mouse changed (null: off the map). Mouse only; a finger plans with a tap instead. */
+  onHoverTile: (tile: { x: number; y: number } | null) => void = () => {};
+  private hoverTileKey = '';
   private hoverId: string | null = null;
   private unFigures: () => void = () => {};
 
@@ -346,6 +363,7 @@ export class MapRenderer {
     this.zoom = options.zoom;
     this.reduced = options.reducedMotion;
     this.labels = options.labels;
+    this.groundKind = options.ground ?? 'painted';
     this.fx = new Effects((x, y, h) => this.toScreen(x, y, h), () => (this.tilt ? this.tcam.k : this.scale), this.reduced, false);
   }
 
@@ -359,7 +377,7 @@ export class MapRenderer {
       this.entLayer.visible = false;
       this.shadeSprite.texture = vignette();
       this.standLayer.sortableChildren = true;
-      this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.fx.layer, this.floatLayer);
+      this.app.stage.addChild(this.slab, this.standLayer, this.shadeSprite, this.plateLayer, this.fx.layer, this.floatLayer);
       const img = new Image();
       img.onload = () => {
         if (this.destroyed) return;
@@ -371,8 +389,8 @@ export class MapRenderer {
     }
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = this.app.screen;
-    this.app.stage.on('pointermove', (e) => { if (e.pointerType === 'mouse') { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); } });
-    this.app.stage.on('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.reportHover(); } });
+    this.app.stage.on('pointermove', (e) => { if (e.pointerType === 'mouse') { this.hover = this.pick(e.global.x, e.global.y); this.reportHover(); this.reportTile(); } });
+    this.app.stage.on('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.reportHover(); this.reportTile(); } });
     this.app.stage.on('pointertap', (e) => {
       if (this.dragged) { this.dragged = false; return; }
       const t = this.pick(e.global.x, e.global.y);
@@ -394,6 +412,7 @@ export class MapRenderer {
     this.unFigures();
     if (this.ready) {
       this.groundRT?.destroy(true);
+      this.paintedTex?.destroy(true);
       this.app.destroy(true, { children: true });
     }
   }
@@ -447,17 +466,28 @@ export class MapRenderer {
 
   private buildTiles(state: GameState) {
     this.tileLayer.removeChildren().forEach((c) => c.destroy());
+    this.paintedTex?.destroy(true);
+    this.paintedTex = null;
     this.tiles = [];
+    if (this.groundKind === 'painted') {
+      const S = this.lite ? 40 : 64;
+      const pic = paintedGround(state.map.rows, state.map.biome ?? 'dungeon', S);
+      this.paintedTex = Texture.from({ resource: pic, autoGenerateMipmaps: true, scaleMode: 'linear' });
+      const s = new Sprite(this.paintedTex);
+      s.scale.set(TILE / S);
+      this.tileLayer.addChild(s);
+    }
     for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
         const s = new Sprite(tex('floor0'));
         s.anchor.set(0.5);
         s.position.set(x * TILE + TILE / 2, y * TILE + TILE / 2);
+        s.visible = this.groundKind === 'pixel';
         this.tileLayer.addChild(s);
         this.tiles.push(s);
       }
     }
-    for (const e of this.ents.values()) { e.root.destroy({ children: true }); e.stand?.root.destroy({ children: true }); }
+    for (const e of this.ents.values()) { e.root.destroy({ children: true }); e.stand?.root.destroy({ children: true }); if (e.plate && !e.plate.destroyed) e.plate.destroy({ children: true }); }
     this.ents.clear();
     for (const d of this.dying) d.node.destroy({ children: true });
     this.dying = [];
@@ -487,7 +517,7 @@ export class MapRenderer {
     }
 
     // Tiles
-    for (let y = 0; y < state.map.height; y++) {
+    if (this.groundKind === 'pixel') for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
         this.tiles[y * state.map.width + x].texture = tex(battleTileName(state.map.biome ?? 'dungeon', tileAt(state, x, y), x, y));
       }
@@ -579,7 +609,7 @@ export class MapRenderer {
       if (seen.has(id)) continue;
       // Slain monsters get a last damage number, then vanish.
       if (e.kind === 'monster' && e.hp > 0) this.hpChanged(e, -e.hp);
-      if (e.plate) e.plate.visible = false;
+      if (e.plate) { e.plate.visible = false; if (e.plate.parent === this.plateLayer) { e.plate.destroy({ children: true }); e.plate = null; } }
       if (this.reduced && e.incoming === 0) {
         e.stand?.root.destroy({ children: true });
         e.root.destroy({ children: true });
@@ -613,7 +643,6 @@ export class MapRenderer {
         this.standLayer.addChild(root);
         s = { root, shadow, base, fig, bar, figKey: key, figH: TILE };
         e.stand = s;
-        if (e.plate) { root.addChild(e.plate); }
       }
       s.fig.texture = t;
       s.figKey = key;
@@ -733,6 +762,14 @@ export class MapRenderer {
     return { left: this.world.x + e.x * unit, top: this.world.y + e.y * unit, size: e.size * unit };
   }
 
+  private reportTile() {
+    const h = this.hover;
+    const k = h ? `${h.x},${h.y}` : '';
+    if (k === this.hoverTileKey) return;
+    this.hoverTileKey = k;
+    this.onHoverTile(h ? { x: h.x, y: h.y } : null);
+  }
+
   /** Tells the page which monster the pointer is over, so it can show its card. */
   private reportHover() {
     const h = this.hover;
@@ -763,13 +800,12 @@ export class MapRenderer {
       g.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, (h - 4) / 2, 5).fill({ color: 0xf6dc96, alpha: 0.45 });
       for (const sx of [-1, 1]) g.circle(sx * (w / 2 - 8), 0, 2.5).fill(0x6a4a1c);
       plate.addChild(g, text);
-      (e.stand ? e.stand.root : e.root).addChild(plate);
+      (this.tilt ? this.plateLayer : e.root).addChild(plate);
       e.plate = plate;
     }
-    if (e.stand) {
-      // On the front rim of the miniature's base.
-      e.plate.scale.set(0.2);
-      e.plate.position.set(0, ((e.size * TILE) / 2) * 0.8 * GROUND_SQUASH + 2);
+    if (this.tilt) {
+      // On the front rim of the miniature's base; placed with the miniature each frame.
+      if (!e.stand) { e.plate.visible = false; return; }
     } else {
       // Sits on the bottom rim of the token's frame, like the plate on a miniature's base.
       e.plate.scale.set(1 / this.scale / 2.2);
@@ -990,6 +1026,15 @@ export class MapRenderer {
     if (this.opts.reaction) { ring(this.opts.reaction.monsterId, 0xff8a3d, beat); ring(this.opts.reaction.heroId, 0xffd54f, beat); }
     if (this.opts.activeId && this.opts.activeId !== this.opts.selectedId) ring(this.opts.activeId, 0xffd54f, beat);
     ring(this.opts.selectedId, 0xffffff, 0.9);
+    const lit = this.opts.highlightId ? this.ents.get(this.opts.highlightId) : undefined;
+    if (lit && lit.root.visible) {
+      const r = (lit.size * TILE) / 2;
+      const foe = lit.kind === 'monster';
+      const color = foe ? 0xff6a5a : 0x9fe0a0;
+      if (this.tilt) {
+        g.circle(lit.root.x + r, lit.root.y + r, r * 1.05).fill({ color, alpha: 0.28 }).stroke({ width: 2.4, color, alpha: 0.95 });
+      } else g.rect(lit.root.x - 0.5, lit.root.y - 0.5, lit.size * TILE + 1, lit.size * TILE + 1).fill({ color, alpha: 0.22 }).stroke({ width: 2, color, alpha: 0.95 });
+    }
     if (this.hover && tileWalkable(tileAt(state, this.hover.x, this.hover.y))) {
       g.rect(this.hover.x * TILE + 0.5, this.hover.y * TILE + 0.5, TILE - 1, TILE - 1).stroke({ width: 1, color: 0xd4a857, alpha: 0.8 });
     }
@@ -997,6 +1042,11 @@ export class MapRenderer {
     for (const k of this.opts.plannedPath ?? []) {
       const [x, y] = k.split(',').map(Number);
       g.rect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2).fill({ color: 0xf2c14e, alpha: 0.3 });
+    }
+    // Pointing at a square: the way there, step by step, before the click.
+    for (const k of this.opts.hoverPath ?? []) {
+      const [x, y] = k.split(',').map(Number);
+      g.circle(x * TILE + TILE / 2, y * TILE + TILE / 2, TILE * 0.13).fill({ color: this.opts.hoverRisk ? 0xff6a3d : 0xf2c14e, alpha: 0.9 });
     }
     const p = this.opts.planned;
     if (p) g.rect(p.x * TILE + 1, p.y * TILE + 1, TILE - 2, TILE - 2).stroke({ width: 2, color: 0xffd27a, alpha: beat });
@@ -1032,6 +1082,14 @@ export class MapRenderer {
   }
 
   /** Edge scrolling on or off (a setting of the player's). */
+  /** Switches between the painted ground and the pixel tiles. */
+  setGround(kind: BattleGround) {
+    if (kind === this.groundKind) return;
+    this.groundKind = kind;
+    this.mapKey = '';
+    if (this.ready && this.state) this.sync();
+  }
+
   setEdgeScroll(on: boolean) { this.edgeScroll = on; if (!on) this.edgeWait = 0; }
 
   /** Which way the keys push the camera: -1, 0 or 1 on each axis. */
@@ -1219,6 +1277,11 @@ export class MapRenderer {
       st.root.position.set(foot.x + ox, foot.y);
       st.root.scale.set(cam.k * foot.s);
       st.root.zIndex = foot.y + (e.id === this.opts.activeId ? 0.5 : 0);
+      if (e.plate?.visible) {
+        const k = cam.k * foot.s;
+        e.plate.position.set(foot.x + ox, foot.y + (((e.size * TILE) / 2) * 0.8 * GROUND_SQUASH + 2) * k);
+        e.plate.scale.set(0.2 * k);
+      }
       if (e.flash > 0) e.flash -= dt;
       st.fig.tint = e.flash > 0 ? mixColor(e.tint, 0xff4a3a, Math.min(1, e.flash / 0.2) * 0.7) : e.tint;
       // A slow breath, so the table feels alive.

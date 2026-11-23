@@ -1,7 +1,8 @@
 // Floating tooltips. A Float is placed beside the element it explains and kept on screen;
 // a Hint is the short text kind, for anything that used to rely on the browser's own title tooltip.
-import { cloneElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '../i18n';
 
 type Side = 'right' | 'top' | 'bottom';
 
@@ -13,6 +14,8 @@ interface FloatProps {
   className?: string;
   /** Lets the pointer enter the tooltip, for one that is pinned open and scrolls. */
   interactive?: boolean;
+  /** Receives the tooltip's element, to tell clicks inside it from clicks elsewhere. */
+  tipRef?: { current: HTMLDivElement | null };
   children: ReactNode;
 }
 
@@ -20,8 +23,9 @@ const GAP = 10;
 const MARGIN = 8;
 
 /** A box placed beside `anchor`, measured after it renders so it never leaves the window. */
-export function Float({ anchor, side = 'right', className, interactive, children }: FloatProps) {
+export function Float({ anchor, side = 'right', className, interactive, tipRef, children }: FloatProps) {
   const ref = useRef<HTMLDivElement>(null);
+  if (tipRef) tipRef.current = ref.current;
   const [pos, setPos] = useState<CSSProperties>({ left: -9999, top: -9999, visibility: 'hidden' });
   useLayoutEffect(() => {
     const el = ref.current;
@@ -40,6 +44,7 @@ export function Float({ anchor, side = 'right', className, interactive, children
       else if (top + h > vh - MARGIN) top = anchor.top - GAP - h;
     }
     setPos({ left: Math.max(MARGIN, Math.min(left, vw - w - MARGIN)), top: Math.max(MARGIN, Math.min(top, vh - h - MARGIN)) });
+    if (tipRef) tipRef.current = el;
   }, [anchor.left, anchor.top, anchor.width, anchor.height, side, children]);
   return createPortal(
     <div ref={ref} className={['float', className, interactive && 'interactive'].filter(Boolean).join(' ')} role="tooltip" style={pos}>{children}</div>,
@@ -66,9 +71,28 @@ const HOLD_MS = 450;
  */
 export function Hint({ text, title, side = 'top', children }: HintProps) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  // T pins an open tooltip: it stays, and the pointer can go into it to read its underlined words.
+  const [pinned, setPinned] = useState(false);
+  const pinnedRef = useRef(false);
+  pinnedRef.current = pinned;
+  const tipRef = useRef<HTMLDivElement | null>(null);
   const touch = useRef({ at: 0, timer: 0, held: false });
-  const show = (e: { currentTarget: Element }) => setAnchor(e.currentTarget.getBoundingClientRect());
-  const hide = () => setAnchor(null);
+  const show = (e: { currentTarget: Element }) => { if (!pinnedRef.current) setAnchor(e.currentTarget.getBoundingClientRect()); };
+  const hide = () => { if (!pinnedRef.current) setAnchor(null); };
+  const close = () => { setPinned(false); setAnchor(null); };
+  useEffect(() => {
+    if (!anchor) return;
+    const typing = (el: EventTarget | null) => el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+      if (e.key === 't' || e.key === 'T') { e.preventDefault(); e.stopPropagation(); if (pinnedRef.current) close(); else setPinned(true); }
+      else if (e.key === 'Escape' && pinnedRef.current) { e.preventDefault(); e.stopPropagation(); close(); }
+    };
+    const onDown = (e: PointerEvent) => { if (pinnedRef.current && !tipRef.current?.contains(e.target as Node)) close(); };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('pointerdown', onDown, true); };
+  }, [!!anchor]);
   const child = children as ReactElement<Record<string, (e: never) => void>>;
   const acts = typeof child.props.onClick === 'function';
   const wrap = (name: string, fn: (e: never) => void) => (e: never) => { fn(e); child.props[name]?.(e as never); };
@@ -101,9 +125,10 @@ export function Hint({ text, title, side = 'top', children }: HintProps) {
         ...(acts ? { onClick: (e: MouseEvent) => { if (touch.current.held) { touch.current.held = false; e.preventDefault(); return; } child.props.onClick?.(e as never); } } : {}),
       } as never)}
       {anchor && (text || title) && (
-        <Float anchor={anchor} side={side} className="hint-tip">
+        <Float anchor={anchor} side={side} className={pinned ? 'hint-tip pinned' : 'hint-tip'} interactive={pinned} tipRef={tipRef}>
           {title && <b>{title}</b>}
           {text && <span>{text}</span>}
+          <small className="pin-note">{pinned ? <PinNote pinned /> : <PinNote />}</small>
         </Float>
       )}
     </>
@@ -119,3 +144,9 @@ export function Info({ text, title, side }: { text: ReactNode; title?: ReactNode
   );
 }
 
+
+/** The line under a tooltip that has words to follow: how to pin it, or how to let it go. */
+function PinNote({ pinned }: { pinned?: boolean }) {
+  const t = useT();
+  return pinned ? <>{t('Pinned. Point at an underlined word to read it. Esc or T closes.')}</> : <>{t('T: pin, to read the underlined words')}</>;
+}

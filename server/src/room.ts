@@ -37,11 +37,15 @@ export interface RoomTiming {
   hostGraceMs: number;
   /** How long the fight waits for a player deciding on an opportunity attack before striking for them. */
   reactionWaitMs: number;
+  /** How long a check the Dungeon Master asks for waits for its player to press Roll. 0 rolls at once. */
+  checkWaitMs: number;
+  /** How long a new fight waits for the players to press "To battle" before the monsters move. 0 starts at once. */
+  readyWaitMs: number;
   /** How long a player may take back what they just said, before the Dungeon Master starts to answer. 0 answers at once. */
   undoGraceMs: number;
 }
 
-export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000, reactionWaitMs: 20000, undoGraceMs: 0 };
+export const DEFAULT_TIMING: RoomTiming = { actionDelayMs: 500, travelDelayMs: 320, turnWaitMs: 8000, turnWaitMaxMs: 30000, hostGraceMs: 20000, reactionWaitMs: 20000, checkWaitMs: 45000, readyWaitMs: 60000, undoGraceMs: 0 };
 
 export interface RoomHooks {
   /** What the lobby lists about this table changed. */
@@ -124,6 +128,9 @@ export class Room {
   private answerSeq = 0;
   /** Settles the reaction prompt that a monster's turn is waiting on: true strikes. */
   private reactionWaiter: ((take: boolean) => void) | null = null;
+  /** Rolls the check the Dungeon Master is waiting on. */
+  private checkRoller: (() => void) | null = null;
+  private readyWaiter: (() => void) | null = null;
   /** Since when each player has been at the table without a break, for their play time. */
   private seatedSince = new Map<string, number>();
   /** When each player last got up, so a quick reload is not a new session. */
@@ -146,6 +153,9 @@ export class Room {
     this.lastPlayed = Number.isFinite(savedAt) ? savedAt : Date.now();
     this.game.interactiveReactions = this.timing.reactionWaitMs > 0;
     this.game.reactionWaitMs = this.timing.reactionWaitMs;
+    this.game.checkWaitMs = this.timing.checkWaitMs;
+    this.game.readyWaitMs = this.timing.readyWaitMs;
+    if (this.timing.checkWaitMs > 0) this.game.checkWaiter = (check) => this.waitForRoll(check);
     for (const p of this.game.s.players) p.connected = false;
     // Every table has a world seed to show and share, also the ones saved before seeds existed.
     if (!this.game.s.table.start.seed) this.game.s.table.start.seed = newSeed();
@@ -287,6 +297,11 @@ export class Room {
       // Nobody waits for a player who has gone: their hero strikes.
       const prompt = this.game.reactionPrompt();
       if (prompt && this.game.s.characters.find((c) => c.id === prompt.heroId)?.ownerId === id) this.reactionWaiter?.(true);
+      // Nor for their roll: the game rolls it for them.
+      const check = this.game.pendingCheck;
+      if (check && this.game.s.characters.find((c) => c.id === check.characterId)?.ownerId === id) this.checkRoller?.();
+      // Nor for them to get ready for a fight.
+      if (this.game.pressReady(id)) this.readyWaiter?.();
     }
     this.watchHost();
     this.flush();
@@ -328,6 +343,8 @@ export class Room {
     this.closed = true;
     this.epoch++;
     this.reactionWaiter?.(false);
+    this.checkRoller?.();
+    this.readyWaiter?.();
     for (const id of new Set(this.sockets.values())) this.detach(id, reason);
     for (const t of [this.saveTimer, this.hostTimer, this.gatherTimer]) if (t) clearTimeout(t);
     this.saveTimer = this.hostTimer = this.gatherTimer = null;
@@ -506,6 +523,14 @@ export class Room {
         if (this.attempt(ws, () => g.setReady(playerId, !!msg.ready))) this.flush();
         return;
       // Answered outside the queue: the monsters' turn holds it while it waits for this.
+      // Answered outside the queue too: the first monster turn waits for it.
+      case 'battle_ready':
+        if (this.game.pressReady(playerId)) this.readyWaiter?.();
+        this.flush();
+        return;
+      case 'roll_check':
+        if (this.attempt(ws, () => g.pressRoll(playerId, String(msg.id)))) this.checkRoller?.();
+        return;
       case 'reaction':
         if (this.attempt(ws, () => g.checkReaction(playerId, String(msg.characterId)))) this.reactionWaiter?.(!!msg.take);
         return;
@@ -635,6 +660,15 @@ export class Room {
     const g = this.game;
     this.narrateLater(g.takeBeats());
     while (g.isMonsterTurn() || g.isAllyTurn()) {
+      if (g.s.combat?.ready) {
+        // The fight has only just begun: the monsters wait until every player is ready, or the time is up.
+        const epoch = this.epoch;
+        await this.waitForReady(g.s.combat.ready.until);
+        if (epoch !== this.epoch || this.closed) return;
+        g.endReady();
+        this.flush();
+        continue;
+      }
       if (g.isAllyTurn()) {
         // A companion's turn is played by the server from their stance: no Dungeon Master call, no cost.
         const epoch = this.epoch;
@@ -692,6 +726,36 @@ export class Room {
       await sleep(this.timing.actionDelayMs);
       return result;
     };
+  }
+
+  /** Resolves when the hero's player presses Roll, leaves, or the time runs out (then the game rolls). */
+  private waitForRoll(check: { until: number }): Promise<void> {
+    this.flush();
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => settle(), Math.max(0, check.until - Date.now()));
+      timer.unref?.();
+      const settle = () => {
+        clearTimeout(timer);
+        if (this.checkRoller === settle) this.checkRoller = null;
+        resolve();
+      };
+      this.checkRoller = settle;
+    });
+  }
+
+  /** Resolves when every player is ready for the fight, or the time runs out. */
+  private waitForReady(until: number): Promise<void> {
+    this.flush();
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => settle(), Math.max(0, until - Date.now()));
+      timer.unref?.();
+      const settle = () => {
+        clearTimeout(timer);
+        if (this.readyWaiter === settle) this.readyWaiter = null;
+        resolve();
+      };
+      this.readyWaiter = settle;
+    });
   }
 
   /** Resolves when the player answers, leaves, or the time runs out (then the hero strikes). */

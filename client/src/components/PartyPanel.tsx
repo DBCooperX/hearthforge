@@ -5,7 +5,7 @@ import { artOfCharacter, companionFace, heroPortraitUrl } from '../game/heroArt'
 import { playerId } from '../net';
 import { useT } from '../i18n';
 import { classLabel, conditionHelp } from '../game/util';
-import { FeatureGlyph } from '../ui/Glyph';
+import { FeatureGlyph, UiGlyph } from '../ui/Glyph';
 import { itemDef } from '../../../shared/items';
 
 interface Props {
@@ -41,6 +41,30 @@ function Bar({ kind, value, max, temp }: { kind: 'hp' | 'mana'; value: number; m
   );
 }
 
+/**
+ * In a fight, what a hero still has: action, bonus action and reaction on the hero whose turn it
+ * is, and the reaction on everyone else, as the same pips as the hotbar. Spent ones empty.
+ */
+function TurnPips({ state, c, active }: { state: GameState; c: Character; active: boolean }) {
+  const t = useT();
+  const combat = state.phase === 'combat' ? state.combat : null;
+  if (!combat || c.dead || c.hp <= 0 || !combat.order.some((o) => o.id === c.id)) return null;
+  const reaction = !combat.reacted?.includes(c.id);
+  const pips: { kind: 'action' | 'bonus' | 'reaction'; left: boolean; label: string }[] = [
+    ...(active ? [
+      { kind: 'action' as const, left: !combat.actionUsed || combat.attacksLeft > 0, label: t('Action') },
+      { kind: 'bonus' as const, left: !combat.bonusUsed, label: t('Bonus action') },
+    ] : []),
+    { kind: 'reaction', left: reaction, label: t('Reaction') },
+  ];
+  const say = pips.map((p) => `${p.label}: ${p.left ? t('ready') : t('used')}`).join(' · ');
+  return (
+    <span className="turn-pips" title={say} aria-label={say}>
+      {pips.map((p) => <i key={p.kind} className={`pip ${p.kind}${p.left ? '' : ' spent'}`} />)}
+    </span>
+  );
+}
+
 export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onGive, onSheet, onLevelUp, onCompanion }: Props) {
   const t = useT();
   return (
@@ -72,7 +96,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
             <div className="info">
               <div className="name">
                 <b title={c.name}>{c.name}</b>
-                {c.heroic && <span className="heroic-spark" title={t('Inspiration: the next failed check is rolled again')} aria-label={t('Inspiration: the next failed check is rolled again')}>✨</span>}
+                {c.heroic && <span className="heroic-spark" title={t('Inspiration: the next failed check is rolled again')} aria-label={t('Inspiration: the next failed check is rolled again')}><UiGlyph id="inspiration" emoji="✨" /></span>}
                 <button className="link sheet-link" title={t('Character sheet (c)')} onClick={(e) => { e.stopPropagation(); onSheet(c); }}>{classLabel(c, t)} {c.level}</button>
               </div>
               <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />
@@ -80,13 +104,14 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
               <div className="xpbar" title={c.level < MAX_LEVEL ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next: XP_THRESHOLDS[c.level], level: c.level + 1 }) : `${c.xp} XP`}>
                 <div style={{ width: `${c.level < MAX_LEVEL ? Math.min(100, ((c.xp - XP_THRESHOLDS[c.level - 1]) / (XP_THRESHOLDS[c.level] - XP_THRESHOLDS[c.level - 1])) * 100) : 100}%` }} />
               </div>
-              {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}>⬆ {t('Level up')}</button>}
+              {mine && c.pending.length > 0 && <button className="levelup-badge" onClick={(e) => { e.stopPropagation(); onLevelUp(c); }}><UiGlyph id="level_up" emoji="⬆" /> {t('Level up')}</button>}
               {shownResources(c).length > 0 && (
                 <div className="uses">
                   {shownResources(c).map((r) => <span key={r.def.id} className={r.left ? '' : 'out'} title={`${t(r.def.name)}: ${r.left} / ${r.max}`}><FeatureGlyph id={r.def.id} emoji={r.def.icon} /> {r.left}</span>)}
                 </div>
               )}
               <div className="conditions">
+                <TurnPips state={state} c={c} active={c.id === activeId} />
                 {c.form && BEAST_FORMS[c.form] && <span className="chip form" title={t('Wild Shape')}>{BEAST_FORMS[c.form].icon} {t(BEAST_FORMS[c.form].name)}</span>}
                 {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}
                 {down && !c.conditions.includes('stable') && (
@@ -134,6 +159,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
                   </div>
                   <Bar kind="hp" value={c.hp} max={c.maxHp} temp={c.tempHp} />
                   <div className="conditions">
+                    <TurnPips state={state} c={c} active={c.id === activeId} />
                     {c.dead ? <span className="chip">{t('fallen')}</span> : <span className={`chip stance ${info.stance}`} title={t(STANCE_HELP[info.stance])}>{t(STANCE_LABELS[info.stance])}</span>}
                     <span className="chip weapon" title={t('Weapon in hand')}>{weapon ? t(weapon) : t('unarmed')}</span>
                     {c.conditions.map((x) => <span key={x} className={`chip ${x}`} title={conditionHelp(x, t)}>{t(x)}</span>)}
@@ -149,7 +175,7 @@ export function PartyPanel({ state, selectedId, activeId, targeting, onPick, onG
           })}
         </section>
       )}
-      <div className="gold" title={t('Party gold')}>🪙 {state.gold} {t('gp')}</div>
+      <div className="gold" title={t('Party gold')}><UiGlyph id="gold" emoji="🪙" /> {state.gold} {t('gp')}</div>
     </aside>
   );
 }

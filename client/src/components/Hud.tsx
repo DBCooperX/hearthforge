@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
 import { partyOf } from '../game/util';
-import { ABILITIES } from '../../../shared/content';
+import { combatantFace } from '../game/faces';
+import { onFigureLoaded } from '../game/paintedFigures';
+import { onPortraitLoaded } from '../game/heroArt';
+import { ABILITIES, ABILITY_NAMES } from '../../../shared/content';
 import { RESOURCES, SLOT_COST, hasFeature, maxSpellLevelFor, resourceLeft } from '../../../shared/classes';
-import { castLevel, diceAtLevel, upcastable } from '../../../shared/spells';
+import { castLevel, upcastable } from '../../../shared/spells';
 import { LIGHT_ITEMS } from '../../../shared/light';
 import { itemDef } from '../../../shared/items';
-import { isLightWeapon } from '../../../shared/build';
-import { OPPORTUNITY_MODES, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
+import { isLightWeapon, weaponAttack } from '../../../shared/build';
+import { abilityFigures, damageSpread } from '../../../shared/odds';
+import { OPPORTUNITY_MODES, type AbilityKey, type Character, type GameState, type OpportunityMode } from '../../../shared/types';
 import type { Connection } from '../net';
 import { useLang, useT } from '../i18n';
-import { dice } from './Guide';
+import { Rich, dice, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { usePrefs } from '../ui/prefs';
-import { AbilityGlyph, Glyph } from '../ui/Glyph';
+import { AbilityGlyph, Glyph, UiGlyph } from '../ui/Glyph';
 import {
   HOTBAR_DRAG, HOTBAR_ROW, abilityRef, itemRef, loadHotbar, parseRef, placeOnHotbar, removeFromHotbar, saveHotbar, syncHotbar,
   type HotbarDrag, type HotbarLayout,
@@ -26,29 +30,44 @@ const ACTIVE: Record<string, string> = {
 
 export type Targeting = { kind: 'attack' } | { kind: 'offhand' } | { kind: 'ability'; abilityId: string; level?: number; item?: string } | { kind: 'item'; uid: string } | null;
 
-export function TurnBar({ state }: { state: GameState }) {
+/**
+ * The initiative order as a row of faces: friends in green, foes in red, the one acting now larger
+ * and lit, each with a sliver of hit points. Pointing at a face lights up that figure on the board.
+ */
+export function TurnBar({ state, unseen, onHover }: { state: GameState; unseen?: Set<string>; onHover?: (id: string | null) => void }) {
   const t = useT();
+  const [, tick] = useState(0);
+  useEffect(() => onFigureLoaded(() => tick((n) => n + 1)), []);
+  useEffect(() => onPortraitLoaded(() => tick((n) => n + 1)), []);
   const combat = state.combat;
   if (!combat) return null;
-  const name = (id: string) => partyOf(state).find((c) => c.id === id)?.name ?? state.monsters.find((m) => m.id === id)?.name ?? '???';
   return (
     <div className="turnbar">
       <span className="phase combat">{t('Round {n}', { n: combat.round })}</span>
-      <div className="order">
+      <ol className="order" onMouseLeave={() => onHover?.(null)}>
         {combat.order.map((o, i) => {
           const m = state.monsters.find((x) => x.id === o.id);
           const c = partyOf(state).find((x) => x.id === o.id);
           const out = m ? !m.alive : c ? c.dead || c.hp <= 0 : true;
+          const hidden = !!m && !!unseen?.has(m.id);
+          const name = c?.name ?? (hidden ? t('Something in the dark') : m?.name) ?? '???';
+          const hp = c ? c.hp : m?.hp ?? 0, max = c ? c.maxHp : m?.maxHp ?? 1;
+          const pct = Math.max(0, Math.min(100, (hp / Math.max(1, max)) * 100));
+          const face = hidden ? null : combatantFace(state, o.id);
+          const tip = [name, o.ambush ? t('Struck first, from hiding') : `${t('Initiative')} ${o.initiative}`, hidden ? '' : `${t('Hit points')} ${hp} / ${max}`, o.surprised ? t('Caught unawares: rolled initiative with Disadvantage') : ''].filter(Boolean).join(' · ');
           return (
-            <span key={o.id} className={['init', o.kind, i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
-              title={[o.ambush ? t('Struck first, from hiding') : `${t('Initiative')} ${o.initiative}`, o.surprised ? t('Caught unawares: rolled initiative with Disadvantage') : ''].filter(Boolean).join(' · ')}>
-              {o.ambush && <span className="init-mark" aria-hidden>🗡</span>}
-              {name(o.id)}
+            <li key={o.id} className={['init', o.kind, m ? 'foe' : 'friend', i === combat.turnIndex && 'now', out && 'out', o.surprised && 'surprised', o.ambush && 'ambush'].filter(Boolean).join(' ')}
+              title={tip} aria-label={tip} aria-current={i === combat.turnIndex ? 'step' : undefined}
+              onMouseEnter={() => onHover?.(out ? null : o.id)}>
+              <span className="init-face">{face ? <img src={face} alt="" /> : <b aria-hidden>?</b>}</span>
+              {!hidden && <span className={pct <= 25 ? 'init-hp low' : 'init-hp'}><i style={{ width: `${pct}%` }} /></span>}
+              <span className="init-name">{name}</span>
+              {o.ambush && <span className="init-mark" aria-hidden><UiGlyph id="ambush" emoji="🗡" /></span>}
               {o.surprised && <span className="init-mark surprised" aria-label={t('Caught unawares')}>!</span>}
-            </span>
+            </li>
           );
         })}
-      </div>
+      </ol>
       {state.dmBusy && <span className="thinking">{t('The Dungeon Master is thinking…')}</span>}
     </div>
   );
@@ -184,7 +203,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ab.spellLevel === undefined ? '' : base === 0 ? t('Cantrip') : t('Spell level {n}', { n: base }),
       level > base ? t('Cast at level {n}', { n: level }) : '',
       sustained ? t('Free again this turn') : '',
-      ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', ab.dice ? dice(diceAtLevel(ab, level) ?? ab.dice, lang) : '',
+      ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : ab.range === 5 ? t('Touch') : '', figuresLine(c, ab, level),
       ab.concentration ? t('Concentration') : '',
       left !== null && pool && RESOURCES[pool] ? `${t(RESOURCES[pool].name)}: ${left}` : '',
     ].filter(Boolean).join(' · ');
@@ -194,7 +213,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ref: abilityRef(id), name: t(ab.name), icon: <AbilityGlyph def={ab} />, cost, mana: mana > 0 ? mana : undefined,
       uses: left !== null && !(mana > 0) ? left : undefined, why, auto: react, warn,
       on: active || sustained || (targeting?.kind === 'ability' && targeting.abilityId === id && !targeting.item),
-      tip: <>{t(ab.description)}{facts && <em>{facts}</em>}{react && <em className="info-line">{reactWhy}</em>}</>,
+      tip: <><Rich text={t(ab.description)} />{facts && <em>{facts}</em>}{react && <em className="info-line">{reactWhy}</em>}</>,
       run: () => {
         const lv = level > base ? level : undefined;
         if (ab.target === 'self') { conn.send({ t: 'ability', characterId: c.id, abilityId: id, ...(lv ? { level: lv } : {}) }); setTargeting(null); }
@@ -213,12 +232,12 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
     const left = cast.charges - (it.used ?? 0);
     const cost: Cost = ab.bonusAction ? 'bonus' : 'action';
     const used = ab.bonusAction ? combat!.bonusUsed : actionUsed;
-    const facts = [t('Cast at level {n}', { n: cast.level }), ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : '', ab.dice ? dice(diceAtLevel(ab, cast.level) ?? ab.dice, lang) : ''].filter(Boolean).join(' · ');
+    const facts = [t('Cast at level {n}', { n: cast.level }), ab.range > 5 ? t('Range {n} ft', { n: ab.range }) : '', figuresLine(c, ab, cast.level, true)].filter(Boolean).join(' · ');
     return {
       ref: itemRef(uid), name: t(def.name), icon: def.icon, cost, uses: left,
       why: general || (left <= 0 ? t('No charges left until a long rest.') : used ? spentWhy(cost) : ''),
       on: targeting?.kind === 'ability' && targeting.item === uid,
-      tip: <>{t(ab.name)}: {t(ab.description)}<em>{facts}</em></>,
+      tip: <>{t(ab.name)}: <Rich text={t(ab.description)} /><em>{facts}</em></>,
       run: () => {
         if (ab.target === 'self') { conn.send({ t: 'use_item', characterId: c.id, uid }); setTargeting(null); }
         else toggle({ kind: 'ability', abilityId: ab.id, item: uid });
@@ -232,6 +251,24 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
     return p.kind === 'ab' ? (ABILITIES[p.id] ? abilityEntry(p.id) : null) : itemEntry(p.id);
   };
 
+  // The weapon's own numbers, as the attack will roll them.
+  const weapon = weaponAttack(c, c.equipment.mainHand ? itemDef(state.items, c.equipment.mainHand.defId) : null);
+  const weaponSpread = damageSpread(weapon.damage, weapon.type);
+  const weaponLine = t('{weapon}: {bonus} to hit, {dice} {type} ({min}–{max})', { weapon: t(weapon.name), bonus: signed(weapon.bonus), dice: dice(weapon.damage, lang), type: t(`${weapon.type} damage`), min: weaponSpread.min, max: weaponSpread.max });
+
+  /** A spell's numbers for this hero: its attack bonus or save DC, and its dice with the modifier in. */
+  function figuresLine(who: Character, ab: (typeof ABILITIES)[string], level: number, wand = false) {
+    const f = abilityFigures(who, ab, level);
+    const parts: string[] = [];
+    if (f.toHit !== undefined) parts.push(t('Spell attack {n}', { n: signed(f.toHit) }));
+    if (f.dc !== undefined && f.save) parts.push(t('DC {n} {save} save', { n: wand ? Math.max(15, f.dc) : f.dc, save: t(ABILITY_NAMES[f.save as AbilityKey]) }));
+    if (f.dice && f.spread) {
+      const range = f.spread.min === f.spread.max ? String(f.spread.min) : `${f.spread.min}–${f.spread.max}`;
+      parts.push(f.heal ? t('Heals {dice} ({range})', { dice: dice(f.dice, lang), range }) : `${dice(f.dice, lang)} (${range})`);
+    }
+    return parts.join(' · ');
+  }
+
   // The common actions: always there, in a fixed place.
   const cunning = hasFeature(c, 'cunning_action');
   const twoWeapons = isLightWeapon(itemDef(state.items, c.equipment.mainHand?.defId ?? '')) && isLightWeapon(itemDef(state.items, c.equipment.offHand?.defId ?? '')) && !c.form;
@@ -240,7 +277,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       ref: 'attack', name: t('Attack'), icon: <Glyph keys={['action:attack']} emoji="⚔️" />, cost: 'action',
       why: general || (actionUsed && combat.attacksLeft <= 0 ? spentWhy('action') : ''),
       on: targeting?.kind === 'attack',
-      tip: <>{t('Attack with your main-hand weapon. You can also just click an enemy.')}{combat.attacksLeft > 0 && actionUsed && <em>{t('one more attack')}</em>}</>,
+      tip: <>{t('Attack with your main-hand weapon. You can also just click an enemy.')}<em>{weaponLine}</em>{combat.attacksLeft > 0 && actionUsed && <em>{t('one more attack')}</em>}</>,
       run: () => toggle({ kind: 'attack' }),
     },
     ...(twoWeapons ? [{
@@ -373,6 +410,12 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
           })}
         </div>
         <div className="hb-end">
+          {nudge?.note && (
+            <div className="endturn-nudge" role="status" aria-live="polite">
+              <b>{nudge.kind === 'spent' ? t('That was everything for this turn') : t('Your move, {name}', { name: c.name })}</b>
+              <span>{nudge.kind === 'spent' ? t('End your turn when you are ready.') : t('Pick an action, or end your turn.')}</span>
+            </div>
+          )}
           <OpportunitySwitch actor={c} conn={conn} />
           <Hint title={t('End turn')} text={<>{t('Hand the turn to the next in the initiative order.')}<em>{t('Space')}</em></>}>
             <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
@@ -388,21 +431,41 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
 
 /**
  * A gentle reminder to end the turn: after the player's chosen delay without doing anything on
- * their turn, or soon after the action and movement are used up. It never ends the turn.
+ * their turn, or soon after the action and movement are used up. It never ends the turn. Any sign
+ * of life (the mouse moving, a click, a key, a touch) puts it away at once and starts the wait
+ * again, and the note fades by itself after a few seconds, leaving only the glow on End turn.
  */
-export function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): 'idle' | 'spent' | null {
+export function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): { kind: 'idle' | 'spent'; note: boolean } | null {
   const { turnReminder } = usePrefs();
   const [nudge, setNudge] = useState<'idle' | 'spent' | null>(null);
+  const [note, setNote] = useState(false);
+  const [poke, setPoke] = useState(0);
   const spent = !!combat && combat.actionUsed && combat.attacksLeft <= 0 && combat.movementLeft <= 0;
   // Anything that happens on the turn (a step, an attack, a new line in the story) starts the wait again.
   const activity = combat ? `${combat.round}:${combat.turnIndex}:${combat.movementLeft}:${combat.actionUsed}:${combat.attacksLeft}:${combat.bonusUsed}:${logLength}` : '';
+  const waiting = canAct && !!combat && !!turnReminder;
+  useEffect(() => {
+    if (!waiting) return;
+    let last = 0;
+    const alive = () => { const now = Date.now(); if (now - last > 400) { last = now; setPoke((p) => p + 1); } };
+    const opts = { passive: true, capture: true } as const;
+    const kinds = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+    for (const k of kinds) window.addEventListener(k, alive, opts);
+    return () => { for (const k of kinds) window.removeEventListener(k, alive, opts); };
+  }, [waiting]);
   useEffect(() => {
     setNudge(null);
-    if (!canAct || !combat || !turnReminder) return;
-    const timer = window.setTimeout(() => setNudge(spent ? 'spent' : 'idle'), spent ? Math.min(4, turnReminder) * 1000 : turnReminder * 1000);
-    return () => window.clearTimeout(timer);
-  }, [canAct, activity, turnReminder, spent]);
-  return nudge;
+    setNote(false);
+    if (!waiting) return;
+    let fade = 0;
+    const timer = window.setTimeout(() => {
+      setNudge(spent ? 'spent' : 'idle');
+      setNote(true);
+      fade = window.setTimeout(() => setNote(false), 6000);
+    }, spent ? Math.min(4, turnReminder) * 1000 : turnReminder * 1000);
+    return () => { window.clearTimeout(timer); window.clearTimeout(fade); };
+  }, [waiting, activity, turnReminder, spent, poke]);
+  return nudge ? { kind: nudge, note } : null;
 }
 
 interface SlotProps {
@@ -501,7 +564,7 @@ function OpportunitySwitch({ actor, conn }: { actor: Character; conn: Connection
   return (
     <Hint title={t('Opportunity attacks')} text={t('When an enemy {name} can see leaves their reach, they may strike at it with their reaction, once per round. Ask me: you decide each time. Always strike or Never: the game decides for you. Click to switch.', { name: actor.name })}>
       <button className="act small oa-mode" onClick={() => conn.send({ t: 'set_opportunity', characterId: actor.id, mode: next })}>
-        <span className="icon">🛡️</span>{t(MODE_LABELS[mode])}
+        <span className="icon"><UiGlyph id="action:opportunity" emoji="🛡️" /></span>{t(MODE_LABELS[mode])}
       </button>
     </Hint>
   );
@@ -543,7 +606,7 @@ export function ReactionPrompt({ state, playable, conn }: { state: GameState; pl
   return (
     <div className={mine ? 'reaction-prompt panel mine' : 'reaction-prompt panel'} role={mine ? 'alertdialog' : 'status'} aria-live="assertive">
       <div className="rp-head">
-        <span className="icon">⚔️</span>
+        <span className="icon"><UiGlyph id="reaction" emoji="⚔️" /></span>
         <b>{t('{monster} is leaving the reach of {hero}!', { monster: foe.name, hero: hero.name })}</b>
       </div>
       {mine ? (

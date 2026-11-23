@@ -15,7 +15,7 @@ const rect = (g: Grid, x0: number, y0: number, x1: number, y1: number, c: string
 const px = (g: Grid, x: number, y: number, c: string) => { if (x >= 0 && y >= 0 && x < N && y < N) g[y][x] = c; };
 const disc = (g: Grid, cx: number, cy: number, r: number, c: string) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + 1) px(g, cx + x, cy + y, c); };
 
-interface Look {
+export interface Look {
   /** Ground: base colour, darker and lighter flecks. */
   ground: [string, string, string];
   /** Grass tufts on the ground, if any. */
@@ -37,7 +37,7 @@ interface Look {
 
 const GRASS: Pick<Look, 'deck' | 'prop' | 'wall' | 'wallStyle' | 'water'> = { deck: 'dirt', prop: 'crate', wall: ['#6d6a66', '#8d8a85', '#45423f'], wallStyle: 'rock', water: ['#4f8fae', '#2c5f86'] };
 
-const LOOKS: Record<Biome, Look> = {
+export const LOOKS: Record<Biome, Look> = {
   dungeon: { ground: ['#3a3340', '#322c38', '#443c4b'], deck: 'planks', rough: 'rubble', tree: 'dead', prop: 'crate', wall: ['#6b6375', '#8a8296', '#4a4454'], wallStyle: 'brick', water: ['#3f6f8a', '#27485f'] },
   cave: { ground: ['#40372f', '#352d27', '#4c4239'], deck: 'planks', rough: 'rubble', tree: 'dead', prop: 'crate', wall: ['#2a2420', '#3d352e', '#1a1613'], wallStyle: 'rock', water: ['#3f7a86', '#24505c'] },
   ruin: { ground: ['#55574a', '#494b40', '#62644f'], tuft: '#6f8a4a', deck: 'cobble', rough: 'rubble', tree: 'leafy', prop: 'crate', wall: ['#77766a', '#96957f', '#4f4e45'], wallStyle: 'brick', water: ['#4f8fae', '#2c5f86'] },

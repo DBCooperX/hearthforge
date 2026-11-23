@@ -8,6 +8,7 @@ import { EntityName, useEntity } from './Story';
 import { useLang, useT } from '../i18n';
 import { Window } from '../ui/Window';
 import { ZoneMap } from './ZoneMap';
+import { PlaceGlyph, ShopGlyph, UiGlyph } from '../ui/Glyph';
 
 function Named({ name }: { name: string }) {
   const entity = useEntity(name);
@@ -42,7 +43,7 @@ export function TravelMap({ world, state, conn, target, setTarget, local }: Trav
       {target && plan && (
         <div className="travel">
           <div className="travel-head">
-            <b>{dest ? `${KIND_ICON[dest.kind]} ${dest.name}` : code === UNKNOWN ? t('Uncharted land') : t(TERRAIN[code as TerrainCode].name)}</b>
+            <b>{dest ? <><PlaceGlyph kind={dest.kind} emoji={KIND_ICON[dest.kind]} /> {dest.name}</> : code === UNKNOWN ? t('Uncharted land') : t(TERRAIN[code as TerrainCode].name)}</b>
             <button className="link" onClick={() => setTarget(null)}>{t('cancel')}</button>
           </div>
           {plan.summary ? (
@@ -123,7 +124,7 @@ export function WorldPanel(props: PanelProps) {
   return (
     <aside className="worldpanel">
       <header className="where">
-        <span className="where-icon">{place ? KIND_ICON[place.kind] : '🧭'}</span>
+        <span className="where-icon">{place ? <PlaceGlyph kind={place.kind} emoji={KIND_ICON[place.kind]} /> : <PlaceGlyph kind="wilds" emoji="🧭" />}</span>
         <div>
           <h2>{place?.name ?? t('The wilds')}</h2>
           <small>{place ? (parent ? t('{kind} in {place}', { kind: t(place.kind), place: parent.name }) : t(place.kind)) : `${t(terrain)}${nearest ? `, ${t('near {place}', { place: nearest.name })}` : ''}`}</small>
@@ -146,12 +147,12 @@ export function WorldPanel(props: PanelProps) {
             <div className="here-list">
               {place?.dungeon && (
                 place.dungeon.next
-                  ? <button disabled={!idle} onClick={() => conn.send({ t: 'delve' })} title={t('Fight your way into the next section')}>⚔️ {t('Delve: {stage}', { stage: place.dungeon.next })} <small>{t('{n}/{total} cleared', { n: place.dungeon.cleared, total: place.dungeon.total })}</small></button>
+                  ? <button disabled={!idle} onClick={() => conn.send({ t: 'delve' })} title={t('Fight your way into the next section')}><UiGlyph id="delve" emoji="⚔️" /> {t('Delve: {stage}', { stage: place.dungeon.next })} <small>{t('{n}/{total} cleared', { n: place.dungeon.cleared, total: place.dungeon.total })}</small></button>
                   : <p className="muted small">{t('Cleared. Nothing stirs here any more.')}</p>
               )}
               {here.map((l) => (
                 <button key={l.id} disabled={!idle} onClick={() => conn.send({ t: 'go', locationId: l.id })}>
-                  {KIND_ICON[l.kind]} {l.parentId ? t('Enter {place}', { place: l.name }) : t('Back to {place}', { place: l.name })}
+                  <PlaceGlyph kind={l.kind} emoji={KIND_ICON[l.kind]} /> {l.parentId ? t('Enter {place}', { place: l.name }) : t('Back to {place}', { place: l.name })}
                 </button>
               ))}
             </div>
@@ -164,7 +165,7 @@ export function WorldPanel(props: PanelProps) {
             <div className="here-list">
               {state.shops.map((sh) => (
                 <button key={sh.id} className="shop-btn" onClick={() => onTrade(sh.id)} title={t('Buy and sell')}>
-                  {SHOP_ICONS[sh.kind]} {sh.name}{sh.merchant && <small>{sh.merchant}</small>}
+                  <ShopGlyph kind={sh.kind} emoji={SHOP_ICONS[sh.kind]} /> {sh.name}{sh.merchant && <small>{sh.merchant}</small>}
                 </button>
               ))}
             </div>
@@ -194,8 +195,8 @@ export function WorldPanel(props: PanelProps) {
       </div>
 
       <footer className="wp-actions">
-        <button disabled={!idle || state.shortRestsLeft <= 0} onClick={() => conn.send({ t: 'short_rest' })} title={t('One hour. Spend a hit die to heal and recover some mana.')}>{t('⛺ Short rest')} <span className="cost">{state.shortRestsLeft}</span></button>
-        <button disabled={!idle} onClick={() => conn.send({ t: 'long_rest' })} title={world.safe ? t('Eight hours. Restores everything.') : t('Eight hours. Restores everything, but camping in the wild can be interrupted.')}>{t('🌙 Long rest')}</button>
+        <button disabled={!idle || state.shortRestsLeft <= 0} onClick={() => conn.send({ t: 'short_rest' })} title={t('One hour. Spend a hit die to heal and recover some mana.')}><UiGlyph id="short_rest" emoji="⛺" /> {t('Short rest')} <span className="cost">{state.shortRestsLeft}</span></button>
+        <button disabled={!idle} onClick={() => conn.send({ t: 'long_rest' })} title={world.safe ? t('Eight hours. Restores everything.') : t('Eight hours. Restores everything, but camping in the wild can be interrupted.')}><UiGlyph id="long_rest" emoji="🌙" /> {t('Long rest')}</button>
       </footer>
     </aside>
   );

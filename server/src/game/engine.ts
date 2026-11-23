@@ -2,6 +2,7 @@
 // The engine is synchronous and deterministic for a given RNG; the AI Dungeon
 // Master only chooses monster intents and narrates what the engine resolved.
 
+import { parseActionTag } from '../../../shared/skillTag';
 import { targetHabit, type TargetHabit } from '../../../shared/style';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import { applyFeat, armorClass, buildSheet, castingAbility, checkSpec, classSpellList, isLightWeapon, isMonkWeapon, isProficient, maxManaOf, spellOptions, weaponAttack } from '../../../shared/build';
@@ -32,6 +33,7 @@ import {
   XP_THRESHOLDS,
   abilityMod,
   type AbilityDef,
+  type PendingCheck,
   type AbilityKey,
   type Character,
   type ChatMessage,
@@ -76,6 +78,9 @@ import { EXPOSED, HAMPERED, HELD, HELPLESS, HERO_CONDITIONS, INCAPACITATING, typ
 import { ENCOUNTERS, MAJOR_KINDS, SAFE_KINDS, type GroupSpec } from '../data/world';
 import { isLang, tagged, tr, type Lang } from '../../../shared/i18n';
 import { d20, roll, rollDie, rollMode, signed, type Rng, type RollMode } from './dice';
+import { addFlat, damageSpread, failChance, hitChance, percent, type CombatOdds, type DamageSpread, type Odds } from '../../../shared/odds';
+
+type OddsWhy = NonNullable<RollInfo['why']>;
 import { COVER_BONUS, buildBattleMap, cheb, chooseBiome, hasCover, tileBlocksSight, tileCost, tileWalkable, type Biome } from '../../../shared/battlemap';
 import { POWER, SIZES, SIZE_TILES, applyLookTokens, lookKey, distToFootprint, inFootprint, nearestFootprintTile, type MonsterLook, type Power } from '../../../shared/monsterLook';
 import { campaignShelf, viewer } from '../campaign/registry';
@@ -1331,7 +1336,7 @@ export class Game {
   // ----------------------------------------------------------------- combat
 
   /** Set up a battle map and roll initiative. Group counts are for a party of four. */
-  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string; surprise?: string; opener?: string }): Opening | null {
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string; surprise?: string; opener?: string; why?: string }): Opening | null {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
@@ -1350,6 +1355,8 @@ export class Game {
       for (let i = 0; i < count && chosen.length < 8; i++) { chosen.push(def); specs.push(g); }
     }
     if (!chosen.length) throw new GameError(this.t`An encounter needs at least one monster`);
+    // The battle log beside the map starts here, with any ambush roll.
+    const logFrom = s.logSeq + 1;
     s.travel = null;
     const place = this.place();
     const terrain = trueTerrain(this.world, this.world.party);
@@ -1361,7 +1368,11 @@ export class Game {
       for (const x of xs) for (const dy of [0, -1, 1, -2, 2, -3, 3, -4, 4]) out.push({ x, y: midY + dy });
       return out;
     };
-    const heroSpots = column([3, 2]);
+    // Heroes stand on a diagonal, never two in one column next to each other, so the miniatures in
+    // the 2.5D view (taller than a square) do not hide one another.
+    const spaced = [[3, 0], [2, -1], [4, 1], [2, 1], [4, -1], [3, -2], [3, 2], [2, -3], [4, 3]].map(([x, dy]) => ({ x, y: midY + dy }))
+      .filter((p) => p.y >= 1 && p.y < this.height - 1);
+    const heroSpots = [...spaced, ...column([3, 2]).filter((p) => !spaced.some((q) => q.x === p.x && q.y === p.y))];
     heroes.forEach((c, i) => { c.x = heroSpots[i].x; c.y = heroSpots[i].y; });
     // Companions stand behind the heroes, or beside them when the column is full.
     const allies = s.companions.filter((c) => !c.dead);
@@ -1403,8 +1414,10 @@ export class Game {
       const [entry] = order.splice(i, 1);
       order.unshift({ ...entry, ambush: true });
     }
-    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
+    s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, logFrom, roundFrom: [logFrom], ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
     s.phase = 'combat';
+    const waiting = this.readyWaitMs > 0 ? s.players.filter((p) => p.connected && heroes.some((c) => c.ownerId === p.id)).map((p) => p.id) : [];
+    if (waiting.length) s.combat.ready = { why: this.whyFight(opts.why, ambush?.side ?? null, ambush?.caughtIds.length ?? 0), waiting, until: Date.now() + this.readyWaitMs };
     this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.ambush ? `(${this.t`first, from hiding`})` : o.initiative}`).join(', ')}.`);
     this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
     this.nextTurn();
@@ -1413,6 +1426,29 @@ export class Game {
     if (ambush.noStrike) out.noStrike = ambush.noStrike;
     if (opener && this.current()?.id === opener.c.id) out.strike = this.openingStrike(opener.c, opener.m);
     return out;
+  }
+
+  /** The line on the "get ready" card: the Dungeon Master's reason, or one from how the fight began. */
+  private whyFight(asked: string | undefined, side: SurpriseInfo['side'] | null, caught: number): string {
+    const why = String(asked ?? '').trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (why) return why;
+    if (side === 'party') return caught ? this.t`Ambush! The enemies are upon you before you see them.` : this.t`Ambush! But you spot the enemies in time.`;
+    if (side === 'enemies') return caught ? this.t`You catch the enemies unawares.` : this.t`The enemies notice you before you can strike.`;
+    return this.t`The enemies attack. The fight begins!`;
+  }
+
+  /** A player is ready for the fight to begin. Once nobody is left, the monsters may move. */
+  pressReady(playerId: string): boolean {
+    const r = this.s.combat?.ready;
+    if (!r) return true;
+    r.waiting = r.waiting.filter((id) => id !== playerId);
+    if (!r.waiting.length) this.s.combat!.ready = null;
+    return !this.s.combat!.ready;
+  }
+
+  /** The time to get ready is over: the fight begins. */
+  endReady() {
+    if (this.s.combat?.ready) this.s.combat.ready = null;
   }
 
   /**
@@ -1670,7 +1706,7 @@ export class Game {
       if (!combat || s.phase !== 'combat') return;
       if (this.checkCombatOver()) return;
       combat.turnIndex++;
-      if (combat.turnIndex >= combat.order.length) { combat.turnIndex = 0; combat.round++; }
+      if (combat.turnIndex >= combat.order.length) { combat.turnIndex = 0; combat.round++; (combat.roundFrom ??= []).push(s.logSeq + 1); }
       const cur = combat.order[combat.turnIndex];
       combat.actionUsed = false;
       combat.bonusUsed = false;
@@ -2281,12 +2317,31 @@ export class Game {
       || (marked === 'hunters_mark' && this.feat(c, 'precise_hunter'));
     const dis = seen.dis || this.hampered(c) || (prone && dist > 5) || (!!ranged && (dist > ranged.normal || this.hostileAdjacentToChar(c)));
     const mode = brutal ? (dis ? 'disadvantage' : 'normal') : rollMode(adv, dis);
+    // Why the roll went as it did, for the roll card.
+    const why: OddsWhy = [];
+    if (guided) why.push({ code: 'guided' });
+    if (seen.adv) why.push({ code: 'unseen' });
+    if (studied) why.push({ code: 'studied' });
+    if (aimed || unseen) why.push({ code: 'aimed' });
+    if (reckless && !brutal) why.push({ code: 'reckless' });
+    if (this.mExposed(m)) why.push({ code: 'exposed' });
+    if (this.buffOn(c, 'attackAdv')) why.push({ code: 'buff_adv' });
+    if (prone && dist <= 5) why.push({ code: 'prone_near' });
+    if (c.conditions.includes('invisible')) why.push({ code: 'invisible' });
+    if (seen.dis) why.push({ code: 'cant_see' });
+    if (this.hampered(c)) why.push({ code: 'hampered' });
+    if (prone && dist > 5) why.push({ code: 'prone_far' });
+    if (ranged && dist > ranged.normal) why.push({ code: 'long_range' });
+    if (ranged && this.hostileAdjacentToChar(c)) why.push({ code: 'foe_adjacent' });
+    if (this.blessSides(c).length) why.push({ code: 'bless' });
+    if (this.mHas(m, 'slowed')) why.push({ code: 'slowed', n: 2 });
     if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
     if (studied) m.studiedBy = m.studiedBy!.filter((id) => id !== c.id);
     if (aimed) this.unprime(`${c.id}:aim`);
     const critAt = critFrom(c);
     const cover = ranged ? this.coverBonus(c, this.mpoint(m, c)) : 0;
     const ac = this.mAc(m) + cover;
+    if (cover) why.push({ code: 'cover', n: cover });
     let r = this.heroD20(c, mode);
     let total = r.value + bonus;
     let forced = false;
@@ -2313,7 +2368,7 @@ export class Game {
     const label = beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`an unarmed strike`;
     const head = (opts.reaction ? this.t`Opportunity attack! ` : '') + this.t`${c.name} attacks ${m.name} with ${label}: ${this.d20Text(r, mode)}${signed(bonus)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
     const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-      ({ actor: c.name, label: (opts.reaction ? `${this.t`Opportunity attack`}: ` : '') + (beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`Unarmed strike`), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
+      ({ actor: c.name, label: (opts.reaction ? `${this.t`Opportunity attack`}: ` : '') + (beast ? this.n(beast.name) : w ? this.n(w.name) : this.t`Unarmed strike`), die: r.value, rolls: r.rolls, mode, modifier: bonus, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage, ...(why.length ? { why } : {}) });
     const horde = () => {
       if (opts.reaction || opts.again || beast || !wp || !this.opted(c, 'prey_horde') || this.s.phase !== 'combat') return;
       const reach = ranged ? ranged.long : 5;
@@ -2710,6 +2765,17 @@ export class Game {
           if (guided) m.conditions = m.conditions.filter((x) => x !== 'guided');
           const cover = this.coverBonus(c, this.mpoint(m, c));
           const ac = this.mAc(m) + cover;
+          const why: OddsWhy = [];
+          if (guided) why.push({ code: 'guided' });
+          if (seen.adv) why.push({ code: 'unseen' });
+          if (sorcery || this.buffOn(c, 'attackAdv')) why.push({ code: 'buff_adv' });
+          if (this.mExposed(m)) why.push({ code: 'exposed' });
+          if (c.conditions.includes('invisible')) why.push({ code: 'invisible' });
+          if (seen.dis) why.push({ code: 'cant_see' });
+          if (this.hampered(c)) why.push({ code: 'hampered' });
+          if (range > 5 && this.hostileAdjacentToChar(c)) why.push({ code: 'foe_adjacent' });
+          if (cover) why.push({ code: 'cover', n: cover });
+          if (this.blessSides(c).length) why.push({ code: 'bless' });
           const toHit = bonus + this.blessDie(c);
           let r = this.heroD20(c, mode);
           const missed = () => r.value === 1 || (r.value !== 20 && r.value + toHit < ac);
@@ -2724,7 +2790,7 @@ export class Game {
           if (crit) this.tally?.(c.id, 'crits');
           const head = this.t`${c.name} casts ${this.n(ab.name)} at ${m.name}: ${this.d20Text(r, mode)}${signed(toHit)} = ${total} vs AC ${ac}.` + (cover ? ` ${this.t`${m.name} has half cover.`}` : '') + seen.note + luck;
           const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-            ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: toHit, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage });
+            ({ actor: c.name, label: this.n(ab.name), die: r.value, rolls: r.rolls, mode, modifier: toHit, total, target: { kind: 'AC', value: ac, name: m.name }, outcome, damage, ...(why.length ? { why } : {}) });
           if (missed()) {
             if (grazes) {
               const res = this.damageMonster(m, Math.floor(this.spellDmg(c, ab, dice!) / 2), type);
@@ -2867,10 +2933,14 @@ export class Game {
       }
       const save = this.n(ab.saveAbility.toUpperCase());
       let saveMod = mdef.saves[ab.saveAbility] ?? 0;
-      if (this.mHas(m, 'baned')) saveMod -= rollDie(4, this.rng);
+      const why: OddsWhy = [];
+      if (this.mHas(m, 'baned')) { saveMod -= rollDie(4, this.rng); why.push({ code: 'bane' }); }
+      if (mdef.flags?.magicResistance && isSpell) why.push({ code: 'magic_resistance' });
+      if (heightened) why.push({ code: 'heightened' });
       // Magic Resistance: advantage on saves against spells.
       const r = d20(this.rng, rollMode(!!mdef.flags?.magicResistance && isSpell, heightened)).value;
       const helpless = (ab.saveAbility === 'str' || ab.saveAbility === 'dex') && (this.mHas(m, 'stunned') || this.mHas(m, 'paralyzed'));
+      if (helpless) why.push({ code: 'helpless' });
       let resisted = false;
       const failed = helpless || r + saveMod < dc;
       if (failed && (m.legRes ?? mdef.flags?.legendaryResistance ?? 0) > 0) {
@@ -2881,7 +2951,7 @@ export class Game {
         ? this.t`${verb}: ${save} save ${r}${signed(saveMod)} = ${r + saveMod} vs DC ${dc}.`
         : this.t`${m.name} is caught in ${this.n(ab.name)}: ${save} save ${r}${signed(saveMod)} = ${r + saveMod} vs DC ${dc}.`;
       const info = (outcome: RollInfo['outcome'], damage?: RollInfo['damage']): RollInfo =>
-        ({ actor: m.name, label: this.t`${save} save against ${this.n(ab.name)}`, die: r, rolls: [r], mode: 'normal', modifier: saveMod, total: r + saveMod, target: { kind: 'DC', value: dc }, outcome, damage });
+        ({ actor: m.name, label: this.t`${save} save against ${this.n(ab.name)}`, die: r, rolls: [r], mode: 'normal', modifier: saveMod, total: r + saveMod, target: { kind: 'DC', value: dc }, outcome, damage, ...(why.length ? { why } : {}) });
       if (resisted) this.log('roll', this.t`${m.name} fails the save but shrugs it off with Legendary Resistance (${m.legRes} left).`);
       if (resisted || !failed) {
         if (full && (ab.half || grazes)) {
@@ -5686,7 +5756,60 @@ export class Game {
   // validate, clamp and apply, so the server stays the owner of the state.
 
   /** Ability check requested by the Dungeon Master. */
-  skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
+  /** A check that waits for its player to press Roll: set by the room, and the one waiting now. */
+  checkWaiter: ((check: PendingCheck) => Promise<void>) | null = null;
+  pendingCheck: PendingCheck | null = null;
+  checkWaitMs = 45000;
+  /** How long a new fight waits for its players to get ready before the first monster moves. 0 starts at once. */
+  readyWaitMs = 0;
+  private checkSeq = 0;
+
+  /** What a check will add to the d20, part by part, before anything is rolled. */
+  checkPreview(c: Character, ability: AbilityKey, skill: string): { parts: PendingCheck['parts']; modifier: number; mode: RollMode; label: string } {
+    const name = skill.trim().toLowerCase();
+    const proficient = c.skills.includes(name);
+    const parts: PendingCheck['parts'] = [{ label: this.n(ABILITY_NAMES[ability]), value: signed(abilityMod(c.abilities[ability])) }];
+    let modifier = abilityMod(c.abilities[ability]);
+    const prof = proficient ? c.profBonus * (c.expertise.includes(name) ? 2 : 1) : this.feat(c, 'jack_of_all_trades') ? Math.floor(c.profBonus / 2) : 0;
+    if (prof) { parts.push({ label: proficient && c.expertise.includes(name) ? this.n('Expertise') : proficient ? this.n('Proficiency') : this.n('Jack of All Trades'), value: signed(prof) }); modifier += prof; }
+    const guide = (c.buffs ?? []).find((b) => SPELL_BUFFS[b.id]?.check);
+    if (guide) parts.push({ label: this.n(ABILITIES[guide.id]?.name ?? 'Guidance'), value: `+${SPELL_BUFFS[guide.id].check}` });
+    if ((this.opted(c, 'order_thaumaturge') && ['arcana', 'religion'].includes(name)) || (this.opted(c, 'primal_magician') && ['arcana', 'nature'].includes(name))) {
+      const w = Math.max(1, this.mod(c, 'wis'));
+      parts.push({ label: this.n(ABILITY_NAMES.wis), value: signed(w) });
+      modifier += w;
+    }
+    const adv = (name === 'athletics' && this.feat(c, 'remarkable_athlete')) || (ability === 'str' && c.conditions.includes('raging'));
+    const mode = rollMode(adv, c.conditions.includes('poisoned'));
+    const skillName = name ? this.n(name) : '';
+    const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
+    return { parts, modifier, mode, label };
+  }
+
+  /**
+   * A check the Dungeon Master asks for. When the hero's player is at the table, the game waits
+   * for them to press Roll (or for the time to run out) before the die is cast: the pen-and-paper moment.
+   */
+  async requestCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
+    const c = this.char(characterId);
+    if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
+    const waiter = this.checkWaiter;
+    if (!waiter || !this.player(c.ownerId)?.connected || this.pendingCheck) return this.skillCheck(characterId, ability, skill, dc);
+    const preview = this.checkPreview(c, ability, skill);
+    const check: PendingCheck = { id: `check-${Date.now().toString(36)}-${++this.checkSeq}`, characterId, hero: c.name, label: preview.label, ability, skill: skill.trim().toLowerCase(), dc, mode: preview.mode, parts: preview.parts, modifier: preview.modifier, since: Date.now(), until: Date.now() + this.checkWaitMs };
+    this.pendingCheck = check;
+    try { await waiter(check); } finally { this.pendingCheck = null; }
+    return this.skillCheck(characterId, ability, skill, dc, check.id);
+  }
+
+  /** A player presses Roll: only someone who may play the hero. */
+  pressRoll(playerId: string, id: string) {
+    const p = this.pendingCheck;
+    if (!p || p.id !== id) throw new GameError(this.t`There is nothing to roll right now`);
+    if (!this.mayControl(playerId, this.char(p.characterId))) throw new GameError(this.t`That hero belongs to another player`);
+  }
+
+  skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number, checkId?: string) {
     const c = this.char(characterId);
     if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
     const name = skill.trim().toLowerCase();
@@ -5708,7 +5831,7 @@ export class Game {
     let success = total >= dc;
     const skillName = name ? this.n(name) : '';
     const label = name ? this.t`${skillName[0].toUpperCase() + skillName.slice(1)} check` : this.t`${this.n(ABILITY_NAMES[ability])} check`;
-    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure' };
+    const info: RollInfo = { actor: c.name, label, die: r, rolls: [r], mode, modifier: mod, total, target: { kind: 'DC', value: dc }, outcome: success ? 'success' : 'failure', ...(checkId ? { checkId } : {}) };
     this.log('roll', this.t`${c.name}: ${label}, ${r}${signed(mod)} = ${total} vs DC ${dc}. ${success ? this.t`Success.` : this.t`Failure.`}`, { roll: info });
     // Heroic Inspiration: the first failed check is rerolled once, and the new roll counts.
     if (!success && c.heroic) {
@@ -5741,7 +5864,10 @@ export class Game {
   /** Narration shown to the players as a scene card, headed by where it plays, when, and who is there. */
   addScene(scene: { title: string; mood: Mood; text: string; actions: string[] }, opts: { battle?: boolean } = {}) {
     this.spoilsOpen = false;
-    const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: scene.actions.map((a) => a.trim().slice(0, 80)).filter(Boolean).slice(0, 5), imageId: null };
+    // "[Persuasion] Convince Hendrick": the tag becomes the chip's skill icon and the hero's bonus.
+    const tagged = scene.actions.map((a) => parseActionTag(String(a))).map((a) => ({ text: a.text.slice(0, 80), skill: a.skill })).filter((a) => a.text).slice(0, 5);
+    const meta: SceneMeta = { title: scene.title.trim().slice(0, 80), mood: scene.mood, actions: tagged.map((a) => a.text), imageId: null };
+    if (tagged.some((a) => a.skill)) meta.actionSkills = tagged.map((a) => a.skill);
     if (this.s.world) Object.assign(meta, this.stage(), { time: timeOfDay(this.world.minutes) });
     let ask = this.pictureAsk;
     this.pictureAsk = null;
@@ -6373,6 +6499,171 @@ export class Game {
     return id ? { ...look, imageId: id } : look;
   }
 
+
+  // ----------------------------------------------------------------- odds before committing
+
+  /** The dice a hero's blessings add to an attack roll, as die sizes (Bless: 4). */
+  private blessSides(c: Character): number[] {
+    return this.buffsOf(c).flatMap((b) => { const m = b.roll ? /^1d(\d+)$/.exec(b.roll) : null; return m ? [Number(m[1])] : []; });
+  }
+
+  /** What a hit does once the monster's resistances have had their say. */
+  private oddsDamage(m: Monster, dice: string, type: string, reasons: Odds['reasons']): DamageSpread {
+    const def = MONSTERS[m.defId];
+    let scale = 1;
+    if (def.immune?.includes(type)) { scale = 0; reasons.push({ code: 'immune' }); }
+    else if (def.vulnerable?.includes(type)) { scale = 2; reasons.push({ code: 'vulnerable' }); }
+    else if (def.resist?.includes(type)) { scale = 0.5; reasons.push({ code: 'resists' }); }
+    return damageSpread(dice, type, scale);
+  }
+
+  /**
+   * The hero's weapon attack against a monster, as the attack itself would roll it right now:
+   * the same bonus, advantage, cover and armour class, without rolling or using anything up.
+   */
+  attackOdds(c: Character, m: Monster): Odds {
+    const reasons: Odds['reasons'] = [];
+    const formAtk = c.form ? weaponAttack(c, null) : null;
+    const w = c.form ? null : this.weaponOf(c);
+    const wp = w?.weapon;
+    const ranged = wp?.ranged;
+    const dist = this.mdist(m, c) * 5;
+    const lend = !ranged && !c.form && this.buffOn(c, 'shillelagh');
+    const atk = formAtk ?? weaponAttack({ ...c, form: null, abilities: lend ? { ...c.abilities, str: Math.max(c.abilities.str, c.abilities[castingAbility(c)]) } : c.abilities }, w);
+    const magicWeapon = c.form ? 0 : Math.max(0, ...(c.buffs ?? []).map((b) => SPELL_BUFFS[b.id]?.weapon?.[b.level] ?? 0));
+    const usesStr = !c.form && !ranged && atk.mod === this.mod(c, 'str');
+    const reckless = c.conditions.includes('reckless') && usesStr;
+    const bonus = atk.bonus + (c.conditions.includes('sacred weapon') && !c.form ? Math.max(1, this.mod(c, 'cha')) : 0) + magicWeapon;
+    const bless = this.blessSides(c);
+    if (bless.length) reasons.push({ code: 'bless' });
+    const marked = c.mark?.monsterId === m.id ? c.mark.spell : null;
+    const seesIt = this.heroSees(c, m), seesMe = this.monsterSees(m, c);
+    const prone = this.mHas(m, 'prone');
+    const adv: Odds['reasons'] = [];
+    if (m.conditions.includes('guided')) adv.push({ code: 'guided' });
+    if (!seesMe) adv.push({ code: 'unseen' });
+    if (m.studiedBy?.includes(c.id)) adv.push({ code: 'studied' });
+    if (this.primed(`${c.id}:aim`) || this.primed(`${c.id}:unseen`)) adv.push({ code: 'aimed' });
+    if (reckless) adv.push({ code: 'reckless' });
+    if (this.mExposed(m)) adv.push({ code: 'exposed' });
+    if (this.buffOn(c, 'attackAdv')) adv.push({ code: 'buff_adv' });
+    if (prone && dist <= 5) adv.push({ code: 'prone_near' });
+    if (c.conditions.includes('invisible')) adv.push({ code: 'invisible' });
+    if (marked === 'hunters_mark' && this.feat(c, 'precise_hunter')) adv.push({ code: 'hunted' });
+    const dis: Odds['reasons'] = [];
+    if (!seesIt) dis.push({ code: 'cant_see' });
+    if (this.hampered(c)) dis.push({ code: 'hampered' });
+    if (prone && dist > 5) dis.push({ code: 'prone_far' });
+    if (ranged && dist > ranged.normal) dis.push({ code: 'long_range' });
+    if (ranged && this.hostileAdjacentToChar(c)) dis.push({ code: 'foe_adjacent' });
+    const mode = rollMode(adv.length > 0, dis.length > 0);
+    reasons.push(...adv, ...dis);
+    const cover = ranged ? this.coverBonus(c, this.mpoint(m, c)) : 0;
+    if (cover) reasons.push({ code: 'cover', n: cover });
+    const slowed = this.mHas(m, 'slowed');
+    if (slowed) reasons.push({ code: 'slowed', n: 2 });
+    const ac = this.mAc(m) + cover;
+    const critAt = critFrom(c);
+    if (critAt < 20) reasons.push({ code: 'crit_range', n: critAt });
+    // Damage: the weapon's dice and modifier, a magic weapon, rage, Sneak Attack when it would apply, a mark.
+    const type = formAtk ? formAtk.type : wp?.damageType ?? 'bludgeoning';
+    let flat = magicWeapon + (c.conditions.includes('raging') && usesStr ? rageDamage(c) : 0);
+    if (!c.form && this.offWeaponOf(c) && atk.flat) flat -= atk.flat;
+    let dice = addFlat(atk.damage, flat);
+    const flanked = this.s.characters.some((a) => a.id !== c.id && this.conscious(a) && this.mdist(m, a) <= 1);
+    if (this.feat(c, 'sneak_attack') && wp && (wp.finesse || ranged) && (flanked || mode === 'advantage') && !this.s.combat?.once?.includes(`${c.id}:sneak`)) {
+      dice = `${dice}+${sneakDice(c)}d6`;
+      reasons.push({ code: 'sneak' });
+    }
+    if (marked === 'hunters_mark') { dice = `${dice}+${this.feat(c, 'foe_slayer') ? '1d10' : '1d6'}`; reasons.push({ code: 'mark' }); }
+    if (marked === 'hex') { dice = `${dice}+1d6`; reasons.push({ code: 'mark' }); }
+    const reach = ranged ? ranged.long : 5;
+    const blocked = dist > Math.max(5, reach) ? 'range' as const : !this.los(c, this.mpoint(m, c)) ? 'sight' as const : undefined;
+    return {
+      kind: 'attack', chance: percent(hitChance(bonus, ac, mode, { critAt, lucky: c.speciesId === 'halfling', dice: bless })), mode, bonus, ac,
+      damage: atk.dice || formAtk ? this.oddsDamage(m, dice, type, reasons) : damageSpread(String(Math.max(1, 1 + this.mod(c, 'str'))), type),
+      reasons, ...(blocked ? { blocked } : {}),
+    };
+  }
+
+  /** A spell or feature aimed at an enemy: its attack roll or the save it forces, at its lowest level. */
+  abilityOdds(c: Character, ab: AbilityDef, m: Monster): Odds | null {
+    if (ab.target !== 'enemy' || !['attack', 'save', 'weapon'].includes(ab.kind)) return null;
+    if (ab.kind === 'weapon') return this.attackOdds(c, m);
+    const isSpell = ab.spellLevel !== undefined;
+    const lvl = ab.spellLevel ?? 0;
+    const dice = this.spellDice(c, ab, lvl);
+    const type = this.typeFor(ab, m);
+    const reasons: Odds['reasons'] = [];
+    const dist = this.mdist(m, c) * 5;
+    const blocked = dist > Math.max(5, ab.range) ? 'range' as const : !this.los(c, this.mpoint(m, c)) ? 'sight' as const : undefined;
+    const flat = isSpell ? (this.feat(c, 'empowered_evocation') ? Math.max(0, this.mod(c, 'int')) : 0)
+      + (ab.spellLevel === 0 && this.opted(c, 'fury_spellcasting') && this.feat(c, 'elemental_fury') ? Math.max(0, this.mod(c, 'wis')) : 0)
+      + (ab.damageType && this.opted(c, `aff_${ab.damageType}`) ? Math.max(0, this.mod(c, 'cha')) : 0)
+      + (ab.id === 'eldritch_blast' && this.opted(c, 'inv_agonizing') ? Math.max(0, this.mod(c, 'cha')) : 0) : 0;
+    const damage = dice ? this.oddsDamage(m, addFlat(dice, flat), type, reasons) : undefined;
+    if (ab.kind === 'attack') {
+      const sorcery = isSpell && c.conditions.includes('innate sorcery');
+      const seesIt = this.heroSees(c, m), seesMe = this.monsterSees(m, c);
+      const adv: Odds['reasons'] = [];
+      if (m.conditions.includes('guided')) adv.push({ code: 'guided' });
+      if (!seesMe) adv.push({ code: 'unseen' });
+      if (sorcery || this.buffOn(c, 'attackAdv')) adv.push({ code: 'buff_adv' });
+      if (this.mExposed(m)) adv.push({ code: 'exposed' });
+      if (c.conditions.includes('invisible')) adv.push({ code: 'invisible' });
+      const dis: Odds['reasons'] = [];
+      if (!seesIt) dis.push({ code: 'cant_see' });
+      if (this.hampered(c)) dis.push({ code: 'hampered' });
+      if (ab.range > 5 && this.hostileAdjacentToChar(c)) dis.push({ code: 'foe_adjacent' });
+      const mode = rollMode(adv.length > 0, dis.length > 0);
+      const cover = this.coverBonus(c, this.mpoint(m, c));
+      if (cover) reasons.unshift({ code: 'cover', n: cover });
+      if (this.mHas(m, 'slowed')) reasons.unshift({ code: 'slowed', n: 2 });
+      const bless = this.blessSides(c);
+      if (bless.length) reasons.unshift({ code: 'bless' });
+      reasons.unshift(...adv, ...dis);
+      const bonus = this.castingMod(c) + c.profBonus;
+      const ac = this.mAc(m) + cover;
+      return { kind: 'attack', chance: percent(hitChance(bonus, ac, mode, { lucky: c.speciesId === 'halfling', dice: bless })), mode, bonus, ac, damage, reasons, ...(blocked ? { blocked } : {}) };
+    }
+    // A save: words of power ask none.
+    if (!ab.saveAbility) return { kind: 'save', chance: 100, mode: 'normal', damage, reasons, ...(blocked ? { blocked } : {}) };
+    const mdef = MONSTERS[m.defId];
+    const own = 8 + c.profBonus + (ab.dcAbility ? abilityMod(c.abilities[ab.dcAbility]) : this.castingMod(c)) + (isSpell && c.conditions.includes('innate sorcery') ? 1 : 0);
+    const saveMod = mdef.saves[ab.saveAbility] ?? 0;
+    const resists = !!mdef.flags?.magicResistance && isSpell;
+    const heightened = isSpell && this.primed(`${c.id}:heightened`);
+    if (resists) reasons.unshift({ code: 'magic_resistance' });
+    if (heightened) reasons.unshift({ code: 'heightened' });
+    const baned = this.mHas(m, 'baned');
+    if (baned) reasons.unshift({ code: 'bane' });
+    const helpless = (ab.saveAbility === 'str' || ab.saveAbility === 'dex') && (this.mHas(m, 'stunned') || this.mHas(m, 'paralyzed'));
+    if (helpless) reasons.unshift({ code: 'helpless' });
+    const mode = rollMode(resists, heightened);
+    const chance = helpless ? 100 : percent(failChance(saveMod, own, mode, baned ? [-4] : []));
+    return { kind: 'save', chance, mode, save: ab.saveAbility, dc: own, saveMod, half: !!ab.half, damage, reasons, ...(blocked ? { blocked } : {}) };
+  }
+
+  /** The odds for whoever may act now, if a hero: their weapon and each spell they can aim at an enemy. */
+  combatOdds(): CombatOdds | null {
+    const cur = this.current();
+    if (this.s.phase !== 'combat' || !cur || cur.kind !== 'pc') return null;
+    const c = this.s.characters.find((x) => x.id === cur.id);
+    if (!c || !this.conscious(c)) return null;
+    const foes = this.s.monsters.filter((m) => m.alive && !this.mHas(m, 'banished'));
+    const attack: Record<string, Odds> = {};
+    const abilities: Record<string, Record<string, Odds>> = {};
+    for (const m of foes) attack[m.id] = this.attackOdds(c, m);
+    for (const id of c.abilityIds) {
+      const ab = ABILITIES[id];
+      if (!ab || ab.target !== 'enemy' || !['attack', 'save', 'weapon'].includes(ab.kind)) continue;
+      const row: Record<string, Odds> = {};
+      for (const m of foes) { const o = this.abilityOdds(c, ab, m); if (o) row[m.id] = o; }
+      abilities[id] = row;
+    }
+    return { heroId: c.id, attack, abilities };
+  }
+
   publicState(dm: { busy: boolean; mode: 'claude' | 'scripted'; model: string | null; gathering?: boolean; unanswered?: { logId: number; playerId: string }[] }): GameState {
     const s = this.s;
     const w = s.world;
@@ -6415,6 +6706,8 @@ export class Game {
       trophies: trophyViews(this),
       unanswered: dm.unanswered ?? [],
       lastFight: s.lastFight ?? null,
+      odds: this.combatOdds(),
+      check: this.pendingCheck,
       testMode: s.testMode ? { since: s.testMode.since } : null,
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),

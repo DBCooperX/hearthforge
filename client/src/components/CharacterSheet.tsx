@@ -18,7 +18,7 @@ import { Rich, dice, featureText, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { Icon } from '../ui/icons';
 import { HeroTabs, TabBar, Window } from '../ui/Window';
-import { AbilityGlyph, FeatureGlyph, LineGlyph, SkillGlyph } from '../ui/Glyph';
+import { AbilityGlyph, FeatureGlyph, LineGlyph, SkillGlyph, UiGlyph } from '../ui/Glyph';
 
 const KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 type Side = 'features' | 'actions' | 'story';
@@ -95,7 +95,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
             <div className="fill" style={{ width: `${pct}%` }} />
             <span>{next ? t('{xp} / {next} XP to level {level}', { xp: c.xp, next, level: c.level + 1 }) : t('{xp} XP · highest level', { xp: c.xp })}</span>
           </div>
-          {mine && c.pending.length > 0 && onLevelUp && <button className="primary levelup-btn" onClick={() => onLevelUp(c)}>⬆ {t('Level-up choice waiting')}</button>}
+          {mine && c.pending.length > 0 && onLevelUp && <button className="primary levelup-btn" onClick={() => onLevelUp(c)}><UiGlyph id="level_up" emoji="⬆" /> {t('Level-up choice waiting')}</button>}
           <div className="cs-vitals">
             {vitals.map((v) => (
               <Hint key={v.key} title={v.label} text={v.hint}>
@@ -118,7 +118,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               const mod = abilityMod(c.abilities[k]);
               const prof = saves.includes(k);
               return (
-                <Hint key={k} title={t(ABILITY_NAMES[k])} text={<>{loc(ABILITY_HELP[k].text, lang)}<br /><em>{loc(ABILITY_HELP[k].uses, lang)}</em></>}>
+                <Hint key={k} title={t(ABILITY_NAMES[k])} text={<><Rich text={loc(ABILITY_HELP[k].text, lang)} /><br /><em><Rich text={loc(ABILITY_HELP[k].uses, lang)} /></em></>}>
                   <div className="plaque" tabIndex={0}>
                     <small>{t(k.toUpperCase())}</small>
                     <b>{signed(mod)}</b>
@@ -138,7 +138,7 @@ export function CharacterSheet({ state, character: c, onSelect, onClose, onLevel
               const bonus = prof ? c.profBonus * (expert ? 2 : 1) : 0;
               const parts = `${t(ABILITY_NAMES[ability])} ${signed(mod)}${bonus ? ` · ${t(expert ? 'Expertise' : 'Proficiency')} ${signed(bonus)}` : ''}`;
               return (
-                <Hint key={skill} title={<span className="cap"><SkillGlyph skill={skill} /> {t(skill)}</span>} text={<>{SKILL_HELP[skill] ? loc(SKILL_HELP[skill], lang) : ''}<br /><em>{parts}</em></>}>
+                <Hint key={skill} side="right" title={<span className="cap"><SkillGlyph skill={skill} /> {t(skill)}</span>} text={<>{SKILL_HELP[skill] ? <Rich text={loc(SKILL_HELP[skill], lang)} /> : ''}<br /><em>{parts}</em></>}>
                   <li className={prof ? 'prof' : ''} tabIndex={0}>
                     <i className={expert ? 'pip double' : prof ? 'pip on' : 'pip'} />
                     <span className="skill-glyph"><SkillGlyph skill={skill} /></span>

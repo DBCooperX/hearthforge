@@ -45,9 +45,15 @@ export function Settings({ onClose }: Props) {
                 onClick={() => { setPrefs({ edgeScroll: !prefs.edgeScroll }); sfx('tab'); }}>{prefs.edgeScroll ? t('On') : t('Off')}</button>
             </div>
             <div className="setting">
-              <span>{t('End turn reminder')} <Info text={t('On your turn in a fight, the End turn button glows and a short note appears when you have done nothing for this long, and soon after you have used up your action and movement. The turn never ends by itself.')} /></span>
+              <span>{t('End turn reminder')} <Info text={t('On your turn in a fight, the End turn button glows and a short note appears when you have done nothing for this long, and soon after you have used up your action and movement. Moving the mouse or pressing a key puts it away. The turn never ends by itself.')} /></span>
               <span className="pick">
                 {TURN_REMINDERS.map((s) => <button key={s} type="button" className={prefs.turnReminder === s ? 'on' : ''} aria-pressed={prefs.turnReminder === s} onClick={() => { setPrefs({ turnReminder: s }); sfx('tab'); }}>{s ? t('{n} s', { n: s }) : t('Off')}</button>)}
+              </span>
+            </div>
+            <div className="setting">
+              <span>{t('Battle ground')} <Info text={t('Painted: the battle map as one painted picture, with soft ground, water and inked trees. Pixel tiles: the older square tiles, which an art pack on the server can replace.')} /></span>
+              <span className="pick">
+                {(['painted', 'pixel'] as const).map((m) => <button key={m} type="button" className={prefs.battleGround === m ? 'on' : ''} aria-pressed={prefs.battleGround === m} onClick={() => { setPrefs({ battleGround: m }); sfx('tab'); }}>{t(m === 'painted' ? 'Painted' : 'Pixel tiles')}</button>)}
               </span>
             </div>
             <div className="setting">

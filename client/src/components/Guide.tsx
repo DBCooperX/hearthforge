@@ -1,5 +1,6 @@
 // Building blocks for explained choices, used by the character creator and by level-ups:
 // rules text with hover explanations, pick rows, option details and the live stat preview.
+import { createPortal } from 'react-dom';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { ABILITIES, ABILITY_NAMES, ITEMS, SKILLS } from '../../../shared/content';
 import { applyFeat, initiateNeeds, type Build, type Sheet } from '../../../shared/build';
@@ -42,11 +43,13 @@ function Tip({ term, children }: { term: Term; children: ReactNode }) {
   return (
     <span className="term" tabIndex={0} onMouseEnter={(e) => show(e.currentTarget)} onMouseLeave={() => setPos(null)} onFocus={(e) => show(e.currentTarget)} onBlur={() => setPos(null)}>
       {children}
-      {pos && (
+      {/* In the page itself, so a tooltip that holds this word (pinned with T) does not shift it. */}
+      {pos && createPortal(
         <span className={pos.below ? 'term-tip below' : 'term-tip'} role="tooltip" style={{ left: pos.x, top: pos.y }}>
           <b>{loc(term.name, lang)}</b>
           {loc(term.text, lang)}
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );

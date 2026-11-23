@@ -10,6 +10,7 @@ import type { StartOptions } from './start';
 import type { ShopView } from './trade';
 import type { DmStyle } from './style';
 import type { LightKindId, LightLevel, LightSource, Senses } from './light';
+import type { CombatOdds, OddsReason } from './odds';
 import type { FactionView, RumourView } from './reputation';
 import type { ZoneView } from './zone';
 import type { TrophyView } from './achievements';
@@ -522,6 +523,23 @@ export interface CombatState {
   reaction?: ReactionPrompt | null;
   /** Set when the fight began with one side caught unawares. */
   surprise?: SurpriseInfo | null;
+  /** The first log entry of this fight, and of each round (index 0 is round 1): the battle log beside the map. */
+  logFrom?: number;
+  roundFrom?: number[];
+  /**
+   * The moment before the first blow: why the fight starts, and the players the battle still waits
+   * for before any monster moves. Gone once everyone is ready or the time is up.
+   */
+  ready?: BattleReady | null;
+}
+
+export interface BattleReady {
+  /** One line in the table language: why the fight starts now. */
+  why: string;
+  /** Players who have not pressed "To battle" yet. */
+  waiting: string[];
+  /** Milliseconds since the epoch when the battle starts anyway. */
+  until: number;
 }
 
 /** The fight waits for one player: take the opportunity attack or let the enemy go. */
@@ -544,6 +562,8 @@ export interface SceneMeta {
   mood: Mood;
   /** Suggested next actions, shown as chips under the newest card. */
   actions: string[];
+  /** The skill each suggested action would likely test (same order), when the Dungeon Master tagged one: shown with the hero's bonus, never a DC. */
+  actionSkills?: (string | null)[];
   /** Id of the illustration painted for this scene, or null. Loaded from /pictures/<id>. */
   imageId: string | null;
   /** True while that illustration is being painted. */
@@ -570,6 +590,29 @@ export interface RollInfo {
   target: { kind: 'AC' | 'DC'; value: number; name?: string };
   outcome: 'hit' | 'miss' | 'crit' | 'success' | 'failure';
   damage?: { amount: number; type: string };
+  /** Set on a check the player rolled themselves, so the table can show the result big. */
+  checkId?: string;
+  /** What shaped the roll: advantage, cover, a blessing. Shown on the roll card, most of all on a miss. */
+  why?: { code: OddsReason; n?: number }[];
+}
+
+/** A check waiting for its roll: what it is, the DC, and every part of the modifier, shown before the die is cast. */
+export interface PendingCheck {
+  id: string;
+  characterId: string;
+  hero: string;
+  label: string;
+  ability: AbilityKey;
+  skill: string;
+  dc: number;
+  mode: 'normal' | 'advantage' | 'disadvantage';
+  /** The parts of the modifier: name and value ("+2") or die ("+1d4"). */
+  parts: { label: string; value: string }[];
+  /** The flat modifier, dice left out. */
+  modifier: number;
+  /** When the check was asked for, and when the game rolls by itself if nobody has. */
+  since: number;
+  until: number;
 }
 
 export interface LevelUpInfo {
@@ -844,6 +887,10 @@ export interface GameState {
   unanswered: { logId: number; playerId: string }[];
   /** How the last fight ended. Its `seq` grows with every fight. */
   lastFight: FightOutcome | null;
+  /** Hit chances and damage for the hero who may act now, before anything is committed. */
+  odds?: CombatOdds | null;
+  /** A check the Dungeon Master asked for, waiting for the hero's player to press Roll. */
+  check?: PendingCheck | null;
   /** Set while the owner has the table in test mode: the host gets a toolbox, everyone sees the badge. `since` is the time it was switched on. */
   testMode: { since: number } | null;
 }
@@ -916,6 +963,8 @@ export type ClientMessage =
   | { t: 'escape'; characterId: string }
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
+  | { t: 'roll_check'; id: string }
+  | { t: 'battle_ready' }
   | { t: 'trip'; go: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
   /** `qty` moves only part of a stack. */

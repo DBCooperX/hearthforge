@@ -1,8 +1,14 @@
 import { itemArtUrl } from '../game/itemArt';
+import { GOOD_REASONS } from '../../../shared/odds';
+import { reasonText } from './Odds';
+import { npcBustUrl } from '../game/faces';
+import { skillBonus } from '../../../shared/skillTag';
+import { SkillGlyph } from '../ui/Glyph';
+import { signed as plusMinus } from './Guide';
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CLASS_INFO, ITEMS } from '../../../shared/content';
 import { HEX_MILES, direction, formatHours, hexDistance } from '../../../shared/hex';
-import type { GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
+import type { CombatState, GameState, LogEntry, RollInfo, SceneMeta } from '../../../shared/types';
 import { monsterUrl, monsterVariant } from '../game/monsterArt';
 import { artOfCharacter, heroPortraitUrl, onPortraitLoaded, paintedPortraitUrl } from '../game/heroArt';
 import { usePrefs } from '../ui/prefs';
@@ -99,7 +105,8 @@ export function buildEntities(state: GameState, t: Translate): Entity[] {
 }
 
 interface Hover {
-  show: (e: Entity, el: HTMLElement) => void;
+  /** `extra` rides at the bottom of the card, such as the odds of an attack on a monster. */
+  show: (e: Entity, el: HTMLElement, extra?: ReactNode) => void;
   hide: () => void;
 }
 const HoverContext = createContext<{ entities: Entity[]; pattern: RegExp | null; hover: Hover }>({ entities: [], pattern: null, hover: { show: () => {}, hide: () => {} } });
@@ -110,7 +117,7 @@ export const useEntityHover = () => useContext(HoverContext);
 /** Provides entity highlighting and one shared hover card to everything inside it. */
 export function EntityProvider({ state, children }: { state: GameState; children: ReactNode }) {
   const t = useT();
-  const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean } | null>(null);
+  const [card, setCard] = useState<{ entity: Entity; x: number; y: number; below: boolean; extra?: ReactNode } | null>(null);
   const entities = useMemo(() => buildEntities(state, t), [state.memory, state.items, state.world?.locations, state.world?.party, state.characters, state.monsters, state.phase, state.players, state.language, t]);
   const pattern = useMemo(() => {
     const names = [...new Set(entities.map((e) => e.name))].filter((n) => n.length > 2).sort((a, b) => b.length - a.length);
@@ -118,10 +125,10 @@ export function EntityProvider({ state, children }: { state: GameState; children
     return new RegExp(`(?<![\\p{L}\\p{N}])(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}])`, 'gu');
   }, [entities]);
   const hover = useMemo<Hover>(() => ({
-    show: (entity, el) => {
+    show: (entity, el, extra) => {
       const r = el.getBoundingClientRect();
-      const below = r.top < 240;
-      setCard({ entity, x: Math.max(12, Math.min(window.innerWidth - 312, r.left + r.width / 2 - 150)), y: below ? r.bottom + 8 : r.top - 8, below });
+      const below = r.top < (extra ? 360 : 240);
+      setCard({ entity, x: Math.max(12, Math.min(window.innerWidth - 312, r.left + r.width / 2 - 150)), y: below ? r.bottom + 8 : r.top - 8, below, extra });
     },
     hide: () => setCard(null),
   }), []);
@@ -141,6 +148,7 @@ export function EntityProvider({ state, children }: { state: GameState; children
           </div>
           {card.entity.description && <p>{card.entity.description}</p>}
           {card.entity.facts.length > 0 && <ul>{card.entity.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>}
+          {card.extra}
         </div>
       )}
     </HoverContext.Provider>
@@ -221,6 +229,12 @@ function DiceRoll({ roll, animate }: { roll: RollInfo; animate: boolean }) {
           )}
           {rolling && <span className="muted">{t('rolling…')}</span>}
         </div>
+        {!rolling && (roll.why?.length || (roll.outcome === 'miss' && roll.die !== 1 && roll.target.kind === 'AC')) ? (
+          <ul className="odds-why dice-why">
+            {roll.outcome === 'miss' && roll.die !== 1 && roll.target.kind === 'AC' && roll.total < roll.target.value && <li className="bad">{t('Short by {n}', { n: roll.target.value - roll.total })}</li>}
+            {roll.why?.map((r, i) => <li key={i} className={GOOD_REASONS.has(r.code) ? 'good' : 'bad'}>{reasonText(r.code, r.n, t)}</li>)}
+          </ul>
+        ) : null}
       </div>
     </div>
   );
@@ -234,10 +248,11 @@ function usePortraitTick() {
   useEffect(() => onPortraitLoaded(() => tick((n) => n + 1)), []);
 }
 
-/** The framed face of a speaker in the story: the painted portrait, or an initial in a brass ring until there is one. */
-function Face({ name, image, portraitId, kind }: { name: string; image?: string; portraitId?: string | null; kind: 'npc' | 'hero' }) {
+/** The framed face of a speaker in the story: the painted portrait, or a drawn face until there is one. */
+function Face({ name, image, portraitId, kind, role, about }: { name: string; image?: string; portraitId?: string | null; kind: 'npc' | 'hero'; role?: string; about?: string }) {
   usePortraitTick();
-  const src = image ?? paintedPortraitUrl(portraitId, 144);
+  // Someone without a painted portrait (yet) gets a drawn face, never just a letter.
+  const src = image ?? paintedPortraitUrl(portraitId, 144) ?? (kind === 'npc' ? npcBustUrl(name, role, about) : undefined);
   return (
     <span className={`face ${kind}`} aria-hidden="true">
       {src ? <img className="hero-art" src={src} alt="" /> : <span className="face-initial">{[...name.trim()][0]?.toUpperCase() ?? '?'}</span>}
@@ -270,7 +285,7 @@ function Paragraph({ text }: { text: string }) {
   if (!who) return <p><RichText text={text} /></p>;
   return (
     <div className={`speech ${storyPortraits}`}>
-      <Face name={who.name} image={who.image} portraitId={who.portraitId} kind={who.kind === 'hero' ? 'hero' : 'npc'} />
+      <Face name={who.name} image={who.image} portraitId={who.portraitId} kind={who.kind === 'hero' ? 'hero' : 'npc'} role={who.subtitle} about={who.description} />
       <div className="speech-body"><b className="speech-name">{who.name}</b><p><RichText text={text} /></p></div>
     </div>
   );
@@ -432,6 +447,8 @@ interface FeedProps {
   compact?: boolean;
   /** The last log entry of the fight that just ended: the first scene after it opens with a divider. */
   afterFight?: number;
+  /** In a fight: the log beside the map starts at the fight, with a divider for each round. */
+  battle?: CombatState | null;
 }
 
 /** The story: scene cards, what players said, dice and system notes, plus the box to act in. */
@@ -456,7 +473,7 @@ function TripCard({ state, conn }: { state: GameState; conn: Connection }) {
   );
 }
 
-export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
+export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProps) {
   const t = useT();
   const { lang } = useLang();
   const [text, setText] = useState('');
@@ -476,6 +493,9 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
   const sceneAt = state.log.reduce((at, l, i) => (l.kind === 'dm' ? i : at), -1);
   const answered = state.log.slice(sceneAt + 1).some((l) => l.kind === 'chat' && l.speaker === me);
   const chips = exploring && !state.dmBusy && !state.travelling && sceneAt >= 0 && !answered ? state.log[sceneAt].scene?.actions ?? [] : [];
+  const chipSkills = sceneAt >= 0 ? state.log[sceneAt].scene?.actionSkills ?? [] : [];
+  // A tagged choice shows the skill and the bonus of the player's own hero (the first one still standing).
+  const myHero = state.characters.find((c) => c.ownerId === playerId && !c.dead && c.hp > 0) ?? state.characters.find((c) => c.ownerId === playerId);
   // The newest line of mine that the Dungeon Master has not started on can still be taken back.
   const takeBackId = state.unanswered.filter((u) => u.playerId === playerId).pop()?.logId;
   const writing = state.players.filter((p) => p.id !== playerId && conn.typing[p.id] === 'story').map((p) => p.name);
@@ -500,12 +520,26 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
     return c ? { name: c.name, image: heroPortraitUrl(artOfCharacter(c, state.items), 144) } : undefined;
   };
   const dividerAt = afterFight === undefined ? undefined : state.log.find((l) => l.id > afterFight && l.kind === 'dm')?.id;
+  // The battle log: only this fight, round by round. The story before it is one click away.
+  const [earlier, setEarlier] = useState(false);
+  const from = compact && battle?.logFrom !== undefined && !earlier ? battle.logFrom : undefined;
+  const shown = from === undefined ? state.log : state.log.filter((l) => l.id >= from);
+  const roundAt = new Map<number, number>();
+  if (compact && battle?.roundFrom) {
+    battle.roundFrom.forEach((id, i) => { const first = state.log.find((l) => l.id >= id); if (first && !roundAt.has(first.id)) roundAt.set(first.id, i + 1); });
+  }
 
   return (
     <section className={compact ? 'story compact' : 'story'}>
       <div className="feed">
-        {state.log.map((l) => (
+        {compact && battle?.logFrom !== undefined && (
+          <button type="button" className="link earlier-story" aria-expanded={earlier} onClick={() => setEarlier(!earlier)}>
+            {earlier ? t('Show only the battle') : t('Show the story before the battle')}
+          </button>
+        )}
+        {shown.map((l) => (
           <Fragment key={l.id}>
+            {roundAt.has(l.id) && <div className="round-divider" role="separator"><span>{t('Round {n}', { n: roundAt.get(l.id)! })}</span></div>}
             {l.id === dividerAt && <div className="after-battle" role="separator"><span>{t('After the battle')}</span></div>}
             <Entry entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} hero={l.kind === 'chat' ? heroOf(l.speaker) : undefined} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
           </Fragment>
@@ -519,7 +553,18 @@ export function StoryFeed({ state, conn, compact, afterFight }: FeedProps) {
       {state.trip && exploring && !state.travelling && <TripCard state={state} conn={conn} />}
       {chips.length > 0 && (
         <div className="chips">
-          {chips.map((a, i) => <button key={i} className="chip-action" data-pick={i + 1} onClick={() => say(a)}>{i < 9 && <kbd className="kbd">{i + 1}</kbd>}{a}</button>)}
+          {chips.map((a, i) => {
+            const skill = chipSkills[i] ?? null;
+            const bonus = skill && myHero ? skillBonus(myHero, skill) : null;
+            const tip = skill ? (bonus !== null && myHero ? t('{skill} check: {name} adds {bonus}. The Dungeon Master decides whether to roll, and how hard it is.', { skill: t(skill), name: myHero.name, bonus: plusMinus(bonus) }) : t('{skill} check', { skill: t(skill) })) : undefined;
+            return (
+              <button key={i} className={skill ? 'chip-action tagged' : 'chip-action'} data-pick={i + 1} title={tip} onClick={() => say(a)}>
+                {i < 9 && <kbd className="kbd">{i + 1}</kbd>}
+                {skill && <span className="chip-skill"><SkillGlyph skill={skill} /><span className="cap">{t(skill)}</span>{bonus !== null && <b>{plusMinus(bonus)}</b>}</span>}
+                {a}
+              </button>
+            );
+          })}
         </div>
       )}
       <form
