@@ -123,4 +123,30 @@ describe('the battle figure of a person who fights', () => {
     expect(g.npcOfMonster({ name: 'varo kessel' })?.id).toBe(varo.id);
     expect(g.npcOfMonster({ name: 'Goblin' })).toBeNull();
   });
+
+  it('keeps the portrait and memory when the party learns the name of someone saved without one', () => {
+    const g = newGame();
+    g.rememberNpc({ name: 'hagere Gestalt', appearance: 'A tall, gaunt man in a grey cloak.', note: 'Watches the door.' });
+    const fig = g.s.memory.npcs.find((n) => n.name === 'hagere Gestalt')!;
+    fig.portraitId = 'a'.repeat(18); fig.portraitKey = npcPortraitKey(fig);
+    const count = g.s.memory.npcs.length;
+    const r = g.rememberNpc({ name: 'Gerd Halm', formerly: 'hagere Gestalt', appearance: 'Someone else.' });
+    expect(r).toMatchObject({ id: fig.id, created: false, renamed_from: 'hagere Gestalt' });
+    expect(g.s.memory.npcs).toHaveLength(count);
+    expect(fig.name).toBe('Gerd Halm');
+    expect(fig.portraitId).toBe('a'.repeat(18));
+    expect(fig.portraitKey).toBe(npcPortraitKey(fig));
+    expect(fig.notes).toContain('Watches the door.');
+  });
+
+  it('catches the rename when the DM forgets to say so, but never takes a real name', () => {
+    const g = newGame();
+    g.rememberNpc({ name: 'the pale stranger', appearance: 'A pale man.' });
+    const stranger = g.s.memory.npcs.find((n) => n.name === 'the pale stranger')!;
+    const r = g.rememberNpc({ name: 'Orlin Vale', appearance: 'A pale man.' });
+    expect(r.id).toBe(stranger.id);
+    expect(stranger.name).toBe('Orlin Vale');
+    // A second newcomer is a new person: nobody nameless is left.
+    expect(g.rememberNpc({ name: 'Mara Quill' })).toMatchObject({ created: true });
+  });
 });
