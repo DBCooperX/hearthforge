@@ -109,6 +109,10 @@ export function LibraryPane() {
       {!lib.canMake && <p className="art-note">{t(LIBRARY_ERRORS.no_key)}</p>}
       {error && <p className="art-error" role="alert">{t(LIBRARY_ERRORS[error.code as keyof typeof LIBRARY_ERRORS] ?? LIBRARY_ERRORS.failed, { detail: error.detail || '?' })}</p>}
 
+      <StarterBar kind={kind} lib={lib} busy={busy === 'starter'} onMake={(kinds, usd) => {
+        void ask(t('Make {n} starter sounds for about {usd}? They are made in the background, effects first; you can keep playing meanwhile.', { n: kinds.reduce((n, k) => n + lib.starter[k].missing, 0), usd: dollars(usd) })).then((yes) => { if (yes) void run('starter', '/api/library/starter', { kinds }); });
+      }} />
+
       {lib.canMake && <MakeForm key={kind} kind={kind} usdPerMinute={lib.usdPerMinute[kind]} busy={busy === 'make'} onMake={(body) => run('make', '/api/library/make', { kind, ...body })} />}
 
       <div className="lib-tools">
@@ -135,6 +139,22 @@ export function LibraryPane() {
       ))}
       {!mine.length && <p className="muted">{t('Nothing here yet.')}</p>}
       {mine.length > 0 && !shown.length && <p className="muted">{t('No sound fits these words.')}</p>}
+    </div>
+  );
+}
+
+/** How much of the starter set is made, and a button for the rest: this kind, or every kind at once. */
+function StarterBar({ kind, lib, busy, onMake }: { kind: LibraryKind; lib: LibraryView; busy: boolean; onMake: (kinds: LibraryKind[], usd: number) => void }) {
+  const t = useT();
+  const p = lib.starter[kind];
+  const allMissing = LIBRARY_KINDS.reduce((n, k) => n + lib.starter[k].missing, 0);
+  const allUsd = LIBRARY_KINDS.reduce((n, k) => n + lib.starter[k].missingUsd, 0);
+  return (
+    <div className="lib-starter">
+      <span><b>{t('Starter set')}</b> <span className="muted small">{t('{made} of {total} made', { made: p.made, total: p.total })}</span></span>
+      {p.missing > 0 && lib.canMake && <button type="button" className="primary" disabled={busy} onClick={() => onMake([kind], p.missingUsd)}>{t('Make the {n} missing for about {usd}', { n: p.missing, usd: dollars(p.missingUsd) })}</button>}
+      {allMissing > p.missing && lib.canMake && <button type="button" disabled={busy} onClick={() => onMake([...LIBRARY_KINDS], allUsd)}>{t('Everything missing: {n} for about {usd}', { n: allMissing, usd: dollars(allUsd) })}</button>}
+      {p.missing === 0 && <span className="muted small">{t('All made.')}</span>}
     </div>
   );
 }

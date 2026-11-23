@@ -7,9 +7,10 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, rmSy
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { Zip, ZipPassThrough } from 'fflate';
+import { STARTER_SET, starterCost, type StarterSound } from '../../shared/starterLibrary';
 import {
-  LENGTH_LIMITS, SOUND_USD_PER_MINUTE, isLibraryKind, isScene, isSfxEvent, soundCost, tagsFrom,
-  type LibraryEntry, type LibraryErrorCode, type LibraryKind, type LibraryOrigin, type LibraryView,
+  LIBRARY_KINDS, LENGTH_LIMITS, SOUND_USD_PER_MINUTE, isLibraryKind, isScene, isSfxEvent, soundCost, tagsFrom,
+  type LibraryEntry, type LibraryErrorCode, type StarterProgress, type LibraryKind, type LibraryOrigin, type LibraryView,
 } from '../../shared/library';
 import { type MusicManifest, type MusicTrack } from '../../shared/music';
 import type { SfxEvent, SfxManifest } from '../../shared/sfx';
@@ -20,7 +21,11 @@ export class LibraryError extends Error {
 
 /** One entry as saved: the file's name instead of its address. */
 interface Stored extends Omit<LibraryEntry, 'src' | 'error'> { file?: string; error?: string }
-interface Saved { entries: Stored[] }
+interface Saved {
+  entries: Stored[];
+  /** Starter lines the owner deleted, so "make what is missing" leaves them out. */
+  droppedStarter?: string[];
+}
 
 /** Who pays for a take: the account that pressed the button, or the table that asked. */
 export interface Payer { account?: string; table?: string }
@@ -119,7 +124,8 @@ export class SoundLibrary {
     try {
       const raw = JSON.parse(readFileSync(join(this.dir, 'library.json'), 'utf8')) as Partial<Saved>;
       const entries = Array.isArray(raw.entries) ? raw.entries.filter((e) => e && typeof e.id === 'string' && isLibraryKind(e.kind)) : [];
-      return { entries };
+      const droppedStarter = Array.isArray(raw.droppedStarter) ? raw.droppedStarter.filter((k) => typeof k === 'string') : [];
+      return { entries, droppedStarter };
     } catch {
       return { entries: [] };
     }
@@ -140,7 +146,59 @@ export class SoundLibrary {
   entries(): LibraryEntry[] { return this.s.entries.map((e) => this.view(e)); }
 
   library(): LibraryView {
-    return { canMake: !!this.key(), entries: this.entries().sort((a, b) => b.createdAt - a.createdAt), usdPerMinute: { ...SOUND_USD_PER_MINUTE } };
+    return { canMake: !!this.key(), entries: this.entries().sort((a, b) => b.createdAt - a.createdAt), usdPerMinute: { ...SOUND_USD_PER_MINUTE }, starter: this.starterProgress() };
+  }
+
+  /** Starter lines that have no sound yet (or only a failed one), leaving out the ones the owner deleted. */
+  private starterMissing(kinds: readonly LibraryKind[]): StarterSound[] {
+    const have = new Set(this.s.entries.filter((e) => e.starter && e.status !== 'failed').map((e) => e.starter));
+    const dropped = new Set(this.s.droppedStarter ?? []);
+    return STARTER_SET.filter((x) => kinds.includes(x.kind) && !have.has(x.key) && !dropped.has(x.key));
+  }
+
+  starterProgress(): Record<LibraryKind, StarterProgress> {
+    const out = {} as Record<LibraryKind, StarterProgress>;
+    for (const kind of LIBRARY_KINDS) {
+      const all = STARTER_SET.filter((x) => x.kind === kind);
+      const missing = this.starterMissing([kind]);
+      const made = new Set(this.s.entries.filter((e) => e.kind === kind && e.starter && e.status !== 'failed').map((e) => e.starter)).size;
+      out[kind] = { total: all.length, made, missing: missing.length, missingUsd: round(starterCost(missing, SOUND_USD_PER_MINUTE)) };
+    }
+    return out;
+  }
+
+  /**
+   * Make every missing starter sound of these kinds. A line whose earlier try failed gets a new try in its old
+   * entry. Returns how many were put in the queue.
+   */
+  makeStarter(kinds: unknown, payer: Payer = {}): number {
+    if (!this.key()) throw new LibraryError('no_key');
+    const wanted = (Array.isArray(kinds) ? kinds : [kinds]).filter(isLibraryKind);
+    if (!wanted.length) throw new LibraryError('bad_request');
+    const missing = this.starterMissing(wanted);
+    for (const x of missing) {
+      const failed = this.s.entries.find((e) => e.starter === x.key);
+      if (failed) {
+        failed.status = 'making';
+        delete failed.error;
+        this.queue.push({ id: failed.id, payer });
+        continue;
+      }
+      const entry: Stored = {
+        id: `${x.kind}-${randomBytes(5).toString('hex')}`, kind: x.kind, title: x.title, description: x.description, tags: [...x.tags],
+        seconds: x.seconds, loop: x.kind === 'ambient', ...(x.scene ? { scene: x.scene } : {}), ...(x.event ? { event: x.event } : {}),
+        status: 'making', bytes: 0, usd: 0, by: 'starter', createdAt: this.now(), starter: x.key,
+      };
+      this.s.entries.push(entry);
+      this.queue.push({ id: entry.id, payer });
+    }
+    // Short sounds first, so effects are heard within minutes while the music is still being composed.
+    const order: Record<LibraryKind, number> = { sfx: 0, ambient: 1, music: 2 };
+    const kindOf = (id: string) => this.s.entries.find((e) => e.id === id)?.kind ?? 'music';
+    this.queue.sort((a, b) => order[kindOf(a.id)] - order[kindOf(b.id)]);
+    this.save();
+    this.pump();
+    return missing.length;
   }
 
   private find(id: unknown): Stored {
@@ -206,6 +264,7 @@ export class SoundLibrary {
   remove(id: unknown) {
     const e = this.find(id);
     this.s.entries = this.s.entries.filter((x) => x !== e);
+    if (e.starter && !this.s.entries.some((x) => x.starter === e.starter)) (this.s.droppedStarter ??= []).push(e.starter);
     this.queue = this.queue.filter((q) => q.id !== e.id);
     this.dropFile(e.file);
     this.save();

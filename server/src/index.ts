@@ -665,6 +665,10 @@ async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       library.make(body, 'innkeeper', payer);
       return json(200, library.library());
     }
+    if (url.pathname === '/api/library/starter') {
+      library.makeStarter(body.kinds, payer);
+      return json(200, library.library());
+    }
     if (url.pathname === '/api/library/action') {
       if (body.do === 'set') library.set(body.id, body);
       else if (body.do === 'remove') library.remove(body.id);

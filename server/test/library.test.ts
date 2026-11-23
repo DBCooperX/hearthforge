@@ -228,3 +228,65 @@ describe('sound costs in the credits', () => {
     expect(existsSync(dir)).toBe(true);
   });
 });
+
+describe('the starter set', () => {
+  it('has unique keys, lengths the providers accept and a sound for every game moment and scene', async () => {
+    const { STARTER_SET } = await import('../../shared/starterLibrary');
+    const { LENGTH_LIMITS } = await import('../../shared/library');
+    const { SFX_EVENTS } = await import('../../shared/sfx');
+    const { MUSIC_CONTEXTS } = await import('../../shared/music');
+    expect(new Set(STARTER_SET.map((x) => x.key)).size).toBe(STARTER_SET.length);
+    for (const x of STARTER_SET) {
+      expect(x.seconds).toBeGreaterThanOrEqual(LENGTH_LIMITS[x.kind].min);
+      expect(x.seconds).toBeLessThanOrEqual(LENGTH_LIMITS[x.kind].max);
+      expect(x.key.startsWith(`${x.kind}/`)).toBe(true);
+      expect(x.description.length).toBeGreaterThan(10);
+    }
+    for (const ev of SFX_EVENTS) expect(STARTER_SET.some((x) => x.event === ev), ev).toBe(true);
+    for (const c of MUSIC_CONTEXTS) expect(STARTER_SET.some((x) => x.kind === 'music' && x.scene === c), c).toBe(true);
+    for (const c of ['tavern', 'town', 'overworld', 'dungeon']) expect(STARTER_SET.some((x) => x.kind === 'ambient' && x.scene === c), c).toBe(true);
+  });
+
+  it('costs about fifteen dollars at the list prices', async () => {
+    const { STARTER_SET, starterCost } = await import('../../shared/starterLibrary');
+    const { SOUND_USD_PER_MINUTE } = await import('../../shared/library');
+    const usd = starterCost(STARTER_SET, SOUND_USD_PER_MINUTE);
+    expect(usd).toBeGreaterThan(10);
+    expect(usd).toBeLessThan(20);
+  });
+
+  it('makes only what is missing, effects first, and never a line the owner deleted', async () => {
+    const { lib, eleven } = make();
+    const before = lib.library().starter;
+    expect(before.sfx.made).toBe(0);
+    expect(before.sfx.missing).toBe(before.sfx.total);
+    expect(lib.makeStarter(['sfx', 'music'], { account: 'acc-1' })).toBe(before.sfx.total + before.music.total);
+    await lib.whenIdle();
+    const firstMusic = eleven.calls.findIndex((c) => c.url.includes('/v1/music'));
+    expect(eleven.calls.slice(0, firstMusic).every((c) => c.url.includes('sound-generation'))).toBe(true);
+    expect(firstMusic).toBeGreaterThanOrEqual(before.sfx.total - 2);
+    const after = lib.library().starter;
+    expect(after.sfx).toMatchObject({ made: before.sfx.total, missing: 0, missingUsd: 0 });
+    expect(after.ambient.made).toBe(0);
+    expect(lib.makeStarter('sfx')).toBe(0);
+    const jig = lib.entries().find((e) => e.starter === 'music/tavern-jig')!;
+    expect(jig).toMatchObject({ by: 'starter', scene: 'tavern', status: 'ready' });
+    lib.remove(jig.id);
+    expect(lib.library().starter.music.missing).toBe(0);
+    expect(lib.makeStarter('music')).toBe(0);
+  });
+
+  it('tries a failed starter sound again in its old entry', async () => {
+    let fail = true;
+    const { lib } = make(fresh(), (url) => (fail && url.includes('/v1/music') ? new Response('{"detail":"Music needs a paid plan"}', { status: 403 }) : undefined));
+    lib.makeStarter('music');
+    await lib.whenIdle();
+    expect(lib.library().starter.music.made).toBe(0);
+    const count = lib.entries().length;
+    fail = false;
+    lib.makeStarter('music');
+    await lib.whenIdle();
+    expect(lib.entries().length).toBe(count);
+    expect(lib.library().starter.music.missing).toBe(0);
+  });
+});
