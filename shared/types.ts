@@ -906,6 +906,19 @@ export interface GameState {
   check?: PendingCheck | null;
   /** Set while the owner has the table in test mode: the host gets a toolbox, everyone sees the badge. `since` is the time it was switched on. */
   testMode: { since: number } | null;
+  /** What the Dungeon Master chose to play from the sound library, if anything. */
+  soundtrack?: Soundtrack | null;
+}
+
+/** A sound from the server's library the Dungeon Master put on. Music and loops hold while the game stays in `context`. */
+export interface SoundPick { id: string; title: string; src: string; context: string; /** The place it was put on at; it stops when the party leaves. */ place?: string | null }
+export interface Soundtrack {
+  music?: SoundPick | null;
+  ambient?: SoundPick | null;
+  /** A one-off effect; `n` grows with each, so every browser plays it once. */
+  effect?: { src: string; n: number } | null;
+  /** Sounds the Dungeon Master ordered, which take over as soon as they are made (library ids). */
+  waiting?: { music?: { id: string; context: string; place?: string | null }; ambient?: { id: string; context: string; place?: string | null } };
 }
 
 export type InvLoc = { type: 'slot'; slot: SlotId } | { type: 'bag'; index: number };

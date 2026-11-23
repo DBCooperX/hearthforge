@@ -25,6 +25,7 @@ import { readCampaign } from '../campaign/digest';
 import type { Book } from '../campaign/read';
 import type { CampaignDigest } from '../campaign/library';
 import { askPicture, pictureState, placePictureHint } from '../game/pictures';
+import { findSound, orderSound, playSound, soundState } from '../game/sounds';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type Tool = Anthropic.Beta.BetaTool;
@@ -282,6 +283,13 @@ const STORY_TOOLS: Tool[] = [
     picture: str('The picture in one to three sentences of English: who does what, where, in what light. One clear moment, as a painter would frame it. No text or letters in the picture.'),
     who: str('The heroes and people in the picture by name, comma separated, so the server draws them as they look. Empty string for the whole party.'),
   }),
+  // Loose, like every tool added since the grammar limit: plain strings that the server checks.
+  looseTool('sound', 'The sound library. do "find": look for sounds by words; returns up to five with id, title and what they sound like. do "play": put one on for everyone at the table (music and ambient hold until the party moves on to another kind of scene; an effect plays once). do "order": have a new one made when nothing fits a moment that deserves its own; it costs real money, so only for a scene that will last or come back. Music takes about a minute and takes over by itself; the closest match named in id plays meanwhile. A new effect is only kept for next time.', {
+    do: str('"find", "play" or "order".'),
+    kind: str('"music", "ambient" (a loop under the music: a crowd, rain, a cave) or "effect" (a short sound, played once). Not needed for play.'),
+    words: str('find: a few English words, for example "misty harbour night" or "heavy door creak". order: what it should sound like, in English, for example "slow fiddle and low strings, misty harbour at night, a little eerie".'),
+    id: str('play: the id from find. order: the id of the closest sound to play meanwhile, or an empty string.'),
+  }),
   CAMPAIGN_TOOL,
   SCENE_TOOL,
 ];
@@ -516,6 +524,13 @@ export class ClaudeDM implements DungeonMaster {
             return campaignTool(game, i);
           case 'illustrate':
             return askPicture(game, i);
+          case 'sound': {
+            const what = String(i.do ?? '').trim().toLowerCase();
+            if (what === 'find') return findSound(game, { kind: i.kind, words: i.words });
+            if (what === 'play') return playSound(game, { id: i.id });
+            if (what === 'order') return orderSound(game, { kind: i.kind, description: i.words, meanwhile: i.id });
+            throw new Error('do must be "find", "play" or "order".');
+          }
           case 'secret':
             return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:
@@ -550,7 +565,8 @@ export class ClaudeDM implements DungeonMaster {
   /** The state of play right now, without what describeTable already says. */
   private situation(game: Game): string {
     const pictures = game.s.phase === 'combat' ? null : pictureState(game);
-    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : `${describeWorld(game, { live: true })}${pictures ? `\n${pictures}` : ''}`;
+    const sound = game.s.phase === 'combat' ? null : soundState(game);
+    const state = game.s.phase === 'combat' ? describeCombat(game, { live: true }) : `${describeWorld(game, { live: true })}${pictures ? `\n${pictures}` : ''}${sound ? `\n${sound}` : ''}`;
     return game.s.testMode ? `TEST MODE: the table's host is playtesting and may set levels, hit points, items, gold, the clock and the place directly. Take the state below as the truth, and do not comment on sudden changes.\n${state}` : state;
   }
 

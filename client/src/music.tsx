@@ -1,7 +1,8 @@
 // Background music. One player for the whole page: it follows the game's music context,
 // crossfades between tracks, and remembers each player's mute and volume in the browser.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { MUSIC_FALLBACK, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
+import type { SoundPick, Soundtrack } from '../../shared/types';
+import { MUSIC_CONTEXTS, MUSIC_FALLBACK, type MusicContext, type MusicManifest, type MusicTrack } from '../../shared/music';
 import { useT } from './i18n';
 import { sfx } from './sfx';
 import { narrator, useNarratorState } from './narrator';
@@ -59,6 +60,8 @@ export class MusicPlayer {
   private listeners = new Set<() => void>();
   private snap: MusicSnapshot;
   private started = false;
+  /** What the Dungeon Master put on, for the kind of scene it was put on in. It plays instead of the server's choice. */
+  private picks: { music: MusicTrack | null; ambient: MusicTrack | null } = { music: null, ambient: null };
 
   constructor() { this.snap = this.snapshot(); }
 
@@ -130,6 +133,18 @@ export class MusicPlayer {
     if (this.started) void this.refresh();
   }
 
+  /** Follow the Dungeon Master's picks. A pick only counts in the kind of scene it was made for. */
+  setPicks(st: Soundtrack | null | undefined) {
+    const track = (p: SoundPick | null | undefined, layer: 'music' | 'ambient'): MusicTrack | null =>
+      p && p.src && isMusicContext(p.context) ? { id: p.id, context: p.context, layer, title: p.title, artist: '', license: '', src: p.src } : null;
+    const next = { music: track(st?.music, 'music'), ambient: track(st?.ambient, 'ambient') };
+    if (next.music?.id === this.picks.music?.id && next.music?.context === this.picks.music?.context
+      && next.ambient?.id === this.picks.ambient?.id && next.ambient?.context === this.picks.ambient?.context) return;
+    this.picks = next;
+    this.sync();
+    this.emit();
+  }
+
   /** While the narrator reads, music and ambient sound step back so the voice is easy to follow. */
   private ducked = false;
   private musicLevel(s: Settings) { return (s.muted ? 0 : s.volume) * masterLevel() * (this.ducked ? DUCK : 1); }
@@ -176,6 +191,7 @@ export class MusicPlayer {
   private ambientTracks() { return this.manifest.tracks.filter((t) => t.layer === 'ambient'); }
 
   private candidates(context: MusicContext): MusicTrack[] {
+    if (this.picks.music?.context === context) return [this.picks.music];
     for (const c of [context, ...MUSIC_FALLBACK[context]]) {
       const found = this.musicTracks().filter((t) => t.context === c);
       if (found.length) return found;
@@ -205,7 +221,8 @@ export class MusicPlayer {
     const off = this.settings.ambientMuted || this.settings.ambient <= 0;
     const fight = this.context === 'combat' || this.context === 'boss';
     if (fight && !off) return; // the scene's loop keeps running under the fight
-    const options = off ? [] : this.ambientTracks().filter((t) => t.context === this.context);
+    const picked = this.picks.ambient?.context === this.context ? this.picks.ambient : null;
+    const options = off ? [] : picked ? [picked] : this.ambientTracks().filter((t) => t.context === this.context);
     const current = this.ambientVoice;
     if (current && options.some((t) => t.id === current.track.id)) return;
     if (current) this.fadeAmbient(current);
@@ -304,12 +321,15 @@ export class MusicPlayer {
   }
 }
 
+const isMusicContext = (x: string): x is MusicContext => (MUSIC_CONTEXTS as readonly string[]).includes(x);
+
 export const music = new MusicPlayer();
 
 /** Keep the music in step with the game. Call once, near the top of the app. */
-export function useMusic(context: MusicContext) {
+export function useMusic(context: MusicContext, soundtrack?: Soundtrack | null) {
   useEffect(() => { music.start(); }, []);
   useEffect(() => { music.setContext(context); }, [context]);
+  useEffect(() => { music.setPicks(soundtrack); }, [soundtrack]);
 }
 
 const credit = (t: MusicTrack) => `${t.title}${t.artist ? ` · ${t.artist}` : ''}${t.license ? ` · ${t.license}` : ''}`;

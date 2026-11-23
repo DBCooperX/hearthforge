@@ -35,6 +35,8 @@ export interface LibraryHooks {
   onCost?: (usd: number, entry: LibraryEntry, payer: Payer) => void;
   /** Something players hear changed: a sound became ready, was switched off or removed. */
   onChange?: () => void;
+  /** A take is done, made or failed. The entry as it is now. */
+  onDone?: (entry: LibraryEntry) => void;
 }
 
 export interface MakeInput {
@@ -226,6 +228,7 @@ export class SoundLibrary {
       title: clean(input.title, 80) || description.slice(0, 60),
       ...(scene ? { scene } : {}), ...(event ? { event } : {}),
       status: 'making', bytes: 0, usd: 0, by, createdAt: this.now(),
+      ...(by === 'dm' && payer.table ? { table: payer.table } : {}),
     };
     this.s.entries.push(entry);
     this.save();
@@ -315,6 +318,7 @@ export class SoundLibrary {
       this.save();
       console.log(`[library] Made ${e.kind} "${e.title}" (${e.seconds} s, $${usd.toFixed(3)}).`);
       this.hooks.onChange?.();
+      this.hooks.onDone?.(this.view(e));
     } catch (err) {
       const le = err instanceof LibraryError ? err : new LibraryError('provider_failed', err instanceof Error ? err.message : String(err));
       if (!this.s.entries.includes(e)) return;
@@ -324,8 +328,24 @@ export class SoundLibrary {
       this.save();
       console.warn(`[library] Could not make ${e.kind} "${e.title}": ${e.error}`);
       this.hooks.onChange?.();
+      this.hooks.onDone?.(this.view(e));
     }
   }
+
+  /** The entry with this id, or null. */
+  get(id: unknown): LibraryEntry | null {
+    const e = this.s.entries.find((x) => x.id === id);
+    return e ? this.view(e) : null;
+  }
+
+  /** Sounds the Dungeon Master ordered at this table: how many since `since`, and how many are still being made. */
+  ordersAt(table: string, since: number): { count: number; making: number } {
+    const mine = this.s.entries.filter((e) => e.by === 'dm' && e.table === table);
+    return { count: mine.filter((e) => e.createdAt >= since).length, making: mine.filter((e) => e.status === 'making').length };
+  }
+
+  /** Whether new sounds can be made at all: an ElevenLabs key is set. */
+  canMake() { return !!this.key(); }
 
   /** The file behind /library/<name>, or null. */
   file(name: string): string | null {

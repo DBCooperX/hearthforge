@@ -114,6 +114,19 @@ export class SfxPlayer {
     });
   }
 
+  /** A sound the Dungeon Master put on, from the library: played once, as it is. */
+  playSrc(src: string) {
+    const ctx = this.ctx;
+    if (!src || !ctx || !this.master || ctx.state !== 'running' || !this.manifest.enabled || this.level(this.settings) <= 0) return;
+    void this.buffer(src).then((buf) => {
+      if (!buf) return;
+      const node = ctx.createBufferSource();
+      node.buffer = buf;
+      node.connect(this.master!);
+      node.start();
+    });
+  }
+
   private async buffer(src: string): Promise<AudioBuffer | null> {
     if (this.buffers.has(src)) return this.buffers.get(src)!;
     this.buffers.set(src, null);
@@ -130,13 +143,15 @@ export const sfx = new SfxPlayer();
 
 interface Seen {
   room: string; phase: string; gold: number; logId: number;
+  /** How many effects the Dungeon Master has put on at this table. */
+  effect: number;
   heroes: Map<string, { hp: number; maxHp: number; x: number; y: number; dead: boolean }>;
   monsters: Map<string, { alive: boolean; x: number; y: number }>;
 }
 
 function take(state: GameState): Seen {
   return {
-    room: state.room, phase: state.phase, gold: state.gold, logId: state.log.length ? state.log[state.log.length - 1].id : 0,
+    room: state.room, phase: state.phase, gold: state.gold, effect: state.soundtrack?.effect?.n ?? 0, logId: state.log.length ? state.log[state.log.length - 1].id : 0,
     heroes: new Map(state.characters.map((c) => [c.id, { hp: c.hp, maxHp: c.maxHp, x: c.x, y: c.y, dead: c.dead }])),
     monsters: new Map(state.monsters.map((m) => [m.id, { alive: m.alive, x: m.x, y: m.y }])),
   };
@@ -183,5 +198,7 @@ export function useSfx(state: GameState | null) {
     // A new table or a first look (join, reload) is not an event.
     if (!prev || prev.room !== state.room) return;
     for (const s of sfxForChange(prev, state)) sfx.play(s.event, s.at);
+    const effect = state.soundtrack?.effect;
+    if (effect && effect.n > prev.effect) sfx.playSrc(effect.src);
   }, [state]);
 }

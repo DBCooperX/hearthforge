@@ -35,6 +35,8 @@ export interface LibraryEntry {
   /** What making it cost, in dollars, over every take. */
   usd: number;
   by: LibraryOrigin;
+  /** A sound the Dungeon Master ordered: the table it was ordered at. */
+  table?: string;
   createdAt: number;
   /** Players do not hear it. */
   disabled?: boolean;

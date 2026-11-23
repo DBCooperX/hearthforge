@@ -67,6 +67,7 @@ import {
   type SceneMeta,
   type ScenePerson,
   type SlotId,
+  type Soundtrack,
   type TableInfo,
 } from '../../../shared/types';
 import { CLASSES, defaultGender, profBonusFor } from '../data/classes';
@@ -91,6 +92,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
+import { soundtrackNow, type SoundHooks } from './sounds';
 import { companionFigureSubject, heroFigureSubject, monsterFigureSubject, npcFigureSubject, npcPortraitKey, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
 import { PICTURE_MOMENTS } from '../../../shared/illustrations';
 import { COMPANION_TEMPLATES, COMPANION_TEMPLATE_IDS, companionTemplate, parseStance } from '../../../shared/companions';
@@ -285,6 +287,8 @@ export interface InternalState {
    * Set while the owner has the table in test mode. `snapshot` is the table as it was when the mode began (the
    * JSON of this state without chat and without this field), so the campaign can go back to it.
    */
+  /** The Dungeon Master's choice from the sound library. Missing in saves from before it. */
+  soundtrack?: Soundtrack;
   testMode?: { since: number; snapshot: string };
   /** How the last fight ended, for the closing screen. Missing in older saves. */
   lastFight?: FightOutcome | null;
@@ -393,6 +397,8 @@ export class Game {
   pictures: PictureHooks | null = null;
   /** A picture the Dungeon Master asked for in the reply being written, for its scene. */
   pictureAsk: PictureAsk | null = null;
+  /** Set by the room when the server has a sound library. */
+  sounds: SoundHooks | null = null;
   /** The place the party has just come to for the first time, until its picture is asked for or the party moves on (not saved). */
   newPlace: { id: string; name: string } | null = null;
 
@@ -6730,6 +6736,7 @@ export class Game {
       odds: this.combatOdds(),
       check: this.pendingCheck,
       testMode: s.testMode ? { since: s.testMode.since } : null,
+      soundtrack: soundtrackNow(this),
       world: w && {
         name: s.setting?.name ?? this.n('the Emberfall Vale'),
         width: w.width,
