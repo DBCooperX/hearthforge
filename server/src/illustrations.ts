@@ -135,6 +135,16 @@ export class Illustrator {
 
   get enabled() { return this.config.on && !!this.key(this.config.provider); }
 
+  /**
+   * The picture service the Innkeeper chose, for the server's own icons, or null without a key. Icons are painted
+   * when the Innkeeper presses the button, so they do not wait for story illustrations to be switched on.
+   */
+  iconPainter(): { label: string; usd: number; paint(prompt: string): Promise<{ data: Buffer; mime: string }> } | null {
+    const cfg = this.config, provider = cfg.provider, model = this.model, key = this.key(provider);
+    if (!key) return null;
+    return { label: `${provider} ${model}`, usd: pictureUsd(cfg, provider, model), paint: (prompt) => PAINTERS[provider](this.fetchFn, model, key, { prompt, refs: [], square: true }) };
+  }
+
   /** Dollars and pictures since the start of the month, or of the day. */
   private spent(since: (ms: number) => string) {
     const now = since(this.now());

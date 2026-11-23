@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Your own sound library (phase 4): painted icons
+- **Art → Icons.** The server can paint its own icons for every item, spell, skill, feat and class feature (411 pictures) in one look that matches the hero portraits, with the picture service set up under Illustrations (Gemini by default). Four icons go on one picture, which keeps them alike and costs a quarter as much: about 103 sheets, roughly $7 at Gemini's list price. *Paint missing icons* shows the price first and runs in the background. Players see each icon as soon as its sheet is there; the browser cuts it out and takes the background away.
+- **Four new takes.** Open an icon, optionally say how it should look, and get four new takes on one sheet; the old one stays until you pick another. Switch an icon off to bring back the older icon or the emoji. *Download icons* saves every sheet and `icons.json` as a zip for your own copy.
+- **Order.** The server's own icons come first, then the icon pack in use, then the emoji. Each sheet is booked as a picture in Costs and credits, paid by the Innkeeper account that pressed the button. Files live in `/data/icons` (`ICONS_DIR`). English and German.
+
 ### Your own sound library (phase 3): the Dungeon Master picks the sound
 - **The Dungeon Master sets the mood.** When a scene has a mood of its own (a misty harbour at night, a haunted chapel, a festival, a funeral, a chase), the Dungeon Master looks through the library and puts on the best music or ambient loop for everyone at the table. It plays until the party leaves the place or a fight starts; then the server's usual music for the scene comes back. A striking moment can get one effect (a door groaning open, a distant howl). The story never mentions the music.
 - **New sounds on order.** If nothing in the library fits, the Dungeon Master can have a new one made with your ElevenLabs key. The closest match plays meanwhile, and the new sound takes over by itself when it is ready (about a minute for music) if the party is still there. It stays in the library for every table, marked as made by the Dungeon Master. The table pays for it like a picture; players without credit get no new sounds. One order at a time per table.
