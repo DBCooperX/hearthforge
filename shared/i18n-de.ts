@@ -1740,6 +1740,8 @@ export const DE: Record<string, string> = {
   'Trophies': 'Trophäen',
   '{n} of {total}': '{n} von {total}',
   'Take back': 'Zurücknehmen',
+  'Item found': 'Gegenstand gefunden', 'Gold gained': 'Gold erhalten', 'Gold spent': 'Gold ausgegeben', 'Travel': 'Reise', 'New place': 'Neuer Ort', 'New quest': 'Neue Quest',
+  'Quest completed': 'Quest abgeschlossen', 'Quest failed': 'Quest gescheitert', 'New clue': 'Neuer Hinweis', 'Trophy': 'Trophäe', 'Victory': 'Sieg',
   'Guild standing: prices {percent}': 'Ansehen bei der Gilde: Preise {percent}',
   'Seconds to take an action back': 'Sekunden, um eine Handlung zurückzunehmen',
   'After a player acts in the story, they may take it back for this long before the Dungeon Master answers. 0 answers at once.': 'Nach einer Handlung in der Geschichte kann der Spieler sie so lange zurücknehmen, bevor der Spielleiter antwortet. 0 antwortet sofort.',
