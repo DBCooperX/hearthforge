@@ -100,7 +100,7 @@ const STORY_TOOLS: Tool[] = [
     skill: str('Skill name in lower case, for example "perception" or "persuasion", or an empty string for a raw ability check.'),
     dc: int('Difficulty class. 10 easy, 13 moderate, 16 hard, 19 very hard.'),
   }),
-  tool('remember_npc', 'Save or update a named character in your memory. Call it when you introduce someone or the party learns something lasting about them. Matching is by name.', {
+  tool('remember_npc', 'Save or update a named character in your memory. Call it when you introduce someone or the party learns something lasting about them. Matching is by name. To give a name to someone you saved without one, set formerly instead of saving a second person.', {
     name: str("The character's full name."),
     role: str('Who they are in a few words, for example "blacksmith\'s apprentice". Empty string to leave unchanged.'),
     description: str('One or two sentences on their manner (how they talk, a quirk, a want or flaw) and situation. Keep to it every time you play them. Empty string to leave unchanged.'),
@@ -108,6 +108,7 @@ const STORY_TOOLS: Tool[] = [
     disposition: { type: 'string', enum: [...DISPOSITIONS], description: 'How they currently feel about the party.' },
     location_id: str('Id of the location where they are. Empty string for the place the party is in now.'),
     note: str('A new fact worth remembering about them, or an empty string.'),
+    formerly: str('Only when the party just learned the name of someone you already saved without one (for example "the gaunt figure"): the name they were saved under, so this is the same person and keeps their picture and memory. Empty string otherwise.'),
   }),
   tool('create_location', 'Add a new place to the world so the party can find it again. It is marked on their map. Use direction "here" for a place inside or beside where the party is now (a shop in town, a cave mouth in this hex).', {
     name: str('Name of the place.'),
@@ -424,7 +425,7 @@ export class ClaudeDM implements DungeonMaster {
             if (!ABILITY_KEYS.includes(i.ability)) throw new Error('Unknown ability');
             return game.requestCheck(String(i.character_id), i.ability as AbilityKey, String(i.skill ?? ''), Math.max(1, Math.min(30, Math.round(i.dc))));
           case 'remember_npc':
-            return game.rememberNpc({ name: String(i.name), role: i.role, description: i.description, appearance: i.appearance, disposition: i.disposition as Disposition, locationId: i.location_id, note: i.note });
+            return game.rememberNpc({ name: String(i.name), role: i.role, description: i.description, appearance: i.appearance, disposition: i.disposition as Disposition, locationId: i.location_id, note: i.note, formerly: i.formerly });
           case 'create_location':
             return game.createLocation({ name: String(i.name), kind: i.kind as LocationKind, description: String(i.description ?? ''), appearance: i.appearance, direction: i.direction as Compass | 'here', distance: Number(i.distance) });
           case 'update_quest':

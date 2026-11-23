@@ -91,7 +91,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
-import { companionFigureSubject, heroFigureSubject, monsterFigureSubject, npcFigureSubject, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
+import { companionFigureSubject, heroFigureSubject, monsterFigureSubject, npcFigureSubject, npcPortraitKey, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
 import { PICTURE_MOMENTS } from '../../../shared/illustrations';
 import { COMPANION_TEMPLATES, COMPANION_TEMPLATE_IDS, companionTemplate, parseStance } from '../../../shared/companions';
 import { currentZone, enterPlace, enterSpot, followHeader, zoneRoot } from './zone';
@@ -6021,11 +6021,32 @@ export class Game {
   }
 
   /** Create or update someone the party has met. */
-  rememberNpc(input: { name: string; role?: string; description?: string; appearance?: string; disposition?: Disposition; locationId?: string; note?: string }) {
+  rememberNpc(input: { name: string; role?: string; description?: string; appearance?: string; disposition?: Disposition; locationId?: string; note?: string; formerly?: string }) {
     const name = input.name.trim().slice(0, 60);
     if (!name) throw new GameError(this.t`An NPC needs a name`);
     const mem = this.s.memory;
     let npc = mem.npcs.find((n) => n.name.toLowerCase() === name.toLowerCase() || n.id === name);
+    let renamedFrom: string | undefined;
+    if (!npc) {
+      // The party learned a name for someone already saved under a description ("the gaunt figure").
+      const former = input.formerly?.trim().toLowerCase();
+      let known = former ? mem.npcs.find((n) => n.name.toLowerCase() === former || n.id === input.formerly?.trim()) : undefined;
+      if (!known && !former) {
+        // The DM forgot to say so: a single nameless-style person in the same place is almost certainly the same one.
+        const here = input.locationId?.trim() || this.s.world?.placeId || '';
+        const nameless = mem.npcs.filter((n) => n.met && n.locationId === here && /^\p{Ll}/u.test(n.name) || /^(the|a|an|der|die|das|ein|eine)\s/i.test(n.name));
+        if (nameless.length === 1) known = nameless[0];
+      }
+      if (known) {
+        const keepPortrait = !!known.portraitId && known.portraitKey === npcPortraitKey(known);
+        renamedFrom = known.name;
+        known.notes.push(`Earlier known as ${known.name}.`.slice(0, 200));
+        if (known.notes.length > 12) known.notes.shift();
+        known.name = name;
+        if (keepPortrait) known.portraitKey = npcPortraitKey(known);
+        npc = known;
+      }
+    }
     const created = !npc;
     if (!npc) {
       if (mem.npcs.length >= 150) throw new GameError(this.t`The cast is full; reuse an existing character`);
@@ -6042,7 +6063,7 @@ export class Game {
     if (loc && this.location(loc)) npc.locationId = loc;
     else if (created || loc === '') npc.locationId = this.s.world?.placeId ?? npc.locationId;
     if (input.note?.trim()) { npc.notes.push(input.note.trim().slice(0, 200)); if (npc.notes.length > 12) npc.notes.shift(); }
-    return { id: npc.id, name: npc.name, created, location_id: npc.locationId };
+    return { id: npc.id, name: npc.name, created, location_id: npc.locationId, ...(renamedFrom ? { renamed_from: renamedFrom, note: 'Same person as before: portrait and memory are kept.' } : {}) };
   }
 
   /** Put a new place on the map. `direction` is a compass direction or "here". */
