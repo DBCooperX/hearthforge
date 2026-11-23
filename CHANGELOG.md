@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Your own sound library (phase 1)
+- **Sound and voice → Library.** Describe a piece of music, an ambient loop or a sound effect, and the server makes it with your ElevenLabs key (Sound Effects for effects and seamless loops, Eleven Music for instrumental music). It runs in the background; players hear it in its scene, or at its game moment, as soon as it is ready. Scenes and moments without a library sound keep the older music and effects for now. Listen, rename, move to another scene or moment, switch off, make a new take (the old one plays until the new one is there) or remove. If ElevenLabs refuses (for example music on an account without a plan), the reason is shown on the sound.
+- **Download as a zip.** Music, ambient loops, effects or everything, with a `library.json` that names every file, to keep your own copy.
+- **Costs.** Every take is booked at ElevenLabs' list price ($0.12 a minute for sounds, $0.15 for music) as a new *Sounds* line in Costs and credits and in each player's usage, paid by the account that pressed the button. Files live in `/data/library` (`LIBRARY_DIR`).
+
 ### A painted battle ground, and a moment to get ready
 - **Painted battle ground.** The battle map is now one painted picture instead of pixel tiles: soft ground that runs from grass into mud, water with a wet bank, walls and roofs that cast a shadow, and inked trees, boulders, tables, crates and barrels. Every square keeps its kind of ground, and a faint grid keeps them countable. It is drawn in the browser from the map itself, so it costs nothing and works without a picture key. Settings → Game → *Battle ground* switches back to the pixel tiles (which an art pack can replace).
 - **Get ready for battle.** A fight no longer throws you onto the battle map mid-sentence. The story stays on screen, with the picture the Dungeon Master painted for the moment, and a card says why the fight starts (*Your sneaking failed: the guards draw their swords*) and who stands against you. Press *To battle!* (or Enter) to go to the map. The monsters wait until every player is ready, or 60 seconds at most (`HEARTHFORGE_READY_WAIT`); a player who is away is never waited for. English and German.

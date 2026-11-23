@@ -50,7 +50,7 @@ function CreditTiles({ credit }: { credit: CreditView }) {
 function UsageSection({ usage }: { usage: UsageView }) {
   const t = useT();
   const m = (n: number) => fmtAmount(n, usage.currency, true);
-  const kinds: [string, number][] = [[t('Story'), usage.claude], [t('Pictures'), usage.images], [t('Voice'), usage.voice]];
+  const kinds: [string, number][] = [[t('Story'), usage.claude], [t('Pictures'), usage.images], [t('Voice'), usage.voice], ...(usage.sound ? [[t('Sounds and music'), usage.sound] as [string, number]] : [])];
   const rows = [...usage.byTable.map((x) => [x.id, x.title, x.amount] as const), ...(usage.elsewhere > 0.0005 ? [['', t('Elsewhere'), usage.elsewhere] as const] : [])];
   return (
     <section>

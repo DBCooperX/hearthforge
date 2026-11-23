@@ -45,7 +45,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'FREESOUND_API_KEY', group: 'play', kind: 'secret', fallback: '', label: 'Freesound API key', help: 'Free from freesound.org/apiv2/apply. With it the server fetches CC0 ambient loops (crowd, town, forest, cave) by itself, and the Ambient tab gets a button for more.' },
   { key: 'HEARTHFORGE_NARRATOR', group: 'voice', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Narrator', help: 'Reads the Dungeon Master\'s story aloud. Choose the voice under Sound and voice → Narrator; each player can mute it or turn it down. Off removes it for everyone.' },
   { key: 'OPENAI_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'OpenAI API key', help: 'For illustrations, if you pick OpenAI there. From platform.openai.com. A few cents per picture.' },
-  { key: 'ELEVENLABS_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'ElevenLabs API key', help: 'Only for the narrator, if you pick an ElevenLabs voice. From elevenlabs.io; the free plan covers a short session a month.' },
+  { key: 'ELEVENLABS_API_KEY', group: 'voice', kind: 'secret', fallback: '', label: 'ElevenLabs API key', help: 'For the narrator (if you pick an ElevenLabs voice) and for making sounds and music for the library under Sound and voice → Library. From elevenlabs.io. Pay-as-you-go works for sounds; music may need a paid plan.' },
   { key: 'HEARTHFORGE_ART', group: 'art', kind: 'choice', fallback: 'generated', choices: ['generated', 'kenney', '0x72'], label: 'Starting art pack', help: 'Only used until a pack is chosen under Art → Art packs.' },
   { key: 'HEARTHFORGE_AUTO_ASSETS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Fetch free art by itself', help: 'On downloads the freely licensed item icons (game-icons.net) the first time the server starts. Music has its own switch.' },
   { key: 'HEARTHFORGE_ART_UPLOADS', group: 'art', kind: 'choice', fallback: 'on', choices: ['on', 'off'], label: 'Art pack changes', help: 'Off locks the art library, also for the Innkeeper.' },
@@ -268,10 +268,12 @@ export interface UsageTotals {
   /** The part of the cost (and of `calls`) that went to pictures and to the narrator's voice, in US dollars. */
   images?: number;
   voice?: number;
+  /** Sounds and music made for the library. */
+  sound?: number;
 }
 
 /** Costs that are not the Dungeon Master's tokens. */
-export type ExtraKind = 'images' | 'voice';
+export type ExtraKind = 'images' | 'voice' | 'sound';
 
 export interface UsageReport {
   /** Per day, newest first. */

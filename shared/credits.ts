@@ -58,6 +58,8 @@ export interface UsageView {
   claude: number;
   voice: number;
   images: number;
+  /** Sounds and music made for the library. Missing from servers before it. */
+  sound?: number;
   /** By table, biggest first. A table's name is its id. */
   byTable: { id: string; title: string; amount: number }[];
   /** Spent away from any table (trying voices or pictures in the Innkeeper area) or before tables were tracked. */
@@ -73,6 +75,8 @@ export interface CreditRow extends CreditView {
   spentVoice: number;
   /** Story illustrations. */
   spentImages: number;
+  /** Sounds and music for the library. */
+  spentSound?: number;
   /** Spent in the last 30 days. */
   last30: number;
   topUps: TopUp[];

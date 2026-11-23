@@ -13,6 +13,8 @@ import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
 import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { readBody as readRaw } from './http';
 import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
+import { LibraryError, SoundLibrary } from './library';
+import { isLibraryKind } from '../../shared/library';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { Narrator, VoiceError, langOf } from './voice';
@@ -73,6 +75,7 @@ const ART_UPLOADS = (env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off
 const MUSIC_DIR = env.MUSIC_DIR ?? join(DATA_DIR, 'music');
 const SFX_DIR = env.SFX_DIR ?? join(DATA_DIR, 'sfx');
 const VOICE_DIR = env.VOICE_DIR ?? join(DATA_DIR, 'voice');
+const LIBRARY_DIR = env.LIBRARY_DIR ?? join(DATA_DIR, 'library');
 const TRUST_PROXY = (env.HEARTHFORGE_TRUST_PROXY ?? 'off').toLowerCase() === 'on';
 
 /** The address a request comes from. Behind a reverse proxy the owner trusts, the one it reports. */
@@ -195,6 +198,25 @@ function bill(table: string, usd: number, kind: CostKind) {
   }
   tellCredits(credits.charge(payersAt(table), usd, kind, { id: table, title: rooms.get(table)?.game.s.table.title ?? table }));
 }
+
+/**
+ * The server's own sounds. A take is paid by whoever asked: the Innkeeper's account for one made by hand, the players
+ * at the table for one the Dungeon Master asked for. Players hear a new sound as soon as it is there.
+ */
+let soundsChanged: NodeJS.Timeout | null = null;
+const library = new SoundLibrary(LIBRARY_DIR, env, {
+  onCost: (usd, _entry, payer) => {
+    if (payer.table) return bill(payer.table, usd, 'sound');
+    usage.recordExtra('Sound library', 'sound', usd);
+    if (payer.account && accounts.get(payer.account)) tellCredits(credits.charge([payer.account], usd, 'sound'));
+  },
+  onChange: () => {
+    if (soundsChanged) return;
+    soundsChanged = setTimeout(() => { soundsChanged = null; announceAssets({ music: true, sfx: true }); }, 500);
+  },
+});
+/** One-time links for the library download, so a big zip can stream straight to the browser's download. */
+const libraryDownloads = new Map<string, { kind: string; until: number }>();
 
 /** The currency every price is shown in, and its fixed rate per dollar. */
 function moneyNow() { const { currency, rate } = credits.config; return { currency, rate }; }
@@ -626,6 +648,48 @@ async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** The sound library belongs to the owner of the server, like the music: it is changed from the Innkeeper. */
+async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/library') return json(200, library.library());
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    const body = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
+    const me = accounts.account(req.headers[SESSION_HEADER]);
+    const payer = { account: me?.id };
+    if (url.pathname === '/api/library/make') {
+      library.make(body, 'innkeeper', payer);
+      return json(200, library.library());
+    }
+    if (url.pathname === '/api/library/action') {
+      if (body.do === 'set') library.set(body.id, body);
+      else if (body.do === 'remove') library.remove(body.id);
+      else if (body.do === 'regenerate') library.regenerate(body.id, payer);
+      else throw new LibraryError('bad_request');
+      return json(200, library.library());
+    }
+    if (url.pathname === '/api/library/download') {
+      const kind = isLibraryKind(body.kind) ? body.kind : 'all';
+      const token = randomBytes(18).toString('hex');
+      const now = Date.now();
+      for (const [k, v] of libraryDownloads) if (v.until < now) libraryDownloads.delete(k);
+      libraryDownloads.set(token, { kind, until: now + 120_000 });
+      return json(200, { url: `/library-download/${token}` });
+    }
+    return json(404, { error: 'bad_request' });
+  } catch (err) {
+    if (err instanceof LibraryError) return json(err.code === 'not_found' ? 404 : 400, { error: err.code, detail: err.detail });
+    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'bad_request' });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[library]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 /** Send a finished speech file. Browsers ask for audio in byte ranges. */
 function sendAudio(req: IncomingMessage, res: ServerResponse, file: string, type: string, extra: Record<string, string> = {}) {
   const size = statSync(file).size;
@@ -809,9 +873,27 @@ const server = createServer((req, res) => {
     void musicApi(req, res, url);
     return;
   }
+  if (url.pathname === '/api/library' || url.pathname.startsWith('/api/library/')) {
+    void libraryApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith('/library-download/')) {
+    const ticket = libraryDownloads.get(url.pathname.slice(18));
+    if (!ticket || ticket.until < Date.now()) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('This download link has run out. Press Download again.'); return; }
+    libraryDownloads.delete(url.pathname.slice(18));
+    library.archive(isLibraryKind(ticket.kind) ? ticket.kind : null, res);
+    return;
+  }
+  if (url.pathname.startsWith('/library/')) {
+    // A file's name is its content's hash, so it never changes and can be kept forever.
+    const file = library.file(url.pathname.slice(9));
+    if (!file) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Not found'); return; }
+    sendAudio(req, res, file, 'audio/mpeg', { 'cache-control': 'public, max-age=31536000, immutable' });
+    return;
+  }
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(musicManifest(MUSIC_DIR, env)));
+    res.end(JSON.stringify(library.mergeMusic(musicManifest(MUSIC_DIR, env))));
     return;
   }
   if (url.pathname.startsWith('/pictures/')) {
@@ -835,7 +917,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === '/api/sfx') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(sfxManifest(SFX_DIR, env)));
+    res.end(JSON.stringify(library.mergeSfx(sfxManifest(SFX_DIR, env))));
     return;
   }
   if (url.pathname.startsWith('/sfx/')) {
@@ -1021,6 +1103,7 @@ server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
   console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
   console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
+  console.log(`Sound library: ${library.summary()} in ${LIBRARY_DIR}${env.ELEVENLABS_API_KEY?.trim() ? "" : " (add an ElevenLabs key to make new sounds)"}`);
   const voice = narrator.manifest();
   const pics = illustrator.library();
   console.log(`Story illustrations: ${!pics.config.on ? 'off (switch them on in Innkeeper → Art)' : !pics.keys[pics.config.provider] ? `${pics.config.provider} has no key yet` : `${pics.config.provider} ${pics.config.models[pics.config.provider]}`}.`);

@@ -99,16 +99,18 @@ export class SfxPlayer {
     const now = performance.now();
     if (now - (this.last.get(event) ?? -1e9) < (LONG_GAP.includes(event) ? 2500 : MIN_GAP_MS)) return;
     this.last.set(event, now);
-    const file = pickSample(event, this.manifest.files.map((f) => f.name));
-    const entry = file ? this.manifest.files.find((f) => f.name === file) : undefined;
-    if (!entry) { synth(ctx, this.master, event); return; }
-    void this.buffer(entry.src).then((buf) => {
+    // The server's own library first, then the older recordings, then the browser's own sound.
+    const own = this.manifest.events?.[event];
+    const file = own?.length ? null : pickSample(event, this.manifest.files.map((f) => f.name));
+    const src = own?.length ? own[Math.floor(Math.random() * own.length)] : file ? this.manifest.files.find((f) => f.name === file)?.src : undefined;
+    if (!src) { synth(ctx, this.master, event); return; }
+    void this.buffer(src).then((buf) => {
       if (!buf) { synth(ctx, this.master!, event); return; }
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.playbackRate.value = 0.94 + Math.random() * 0.12;
-      src.connect(this.master!);
-      src.start();
+      const node = ctx.createBufferSource();
+      node.buffer = buf;
+      node.playbackRate.value = 0.94 + Math.random() * 0.12;
+      node.connect(this.master!);
+      node.start();
     });
   }
 

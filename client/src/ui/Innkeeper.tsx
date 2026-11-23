@@ -30,6 +30,7 @@ import { SfxLibrary } from './SfxLibrary';
 import { NarratorLibrary } from './NarratorLibrary';
 import { PictureLibrary } from './PictureLibrary';
 import { SoundLibrary } from './SoundLibrary';
+import { LibraryPane } from './LibraryPane';
 import { TabBar, Window } from './Window';
 import { ask } from './Confirm';
 
@@ -169,7 +170,7 @@ function SubTabs<K extends string>({ tabs, children, value, onChange }: { tabs: 
 function SoundPane(pane: PaneProps & { go: (tab: Tab) => void }) {
   return (
     <SubTabs tabs={SOUND_TABS}>
-      {(sub) => sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : sub === 'settings' ? <div className="inn-sub"><SettingsBlock {...pane} sections={SOUND_SECTIONS} /></div> : <SoundLibrary key={sub} layer={sub} />}
+      {(sub) => sub === 'library' ? <LibraryPane /> : sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : sub === 'settings' ? <div className="inn-sub"><SettingsBlock {...pane} sections={SOUND_SECTIONS} /></div> : <SoundLibrary key={sub} layer={sub} />}
     </SubTabs>
   );
 }
@@ -743,11 +744,11 @@ function UsageRows<T extends UsageTotals>({ rows, name, head }: { rows: T[]; nam
   const most = Math.max(1e-9, ...rows.map((r) => r.cost ?? 0));
   return (
     <table className="inn-table">
-      <thead><tr><th>{head}</th><th className="num">{t('Calls')}</th><th className="num">{t('Input')}</th><th className="num">{t('Output')}</th><th className="num">{t('From cache')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Voice')}</th><th className="num">{t('Costs')}</th><th /></tr></thead>
+      <thead><tr><th>{head}</th><th className="num">{t('Calls')}</th><th className="num">{t('Input')}</th><th className="num">{t('Output')}</th><th className="num">{t('From cache')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Voice')}</th><th className="num">{t('Sounds')}</th><th className="num">{t('Costs')}</th><th /></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={name(r)}>
-            <td>{name(r)}</td><td className="num">{r.calls}</td><td className="num">{tokens(r.input + r.cacheWrite)}</td><td className="num">{tokens(r.output)}</td><td className="num">{tokens(r.cacheRead)}</td><td className="num">{r.images ? money(r.images) : ''}</td><td className="num">{r.voice ? money(r.voice) : ''}</td><td className="num">{money(r.cost)}</td>
+            <td>{name(r)}</td><td className="num">{r.calls}</td><td className="num">{tokens(r.input + r.cacheWrite)}</td><td className="num">{tokens(r.output)}</td><td className="num">{tokens(r.cacheRead)}</td><td className="num">{r.images ? money(r.images) : ''}</td><td className="num">{r.voice ? money(r.voice) : ''}</td><td className="num">{r.sound ? money(r.sound) : ''}</td><td className="num">{money(r.cost)}</td>
             <td className="inn-bar"><i style={{ width: `${Math.round(((r.cost ?? 0) / most) * 100)}%` }} /></td>
           </tr>
         ))}
@@ -810,7 +811,7 @@ function CreditsPane({ fail, say }: PaneProps) {
         <button type="submit" disabled={!draft}>{t('Save')}</button>
       </form>
       <table className="inn-table">
-        <thead><tr><th>{t('Account')}</th><th className="num">{t('Left')}</th><th className="num">{t('Paid in')}</th><th className="num">{t('Dungeon Master')}</th><th className="num">{t('Narrator')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Last 30 days')}</th><th>{t('Free')}</th><th /></tr></thead>
+        <thead><tr><th>{t('Account')}</th><th className="num">{t('Left')}</th><th className="num">{t('Paid in')}</th><th className="num">{t('Dungeon Master')}</th><th className="num">{t('Narrator')}</th><th className="num">{t('Pictures')}</th><th className="num">{t('Sounds')}</th><th className="num">{t('Last 30 days')}</th><th>{t('Free')}</th><th /></tr></thead>
         <tbody>
           {r.rows.map((a) => (
             <Fragment key={a.id}>
@@ -821,12 +822,13 @@ function CreditsPane({ fail, say }: PaneProps) {
                 <td className="num">{fmtAmount(a.spentClaude, a.currency)}</td>
                 <td className="num">{fmtAmount(a.spentVoice, a.currency)}</td>
                 <td className="num">{fmtAmount(a.spentImages ?? 0, a.currency)}</td>
+                <td className="num">{fmtAmount(a.spentSound ?? 0, a.currency)}</td>
                 <td className="num">{fmtAmount(a.last30, a.currency)}</td>
                 <td>{a.role === 'innkeeper' ? <span className="muted">—</span> : <input type="checkbox" checked={a.free} aria-label={t('Free')} onChange={(e) => void act({ do: 'free', id: a.id, free: e.target.checked })} />}</td>
                 <td className="inn-actions"><button type="button" onClick={() => setTopUp({ id: a.id, amount: '', note: '' })}>{t('Top up')}</button></td>
               </tr>
               {topUp?.id === a.id && (
-                <tr className="inn-subrow"><td colSpan={9}>
+                <tr className="inn-subrow"><td colSpan={10}>
                   <form className="inn-topup" onSubmit={book}>
                     <label>{t('Amount ({currency})', { currency: r.config.currency })}<input autoFocus inputMode="decimal" value={topUp.amount} onChange={(e) => setTopUp({ ...topUp, amount: e.target.value })} placeholder="10.00" /></label>
                     <label>{t('Note')}<input value={topUp.note} maxLength={80} onChange={(e) => setTopUp({ ...topUp, note: e.target.value })} placeholder={t('for example: TWINT, 20 Nov')} /></label>
@@ -837,7 +839,7 @@ function CreditsPane({ fail, say }: PaneProps) {
                 </td></tr>
               )}
               {open === a.id && (
-                <tr className="inn-subrow"><td colSpan={9}>
+                <tr className="inn-subrow"><td colSpan={10}>
                   {a.topUps.length === 0 ? <span className="muted">{t('Nothing paid in yet.')}</span> : (
                     <ul className="inn-list">{a.topUps.map((p, i) => <li key={i}><span>{new Date(p.at).toLocaleDateString(lang)}</span><b>{fmtAmount(p.amount, a.currency)}</b><span className="muted">{p.note}</span></li>)}</ul>
                   )}
@@ -857,7 +859,7 @@ function UsagePane({ fail }: PaneProps) {
   const t = useT();
   const [r] = usePoll<UsageReport>('/usage', 15000, fail);
   if (!r) return <p className="muted">{t('Loading…')}</p>;
-  if (!r.total.calls && !r.total.images && !r.total.voice) return <p className="muted">{t('The AI Dungeon Master has not been called yet. Costs show up here once it has.')}</p>;
+  if (!r.total.calls && !r.total.images && !r.total.voice && !r.total.sound) return <p className="muted">{t('The AI Dungeon Master has not been called yet. Costs show up here once it has.')}</p>;
   return (
     <div className="inn-stack">
       <div className="inn-stats">
@@ -867,8 +869,9 @@ function UsagePane({ fail }: PaneProps) {
         <Stat label={t('From cache')} value={tokens(r.total.cacheRead)} sub={t('tokens')} />
         <Stat label={t('Pictures')} value={money(r.total.images ?? 0)} sub={t('image service')} />
         <Stat label={t('Voice')} value={money(r.total.voice ?? 0)} sub={t('narrator')} />
+        {!!r.total.sound && <Stat label={t('Sounds')} value={money(r.total.sound)} sub={t('library')} />}
       </div>
-      <section><h3>{t('By model')}</h3><UsageRows rows={r.models} name={(m) => (m.model === 'images' ? t('Pictures') : m.model === 'voice' ? t('Narrator voice') : m.model)} head={t('Model')} /></section>
+      <section><h3>{t('By model')}</h3><UsageRows rows={r.models} name={(m) => (m.model === 'images' ? t('Pictures') : m.model === 'voice' ? t('Narrator voice') : m.model === 'sound' ? t('Sounds and music') : m.model)} head={t('Model')} /></section>
       <section><h3>{t('By table')}</h3><UsageRows rows={r.tables} name={(x) => x.title} head={t('Table')} /></section>
       <section><h3>{t('By day')}</h3><UsageRows rows={r.days.slice(0, 30)} name={(d) => d.day} head={t('Day')} /></section>
       <p className="muted small">{t('An estimate from the tokens the API reported and these list prices per million tokens: {prices}, plus what pictures and the narrator voice cost at the prices set for them. Your invoices are what counts.', { prices: r.prices.map((p) => `${p.model} ${usd(p.input, true)} / ${usd(p.output, true)}`).join(', ') })}</p>

@@ -3,7 +3,8 @@
 import type { InvFilter, InvSort } from '../../../shared/inventory';
 import type { QuestStatus } from '../../../shared/types';
 import { MUSIC_ERRORS } from '../../../shared/music';
-import { SFX_ERRORS, SFX_PACKS } from '../../../shared/sfx';
+import { SFX_ERRORS, SFX_PACKS, type SfxEvent } from '../../../shared/sfx';
+import { LIBRARY_ERRORS, type LibraryKind } from '../../../shared/library';
 import { PIPER_VOICES, PROVIDER_LABELS, VOICE_ERRORS } from '../../../shared/voice';
 import { ADMIN_ERRORS, SETTINGS, SETTING_GROUPS } from '../../../shared/admin';
 import { PICTURE_ERRORS, PICTURE_MODELS, PICTURE_MOMENT_LABELS, PICTURE_OUTCOME_LABELS, PICTURE_PROVIDER_LABELS, PICTURE_STYLE_LABELS } from '../../../shared/illustrations';
@@ -72,6 +73,14 @@ export const ART_ERRORS = {
 
 export { MUSIC_ERRORS };
 export const SCENE_LABELS = { tavern: 'Tavern', town: 'Town', overworld: 'Overworld', dungeon: 'Dungeon', combat: 'Combat', boss: 'Boss fight' } as const;
+/** The game moments a sound effect can play for. */
+export const SFX_EVENT_LABELS: Record<SfxEvent, string> = {
+  hit_slash: 'Hit: blade', hit_pierce: 'Hit: point', hit_blunt: 'Hit: blunt', hit_crit: 'Critical hit', miss: 'Miss', shot: 'Shot', shot_hit: 'Shot hits',
+  spell_fire: 'Spell: fire', spell_frost: 'Spell: frost', spell_shock: 'Spell: lightning', spell_shadow: 'Spell: shadow', spell_holy: 'Spell: holy', spell_arcane: 'Spell: arcane', spell_nature: 'Spell: nature',
+  hurt: 'Hero hurt', heal: 'Healing', monster_death: 'Monster dies', hero_down: 'Hero falls', footstep: 'Footstep', combat_start: 'Battle starts', victory: 'Victory', defeat: 'Defeat',
+  level_up: 'Level up', coins: 'Coins', click: 'Click', turn: 'Your turn', scratch: 'Pen scratch', pencil_tap: 'Pencil tap',
+};
+export const LIBRARY_KIND_LABELS: Record<LibraryKind, string> = { music: 'Music', ambient: 'Ambient loops', sfx: 'Sound effects' };
 export const ACCESS_LABELS = { auto: 'Downloads by itself', click: 'Paste a link', manual: 'Get it there, drop it here' } as const;
 
 /** The Innkeeper's sections. */
@@ -79,7 +88,7 @@ export const INN_TABS = {
   overview: 'Overview', tables: 'Tables', players: 'Players', costs: 'Costs and credits', dm: 'Dungeon Master',
   sound: 'Sound and voice', art: 'Art', server: 'Server',
 } as const;
-export const SOUND_TABS = { music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
+export const SOUND_TABS = { library: 'Library', music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
 export const ART_TABS = { art: 'Art packs', pictures: 'Illustrations', settings: 'Switches and keys' } as const;
 export const SERVER_TABS = { server: 'Updates and restart', backups: 'Backups', logs: 'Log' } as const;
 export const INN_SECTIONS = {
@@ -112,7 +121,7 @@ export const ALL_LABELS: string[] = [
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOUND_TABS), ...Object.values(ART_TABS), ...Object.values(SERVER_TABS), ...Object.values(INN_SECTIONS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(ACCOUNT_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
-  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS),
+  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(SFX_EVENT_LABELS), ...Object.values(LIBRARY_KIND_LABELS), ...Object.values(LIBRARY_ERRORS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(TIER_LABELS), ...Object.values(TIER_TEXT), ...FACTIONS.map((f) => f.blurb), ...TROPHIES.flatMap((x) => [x.name, x.text]),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
