@@ -15,6 +15,7 @@ import { armedFigure, artOfCharacter, baseBoxOf, heroCanvas, heroStanding, offWe
 import { onFigureLoaded, paintedFigure } from './paintedFigures';
 import { heroArtKey, type HeroArt } from '../../../shared/heroLook';
 import { battleTileName } from './battleTiles';
+import { paintedGround } from './paintedGround';
 import { heroSenses, lightLevels, partyOf, shortName, tileAt } from './util';
 import { LIGHT_KINDS, perceivedLight } from '../../../shared/light';
 import { GROUND_SQUASH, clampFocus, nearLimit, project, unproject, type TiltCam } from './tilt';
@@ -110,7 +111,11 @@ export interface RendererOptions {
   zoom: number;
   reducedMotion: boolean;
   labels: { miss: string };
+  /** The ground as one painted picture, or as the pixel tiles (which art packs can replace). */
+  ground?: BattleGround;
 }
+
+export type BattleGround = 'painted' | 'pixel';
 
 const textures = new Map<string, Texture>();
 function tex(name: string): Texture {
@@ -324,6 +329,8 @@ export class MapRenderer {
   private frame = 0;
   /** Weaker machines: a lighter ground texture, fewer particles. Decided after a few seconds of play. */
   private lite = false;
+  private groundKind: BattleGround = 'painted';
+  private paintedTex: Texture | null = null;
   private perf = { t: 0, frames: 0 };
 
   private zoom: number;
@@ -356,6 +363,7 @@ export class MapRenderer {
     this.zoom = options.zoom;
     this.reduced = options.reducedMotion;
     this.labels = options.labels;
+    this.groundKind = options.ground ?? 'painted';
     this.fx = new Effects((x, y, h) => this.toScreen(x, y, h), () => (this.tilt ? this.tcam.k : this.scale), this.reduced, false);
   }
 
@@ -404,6 +412,7 @@ export class MapRenderer {
     this.unFigures();
     if (this.ready) {
       this.groundRT?.destroy(true);
+      this.paintedTex?.destroy(true);
       this.app.destroy(true, { children: true });
     }
   }
@@ -457,12 +466,23 @@ export class MapRenderer {
 
   private buildTiles(state: GameState) {
     this.tileLayer.removeChildren().forEach((c) => c.destroy());
+    this.paintedTex?.destroy(true);
+    this.paintedTex = null;
     this.tiles = [];
+    if (this.groundKind === 'painted') {
+      const S = this.lite ? 40 : 64;
+      const pic = paintedGround(state.map.rows, state.map.biome ?? 'dungeon', S);
+      this.paintedTex = Texture.from({ resource: pic, autoGenerateMipmaps: true, scaleMode: 'linear' });
+      const s = new Sprite(this.paintedTex);
+      s.scale.set(TILE / S);
+      this.tileLayer.addChild(s);
+    }
     for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
         const s = new Sprite(tex('floor0'));
         s.anchor.set(0.5);
         s.position.set(x * TILE + TILE / 2, y * TILE + TILE / 2);
+        s.visible = this.groundKind === 'pixel';
         this.tileLayer.addChild(s);
         this.tiles.push(s);
       }
@@ -497,7 +517,7 @@ export class MapRenderer {
     }
 
     // Tiles
-    for (let y = 0; y < state.map.height; y++) {
+    if (this.groundKind === 'pixel') for (let y = 0; y < state.map.height; y++) {
       for (let x = 0; x < state.map.width; x++) {
         this.tiles[y * state.map.width + x].texture = tex(battleTileName(state.map.biome ?? 'dungeon', tileAt(state, x, y), x, y));
       }
@@ -1062,6 +1082,14 @@ export class MapRenderer {
   }
 
   /** Edge scrolling on or off (a setting of the player's). */
+  /** Switches between the painted ground and the pixel tiles. */
+  setGround(kind: BattleGround) {
+    if (kind === this.groundKind) return;
+    this.groundKind = kind;
+    this.mapKey = '';
+    if (this.ready && this.state) this.sync();
+  }
+
   setEdgeScroll(on: boolean) { this.edgeScroll = on; if (!on) this.edgeWait = 0; }
 
   /** Which way the keys push the camera: -1, 0 or 1 on each axis. */

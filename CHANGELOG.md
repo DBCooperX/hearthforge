@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### A painted battle ground, and a moment to get ready
+- **Painted battle ground.** The battle map is now one painted picture instead of pixel tiles: soft ground that runs from grass into mud, water with a wet bank, walls and roofs that cast a shadow, and inked trees, boulders, tables, crates and barrels. Every square keeps its kind of ground, and a faint grid keeps them countable. It is drawn in the browser from the map itself, so it costs nothing and works without a picture key. Settings → Game → *Battle ground* switches back to the pixel tiles (which an art pack can replace).
+- **Get ready for battle.** A fight no longer throws you onto the battle map mid-sentence. The story stays on screen, with the picture the Dungeon Master painted for the moment, and a card says why the fight starts (*Your sneaking failed: the guards draw their swords*) and who stands against you. Press *To battle!* (or Enter) to go to the map. The monsters wait until every player is ready, or 60 seconds at most (`HEARTHFORGE_READY_WAIT`); a player who is away is never waited for. English and German.
+- **A quieter End turn reminder.** The note by End turn now goes away as soon as you move the mouse, click, touch or press a key, and fades by itself after a few seconds. It says *Your move, Lexe* or *That was everything for this turn* and no longer points at the Space key.
+
 ### Scenes, icons and tooltips
 - **Choices that show the skill.** When a suggested action would likely test a skill, the Dungeon Master now tags it, and the chip shows the skill's icon, its name and your hero's bonus, such as *Persuasion −1 · Talk Hendrick round*. The DC stays hidden, and the tag is only a hint: you still decide what to do, and the Dungeon Master still decides whether you roll.
 - **One icon set.** Places, merchants, *Enter…* buttons, rests, gold, level up, inspiration and the marks of a fight now use the same drawn game-icons.net pictures as the hotbar instead of emoji (the emoji stays when the server's art pack is set to Emoji or not installed).

@@ -218,6 +218,7 @@ const STORY_TOOLS: Tool[] = [
       },
     },
     reason: str('One sentence on how the fight started, for the record.'),
+    why: str('One short line the players read on the "get ready" card before the battle map opens, in the table language: why the fight starts right now, for example "Your sneaking failed: the guards draw their swords." Empty string to let the server say it.'),
     setting: str(`What the battle map shows. Use "here" to match where the party is standing (its swamp, forest, tavern and so on), which is right nearly always. Name a setting only when the story put the fight somewhere particular, such as "bridge" for an ambush on a bridge, "camp" for a raid on a camp, or "road" for a roadside holdup. One of: here, ${BIOMES.join(', ')}.`),
     light: str('How lit the battlefield is: "auto" follows the time of day and the place (dungeons and caves are dark), which is right nearly always. "bright", "dim" or "dark" when the story says otherwise, such as "dark" for a cellar whose lamps were smashed. Heroes with torches light them by themselves.'),
     surprise: str('Who is caught unawares. "none" for an ordinary start. "enemies" when the heroes crept up on them: it needs a Stealth skill_check that succeeded just before, and the server measures it against each enemy\'s Passive Perception. "party" when the enemies ambush the heroes: the server rolls their Stealth against each hero\'s Passive Perception. Whoever is caught rolls initiative with Disadvantage.'),
@@ -465,7 +466,7 @@ export class ClaudeDM implements DungeonMaster {
           }
           case 'start_combat': {
             const groups = (Array.isArray(i.monsters) ? i.monsters : []).map((m: any) => ({ defId: String(m.type), count: Number(m.count), name: typeof m.name === 'string' ? m.name : undefined, description: typeof m.description === 'string' ? m.description : undefined, look: Array.isArray(m.look) ? m.look.map(String) : typeof m.look === 'string' ? m.look.split(/[,;\s]+/).filter(Boolean) : undefined, power: typeof m.power === 'string' ? m.power : undefined }));
-            const opening = game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined, surprise: typeof i.surprise === 'string' ? i.surprise : undefined, opener: typeof i.opener === 'string' ? i.opener : undefined });
+            const opening = game.startEncounter(groups, { source: 'story', context: String(i.reason ?? ''), setting: typeof i.setting === 'string' ? i.setting : undefined, light: typeof i.light === 'string' ? i.light : undefined, surprise: typeof i.surprise === 'string' ? i.surprise : undefined, opener: typeof i.opener === 'string' ? i.opener : undefined, why: typeof i.why === 'string' ? i.why : undefined });
             game.dropBeats('combat_start'); // the DM narrates the opening itself
             const ignored = [...new Set(groups.flatMap((gr: { defId: string; look?: string[] }) => { const d = resolveMonster(gr.defId); return d ? applyLookTokens(d.look, gr.look ?? []).ignored : []; }))];
             const levels = game.s.characters.filter((c) => !c.dead).map((c) => c.level);

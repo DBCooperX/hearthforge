@@ -131,6 +131,7 @@ const num = (raw: string | undefined, fallback: number) => (raw !== undefined &&
 const TIMING = {
   turnWaitMs: num(env.HEARTHFORGE_TURN_WAIT, DEFAULT_TIMING.turnWaitMs / 1000) * 1000,
   reactionWaitMs: num(env.HEARTHFORGE_REACTION_WAIT, DEFAULT_TIMING.reactionWaitMs / 1000) * 1000,
+  readyWaitMs: num(env.HEARTHFORGE_READY_WAIT, DEFAULT_TIMING.readyWaitMs / 1000) * 1000,
   undoGraceMs: num(env.HEARTHFORGE_UNDO_WINDOW, 3) * 1000,
 };
 

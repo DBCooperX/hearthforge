@@ -526,6 +526,20 @@ export interface CombatState {
   /** The first log entry of this fight, and of each round (index 0 is round 1): the battle log beside the map. */
   logFrom?: number;
   roundFrom?: number[];
+  /**
+   * The moment before the first blow: why the fight starts, and the players the battle still waits
+   * for before any monster moves. Gone once everyone is ready or the time is up.
+   */
+  ready?: BattleReady | null;
+}
+
+export interface BattleReady {
+  /** One line in the table language: why the fight starts now. */
+  why: string;
+  /** Players who have not pressed "To battle" yet. */
+  waiting: string[];
+  /** Milliseconds since the epoch when the battle starts anyway. */
+  until: number;
 }
 
 /** The fight waits for one player: take the opportunity attack or let the enemy go. */
@@ -950,6 +964,7 @@ export type ClientMessage =
   | { t: 'light'; characterId: string; on: boolean }
   | { t: 'reaction'; characterId: string; take: boolean }
   | { t: 'roll_check'; id: string }
+  | { t: 'battle_ready' }
   | { t: 'trip'; go: boolean }
   | { t: 'set_opportunity'; characterId: string; mode: OpportunityMode }
   /** `qty` moves only part of a stack. */

@@ -410,10 +410,10 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
           })}
         </div>
         <div className="hb-end">
-          {nudge && (
+          {nudge?.note && (
             <div className="endturn-nudge" role="status" aria-live="polite">
-              <b>{nudge === 'spent' ? t('Nothing left to do?') : t('Still there?')}</b>
-              <span>{t('End your turn when you are done.')} <kbd>{t('Space')}</kbd></span>
+              <b>{nudge.kind === 'spent' ? t('That was everything for this turn') : t('Your move, {name}', { name: c.name })}</b>
+              <span>{nudge.kind === 'spent' ? t('End your turn when you are ready.') : t('Pick an action, or end your turn.')}</span>
             </div>
           )}
           <OpportunitySwitch actor={c} conn={conn} />
@@ -431,21 +431,41 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
 
 /**
  * A gentle reminder to end the turn: after the player's chosen delay without doing anything on
- * their turn, or soon after the action and movement are used up. It never ends the turn.
+ * their turn, or soon after the action and movement are used up. It never ends the turn. Any sign
+ * of life (the mouse moving, a click, a key, a touch) puts it away at once and starts the wait
+ * again, and the note fades by itself after a few seconds, leaving only the glow on End turn.
  */
-export function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): 'idle' | 'spent' | null {
+export function useTurnNudge(canAct: boolean, combat: GameState['combat'] | null, logLength: number): { kind: 'idle' | 'spent'; note: boolean } | null {
   const { turnReminder } = usePrefs();
   const [nudge, setNudge] = useState<'idle' | 'spent' | null>(null);
+  const [note, setNote] = useState(false);
+  const [poke, setPoke] = useState(0);
   const spent = !!combat && combat.actionUsed && combat.attacksLeft <= 0 && combat.movementLeft <= 0;
   // Anything that happens on the turn (a step, an attack, a new line in the story) starts the wait again.
   const activity = combat ? `${combat.round}:${combat.turnIndex}:${combat.movementLeft}:${combat.actionUsed}:${combat.attacksLeft}:${combat.bonusUsed}:${logLength}` : '';
+  const waiting = canAct && !!combat && !!turnReminder;
+  useEffect(() => {
+    if (!waiting) return;
+    let last = 0;
+    const alive = () => { const now = Date.now(); if (now - last > 400) { last = now; setPoke((p) => p + 1); } };
+    const opts = { passive: true, capture: true } as const;
+    const kinds = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+    for (const k of kinds) window.addEventListener(k, alive, opts);
+    return () => { for (const k of kinds) window.removeEventListener(k, alive, opts); };
+  }, [waiting]);
   useEffect(() => {
     setNudge(null);
-    if (!canAct || !combat || !turnReminder) return;
-    const timer = window.setTimeout(() => setNudge(spent ? 'spent' : 'idle'), spent ? Math.min(4, turnReminder) * 1000 : turnReminder * 1000);
-    return () => window.clearTimeout(timer);
-  }, [canAct, activity, turnReminder, spent]);
-  return nudge;
+    setNote(false);
+    if (!waiting) return;
+    let fade = 0;
+    const timer = window.setTimeout(() => {
+      setNudge(spent ? 'spent' : 'idle');
+      setNote(true);
+      fade = window.setTimeout(() => setNote(false), 6000);
+    }, spent ? Math.min(4, turnReminder) * 1000 : turnReminder * 1000);
+    return () => { window.clearTimeout(timer); window.clearTimeout(fade); };
+  }, [waiting, activity, turnReminder, spent, poke]);
+  return nudge ? { kind: nudge, note } : null;
 }
 
 interface SlotProps {

@@ -1336,7 +1336,7 @@ export class Game {
   // ----------------------------------------------------------------- combat
 
   /** Set up a battle map and roll initiative. Group counts are for a party of four. */
-  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string; surprise?: string; opener?: string }): Opening | null {
+  startEncounter(groups: GroupSpec[], opts: { source: EncounterState['source']; locationId?: string; context: string; setting?: string; light?: string; surprise?: string; opener?: string; why?: string }): Opening | null {
     const s = this.s;
     if (s.phase !== 'explore') throw new GameError(s.phase === 'combat' ? 'A fight is already under way' : 'The adventure is not under way');
     const heroes = s.characters.filter((c) => !c.dead);
@@ -1416,6 +1416,8 @@ export class Game {
     }
     s.combat = { round: 1, order, turnIndex: -1, movementLeft: 0, actionUsed: false, bonusUsed: false, attacksLeft: 0, logFrom, roundFrom: [logFrom], ...(ambush ? { surprise: { side: ambush.side, ...(opener ? { opener: opener.c.id } : {}) } } : {}) };
     s.phase = 'combat';
+    const waiting = this.readyWaitMs > 0 ? s.players.filter((p) => p.connected && heroes.some((c) => c.ownerId === p.id)).map((p) => p.id) : [];
+    if (waiting.length) s.combat.ready = { why: this.whyFight(opts.why, ambush?.side ?? null, ambush?.caughtIds.length ?? 0), waiting, until: Date.now() + this.readyWaitMs };
     this.log('system', this.t`Combat! Initiative: ${order.map((o) => `${this.nameOf(o.id)} ${o.ambush ? `(${this.t`first, from hiding`})` : o.initiative}`).join(', ')}.`);
     this.beats.push({ kind: 'combat_start', monsters: s.monsters.map((m) => m.name), boss, context: opts.context });
     this.nextTurn();
@@ -1424,6 +1426,29 @@ export class Game {
     if (ambush.noStrike) out.noStrike = ambush.noStrike;
     if (opener && this.current()?.id === opener.c.id) out.strike = this.openingStrike(opener.c, opener.m);
     return out;
+  }
+
+  /** The line on the "get ready" card: the Dungeon Master's reason, or one from how the fight began. */
+  private whyFight(asked: string | undefined, side: SurpriseInfo['side'] | null, caught: number): string {
+    const why = String(asked ?? '').trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (why) return why;
+    if (side === 'party') return caught ? this.t`Ambush! The enemies are upon you before you see them.` : this.t`Ambush! But you spot the enemies in time.`;
+    if (side === 'enemies') return caught ? this.t`You catch the enemies unawares.` : this.t`The enemies notice you before you can strike.`;
+    return this.t`The enemies attack. The fight begins!`;
+  }
+
+  /** A player is ready for the fight to begin. Once nobody is left, the monsters may move. */
+  pressReady(playerId: string): boolean {
+    const r = this.s.combat?.ready;
+    if (!r) return true;
+    r.waiting = r.waiting.filter((id) => id !== playerId);
+    if (!r.waiting.length) this.s.combat!.ready = null;
+    return !this.s.combat!.ready;
+  }
+
+  /** The time to get ready is over: the fight begins. */
+  endReady() {
+    if (this.s.combat?.ready) this.s.combat.ready = null;
   }
 
   /**
@@ -5735,6 +5760,8 @@ export class Game {
   checkWaiter: ((check: PendingCheck) => Promise<void>) | null = null;
   pendingCheck: PendingCheck | null = null;
   checkWaitMs = 45000;
+  /** How long a new fight waits for its players to get ready before the first monster moves. 0 starts at once. */
+  readyWaitMs = 0;
   private checkSeq = 0;
 
   /** What a check will add to the d20, part by part, before anything is rolled. */

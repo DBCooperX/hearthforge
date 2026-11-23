@@ -20,6 +20,7 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_MUSIC` | `on` | `off` skips the music download and the player. |
 | `HEARTHFORGE_SFX` | `on` | `off` silences all effects. Kenney's CC0 packs are added by the owner under Assets → Sound effects. |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the DM waits for the other players after the first one acts. `0` answers every action at once. |
+| `HEARTHFORGE_READY_WAIT` | `60` | Seconds a new fight waits on its "get ready" card (why the fight starts, who the foes are) for every player to press To battle. After that, or once everyone is ready, the monsters move. `0` starts at once. |
 | `HEARTHFORGE_REACTION_WAIT` | `20` | Seconds a player gets to decide on an opportunity attack when an enemy leaves their hero's reach. After that the hero strikes. `0` never asks. |
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |

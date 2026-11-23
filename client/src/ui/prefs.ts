@@ -35,10 +35,12 @@ export interface Prefs {
   battleNarration: BattleNarrationMode;
   /** Portraits beside what people say in the story: large, small or none. */
   storyPortraits: StoryPortraits;
+  /** The battle ground as one painted picture, or as pixel tiles (which an art pack can replace). */
+  battleGround: 'painted' | 'pixel';
 }
 
 const KEY = 'hearthforge.prefs';
-const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5, battleNarration: DEFAULT_BATTLE_NARRATION, storyPortraits: 'large' };
+const DEFAULTS: Prefs = { sounds: true, soundVolume: 0.5, master: 1, masterMuted: false, mixerOpen: false, textSize: 'normal', invSort: 'manual', invFilter: 'all', creatorDetailed: false, edgeScroll: true, turnReminder: 20, chatChime: true, chatChimeVolume: 0.5, battleNarration: DEFAULT_BATTLE_NARRATION, storyPortraits: 'large', battleGround: 'painted' };
 const SCALE: Record<TextSize, string> = { normal: '1', large: '1.12', larger: '1.25' };
 
 function load(): Prefs {

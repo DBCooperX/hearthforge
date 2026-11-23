@@ -37,7 +37,7 @@ const matId = (m: Material) => Math.max(1, MATERIALS.indexOf(m));
 type Path = (ctx: CanvasRenderingContext2D) => void;
 
 /** A closed smooth curve through the points (Catmull-Rom, drawn as Bézier segments). */
-function smoothClosed(ctx: CanvasRenderingContext2D, p: P[], tension = 1) {
+export function smoothClosed(ctx: CanvasRenderingContext2D, p: P[], tension = 1) {
   const n = p.length;
   ctx.moveTo(p[0][0], p[0][1]);
   for (let i = 0; i < n; i++) {

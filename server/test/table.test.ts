@@ -215,7 +215,7 @@ class MemoryStore {
 function room(timing: Partial<RoomTiming> = {}, hooks: RoomHooks = {}) {
   const store = new MemoryStore() as unknown as Store;
   const dm = new RecordingDM();
-  const r = new Room('friday', dm, store, { actionDelayMs: 0, travelDelayMs: 0, turnWaitMs: 8000, hostGraceMs: 20000, ...timing }, hooks);
+  const r = new Room('friday', dm, store, { actionDelayMs: 0, travelDelayMs: 0, turnWaitMs: 8000, hostGraceMs: 20000, readyWaitMs: 0, ...timing }, hooks);
   return { r, dm, store };
 }
 
@@ -453,5 +453,50 @@ describe('opportunity attacks at a live table', () => {
     r.handle(ws(chris), { t: 'reaction', characterId: brann.id, take: false });
     await vi.advanceTimersByTimeAsync(10);
     expect(chris.state.log.some((l) => l.text === 'Brann lets Bandit go.')).toBe(true);
+  });
+});
+
+describe('getting ready for a fight', () => {
+  afterEach(() => vi.useRealTimers());
+
+  async function ambushed() {
+    vi.useFakeTimers();
+    const t = await playing({ readyWaitMs: 30000 });
+    const g = t.r.game;
+    let moved = 0;
+    (t.dm as any).runMonsters = async () => { moved++; return null; };
+    g.startEncounter([{ defId: 'bandit', count: 2 }], { source: 'story', context: 'test', light: 'bright', why: 'Your sneaking failed: the bandits draw their blades.' });
+    g.takeBeats();
+    const [brann, maeve] = g.s.characters;
+    const bandits = g.s.monsters.map((m) => ({ id: m.id, kind: 'monster' as const, initiative: 20 }));
+    g.s.combat!.order = [...bandits, { id: brann.id, kind: 'pc', initiative: 10 }, { id: maeve.id, kind: 'pc', initiative: 5 }];
+    g.s.combat!.turnIndex = 0;
+    (t.r as any).enqueue(() => (t.r as any).pump());
+    await vi.advanceTimersByTimeAsync(10);
+    return { ...t, g, moved: () => moved };
+  }
+
+  it('shows why the fight starts and holds the monsters until every player is ready', async () => {
+    const { r, chris, mira, moved } = await ambushed();
+    expect(chris.state.combat?.ready).toMatchObject({ why: 'Your sneaking failed: the bandits draw their blades.', waiting: ['chris', 'mira'] });
+    expect(moved()).toBe(0);
+    r.handle(ws(chris), { t: 'battle_ready' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(mira.state.combat?.ready?.waiting).toEqual(['mira']);
+    expect(moved()).toBe(0);
+    r.handle(ws(mira), { t: 'battle_ready' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(chris.state.combat?.ready ?? null).toBeNull();
+    expect(moved()).toBe(1);
+  });
+
+  it('starts anyway when the time is up, and never waits for a player who left', async () => {
+    const { r, chris, mira, moved } = await ambushed();
+    r.leave(ws(mira));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(chris.state.combat?.ready?.waiting).toEqual(['chris']);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(chris.state.combat?.ready ?? null).toBeNull();
+    expect(moved()).toBe(1);
   });
 });

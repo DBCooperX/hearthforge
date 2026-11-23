@@ -14,6 +14,7 @@ import { MapView } from './components/MapView';
 import { FightEndBanner, SurpriseBanner, useFightEnd } from './components/FightEnd';
 import { TurnCallout } from './components/TurnCallout';
 import { CheckRoll } from './components/CheckRoll';
+import { BattleReady } from './components/BattleReady';
 import { PartyPanel } from './components/PartyPanel';
 import { EntityProvider, StoryFeed } from './components/Story';
 import { LevelUp } from './components/LevelUp';
@@ -164,7 +165,11 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
     () => state?.characters.filter((c) => c.ownerId === playerId || !state.players.find((p) => p.id === c.ownerId)?.connected) ?? [],
     [state],
   );
-  const combat = state?.phase === 'combat' ? state.combat : null;
+  const rawCombat = state?.phase === 'combat' ? state.combat : null;
+  // A new fight first shows the story (and the picture the Dungeon Master painted for it) with a
+  // "get ready" card; the battle map opens once this player presses To battle.
+  const preparing = !!rawCombat?.ready?.waiting.includes(playerId);
+  const combat = preparing ? null : rawCombat;
   const [fightEnd, endFight] = useFightEnd(state);
   // After a fight: the story column and the world panel arrive in steps, and the Dungeon Master's
   // first scene after the battle gets an "After the battle" divider.
@@ -520,6 +525,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         <MobileTabs pane={shownPane} fighting={fighting} storyNew={logLength > storySeen.current} onPane={setPane} />
         {inn}
         <CheckRoll state={state} playerId={playerId} send={send} />
+        <BattleReady state={state} playerId={playerId} onReady={() => send({ t: 'battle_ready' })} />
         <Toasts conn={conn} />
       </div>
     </EntityProvider>

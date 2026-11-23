@@ -63,7 +63,7 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
 
   useEffect(() => {
     const now = latest.current;
-    const r = new MapRenderer({ view: mode, zoom: now.zoom, reducedMotion: reducedMotion(), labels: { miss: now.miss } });
+    const r = new MapRenderer({ view: mode, zoom: now.zoom, reducedMotion: reducedMotion(), labels: { miss: now.miss }, ground: getPrefs().battleGround });
     renderer.current = r;
     r.onTile = (x, y, touch) => click.current(x, y, touch);
     r.onZoom = (factor) => setZoom((z) => clampZoom(z * factor));
@@ -106,8 +106,9 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
   const pickMode = (m: BattleView) => { setMode(m); remember(VIEW_KEY, m); };
 
   // Looking around: edge scrolling (a setting), and Shift with the arrow keys or WASD.
-  const { edgeScroll } = usePrefs();
+  const { edgeScroll, battleGround } = usePrefs();
   useEffect(() => { renderer.current?.setEdgeScroll(edgeScroll); }, [edgeScroll, mode]);
+  useEffect(() => { renderer.current?.setGround(battleGround); }, [battleGround, mode]);
   useEffect(() => {
     const held = new Set<string>();
     const DIRS: Record<string, [number, number]> = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] };
