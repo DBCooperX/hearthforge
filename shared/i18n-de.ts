@@ -2632,4 +2632,10 @@ export const DE: Record<string, string> = {
   'Your ElevenLabs account has no credit left.': 'Dein ElevenLabs-Konto hat kein Guthaben mehr.',
   'The server does not know this sound.': 'Der Server kennt diesen Klang nicht.',
   'This sound is still being made.': 'Dieser Klang wird noch gemacht.',
+  'Make {n} starter sounds for about {usd}? They are made in the background, effects first; you can keep playing meanwhile.': '{n} Startklänge für etwa {usd} machen? Sie entstehen im Hintergrund, Geräusche zuerst; ihr könnt derweil weiterspielen.',
+  'Starter set': 'Startsammlung',
+  '{made} of {total} made': '{made} von {total} gemacht',
+  'Make the {n} missing for about {usd}': 'Die {n} fehlenden für etwa {usd} machen',
+  'Everything missing: {n} for about {usd}': 'Alles Fehlende: {n} für etwa {usd}',
+  'All made.': 'Alle gemacht.',
 };

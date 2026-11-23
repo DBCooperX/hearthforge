@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Your own sound library (phase 2): the starter set
+- **Starter set.** Sound and voice → Library now shows how much of the starter set is made and a button for the rest: 124 effects (several takes for every game moment, plus doors, chests, traps, beasts, bells and more found by words), 30 ambient loops (tavern, town, harbour, forest, caves, crypts, weather) and 32 music tracks (every scene, plus moods such as a misty harbour, a sad farewell, a festival or a chase). About $14 for all of it at ElevenLabs' list prices; the button shows the price before anything is made. Effects are made first, so they are heard within minutes while the music is composed. A starter sound you delete is not made again; one that failed is tried again.
+
 ### Your own sound library (phase 1)
 - **Sound and voice → Library.** Describe a piece of music, an ambient loop or a sound effect, and the server makes it with your ElevenLabs key (Sound Effects for effects and seamless loops, Eleven Music for instrumental music). It runs in the background; players hear it in its scene, or at its game moment, as soon as it is ready. Scenes and moments without a library sound keep the older music and effects for now. Listen, rename, move to another scene or moment, switch off, make a new take (the old one plays until the new one is there) or remove. If ElevenLabs refuses (for example music on an account without a plan), the reason is shown on the sound.
 - **Download as a zip.** Music, ambient loops, effects or everything, with a `library.json` that names every file, to keep your own copy.

@@ -38,6 +38,19 @@ export interface LibraryEntry {
   createdAt: number;
   /** Players do not hear it. */
   disabled?: boolean;
+  /** The line of the starter set it was made from. */
+  starter?: string;
+}
+
+/** How far the starter set is made, per kind. */
+export interface StarterProgress {
+  /** Lines in the starter set. */
+  total: number;
+  /** Lines with a sound in the library (ready, or being made). */
+  made: number;
+  /** Lines still to make, and what they cost at the list price. Lines the owner deleted are not made again. */
+  missing: number;
+  missingUsd: number;
 }
 
 export interface LibraryView {
@@ -46,6 +59,7 @@ export interface LibraryView {
   entries: LibraryEntry[];
   /** Dollars per minute the server books for each kind. */
   usdPerMinute: Record<LibraryKind, number>;
+  starter: Record<LibraryKind, StarterProgress>;
 }
 
 /** ElevenLabs API list prices (elevenlabs.io/pricing/api, 23 November 2026). */
