@@ -8,6 +8,8 @@ import type { ItemDef } from './types';
 export interface ArtRef {
   src: string;
   rect?: { x: number; y: number; w: number; h: number };
+  /** Painted on a flat key colour that the browser takes out (the server's own icons). */
+  key?: boolean;
 }
 
 export type TilePack = 'generated' | 'kenney' | '0x72';

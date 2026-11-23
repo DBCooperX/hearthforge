@@ -31,6 +31,7 @@ import { NarratorLibrary } from './NarratorLibrary';
 import { PictureLibrary } from './PictureLibrary';
 import { SoundLibrary } from './SoundLibrary';
 import { LibraryPane } from './LibraryPane';
+import { IconPane } from './IconPane';
 import { TabBar, Window } from './Window';
 import { ask } from './Confirm';
 
@@ -176,10 +177,10 @@ function SoundPane(pane: PaneProps & { go: (tab: Tab) => void }) {
 }
 
 function ArtPane(pane: PaneProps & { go: (tab: Tab) => void }) {
-  const [sub, setSub] = useState<keyof typeof ART_TABS>('art');
+  const [sub, setSub] = useState<keyof typeof ART_TABS>('icons');
   return (
     <SubTabs tabs={ART_TABS} value={sub} onChange={setSub}>
-      {(tab) => tab === 'art' ? <ArtWindow embedded /> : tab === 'pictures' ? <PictureLibrary onKeys={() => setSub('settings')} /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}
+      {(tab) => tab === 'icons' ? <IconPane /> : tab === 'art' ? <ArtWindow embedded /> : tab === 'pictures' ? <PictureLibrary onKeys={() => setSub('settings')} /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}
     </SubTabs>
   );
 }

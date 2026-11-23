@@ -2,6 +2,7 @@
 // get it back the moment the pack is switched off.
 import { useSyncExternalStore } from 'react';
 import { iconSlotsOf, type ArtRef } from '../../../shared/art';
+import { keyOut } from './chromaKey';
 import type { ItemDef } from '../../../shared/types';
 
 let urls = new Map<string, string>();
@@ -18,19 +19,41 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 /** A picture as something an <img> can show: the file itself, or its rectangle cut out of a sheet. */
 export async function artUrl(ref: ArtRef): Promise<string> {
-  if (!ref.rect) return ref.src;
-  const img = await loadImage(ref.src);
+  if (!ref.rect && !ref.key) return ref.src;
+  const img = await sheet(ref.src);
+  const r = ref.rect ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+  // The server's own icons are painted large; a quarter of a sheet is kept at a size that stays sharp on the hotbar.
+  const out = ref.key ? Math.min(r.w, ICON_PX) : r.w;
   const c = document.createElement('canvas');
-  c.width = ref.rect.w;
-  c.height = ref.rect.h;
-  c.getContext('2d')!.drawImage(img, ref.rect.x, ref.rect.y, ref.rect.w, ref.rect.h, 0, 0, ref.rect.w, ref.rect.h);
+  c.width = out;
+  c.height = Math.round((r.h * out) / r.w);
+  const g = c.getContext('2d', { willReadFrequently: !!ref.key })!;
+  g.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+  if (ref.key) {
+    const data = g.getImageData(0, 0, c.width, c.height);
+    keyOut(data.data, c.width, c.height);
+    g.putImageData(data, 0, 0);
+  }
   return c.toDataURL();
+}
+
+const ICON_PX = 160;
+/** Sheets hold four icons each, so each is loaded once however many quarters are cut from it. */
+const sheets = new Map<string, Promise<HTMLImageElement>>();
+function sheet(src: string) {
+  let p = sheets.get(src);
+  if (!p) { p = loadImage(src); sheets.set(src, p); p.catch(() => sheets.delete(src)); }
+  return p;
 }
 
 export async function setItemIcons(icons: Record<string, ArtRef>): Promise<void> {
   const next = new Map<string, string>();
+  // Many slots share one picture (all the healing spells, say): cut each picture once.
+  const cut = new Map<string, Promise<string>>();
   await Promise.all(Object.entries(icons).map(async ([slot, ref]) => {
-    try { next.set(slot, await artUrl(ref)); } catch { /* keeps its emoji */ }
+    const id = JSON.stringify(ref);
+    if (!cut.has(id)) cut.set(id, artUrl(ref));
+    try { next.set(slot, await cut.get(id)!); } catch { /* keeps its emoji */ }
   }));
   urls = next;
   listeners.forEach((l) => l());

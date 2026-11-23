@@ -14,6 +14,7 @@ import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { readBody as readRaw } from './http';
 import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
 import { LibraryError, SoundLibrary } from './library';
+import { IconError, IconLibrary } from './iconLibrary';
 import { isLibraryKind, searchLibrary, type LibraryEntry } from '../../shared/library';
 import { soundReady, type SoundHit } from './game/sounds';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
@@ -221,6 +222,29 @@ const library = new SoundLibrary(LIBRARY_DIR, env, {
     soundsChanged = setTimeout(() => { soundsChanged = null; announceAssets({ music: true, sfx: true }); }, 500);
   },
 });
+/**
+ * The server's own icons, painted with the picture service set up under Art → Story illustrations, paid by the
+ * Innkeeper's account that pressed the button. Players see a new icon as soon as its sheet is there.
+ */
+let iconsChanged: NodeJS.Timeout | null = null;
+const icons = new IconLibrary(env.ICONS_DIR ?? join(DATA_DIR, 'icons'), {
+  painter: () => illustrator.iconPainter(),
+  onCost: (usd, payer) => {
+    usage.recordExtra('Icon library', 'images', usd);
+    if (payer.account && accounts.get(payer.account)) tellCredits(credits.charge([payer.account], usd, 'images'));
+  },
+  onChange: () => {
+    if (iconsChanged) return;
+    iconsChanged = setTimeout(() => { iconsChanged = null; announceAssets({ icons: true }); }, 500);
+  },
+});
+
+/** The icons players see: the server's own first, then the icon pack in use, then the emoji. */
+function artNow() {
+  const m = art.manifest();
+  return { ...m, icons: { ...m.icons, ...icons.refs() } };
+}
+
 /** One-time links for the library download, so a big zip can stream straight to the browser's download. */
 const libraryDownloads = new Map<string, { kind: string; until: number }>();
 
@@ -529,7 +553,7 @@ async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   const canEdit = ART_UPLOADS && admin.authorised(req);
   try {
     if (req.method === 'GET') {
-      if (url.pathname === '/api/art') return json(200, art.manifest());
+      if (url.pathname === '/api/art') return json(200, artNow());
       if (url.pathname === '/api/art/library') return json(200, art.library(canEdit, ART_UPLOADS));
       if (url.pathname === '/api/art/icons') return json(200, art.packIcons(url.searchParams.get('pack') ?? ''));
       return json(404, { error: 'bad_request' });
@@ -673,6 +697,35 @@ async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
 }
 
+/** The icons belong to the owner of the server: they are painted and picked from the Innkeeper. */
+async function iconsApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(body));
+  };
+  try {
+    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
+    if (req.method === 'GET' && url.pathname === '/api/icons') return json(200, { ...icons.view(), money: moneyNow() });
+    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    const body = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
+    const me = accounts.account(req.headers[SESSION_HEADER]);
+    const payer = { account: me?.id };
+    if (url.pathname === '/api/icons/make') icons.makeMissing(payer);
+    else if (url.pathname === '/api/icons/action') {
+      if (body.do === 'repaint') icons.repaint(body.id, body.hint, payer);
+      else if (body.do === 'choose') icons.choose(body.id, body.sheet, body.cell);
+      else if (body.do === 'enable') icons.setEnabled(body.id, body.on !== false);
+      else throw new IconError('bad_request');
+    } else return json(404, { error: 'bad_request' });
+    return json(200, { ...icons.view(), money: moneyNow() });
+  } catch (err) {
+    if (err instanceof IconError) return json(err.code === 'not_found' ? 404 : 400, { error: err.code });
+    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
+    console.warn('[icons]', err);
+    return json(500, { error: 'failed' });
+  }
+}
+
 /** The sound library belongs to the owner of the server, like the music: it is changed from the Innkeeper. */
 async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   const json = (status: number, body: unknown) => {
@@ -702,7 +755,7 @@ async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       return json(200, library.library());
     }
     if (url.pathname === '/api/library/download') {
-      const kind = isLibraryKind(body.kind) ? body.kind : 'all';
+      const kind = isLibraryKind(body.kind) || body.kind === 'icons' ? body.kind : 'all';
       const token = randomBytes(18).toString('hex');
       const now = Date.now();
       for (const [k, v] of libraryDownloads) if (v.until < now) libraryDownloads.delete(k);
@@ -910,7 +963,20 @@ const server = createServer((req, res) => {
     const ticket = libraryDownloads.get(url.pathname.slice(18));
     if (!ticket || ticket.until < Date.now()) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('This download link has run out. Press Download again.'); return; }
     libraryDownloads.delete(url.pathname.slice(18));
-    library.archive(isLibraryKind(ticket.kind) ? ticket.kind : null, res);
+    if (ticket.kind === 'icons') icons.archive(res);
+    else library.archive(isLibraryKind(ticket.kind) ? ticket.kind : null, res);
+    return;
+  }
+  if (url.pathname === '/api/icons' || url.pathname.startsWith('/api/icons/')) {
+    void iconsApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith('/icons/')) {
+    // A sheet's name is its content's hash, so it never changes and can be kept forever.
+    const found = icons.file(url.pathname.slice(7));
+    if (!found) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Not found'); return; }
+    res.writeHead(200, { 'content-type': found.mime, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+    createReadStream(found.path).pipe(res);
     return;
   }
   if (url.pathname.startsWith('/library/')) {
@@ -1133,6 +1199,7 @@ server.listen(PORT, () => {
   console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
   console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
   console.log(`Sound library: ${library.summary()} in ${LIBRARY_DIR}${env.ELEVENLABS_API_KEY?.trim() ? "" : " (add an ElevenLabs key to make new sounds)"}`);
+  console.log(`Icons: ${icons.summary()}`);
   const voice = narrator.manifest();
   const pics = illustrator.library();
   console.log(`Story illustrations: ${!pics.config.on ? 'off (switch them on in Innkeeper → Art)' : !pics.keys[pics.config.provider] ? `${pics.config.provider} has no key yet` : `${pics.config.provider} ${pics.config.models[pics.config.provider]}`}.`);

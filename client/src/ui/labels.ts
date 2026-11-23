@@ -89,7 +89,12 @@ export const INN_TABS = {
   sound: 'Sound and voice', art: 'Art', server: 'Server',
 } as const;
 export const SOUND_TABS = { library: 'Library', music: 'Music', ambient: 'Ambient sounds', effects: 'Sound effects', narrator: 'Narrator', settings: 'Switches and keys' } as const;
-export const ART_TABS = { art: 'Art packs', pictures: 'Illustrations', settings: 'Switches and keys' } as const;
+export const ART_TABS = { icons: 'Icons', art: 'Art packs', pictures: 'Illustrations', settings: 'Switches and keys' } as const;
+export const ICON_ERRORS: Record<string, string> = {
+  no_key: 'Set up a picture service with a key under Illustrations first. Icons are painted with the same one.',
+  busy: 'That icon is being painted already.',
+  failed: 'That did not work. Try again in a moment.',
+};
 export const SERVER_TABS = { server: 'Updates and restart', backups: 'Backups', logs: 'Log' } as const;
 export const INN_SECTIONS = {
   ai: 'AI and models', newTables: 'New tables start with', timing: 'Timing at the table', switches: 'On and off for everyone',
@@ -121,7 +126,7 @@ export const ALL_LABELS: string[] = [
   ...Object.values(SHOP_NAMES), ...Object.values(SHOP_BLURBS), ...TRADE_MOODS,
   ...Object.values(LOG_FILTERS), ...Object.values(CLOSED_REASONS), ...Object.values(INN_MISC), ...Object.values(INN_TABS), ...Object.values(SOUND_TABS), ...Object.values(ART_TABS), ...Object.values(SERVER_TABS), ...Object.values(INN_SECTIONS), ...Object.values(SOURCE_LABELS), ...Object.values(PHASE_LABELS), ...Object.values(UPDATER_STATES), ...Object.values(KEY_RESULTS),
   ...Object.values(ADMIN_ERRORS), ...Object.values(ACCOUNT_ERRORS), ...Object.values(SETTING_GROUPS), ...SETTINGS.flatMap((d) => [d.label, d.help]),
-  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(SFX_EVENT_LABELS), ...Object.values(LIBRARY_KIND_LABELS), ...Object.values(LIBRARY_ERRORS),
+  ...Object.values(ART_ERRORS), ...Object.values(MUSIC_ERRORS), ...Object.values(SFX_ERRORS), ...Object.values(VOICE_ERRORS), ...Object.values(PROVIDER_LABELS), ...PIPER_VOICES.map((v) => v.label), ...SFX_PACKS.map((p) => p.name), 'Other recordings', ...Object.values(SCENE_LABELS), ...Object.values(ACCESS_LABELS), ...Object.values(SFX_EVENT_LABELS), ...Object.values(LIBRARY_KIND_LABELS), ...Object.values(LIBRARY_ERRORS), ...Object.values(ICON_ERRORS),
   ...Object.values(FILTER_LABELS), ...Object.values(SORT_LABELS), ...Object.values(STAT_LABELS), ...Object.values(ITEM_KIND_LABELS), ...Object.values(NAV_LABELS),
   ...Object.values(TIER_LABELS), ...Object.values(TIER_TEXT), ...FACTIONS.map((f) => f.blurb), ...TROPHIES.flatMap((x) => [x.name, x.text]),
   ...Object.values(JOURNAL_TABS), ...Object.values(QUEST_HEADS), ...Object.values(JOURNAL_EMPTY), ...Object.values(SIZE_LABELS), ...SHORTCUTS.map((s) => s.text),
