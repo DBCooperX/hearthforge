@@ -623,10 +623,23 @@ export interface LevelUpInfo {
   gains: string[];
 }
 
+/** What a story event is about. The story log shows these as framed cards with an icon instead of a small grey line. */
+export const STORY_EVENTS = ['item', 'gold', 'travel', 'place', 'quest', 'quest-done', 'quest-failed', 'clue', 'rest', 'xp', 'shop', 'companion', 'trophy', 'standing', 'victory', 'defeat', 'ambush'] as const;
+export type StoryEventType = (typeof STORY_EVENTS)[number];
+export interface StoryEvent {
+  type: StoryEventType;
+  /** For 'item': the item whose own icon the card shows. */
+  itemId?: string;
+  /** For 'gold': positive when the party gains gold, negative when it pays. */
+  amount?: number;
+}
+
 export interface LogEntry {
   id: number;
   kind: LogKind;
   text: string;
+  /** Set on system lines that deserve a framed card: loot, travel, quests, rests and so on. */
+  event?: StoryEvent;
   speaker?: string;
   scene?: SceneMeta;
   roll?: RollInfo;

@@ -560,7 +560,7 @@ export class Game {
   get width() { return this.s.rows[0]?.length ?? 0; }
   get height() { return this.s.rows.length; }
 
-  log(kind: LogKind, text: string, extra: Partial<Pick<LogEntry, 'speaker' | 'scene' | 'roll' | 'levelUp' | 'battle'>> = {}) {
+  log(kind: LogKind, text: string, extra: Partial<Pick<LogEntry, 'speaker' | 'scene' | 'roll' | 'levelUp' | 'battle' | 'event'>> = {}) {
     this.s.log.push({ id: ++this.s.logSeq, kind, text, ...extra });
     if (this.s.log.length > MAX_LOG) this.s.log.splice(0, this.s.log.length - MAX_LOG);
   }
@@ -1124,7 +1124,7 @@ export class Game {
     if (!loc || !loc.discovered) throw new GameError(this.t`You do not know that place`);
     if (!sameHex(loc, this.world.party)) throw new GameError(this.t`${loc.name} is not here. Travel there on the map.`);
     if (this.world.placeId === loc.id) return;
-    this.log('system', this.t`The party heads to ${loc.name}.`);
+    this.log('system', this.t`The party heads to ${loc.name}.`, { event: { type: 'travel' } });
     this.arriveAt(loc);
   }
 
@@ -1245,7 +1245,7 @@ export class Game {
     const root = this.rootOf(loc);
     if (root !== loc) this.settleIn(root);
     const firstVisit = this.settleIn(loc);
-    this.log('system', this.t`The party travels ${journey} and reaches ${loc.name}. ${formatTime(w.minutes, this.lang)}.`);
+    this.log('system', this.t`The party travels ${journey} and reaches ${loc.name}. ${formatTime(w.minutes, this.lang)}.`, { event: { type: 'travel' } });
     return { now_at: loc.name, moved: true, minutes, journey, firstVisit };
   }
 
@@ -1291,7 +1291,7 @@ export class Game {
     if (!here && !s.setting?.campaign && this.rng() < encounterChance(code, w.minutes)) {
       const journey = this.journeyText(t);
       s.travel = null;
-      this.log('system', this.t`After ${journey}, the party is set upon. ${formatTime(w.minutes, this.lang)}.`);
+      this.log('system', this.t`After ${journey}, the party is set upon. ${formatTime(w.minutes, this.lang)}.`, { event: { type: 'ambush' } });
       const table = ENCOUNTERS[code] ?? ENCOUNTERS.p;
       this.startEncounter(table[Math.floor(this.rng() * table.length)], { source: 'wild', context: `The party is ambushed on the road after ${journey}, in ${TERRAIN[code].name}.` });
       return false;
@@ -1310,13 +1310,13 @@ export class Game {
     const journey = this.journeyText(t);
     const here = w.locations.find((l) => !l.parentId && sameHex(l, w.party));
     if (!t.hexes) {
-      this.log('system', this.t`The party finds no way forward.`);
+      this.log('system', this.t`The party finds no way forward.`, { event: { type: 'travel' } });
       return false;
     }
     const sighted = found.filter((l) => l !== here);
     const when = formatTime(w.minutes, this.lang);
     const far = sighted.length ? ` ${this.t`In the distance: ${sighted.map((l) => l.name).join(', ')}.`}` : '';
-    this.log('system', (here ? this.t`The party travels ${journey} and reaches ${here.name}. ${when}.` : this.t`The party travels ${journey}. ${when}.`) + far);
+    this.log('system', (here ? this.t`The party travels ${journey} and reaches ${here.name}. ${when}.` : this.t`The party travels ${journey}. ${when}.`) + far, { event: { type: 'travel' } });
     if (here) this.arriveAt(here, journey);
     else if (sighted.length) this.beats.push({ kind: 'discover', locations: sighted.map((l) => `${l.name} (${l.kind}) to the ${direction(w.party, l)}`), journey });
     else this.beats.push({ kind: 'travel_end', journey, reason: reason === 'blocked' ? 'blocked' : 'arrived' });
@@ -1329,7 +1329,7 @@ export class Game {
     const loc = this.place();
     const stage = loc?.stages?.[loc.cleared ?? 0];
     if (!loc || !stage) throw new GameError(loc?.stages ? this.t`${loc.name} has been cleared` : this.t`There is nothing to delve into here`);
-    this.log('system', this.t`The party pushes into ${stage.name}.`);
+    this.log('system', this.t`The party pushes into ${stage.name}.`, { event: { type: 'travel' } });
     this.startEncounter(stage.monsters, { source: 'dungeon', locationId: loc.id, context: `The party delves into ${stage.name} of ${loc.name}. ${stage.description}` });
   }
 
@@ -1785,7 +1785,7 @@ export class Game {
       if (!survivors.length) {
         s.phase = 'defeat';
         s.lastFight = ending('defeat');
-        this.log('system', this.t`The party has fallen.`);
+        this.log('system', this.t`The party has fallen.`, { event: { type: 'defeat' } });
         this.beats.push({ kind: 'defeat' });
         return true;
       }
@@ -1799,7 +1799,7 @@ export class Game {
       if (haven) { w.party = { q: haven.q, r: haven.r }; this.settleIn(haven); reveal(w, w.party, 1); }
       s.phase = 'explore';
       s.lastFight = ending('rescued', { gold: -lost });
-      this.log('system', (haven ? this.t`The party is overwhelmed. The survivors wake in ${haven.name} the next morning with 1 HP.` : this.t`The party is overwhelmed. The survivors wake where they fell the next morning with 1 HP.`) + (lost ? ` ${this.t`They are ${lost} gp lighter.`}` : ''));
+      this.log('system', (haven ? this.t`The party is overwhelmed. The survivors wake in ${haven.name} the next morning with 1 HP.` : this.t`The party is overwhelmed. The survivors wake where they fell the next morning with 1 HP.`) + (lost ? ` ${this.t`They are ${lost} gp lighter.`}` : ''), { event: { type: 'defeat' } });
       this.beats.push({ kind: 'rescued' });
       return true;
     }
@@ -1839,7 +1839,7 @@ export class Game {
       stage ? this.t`Victory in ${stage.name}.` : this.t`Victory.`,
       rewards.length ? this.t`The party finds ${rewards.join(', ')}.` : '',
       loc && stage && loc.cleared! >= loc.stages!.length ? this.t`${loc.name} is cleared.` : '',
-    ].filter(Boolean).join(' '));
+    ].filter(Boolean).join(' '), { event: { type: 'victory' } });
     s.monsters = [];
     s.rows = [];
     const levels = new Map(s.characters.map((c) => [c.id, c.level]));
@@ -1894,7 +1894,7 @@ export class Game {
     const heroes = this.s.characters.filter((c) => !c.dead);
     if (!heroes.length || total <= 0) return;
     const each = Math.max(1, Math.floor(total / heroes.length));
-    this.log('system', this.t`The party gains ${each * heroes.length} XP (${each} each) for ${reason}.`);
+    this.log('system', this.t`The party gains ${each * heroes.length} XP (${each} each) for ${reason}.`, { event: { type: 'xp' } });
     const leveled: string[] = [];
     for (const c of heroes) {
       c.xp += each;
@@ -3205,7 +3205,7 @@ export class Game {
     this.refreshCompanion(c);
     c.hp = c.maxHp;
     s.companions.push(c);
-    this.log('system', this.t`${c.name} joins the party as a companion.`);
+    this.log('system', this.t`${c.name} joins the party as a companion.`, { event: { type: 'companion' } });
     return this.companionReport(c);
   }
 
@@ -3260,7 +3260,7 @@ export class Game {
     this.s.companions = this.s.companions.filter((x) => x !== c);
     const npc = this.s.memory.npcs.find((n) => n.id === c.companion?.npcId);
     if (npc && !c.dead) npc.locationId = this.s.world?.placeId ?? null;
-    this.log('system', c.dead ? this.t`The party lays ${c.name} to rest.` : this.t`${c.name} leaves the party.`);
+    this.log('system', c.dead ? this.t`The party lays ${c.name} to rest.` : this.t`${c.name} leaves the party.`, { event: { type: 'companion' } });
     return { left: c.name, ...(kept.length ? { handed_to_heroes: kept } : {}) };
   }
 
@@ -5411,7 +5411,7 @@ export class Game {
     this.needExplore();
     if (this.s.shortRestsLeft <= 0) throw new GameError(this.t`The party needs a long rest before another short one helps`);
     this.advanceTime(60);
-    this.log('system', this.t`The party rests for an hour. ${this.recoverShort()}`);
+    this.log('system', this.t`The party rests for an hour. ${this.recoverShort()}`, { event: { type: 'rest' } });
   }
 
   /** Eight hours of sleep. Outside a safe place the camp may be attacked instead. */
@@ -5421,14 +5421,14 @@ export class Game {
     if (w.minutes - this.s.lastLongRest < 16 * 60) throw new GameError(this.t`The party is not tired enough for another long rest yet`);
     if (!this.isSafe() && !this.s.setting?.campaign && this.rng() < 0.3) {
       this.advanceTime(4 * 60);
-      this.log('system', this.t`The camp is attacked in the night!`);
+      this.log('system', this.t`The camp is attacked in the night!`, { event: { type: 'ambush' } });
       const code = trueTerrain(w, w.party);
       const table = ENCOUNTERS[code] ?? ENCOUNTERS.p;
       this.startEncounter(table[Math.floor(this.rng() * table.length)], { source: 'wild', context: 'The party made camp in the wild and is attacked in the middle of the night.' });
       return;
     }
     this.advanceTime(8 * 60);
-    this.log('system', this.t`The party sleeps for eight hours and wakes restored. ${formatTime(w.minutes, this.lang)}. ${this.recoverLong()}`);
+    this.log('system', this.t`The party sleeps for eight hours and wakes restored. ${formatTime(w.minutes, this.lang)}. ${this.recoverLong()}`, { event: { type: 'rest' } });
     this.beats.push({ kind: 'rest', long: true });
   }
 
@@ -5448,7 +5448,7 @@ export class Game {
     }
     this.advanceTime(Math.max(0, (long ? 8 * 60 : 60) - Math.max(0, passed)));
     const restored = long ? this.recoverLong() : this.recoverShort();
-    this.log('system', long ? this.t`Long rest. ${restored}` : this.t`Short rest. ${restored}`);
+    this.log('system', long ? this.t`Long rest. ${restored}` : this.t`Short rest. ${restored}`, { event: { type: 'rest' } });
     return { rested: true, kind: long ? 'long' : 'short', restored, ...(kind === 'long' && !long ? { note: 'Too soon after the last long rest, so it counts as a short rest.' } : {}) };
   }
 
@@ -5644,7 +5644,7 @@ export class Game {
     this.s.stats.trades++;
     // Spending money in guild shops earns a little goodwill, but only up to a point.
     if (price >= 50 && shop.kind !== 'peddler' && (this.s.factions.find((f) => f.id === 'guild')?.standing ?? 0) < 30) shiftStanding(this, 'guild', 1, this.t`steady custom`);
-    this.log('system', this.t`${c.name} buys ${this.countOf(def, qty)} at ${shop.name} for ${price} gp.`);
+    this.log('system', this.t`${c.name} buys ${this.countOf(def, qty)} at ${shop.name} for ${price} gp.`, { event: { type: 'shop' } });
     return { item: def.name, quantity: qty, price, gold: this.s.gold };
   }
 
@@ -5669,7 +5669,7 @@ export class Game {
     shop.gold -= total;
     const shelf = shop.stock.find((e) => e.defId === def.id);
     if (shelf) shelf.qty += qty; else shop.stock.push({ defId: def.id, qty });
-    this.log('system', this.t`${c.name} sells ${this.countOf(def, qty)} at ${shop.name} for ${total} gp.`);
+    this.log('system', this.t`${c.name} sells ${this.countOf(def, qty)} at ${shop.name} for ${total} gp.`, { event: { type: 'shop' } });
     this.s.stats.trades++;
     return { item: def.name, quantity: qty, price: total, gold: this.s.gold };
   }
@@ -5996,11 +5996,11 @@ export class Game {
     if (text && !m.clues.some((c) => key(c.text) === key(text))) {
       m.clues.push({ day: this.day(), text, source: (input.source ?? '').trim().slice(0, 60), place: this.stage().where });
       if (m.clues.length > 15) m.clues.shift();
-      this.log('system', this.t`A clue for your journal: ${m.question}`);
+      this.log('system', this.t`A clue for your journal: ${m.question}`, { event: { type: 'clue' } });
     }
     if (input.solved !== undefined && input.solved !== m.solved) {
       m.solved = input.solved;
-      if (m.solved) this.log('system', this.t`Solved: ${m.question}`);
+      if (m.solved) this.log('system', this.t`Solved: ${m.question}`, { event: { type: 'clue' } });
     }
     return { id: m.id, question: m.question, clues: m.clues.length, solved: m.solved };
   }
@@ -6104,7 +6104,7 @@ export class Game {
       description: input.description.trim().slice(0, 500), visited: false, origin: 'dm', visual: { description: (input.appearance ?? '').trim().slice(0, 400), imageId: null }, zone: null, discovered: true,
     };
     w.locations.push(loc);
-    this.log('system', parentId || sameHex(at, w.party) ? this.t`New place: ${loc.name}.` : this.t`${loc.name} is marked on the map, ${hexDistance(w.party, at) * HEX_MILES} miles to the ${this.n(direction(w.party, at))}.`);
+    this.log('system', parentId || sameHex(at, w.party) ? this.t`New place: ${loc.name}.` : this.t`${loc.name} is marked on the map, ${hexDistance(w.party, at) * HEX_MILES} miles to the ${this.n(direction(w.party, at))}.`, { event: { type: 'place' } });
     return { id: loc.id, name: loc.name, created: true, ...this.whereIs(loc) };
   }
 
@@ -6124,7 +6124,7 @@ export class Game {
       if (mem.quests.length >= 60) throw new GameError(this.t`The quest log is full`);
       q = { id: this.uniqueId('quest', title, (id) => mem.quests.some((x) => x.id === id)), title, status: 'active', summary: '', notes: [] };
       mem.quests.push(q);
-      this.log('system', this.t`New quest: ${q.title}.`);
+      this.log('system', this.t`New quest: ${q.title}.`, { event: { type: 'quest' } });
       if (this.s.world) logEvent(this, { what: `The party took on the quest "${q.title}".`, by: 'party' });
     }
     if (input.summary?.trim()) q.summary = input.summary.trim().slice(0, 400);
@@ -6132,10 +6132,10 @@ export class Game {
     if (input.status && input.status !== q.status) {
       const was = q.status;
       q.status = input.status;
-      this.log('system', this.t`Quest ${this.n(q.status)}: ${q.title}.`);
+      this.log('system', this.t`Quest ${this.n(q.status)}: ${q.title}.`, { event: { type: q.status === 'completed' ? 'quest-done' : q.status === 'failed' ? 'quest-failed' : 'quest' } });
       if (this.s.world) logEvent(this, { what: `The party ${q.status} the quest "${q.title}".`, by: 'party' });
       if (was === 'active' && q.status === 'completed') {
-        if (q.rewardGold) { this.s.gold += q.rewardGold; this.log('system', this.t`Reward: ${q.rewardGold} gp.`); }
+        if (q.rewardGold) { this.s.gold += q.rewardGold; this.log('system', this.t`Reward: ${q.rewardGold} gp.`, { event: { type: 'gold', amount: q.rewardGold } }); }
         if (q.rewardXp) this.grantXp(q.rewardXp, this.t`completing "${q.title}"`);
         q.rewardGold = 0;
         q.rewardXp = 0;
@@ -6181,7 +6181,7 @@ export class Game {
     if (this.s.gold + delta < 0) throw new GameError(this.t`The party only has ${this.s.gold} gp`);
     this.s.gold += delta;
     this.spoils({ gold: delta });
-    if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + (reason.trim() ? ` (${reason.trim().slice(0, 100)})` : '') + '.');
+    if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + (reason.trim() ? ` (${reason.trim().slice(0, 100)})` : '') + '.', { event: { type: 'gold', amount: delta } });
     return { gold: this.s.gold };
   }
 
@@ -6202,7 +6202,7 @@ export class Game {
     if (c.dead) throw new GameError(this.t`${c.name} is dead`);
     const n = Math.max(1, Math.min(def.stackable ? 10 : 1, Math.round(qty) || 1));
     if (!this.addToBag(c, itemId, n)) throw new GameError(this.t`${c.name}'s bag is full`);
-    this.log('system', this.t`${c.name} receives ${`${n > 1 ? `${n}× ` : ''}${this.n(def.name)}`}.`);
+    this.log('system', this.t`${c.name} receives ${`${n > 1 ? `${n}× ` : ''}${this.n(def.name)}`}.`, { event: { type: 'item', itemId: def.id } });
     this.spoils({ item: `${n > 1 ? `${n}× ` : ''}${this.n(def.name)} (${c.name})` });
     return { character: c.name, item: def.name, quantity: n };
   }
@@ -6303,7 +6303,7 @@ export class Game {
     if (created) this.s.items[def.id] = def;
     this.addToBag(taker, def.id, qty);
     this.addItemNote(def, input.note);
-    this.log('system', this.t`${taker.name} receives ${`${qty > 1 ? `${qty}× ` : ''}${def.name}`}.`);
+    this.log('system', this.t`${taker.name} receives ${`${qty > 1 ? `${qty}× ` : ''}${def.name}`}.`, { event: { type: 'item', itemId: def.id } });
     this.spoils({ item: `${qty > 1 ? `${qty}× ` : ''}${def.name} (${taker.name})` });
     return { character: taker.name, item: def.name, item_id: def.id, quantity: qty, created, quest_item: !!def.story?.quest };
   }
@@ -6464,7 +6464,7 @@ export class Game {
   testGold(amount: number) {
     const delta = Math.max(-1e6, Math.min(1e6, Math.round(amount) || 0));
     this.s.gold = Math.max(0, this.s.gold + delta);
-    if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + '.');
+    if (delta) this.log('system', (delta > 0 ? this.t`The party gains ${delta} gp` : this.t`The party pays ${-delta} gp`) + '.', { event: { type: 'gold', amount: delta } });
   }
 
   /** Walk the party into a known place at once, and to a spot on its zone map. */
@@ -6477,7 +6477,7 @@ export class Game {
     w.party = { q: loc.q, r: loc.r };
     const i = loc.r * w.width + loc.q;
     if (i >= 0 && i < w.explored.length) w.explored = w.explored.slice(0, i) + '1' + w.explored.slice(i + 1);
-    this.log('system', this.t`The party heads to ${loc.name}.`);
+    this.log('system', this.t`The party heads to ${loc.name}.`, { event: { type: 'travel' } });
     this.arriveAt(loc);
     if (spot.trim()) enterSpot(this, spot.trim());
     return loc;
@@ -6488,7 +6488,7 @@ export class Game {
     const w = this.world;
     for (const l of w.locations) l.discovered = true;
     w.explored = '1'.repeat(w.width * w.height);
-    this.log('system', this.t`Every place of the region is now on the map.`);
+    this.log('system', this.t`Every place of the region is now on the map.`, { event: { type: 'place' } });
   }
 
   /** What a test fight needs to catch the enemies unawares: a Stealth success from just now. */

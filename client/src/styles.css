@@ -141,6 +141,16 @@ input { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; wi
 .said b { display: block; font-weight: 600; }
 .line { padding: 0 4px; }
 .line.system { font-style: italic; }
+.event { --ev: #c8b27a; display: flex; align-items: center; gap: 14px; margin: 6px auto; padding: 10px 16px 10px 12px; width: min(560px, 100%); border: 1px solid var(--ev); border-left-width: 5px; border-radius: 10px; background: color-mix(in srgb, var(--ev) 12%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev) 10%, transparent); }
+.event.enter { animation: rise 0.45s ease both; }
+.ev-gain { --ev: #b79cf0; } .ev-gold { --ev: #f0c64a; } .ev-road { --ev: #7fc8d6; } .ev-quest { --ev: #f2c46d; } .ev-win { --ev: #8fd08f; } .ev-bad { --ev: #f08b7e; } .ev-calm { --ev: #9bd3a4; }
+.ev-icon { flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--ev); background: color-mix(in srgb, var(--ev) 18%, #0000); color: var(--ev); font-size: 26px; }
+.ev-icon .item-art { width: 32px; height: 32px; object-fit: contain; }
+.ev-svg { width: 28px; height: 28px; }
+.ev-body { display: grid; gap: 2px; min-width: 0; line-height: 1.4; }
+.ev-body b { font-family: var(--font-head); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ev); }
+.ev-body span { font-size: 15.5px; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .event { padding: 8px 12px 8px 10px; gap: 10px; } .ev-icon { width: 40px; height: 40px; } .ev-body span { font-size: 15px; } }
 .line.typing { animation: pulse 1.2s infinite; font-style: italic; }
 .entity { border-bottom: 1px dotted currentColor; cursor: help; outline: none; border-radius: 2px; }
 .entity.item { display: inline; width: auto; height: auto; }

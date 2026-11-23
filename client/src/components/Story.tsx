@@ -1,3 +1,4 @@
+import { EventCard } from './EventCard';
 import { itemArtUrl } from '../game/itemArt';
 import { GOOD_REASONS } from '../../../shared/odds';
 import { reasonText } from './Odds';
@@ -293,7 +294,7 @@ function Paragraph({ text }: { text: string }) {
 
 // ----------------------------------------------------------------- feed
 
-function Entry({ entry, animate, takeBack, table, lang, hero }: { entry: LogEntry; animate: boolean; takeBack?: () => void; table: string; lang: string; hero?: { name: string; image: string } }) {
+function Entry({ entry, animate, takeBack, table, lang, hero, items }: { items: GameState['items']; entry: LogEntry; animate: boolean; takeBack?: () => void; table: string; lang: string; hero?: { name: string; image: string } }) {
   const t = useT();
   const { storyPortraits } = usePrefs();
   switch (entry.kind) {
@@ -338,6 +339,7 @@ function Entry({ entry, animate, takeBack, table, lang, hero }: { entry: LogEntr
         </article>
       );
     default:
+      if (entry.event) return <EventCard entry={entry} items={items} animate={animate} />;
       return <p className="line system"><RichText text={entry.text} /></p>;
   }
 }
@@ -541,7 +543,7 @@ export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProp
           <Fragment key={l.id}>
             {roundAt.has(l.id) && <div className="round-divider" role="separator"><span>{t('Round {n}', { n: roundAt.get(l.id)! })}</span></div>}
             {l.id === dividerAt && <div className="after-battle" role="separator"><span>{t('After the battle')}</span></div>}
-            <Entry entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} hero={l.kind === 'chat' ? heroOf(l.speaker) : undefined} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
+            <Entry items={state.items} entry={l} table={state.room} lang={state.language} animate={l.id > seen.current} hero={l.kind === 'chat' ? heroOf(l.speaker) : undefined} takeBack={l.id === takeBackId ? () => conn.send({ t: 'unsay' }) : undefined} />
           </Fragment>
         ))}
         {state.dmBusy && <p className="line typing">{state.phase === 'combat' ? t('The Dungeon Master is thinking…') : t('The Dungeon Master is writing…')}</p>}

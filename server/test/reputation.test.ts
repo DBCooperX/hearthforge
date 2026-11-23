@@ -193,7 +193,7 @@ describe('trophies', () => {
     g.s.gold = 650;
     expect(g.checkTrophies().sort()).toEqual(['deep_pockets', 'first_blood']);
     expect(g.checkTrophies()).toEqual([]);
-    expect(g.s.log.at(-1)!.text).toMatch(/^🏆 Trophy earned: /);
+    expect(g.s.log.at(-1)!.text).toMatch(/^Trophy earned: /);
     const t = view(g).trophies;
     expect(t).toHaveLength(TROPHIES.length);
     expect(t.find((x) => x.id === 'battle_hardened')).toEqual({ id: 'battle_hardened', day: null, have: 1 });
@@ -213,7 +213,7 @@ describe('trophies', () => {
     const g = game('de');
     g.s.stats.fights = 1;
     g.checkTrophies();
-    expect(g.s.log.at(-1)!.text).toBe('🏆 Trophäe errungen: Erstes Blut');
+    expect(g.s.log.at(-1)!.text).toBe('Trophäe errungen: Erstes Blut');
   });
 });
 

@@ -63,7 +63,7 @@ export function shiftStanding(g: Game, id: FactionId, delta: number, why: string
   if (f.history.length > MAX_HISTORY) f.history.shift();
   const now = tierOf(f.standing);
   const signed = `${applied > 0 ? '+' : ''}${applied}`;
-  g.log('system', `${t`Standing with ${f.name}: ${signed}`}${note ? ` (${note})` : ''}.${now !== tierOf(before) ? ` ${t`Now ${tr(g.lang, now)}.`}` : ''}`);
+  g.log('system', `${t`Standing with ${f.name}: ${signed}`}${note ? ` (${note})` : ''}.${now !== tierOf(before) ? ` ${t`Now ${tr(g.lang, now)}.`}` : ''}`, { event: { type: 'standing' } });
   return applied;
 }
 
@@ -178,7 +178,7 @@ export function checkTrophies(g: Game): string[] {
   for (const def of TROPHIES) {
     if (s.achievements.some((a) => a.id === def.id) || def.count(ctx) < def.need) continue;
     s.achievements.push({ id: def.id, day: g.day() });
-    g.log('system', `🏆 ${t`Trophy earned: ${tr(g.lang, def.name)}`}`);
+    g.log('system', t`Trophy earned: ${tr(g.lang, def.name)}`, { event: { type: 'trophy' } });
     earned.push(def.id);
   }
   return earned;
