@@ -123,7 +123,7 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
       ...(canFullscreen() ? [{ id: 'fullscreen', label: fullscreen ? t('Leave fullscreen') : t('Fullscreen'), icon: 'fullscreen' as const, onClick: () => { toggleFullscreen(); close(); } }] : []),
     ],
   ];
-  useMusic(musicContext(state));
+  useMusic(musicContext(state), state?.soundtrack);
   useSfx(state);
   useNarrator(state);
 

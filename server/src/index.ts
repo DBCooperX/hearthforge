@@ -14,7 +14,8 @@ import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
 import { readBody as readRaw } from './http';
 import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
 import { LibraryError, SoundLibrary } from './library';
-import { isLibraryKind } from '../../shared/library';
+import { isLibraryKind, searchLibrary, type LibraryEntry } from '../../shared/library';
+import { soundReady, type SoundHit } from './game/sounds';
 import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
 import { Store } from './db';
 import { Narrator, VoiceError, langOf } from './voice';
@@ -210,6 +211,11 @@ const library = new SoundLibrary(LIBRARY_DIR, env, {
     usage.recordExtra('Sound library', 'sound', usd);
     if (payer.account && accounts.get(payer.account)) tellCredits(credits.charge([payer.account], usd, 'sound'));
   },
+  onDone: (entry) => {
+    // A sound the Dungeon Master ordered takes over at its table, if the party is still in that kind of scene.
+    const room = entry.table ? rooms.get(entry.table) : undefined;
+    if (room && soundReady(room.game, soundHit(entry))) room.flush();
+  },
   onChange: () => {
     if (soundsChanged) return;
     soundsChanged = setTimeout(() => { soundsChanged = null; announceAssets({ music: true, sfx: true }); }, 500);
@@ -294,7 +300,26 @@ const hooks: RoomHooks = {
     figure: (subject) => illustrator.figure(subject),
     figures: (room) => paintFigures(room),
   },
+  sounds: {
+    find: (kind, words) => searchLibrary(library.entries(), kind, words, 5).map(soundHit),
+    get: (id) => { const e = library.get(id); return e ? soundHit(e) : null; },
+    orderGate: (room) => {
+      if (!library.canMake()) return 'the server has no ElevenLabs key';
+      const orders = library.ordersAt(room.name, Date.now() - 24 * 3600_000);
+      if (orders.making) return 'the last sound you ordered is still being made';
+      const cap = Number(config.next('HEARTHFORGE_DM_SOUND_ORDERS')) || 0;
+      if (cap > 0 && orders.count >= cap) return `this table has had its ${cap} new sounds for today`;
+      const broke = payersAt(room.name).some((id) => { const a = creditAccount(id); return a && !credits.mayPlay(a); });
+      return broke ? 'the players have no credit left for new sounds' : null;
+    },
+    order: (room, kind, description) => soundHit(library.make({ kind, description, title: description.slice(0, 60) }, 'dm', { table: room.name })),
+  },
 };
+
+/** A library entry as the Dungeon Master sees it. */
+function soundHit(e: LibraryEntry): SoundHit {
+  return { id: e.id, kind: e.kind, title: e.title, description: e.description, ...(e.scene ? { scene: e.scene } : {}), seconds: e.seconds, src: e.src, status: e.status };
+}
 
 /** The figure subject of a monster that is a named person with a portrait, or null. */
 function npcSubjectOf(room: Room, m: { name: string; defId: string; look?: MonsterLook }): string | null {

@@ -14,6 +14,8 @@ import { parseOoc } from '../../shared/ooc';
 import type { PlayStats } from '../../shared/accounts';
 import type { HeroRef } from './accounts';
 import { hashToken } from './http';
+import type { LibraryKind } from '../../shared/library';
+import type { SoundHit } from './game/sounds';
 import { npcPortraitKey, portraitKey, type PictureAsk, type PictureHooks } from './game/pictures';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -84,6 +86,13 @@ export interface RoomHooks {
     figure?(subject: string): string | null;
     /** Paint the battle figures this table still lacks, if the server may. */
     figures?(room: Room): void;
+  };
+  /** The server's sound library, for the Dungeon Master's find_sound, play_sound and order_sound. */
+  sounds?: {
+    find(kind: LibraryKind | null, words: string): SoundHit[];
+    get(id: string): SoundHit | null;
+    orderGate(room: Room): string | null;
+    order(room: Room, kind: LibraryKind, description: string): SoundHit;
   };
 }
 
@@ -163,6 +172,8 @@ export class Room {
     this.lastPhase = this.game.s.phase;
     const pictures = hooks.pictures;
     if (pictures) this.game.pictures = { gate: (moment) => pictures.gate(this, moment), paint: (entryId, ask) => pictures.paint(this, entryId, ask), figure: (subject) => pictures.figure?.(subject) ?? null, note: (moment, outcome) => pictures.note?.(this, moment, outcome) };
+    const sounds = hooks.sounds;
+    if (sounds) this.game.sounds = { find: (k, w) => sounds.find(k, w), get: (id) => sounds.get(id), orderGate: () => sounds.orderGate(this), order: (k, d) => sounds.order(this, k, d) };
     // A picture that was being painted when the server stopped will not arrive.
     for (const l of this.game.s.log) if (l.scene?.painting) delete l.scene.painting;
     this.game.tally = (heroId, what) => {

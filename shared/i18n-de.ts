@@ -1743,6 +1743,8 @@ export const DE: Record<string, string> = {
   'Item found': 'Gegenstand gefunden', 'Gold gained': 'Gold erhalten', 'Gold spent': 'Gold ausgegeben', 'Travel': 'Reise', 'New place': 'Neuer Ort', 'New quest': 'Neue Quest',
   'Quest completed': 'Quest abgeschlossen', 'Quest failed': 'Quest gescheitert', 'New clue': 'Neuer Hinweis', 'Trophy': 'Trophäe', 'Victory': 'Sieg',
   'Guild standing: prices {percent}': 'Ansehen bei der Gilde: Preise {percent}',
+  'New sounds the Dungeon Master may order per table and day': 'Neue Klänge, die der Spielleiter pro Tisch und Tag bestellen darf',
+  'When nothing in the library fits a scene, the Dungeon Master can have a new sound made with your ElevenLabs key; the table pays for it. 0 sets no limit.': 'Wenn nichts in der Bibliothek zu einer Szene passt, kann der Spielleiter mit deinem ElevenLabs-Schlüssel einen neuen Klang machen lassen; der Tisch bezahlt ihn. 0 heisst ohne Grenze.',
   'Seconds to take an action back': 'Sekunden, um eine Handlung zurückzunehmen',
   'After a player acts in the story, they may take it back for this long before the Dungeon Master answers. 0 answers at once.': 'Nach einer Handlung in der Geschichte kann der Spieler sie so lange zurücknehmen, bevor der Spielleiter antwortet. 0 antwortet sofort.',
   'First Blood': 'Erstes Blut', 'Win a fight.': 'Gewinnt einen Kampf.',

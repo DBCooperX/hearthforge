@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Your own sound library (phase 3): the Dungeon Master picks the sound
+- **The Dungeon Master sets the mood.** When a scene has a mood of its own (a misty harbour at night, a haunted chapel, a festival, a funeral, a chase), the Dungeon Master looks through the library and puts on the best music or ambient loop for everyone at the table. It plays until the party leaves the place or a fight starts; then the server's usual music for the scene comes back. A striking moment can get one effect (a door groaning open, a distant howl). The story never mentions the music.
+- **New sounds on order.** If nothing in the library fits, the Dungeon Master can have a new one made with your ElevenLabs key. The closest match plays meanwhile, and the new sound takes over by itself when it is ready (about a minute for music) if the party is still there. It stays in the library for every table, marked as made by the Dungeon Master. The table pays for it like a picture; players without credit get no new sounds. One order at a time per table.
+- **Optional cap.** Sound and voice → Settings → *New sounds the Dungeon Master may order per table and day* (`HEARTHFORGE_DM_SOUND_ORDERS`). 0, the default, sets no limit. English and German.
+
 ### Your own sound library (phase 2): the starter set
 - **Starter set.** Sound and voice → Library now shows how much of the starter set is made and a button for the rest: 124 effects (several takes for every game moment, plus doors, chests, traps, beasts, bells and more found by words), 30 ambient loops (tavern, town, harbour, forest, caves, crypts, weather) and 32 music tracks (every scene, plus moods such as a misty harbour, a sad farewell, a festival or a chase). About $14 for all of it at ElevenLabs' list prices; the button shows the price before anything is made. Effects are made first, so they are heard within minutes while the music is composed. A starter sound you delete is not made again; one that failed is tried again.
 
