@@ -395,7 +395,7 @@
 .cs-features li > .feat-glyph { grid-column: 1; grid-row: 1 / span 2; width: 28px; height: 28px; display: grid; place-items: center; font-size: 20px; color: #c9a86a; border-radius: 5px; background: #0e0d0b; border: 1px solid #403b36; }
 .skill-glyph { flex: none; width: 20px; display: grid; place-items: center; font-size: 15px; color: #c9a86a; }
 .cs-skills li.prof .skill-glyph { color: var(--gold); }
-/* Pictures from game-icons.net for skills, feats and spells: the set is cream on transparent, so lift it off dark panels. */
+/* Painted icons for skills, feats and spells: lift them off dark panels. */
 .item-art.glyph { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7)); }
 .pick-icon .item-art.glyph { width: 24px; height: 24px; }
 .detail-icon .item-art.glyph { width: 40px; height: 40px; }

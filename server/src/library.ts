@@ -6,7 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { Zip, ZipPassThrough } from 'fflate';
+import { Zip, ZipPassThrough, unzipSync } from 'fflate';
 import { STARTER_SET, starterCost, type StarterSound } from '../../shared/starterLibrary';
 import {
   LIBRARY_KINDS, LENGTH_LIMITS, SOUND_USD_PER_MINUTE, isLibraryKind, isScene, isSfxEvent, soundCost, tagsFrom,
@@ -330,6 +330,53 @@ export class SoundLibrary {
       this.hooks.onChange?.();
       this.hooks.onDone?.(this.view(e));
     }
+  }
+
+  /** The list of sounds without the audio, for the daily backup. The files themselves are in the zip download. */
+  exportable() { return { entries: this.s.entries, droppedStarter: this.s.droppedStarter ?? [] }; }
+
+  /** Bring back entries from a backup whose audio is still in the folder. Entries already here are left alone. */
+  restoreList(d: unknown): number {
+    const list = (d as { entries?: unknown } | null)?.entries;
+    if (!Array.isArray(list)) return 0;
+    let added = 0;
+    for (const raw of list as Stored[]) {
+      if (!raw || typeof raw.id !== 'string' || !isLibraryKind(raw.kind) || typeof raw.file !== 'string' || !/^[0-9a-f]{20}\.mp3$/.test(raw.file)) continue;
+      if (this.s.entries.some((e) => e.id === raw.id) || !existsSync(join(this.dir, 'files', raw.file))) continue;
+      this.s.entries.push({ ...raw, status: 'ready' });
+      added++;
+    }
+    if (added) { this.save(); this.hooks.onChange?.(); }
+    return added;
+  }
+
+  /** Put a downloaded library zip back: its sounds come back with their titles, scenes and moments. Sounds already here are skipped. */
+  restoreZip(zip: Uint8Array): { added: number; skipped: number } {
+    let files: Record<string, Uint8Array>;
+    try { files = unzipSync(zip); } catch { throw new LibraryError('bad_request', 'not a zip'); }
+    let meta: { format?: unknown; entries?: (Stored & { path?: string })[] };
+    try { meta = JSON.parse(new TextDecoder().decode(files['library.json'])); } catch { throw new LibraryError('bad_request', 'no library.json'); }
+    if (meta.format !== 'hearthforge-library' || !Array.isArray(meta.entries)) throw new LibraryError('bad_request', 'not a Hearthforge library');
+    let added = 0, skipped = 0;
+    mkdirSync(join(this.dir, 'files'), { recursive: true });
+    for (const raw of meta.entries) {
+      const bytes = raw && typeof raw.path === 'string' ? files[raw.path] : undefined;
+      const mp3 = !!bytes && bytes.length > 1000 && bytes.length <= MAX_BYTES && ((bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0));
+      if (!raw || !mp3 || typeof raw.id !== 'string' || !isLibraryKind(raw.kind) || this.s.entries.some((e) => e.id === raw.id)) { skipped++; continue; }
+      const name = `${createHash('sha256').update(bytes).digest('hex').slice(0, 20)}.mp3`;
+      if (!existsSync(join(this.dir, 'files', name))) writeFileSync(join(this.dir, 'files', name), bytes);
+      const { path: _path, ...rest } = raw;
+      const lim = LENGTH_LIMITS[raw.kind];
+      this.s.entries.push({
+        ...rest, file: name, status: 'ready', bytes: bytes.length,
+        title: clean(raw.title, 80) || 'Sound', description: clean(raw.description, 400), tags: Array.isArray(raw.tags) ? raw.tags.map((t) => clean(t, 30).toLowerCase()).filter(Boolean).slice(0, 16) : [],
+        seconds: Number.isFinite(raw.seconds) ? Math.min(lim.max, Math.max(lim.min, raw.seconds)) : lim.fallback, loop: raw.kind === 'ambient',
+        usd: Number.isFinite(raw.usd) ? raw.usd : 0, by: raw.by === 'dm' || raw.by === 'starter' ? raw.by : 'innkeeper', createdAt: Number.isFinite(raw.createdAt) ? raw.createdAt : this.now(),
+      } as Stored);
+      added++;
+    }
+    if (added) { this.save(); this.hooks.onChange?.(); }
+    return { added, skipped };
   }
 
   /** The entry with this id, or null. */

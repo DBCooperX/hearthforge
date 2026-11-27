@@ -41,7 +41,6 @@ import { ProfileWindow } from './ui/Profile';
 import { Icon, type IconName } from './ui/icons';
 import { NAV_LABELS } from './ui/labels';
 import { Settings } from './ui/Settings';
-import { ArtWindow } from './ui/ArtWindow';
 import { Innkeeper } from './ui/Innkeeper';
 import { Kbd, Window } from './ui/Window';
 import { Wordmark } from './ui/Brand';
@@ -50,11 +49,11 @@ import { ConfirmHost, ask } from './ui/Confirm';
 import { GameMenu, MenuButton, canFullscreen, useEscMenu, useFullscreen, type MenuEntry } from './ui/GameMenu';
 import { AdventureWindow } from './components/StyleSetup';
 
-type Overlay = 'test' | 'trade' | 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'menu' | 'settings' | 'adventure' | 'art' | null;
+type Overlay = 'test' | 'trade' | 'inventory' | 'sheet' | 'map' | 'journal' | 'levelup' | 'table' | 'menu' | 'settings' | 'adventure' | null;
 /** Windows opened from the game menu: Esc and their close button lead back to it. */
-const FROM_MENU = new Set<Overlay>(['settings', 'adventure', 'art']);
+const FROM_MENU = new Set<Overlay>(['settings', 'adventure']);
 /** The menu on the list of tables and in the table room, before the adventure. */
-type Front = 'menu' | 'settings' | 'art' | null;
+type Front = 'menu' | 'settings' | null;
 
 const NAV: { id: keyof typeof NAV_LABELS; key: string; icon: IconName }[] = [
   { id: 'sheet', key: 'C', icon: 'character' },
@@ -112,14 +111,13 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
   useEscMenu(front !== null, (open) => setFront(open ? 'menu' : (f) => (f === 'menu' ? null : 'menu')), !pregame || innkeeper || showProfile);
   useEffect(() => { if (!pregame) setFront(null); }, [pregame]);
   /** The entries every menu shares: the player's settings, account, the Innkeeper, credits and fullscreen. */
-  const common = (open: (o: 'settings' | 'art') => void, close: () => void): MenuEntry[][] => [
+  const common = (open: (o: 'settings') => void, close: () => void): MenuEntry[][] => [
     [
       { id: 'settings', label: t('Settings'), icon: 'settings', onClick: () => open('settings') },
       { id: 'account', label: t('Your account'), icon: 'character', onClick: () => { close(); setShowProfile(true); } },
       ...(profile.account.role === 'innkeeper' ? [{ id: 'innkeeper', label: t('Innkeeper'), icon: 'innkeeper' as const, note: t('Run this server'), onClick: () => { close(); setInnkeeper(true); } }] : []),
     ],
     [
-      { id: 'credits', label: t('Art credits'), icon: 'lore', onClick: () => open('art') },
       ...(canFullscreen() ? [{ id: 'fullscreen', label: fullscreen ? t('Leave fullscreen') : t('Fullscreen'), icon: 'fullscreen' as const, onClick: () => { toggleFullscreen(); close(); } }] : []),
     ],
   ];
@@ -375,7 +373,6 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
       ]} />
     )}
     {front === 'settings' && <Settings onClose={() => setFront('menu')} />}
-    {front === 'art' && <ArtWindow onClose={() => setFront('menu')} />}
   </>;
   const onMenu = () => setFront((f) => (f ? null : 'menu'));
   if (!state) return <><LobbyScreen conn={conn} me={me} onInnkeeper={() => setInnkeeper(true)} onMenu={onMenu} />{frontLayer}{inn}<Toasts conn={conn} /></>;
@@ -509,7 +506,6 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
         )}
         {overlay === 'settings' && <Settings onClose={() => setOverlay('menu')} />}
         {overlay === 'adventure' && <AdventureWindow state={state} conn={conn} onClose={() => setOverlay('menu')} />}
-        {overlay === 'art' && <ArtWindow onClose={() => setOverlay('menu')} />}
         {overlay === 'table' && (
           <Window title={state.table.title} icon="table" size="small" className="table-sheet" onClose={() => setOverlay(null)}>
             <Players state={state} conn={conn} />

@@ -10,14 +10,14 @@ import { onlineList } from './online';
 import { JOIN_ERRORS, MAX_SEATS, type Character, type ClientMessage, type ServerMessage } from '../../shared/types';
 import { NEW_TABLE_START, newSeed } from '../../shared/start';
 import { DEFAULT_STYLE, cleanStyle } from '../../shared/style';
-import { ArtError, ArtStore, MAX_UPLOAD } from './artLibrary';
-import { readBody as readRaw } from './http';
-import { SfxError, addSfxUpload, importDroppedSfx, removeSfxPack, sfxFile, sfxLibrary, sfxManifest } from './sfx';
+import { TooBig, readBody as readRaw } from './http';
 import { LibraryError, SoundLibrary } from './library';
 import { IconError, IconLibrary } from './iconLibrary';
+import type { ArtManifest } from '../../shared/art';
 import { isLibraryKind, searchLibrary, type LibraryEntry } from '../../shared/library';
 import { soundReady, type SoundHit } from './game/sounds';
-import { AUDIO_TYPES, MusicError, addUpload, byteRange, ensureFreesound, ensureMusic, musicAction, musicEnabled, musicLibrary, musicManifest } from './music';
+import { byteRange, musicEnabled } from './music';
+import { sfxEnabled } from './sfx';
 import { Store } from './db';
 import { Narrator, VoiceError, langOf } from './voice';
 import { speechParts, type VoiceQuality } from '../../shared/voice';
@@ -70,12 +70,6 @@ const auth = new Auth(DATA_DIR);
 const usage = new Usage(DATA_DIR);
 const credits = new Credits(DATA_DIR);
 const updater = new Updater(DATA_DIR);
-const ART_DIR = env.ART_DIR ?? join(DATA_DIR, 'art');
-const art = new ArtStore(ART_DIR, env);
-/** Set HEARTHFORGE_ART_UPLOADS=off to lock the art library against changes from the browser. */
-const ART_UPLOADS = (env.HEARTHFORGE_ART_UPLOADS ?? 'on').toLowerCase() !== 'off';
-const MUSIC_DIR = env.MUSIC_DIR ?? join(DATA_DIR, 'music');
-const SFX_DIR = env.SFX_DIR ?? join(DATA_DIR, 'sfx');
 const VOICE_DIR = env.VOICE_DIR ?? join(DATA_DIR, 'voice');
 const LIBRARY_DIR = env.LIBRARY_DIR ?? join(DATA_DIR, 'library');
 const TRUST_PROXY = (env.HEARTHFORGE_TRUST_PROXY ?? 'off').toLowerCase() === 'on';
@@ -240,9 +234,8 @@ const icons = new IconLibrary(env.ICONS_DIR ?? join(DATA_DIR, 'icons'), {
 });
 
 /** The icons players see: the server's own first, then the icon pack in use, then the emoji. */
-function artNow() {
-  const m = art.manifest();
-  return { ...m, icons: { ...m.icons, ...icons.refs() } };
+function artNow(): ArtManifest {
+  return { pack: 'generated', sprites: {}, iconPack: 'own', icons: icons.refs() };
 }
 
 /** One-time links for the library download, so a big zip can stream straight to the browser's download. */
@@ -519,6 +512,10 @@ const admin = new AdminApi({
   rooms,
   openRoom: (id) => openRoom(id),
   bin,
+  sounds: {
+    exportable: () => ({ library: library.exportable(), icons: icons.exportable() }),
+    restoreList: (d) => library.restoreList(d.library) + icons.restoreList(d.icons),
+  },
   restoreTable,
   tablesChanged: () => pushTables(),
   connections,
@@ -536,57 +533,14 @@ const admin = new AdminApi({
 });
 
 
-const readBody = (req: IncomingMessage, max: number) => readRaw(req, max, () => new ArtError('too_big'));
+/** The biggest library or icons zip that can be put back from the Innkeeper. */
+const ZIP_MAX = 600 * 1024 * 1024;
+const readBody = (req: IncomingMessage, max: number) => readRaw(req, max, () => new TooBig());
 
 /** Tell every open browser that the owner changed art, music or effects, so nobody has to reload by hand. */
 function announceAssets(change: Omit<Extract<ServerMessage, { t: 'assets' }>, 't'>) {
   const payload = JSON.stringify({ t: 'assets', ...change } satisfies ServerMessage);
   for (const ws of conns.keys()) if (ws.readyState === ws.OPEN) ws.send(payload);
-}
-
-async function artApi(req: IncomingMessage, res: ServerResponse, url: URL) {
-  const json = (status: number, body: unknown) => {
-    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify(body));
-  };
-  // The art library belongs to the owner of the server: it is changed from the Innkeeper.
-  const canEdit = ART_UPLOADS && admin.authorised(req);
-  try {
-    if (req.method === 'GET') {
-      if (url.pathname === '/api/art') return json(200, artNow());
-      if (url.pathname === '/api/art/library') return json(200, art.library(canEdit, ART_UPLOADS));
-      if (url.pathname === '/api/art/icons') return json(200, art.packIcons(url.searchParams.get('pack') ?? ''));
-      return json(404, { error: 'bad_request' });
-    }
-    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
-    if (!canEdit) { req.resume(); return json(403, { error: 'forbidden' }); }
-    const tilesBefore = JSON.stringify(art.manifest().sprites ?? {});
-    const done = () => announceAssets({ icons: true, tiles: JSON.stringify(art.manifest().sprites ?? {}) !== tilesBefore });
-    if (url.pathname === '/api/art/upload') {
-      const zip = await readBody(req, MAX_UPLOAD);
-      const added = art.importZip(String(url.searchParams.get('name') ?? 'pack.zip').slice(0, 120), new Uint8Array(zip));
-      done();
-      return json(200, { ...added, library: art.library(canEdit, ART_UPLOADS) });
-    }
-    if (url.pathname === '/api/art/action') {
-      const m = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}');
-      const id = String(m.pack ?? '');
-      if (m.do === 'install') await art.install(id);
-      else if (m.do === 'use') art.activate(m.kind === 'tiles' ? 'tiles' : 'icons', id);
-      else if (m.do === 'assign') art.assign(id, String(m.slot ?? ''), m.icon === null || m.icon === undefined ? m.icon : String(m.icon));
-      else if (m.do === 'describe') art.describe(id, m);
-      else if (m.do === 'remove') art.remove(id);
-      else throw new ArtError('bad_request');
-      done();
-      return json(200, { library: art.library(canEdit, ART_UPLOADS) });
-    }
-    return json(404, { error: 'bad_request' });
-  } catch (err) {
-    if (err instanceof ArtError) return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
-    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
-    console.warn('[art]', err);
-    return json(500, { error: 'failed' });
-  }
 }
 
 /** Campaign books: every signed-in player may bring one; the Innkeeper sees and manages them all. */
@@ -624,75 +578,9 @@ async function campaignApi(req: IncomingMessage, res: ServerResponse, url: URL) 
     return json(404, { error: 'bad_request' });
   } catch (err) {
     if (err instanceof CampaignError) return json(err.code === 'not_found' ? 404 : err.code === 'forbidden' ? 403 : 400, { error: err.code });
-    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
+    if (err instanceof TooBig) return json(413, { error: 'too_big' });
     if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
     console.warn('[campaign]', err);
-    return json(500, { error: 'failed' });
-  }
-}
-
-/** The music library belongs to the owner of the server: it is changed from the Innkeeper. */
-async function musicApi(req: IncomingMessage, res: ServerResponse, url: URL) {
-  const json = (status: number, body: unknown) => {
-    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify(body));
-  };
-  try {
-    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
-    if (req.method === 'GET' && url.pathname === '/api/music/library') return json(200, musicLibrary(MUSIC_DIR, env));
-    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
-    if (url.pathname === '/api/music/upload') {
-      const body = await readBody(req, 96 * 1024 * 1024);
-      addUpload(MUSIC_DIR, String(url.searchParams.get('name') ?? 'track.mp3').slice(0, 160), new Uint8Array(body), url.searchParams.get('layer'), url.searchParams.get('context'));
-      announceAssets({ music: true });
-      return json(200, musicLibrary(MUSIC_DIR, env));
-    }
-    if (url.pathname === '/api/music/action') {
-      await musicAction(MUSIC_DIR, env, JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'));
-      announceAssets({ music: true });
-      return json(200, musicLibrary(MUSIC_DIR, env));
-    }
-    return json(404, { error: 'bad_request' });
-  } catch (err) {
-    if (err instanceof MusicError) {
-      const detail = (err as { detail?: string }).detail;
-      if (detail) console.warn(`[music] ${detail}`);
-      return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
-    }
-    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
-    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
-    console.warn('[music]', err);
-    return json(500, { error: 'failed' });
-  }
-}
-
-/** The effects library belongs to the owner of the server, like the music. */
-async function sfxApi(req: IncomingMessage, res: ServerResponse, url: URL) {
-  const json = (status: number, body: unknown) => {
-    res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify(body));
-  };
-  try {
-    if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
-    if (req.method === 'GET' && url.pathname === '/api/sfx/library') return json(200, sfxLibrary(SFX_DIR, env));
-    if (req.method !== 'POST') return json(405, { error: 'bad_request' });
-    if (url.pathname === '/api/sfx/upload') {
-      const body = await readBody(req, 60 * 1024 * 1024);
-      addSfxUpload(SFX_DIR, String(url.searchParams.get('name') ?? 'sounds.zip').slice(0, 160), new Uint8Array(body));
-      announceAssets({ sfx: true });
-      return json(200, sfxLibrary(SFX_DIR, env));
-    }
-    if (url.pathname === '/api/sfx/remove') {
-      removeSfxPack(SFX_DIR, JSON.parse((await readBody(req, 4 * 1024)).toString('utf8') || '{}').id);
-      announceAssets({ sfx: true });
-      return json(200, sfxLibrary(SFX_DIR, env));
-    }
-    return json(404, { error: 'bad_request' });
-  } catch (err) {
-    if (err instanceof SfxError) return json(err.code === 'too_big' ? 413 : 400, { error: err.code });
-    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'too_big' });
-    if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
-    console.warn('[sfx]', err);
     return json(500, { error: 'failed' });
   }
 }
@@ -707,6 +595,10 @@ async function iconsApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
     if (req.method === 'GET' && url.pathname === '/api/icons') return json(200, { ...icons.view(), money: moneyNow() });
     if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (url.pathname === '/api/icons/restore') {
+      const restored = icons.restoreZip(new Uint8Array(await readBody(req, ZIP_MAX)));
+      return json(200, { ...icons.view(), money: moneyNow(), restored });
+    }
     const body = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
     const me = accounts.account(req.headers[SESSION_HEADER]);
     const payer = { account: me?.id };
@@ -719,6 +611,7 @@ async function iconsApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     } else return json(404, { error: 'bad_request' });
     return json(200, { ...icons.view(), money: moneyNow() });
   } catch (err) {
+    if (err instanceof TooBig) return json(413, { error: 'too_big' });
     if (err instanceof IconError) return json(err.code === 'not_found' ? 404 : 400, { error: err.code });
     if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
     console.warn('[icons]', err);
@@ -736,6 +629,10 @@ async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     if (!admin.authorised(req)) { req.resume(); return json(403, { error: 'forbidden' }); }
     if (req.method === 'GET' && url.pathname === '/api/library') return json(200, library.library());
     if (req.method !== 'POST') return json(405, { error: 'bad_request' });
+    if (url.pathname === '/api/library/restore') {
+      const restored = library.restoreZip(new Uint8Array(await readBody(req, ZIP_MAX)));
+      return json(200, { ...library.library(), restored });
+    }
     const body = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}') as Record<string, unknown>;
     const me = accounts.account(req.headers[SESSION_HEADER]);
     const payer = { account: me?.id };
@@ -764,8 +661,9 @@ async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     }
     return json(404, { error: 'bad_request' });
   } catch (err) {
+    if (err instanceof TooBig) return json(413, { error: 'too_big' });
     if (err instanceof LibraryError) return json(err.code === 'not_found' ? 404 : 400, { error: err.code, detail: err.detail });
-    if (err instanceof ArtError && err.code === 'too_big') return json(413, { error: 'bad_request' });
+    if (err instanceof TooBig) return json(413, { error: 'bad_request' });
     if (err instanceof SyntaxError) return json(400, { error: 'bad_request' });
     console.warn('[library]', err);
     return json(500, { error: 'failed' });
@@ -924,35 +822,13 @@ const server = createServer((req, res) => {
     void admin.handle(req, res, url);
     return;
   }
-  if (url.pathname === '/api/art' || url.pathname.startsWith('/api/art/')) {
-    void artApi(req, res, url);
-    return;
-  }
-  if (url.pathname.startsWith('/art/')) {
-    let rel = '';
-    try { rel = normalize(decodeURIComponent(url.pathname.slice(5))).replace(/^(\.\.[/\\])+/, ''); } catch { /* 404 below */ }
-    const file = join(ART_DIR, rel);
-    const ext = extname(file).toLowerCase();
-    // Uploaded packs are only ever served as PNG. SVG is served for the game-icons.net set alone, which the server fetched and cleaned itself.
-    const allowed = ext === '.png' || (ext === '.svg' && rel.split(/[/\\]/)[0] === 'game-icons');
-    if (!rel || !file.startsWith(ART_DIR) || !allowed || !existsSync(file) || !statSync(file).isFile()) {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('Not found');
-      return;
-    }
-    res.writeHead(200, {
-      'content-type': ext === '.svg' ? 'image/svg+xml' : 'image/png', 'cache-control': 'public, max-age=3600',
-      'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-    });
-    createReadStream(file).pipe(res);
+  if (url.pathname === '/api/art') {
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(artNow()));
     return;
   }
   if (url.pathname === '/api/campaigns' || url.pathname.startsWith('/api/campaigns/')) {
     void campaignApi(req, res, url);
-    return;
-  }
-  if (url.pathname.startsWith('/api/music/')) {
-    void musicApi(req, res, url);
     return;
   }
   if (url.pathname === '/api/library' || url.pathname.startsWith('/api/library/')) {
@@ -988,7 +864,7 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === '/api/music') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(library.mergeMusic(musicManifest(MUSIC_DIR, env))));
+    res.end(JSON.stringify(library.mergeMusic({ enabled: musicEnabled(env), pending: false, tracks: [] })));
     return;
   }
   if (url.pathname.startsWith('/pictures/')) {
@@ -1006,50 +882,9 @@ const server = createServer((req, res) => {
     void voiceApi(req, res, url);
     return;
   }
-  if (url.pathname.startsWith('/api/sfx/')) {
-    void sfxApi(req, res, url);
-    return;
-  }
   if (url.pathname === '/api/sfx') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' });
-    res.end(JSON.stringify(library.mergeSfx(sfxManifest(SFX_DIR, env))));
-    return;
-  }
-  if (url.pathname.startsWith('/sfx/')) {
-    const file = sfxFile(SFX_DIR, url.pathname);
-    if (!file) {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('Not found');
-      return;
-    }
-    res.writeHead(200, { 'content-type': 'audio/ogg', 'cache-control': 'public, max-age=86400', 'content-length': statSync(file).size });
-    createReadStream(file).pipe(res);
-    return;
-  }
-  if (url.pathname.startsWith('/music/')) {
-    // Only MUSIC_DIR/<context>/<file> and MUSIC_DIR/ambient/<context>/<file> are ever served. Browsers ask for audio in byte ranges.
-    const parts = url.pathname.slice(7).split('/').map((p) => { try { return decodeURIComponent(p); } catch { return ''; } });
-    const ok = (parts.length === 2 || (parts.length === 3 && parts[0] === 'ambient')) && parts.every((p) => p && !p.startsWith('.') && !/[\\/]/.test(p));
-    const file = ok ? join(MUSIC_DIR, ...parts) : '';
-    const type = AUDIO_TYPES[extname(file).toLowerCase()];
-    if (!ok || !type || !existsSync(file) || !statSync(file).isFile()) {
-      res.writeHead(404, { 'content-type': 'text/plain' });
-      res.end('Not found');
-      return;
-    }
-    const size = statSync(file).size;
-    const range = byteRange(req.headers.range, size);
-    const headers = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400' };
-    if (req.headers.range && !range) {
-      res.writeHead(416, { 'content-range': `bytes */${size}` });
-      res.end();
-    } else if (range) {
-      res.writeHead(206, { ...headers, 'content-range': `bytes ${range.start}-${range.end}/${size}`, 'content-length': range.end - range.start + 1 });
-      createReadStream(file, range).pipe(res);
-    } else {
-      res.writeHead(200, { ...headers, 'content-length': size });
-      createReadStream(file).pipe(res);
-    }
+    res.end(JSON.stringify(library.mergeSfx({ enabled: sfxEnabled(env), pending: false })));
     return;
   }
   // Static client with SPA fallback.
@@ -1187,17 +1022,13 @@ accounts.onRenamed = (id, username) => {
   if (seats) pushTables();
 };
 
-void art.start();
 narrator.onChange = () => announceAssets({ voice: true });
 void narrator.start();
-importDroppedSfx(SFX_DIR, env);
-void ensureMusic(MUSIC_DIR, env).then(() => ensureFreesound(MUSIC_DIR, env));
 admin.start();
 
 server.listen(PORT, () => {
   console.log(`Hearthforge listening on http://0.0.0.0:${PORT}`);
-  console.log(`Art: ${art.tiles === 'generated' ? 'generated pixel art' : `${art.tiles} pack (falls back to generated art if unavailable)`}, item icons: ${art.icons}. Packs are kept in ${ART_DIR}`);
-  console.log(`Music: ${musicEnabled(env) ? `on, tracks are kept in ${MUSIC_DIR} (silent until some are there)` : 'off (HEARTHFORGE_MUSIC)'}`);
+  console.log(`Music: ${musicEnabled(env) ? 'on, played from the sound library' : 'off (HEARTHFORGE_MUSIC)'}`);
   console.log(`Sound library: ${library.summary()} in ${LIBRARY_DIR}${env.ELEVENLABS_API_KEY?.trim() ? "" : " (add an ElevenLabs key to make new sounds)"}`);
   console.log(`Icons: ${icons.summary()}`);
   const voice = narrator.manifest();

@@ -1,5 +1,5 @@
-// Item icons from an art pack. Items keep their emoji until a pack supplies a picture, and
-// get it back the moment the pack is switched off.
+// Item icons: the server's own painted icons. Items keep their emoji until an icon is painted, and
+// get it back the moment the icon is switched off.
 import { useSyncExternalStore } from 'react';
 import { iconSlotsOf, type ArtRef } from '../../../shared/art';
 import { keyOut } from './chromaKey';

@@ -1,7 +1,6 @@
 // Original 16x16 pixel art, generated procedurally at runtime so the repository ships
 // no binary assets. Everything here is dedicated to the public domain (CC0), and the
-// tile size matches Kenney's "Tiny Dungeon" and 0x72's "DungeonTileset II" so those
-// CC0 packs can be dropped in later.
+// tile size is 16x16.
 
 import { setItemIcons } from './itemArt';
 import { battleTileGrid } from './battleTiles';
@@ -233,9 +232,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Replace generated sprites with ones from an optional art pack the server has
- * downloaded (see server/src/art.ts). Anything missing or oddly sized keeps the
- * generated art, so a broken pack can never leave the map blank.
+ * Load the server's own icons (and any sprite it names). Anything missing or oddly sized keeps the
+ * generated art, so a broken answer can never leave the map blank.
  */
 export async function loadArtPack(): Promise<void> {
   try {
@@ -265,6 +263,6 @@ export async function loadArtPack(): Promise<void> {
       }),
     );
   } catch {
-    /* no art pack: generated sprites */
+    /* nothing from the server: generated sprites */
   }
 }

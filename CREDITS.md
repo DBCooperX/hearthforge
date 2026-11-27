@@ -10,55 +10,15 @@ The 339 spells (`shared/srd/spells.json`, rules text in `server/src/data/srd/spe
 
 Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.
 
-## Art
+## Art, sound effects and music
 
-All sprites and tiles are original pixel art generated procedurally in `client/src/game/sprites.ts` and dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No third-party art is bundled or redistributed in this repository or its Docker image. Packs are fetched by the server at the host's request, or uploaded by the host, and stay in the server's data folder. The game shows name, artist and license of the packs in use under Settings → Art & Assets.
+No third-party art or audio is bundled, downloaded or redistributed by Hearthforge.
 
-Fetched by the server on request:
+- **Pixel art.** All sprites and tiles are original pixel art generated procedurally in `client/src/game/sprites.ts` and dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+- **Icons.** Painted for your server by the picture service you set up (Gemini by default) from prompts in `shared/iconLibrary.ts`, and kept in your data folder. The list of what is painted (`shared/art.ts`, `shared/glyphs.ts`) names the pictures the game needs, in its own words.
+- **Sound effects, ambient loops and music.** Made for your server with your own ElevenLabs key and kept in your data folder (`/data/library`). Check ElevenLabs' terms for what your plan allows you to do with the output; they forbid putting music into a library for third parties, which is why Hearthforge never ships or shares the files. Without a library sound, effects are synthesised in the browser by `client/src/sfxSynth.ts`, original code with no recordings.
 
-- Game-icons.net, icons for items, skills, feats, spells and class features by Lorc, Delapouite, Sbed, Skoll, Willdabeast, Carl Olsen, Cathelineau, Lucas, Faithtoken and other contributors, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/): <https://game-icons.net>. The server downloads about 400 icons from <https://github.com/game-icons/icons> (none are bundled) and recolours them. `shared/art.ts` and `shared/glyphs.ts` name every icon and its author; `node scripts/check-game-icons.mjs` checks the list.
-- Kenney, "Tiny Dungeon", CC0 1.0: <https://kenney.nl/assets/tiny-dungeon>
-
-Recognised when uploaded, with the license as stated on the pack's page on 15 November 2026:
-
-- 0x72, "DungeonTileset II", CC0 1.0: <https://0x72.itch.io/dungeontileset-ii>
-- Alex's Assets, "16x16 RPG Item Pack", CC0 1.0: <https://alexs-assets.itch.io/16x16-rpg-item-pack>
-- Kyrise, "Kyrise's Free 16x16 RPG Icon Pack", CC BY 4.0: <https://kyrise.itch.io/kyrises-free-16x16-rpg-icon-pack>
-- Matt Firth (cheekyinkling), "Shikashi's Fantasy Icons Pack": free to use and remix with credit to "Matt Firth (cheekyinkling)" and "game-icons.net"; the page names no license and says nothing about passing the files on: <https://cheekyinkling.itch.io/shikashis-fantasy-icons-pack>
-- Clockwork Raven, "Raven Fantasy Icons" (free version): may be used in projects but not distributed as a separate product; the author's comments and the page disagree on commercial use: <https://clockworkraven.itch.io/raven-fantasy-icons>
-
-Kenney does not allow automatic downloads, so the owner downloads the zip from the page and drops it under Innkeeper → Assets. Kenney's page could not be read when this list was written; its CC0 license is taken from Kenney's listing on itch.io. For any other pack you upload, crediting it is up to you: the window has fields for artist, license and link.
-
-Without an icon pack, item icons are emoji rendered by the player's system font.
-
-## Sound effects
-
-No sound files are bundled or downloaded by the server. Kenney's packs do not allow automatic downloads, so the owner can add them under Innkeeper → Assets → Sound effects: open the pack's page, download the zip, drop it there. All three are by Kenney under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/): [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds). They are kept in the server's data folder (`/data/sfx`). Without them, every effect (and the bow, spell, healing, level-up and victory sounds in any case) is synthesised in the browser by `client/src/sfxSynth.ts`, original code with no recordings.
-
-## Music
-
-No music is bundled. Unless `HEARTHFORGE_MUSIC=off`, the server downloads these tracks at runtime (they can be switched off, moved or removed in the Innkeeper's Assets page) from [incompetech.com](https://incompetech.com). All are by Kevin MacLeod and licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
-
-- Tavern: "Thatched Villagers", "Master of the Feast", "Folk Round", "Fiddles McGinty", "Celtic Impulse", "Dragon and Toast", "Spazzmatica Polka"
-- Town: "Minstrel Guild", "Village Consort", "Suonatore di Liuto", "Virtutes Instrumenti", "Mystery Bazaar", "Lord of the Land", "Winter Reflections", "Evening Melodrama", "Night in Venice"
-- Overworld: "Heroic Age", "Moorland", "Skye Cuillin", "Eternal Hope", "Ice Flow", "Dreamer", "Heart of Nowhere", "Echoes of Time v2", "Hidden Past", "Atlantean Twilight", "Lightless Dawn"
-- Dungeon: "Ossuary 6 - Air", "Ossuary 5 - Rest", "Dark Times", "The Dread", "The Descent", "Oppressive Gloom", "Gathering Darkness", "Ghost Story", "Disquiet", "Dark Walk", "Dark Fog", "Anguish", "Ancient Rite"
-- Combat: "Five Armies", "Clash Defiant", "Crossing the Chasm", "Volatile Reaction", "Faster Does It", "Prelude and Action", "Impact Moderato", "Killers", "Unholy Knight", "Crusade - Heavy Industry"
-- Boss fights: "Black Vortex", "Death and Axes", "Giant Wyrm", "Epic Unease", "The Complex", "Hall of the Mountain King", "Danse Macabre"
-
-Ambient loops (under the music) are downloaded the same way, straight from [OpenGameArt](https://opengameart.org), and can be switched off or removed in the Innkeeper:
-
-- "Fire loop" by qubodup, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
-- "Wind loop" by AntumDeluge, based on a recording by InspectorJ (Jonathan Shaw), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
-- "Cathedral in the forest" by congusbongus, [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
-
-Deutsch: Umgebungsschleifen werden genauso direkt von OpenGameArt geladen (Feuer: qubodup, CC BY 3.0; Wind: AntumDeluge nach InspectorJ, CC BY 3.0; Kathedrale im Wald: congusbongus, CC0) und lassen sich im Innkeeper abschalten oder entfernen.
-
-If the owner adds a free Freesound API key in the Innkeeper, the server also fetches CC0 ambient loops through Freesound's official API. They are CC0, so no credit is owed, but the author and the Freesound page are recorded and shown with each loop. Deutsch: Mit einem kostenlosen Freesound-API-Schlüssel lädt der Server zusätzlich CC0-Umgebungsschleifen über die offizielle Schnittstelle; Autor und Freesound-Seite werden bei jeder Schleife angezeigt.
-
-Loops you add yourself are credited in the game by whatever title, artist and license you give them.
-
-The game shows title, artist and license of the track that is playing. For tracks you add yourself, crediting them is up to you.
+Earlier versions could fetch Kevin MacLeod's music, OpenGameArt and Freesound loops, Kenney's tile and sound packs and the game-icons.net icons, and could take art packs from uploads. All of that is gone. Files from those sources that an older server still holds in `/data/music`, `/data/sfx` and `/data/art` are no longer used and can be deleted.
 
 ## Logo
 

@@ -2,7 +2,7 @@
 // and mute (separate from the music and the ambient loops). Recordings the server downloaded are used where there is
 // one; everything else is made by sfxSynth.ts.
 import { useEffect, useRef } from 'react';
-import { SFX_DOM_EVENT, SFX_EVENTS, pickSample, sfxForLog, type SfxEvent, type SfxManifest } from '../../shared/sfx';
+import { SFX_DOM_EVENT, SFX_EVENTS, sfxForLog, type SfxEvent, type SfxManifest } from '../../shared/sfx';
 import type { GameState } from '../../shared/types';
 import { synth } from './sfxSynth';
 import { masterLevel, onMasterChange } from './ui/prefs';
@@ -26,7 +26,7 @@ function storedSettings(): Settings {
 
 export class SfxPlayer {
   private settings = storedSettings();
-  private manifest: SfxManifest = { enabled: true, pending: false, files: [] };
+  private manifest: SfxManifest = { enabled: true, pending: false };
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private buffers = new Map<string, AudioBuffer | null>();
@@ -99,10 +99,9 @@ export class SfxPlayer {
     const now = performance.now();
     if (now - (this.last.get(event) ?? -1e9) < (LONG_GAP.includes(event) ? 2500 : MIN_GAP_MS)) return;
     this.last.set(event, now);
-    // The server's own library first, then the older recordings, then the browser's own sound.
+    // The server's own library first, then the browser's own sound.
     const own = this.manifest.events?.[event];
-    const file = own?.length ? null : pickSample(event, this.manifest.files.map((f) => f.name));
-    const src = own?.length ? own[Math.floor(Math.random() * own.length)] : file ? this.manifest.files.find((f) => f.name === file)?.src : undefined;
+    const src = own?.length ? own[Math.floor(Math.random() * own.length)] : undefined;
     if (!src) { synth(ctx, this.master, event); return; }
     void this.buffer(src).then((buf) => {
       if (!buf) { synth(ctx, this.master!, event); return; }

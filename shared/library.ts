@@ -86,6 +86,7 @@ export const LIBRARY_ERRORS = {
   bad_request: 'That did not work. The server log says more.',
   not_found: 'The server does not know this sound.',
   busy: 'This sound is still being made.',
+  too_big: 'This file is too large (600 MB at most).',
 } as const;
 export type LibraryErrorCode = keyof typeof LIBRARY_ERRORS;
 
