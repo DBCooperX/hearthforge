@@ -44,6 +44,7 @@ export function LibraryPane() {
   const [error, setError] = useState<{ code: string; detail: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [note, setNote] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
 
@@ -93,6 +94,20 @@ export function LibraryPane() {
     } catch (e) { setError({ code: e instanceof LibError ? e.code : 'failed', detail: '' }); }
   };
 
+  const restore = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy('restore'); setError(null); setNote(null);
+    try {
+      const res = await fetch('/api/library/restore', { method: 'POST', cache: 'no-store', headers: { [INNKEEPER_HEADER]: innkeeperSession(), 'content-type': 'application/zip' }, body: file });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new LibError(String(out?.error ?? 'failed'), String(out?.detail ?? ''));
+      setLib(out as LibraryView);
+      setNote(t('Put back {added} sounds, skipped {skipped} that were already here or not usable.', { added: out.restored.added, skipped: out.restored.skipped }));
+      void music.refresh(); void effects.refresh();
+    } catch (e) { setError({ code: e instanceof LibError ? e.code : 'failed', detail: e instanceof LibError ? e.detail : '' }); }
+    finally { setBusy(null); }
+  };
+
   const mine = useMemo(() => (lib?.entries ?? []).filter((e) => e.kind === kind), [lib, kind]);
   const shown = useMemo(() => (filter.trim() ? searchLibrary(mine.map((e) => ({ ...e, status: 'ready' as const, disabled: false })), kind, filter, 200).map((x) => mine.find((e) => e.id === x.id)!) : mine), [mine, filter, kind]);
   const groups = kind === 'sfx'
@@ -108,6 +123,7 @@ export function LibraryPane() {
       <p className="muted small">{t('Every sound here was made for this server with your ElevenLabs key. Players hear it in its scene, or at its moment in the game, as soon as it is ready. Scenes and moments without one keep the older sounds for now.')}</p>
       {!lib.canMake && <p className="art-note">{t(LIBRARY_ERRORS.no_key)}</p>}
       {error && <p className="art-error" role="alert">{t(LIBRARY_ERRORS[error.code as keyof typeof LIBRARY_ERRORS] ?? LIBRARY_ERRORS.failed, { detail: error.detail || '?' })}</p>}
+      {note && <p className="art-note" role="status">{note}</p>}
 
       <StarterBar kind={kind} lib={lib} busy={busy === 'starter'} onMake={(kinds, usd) => {
         void ask(t('Make {n} starter sounds for about {usd}? They are made in the background, effects first; you can keep playing meanwhile.', { n: kinds.reduce((n, k) => n + lib.starter[k].missing, 0), usd: dollars(usd) })).then((yes) => { if (yes) void run('starter', '/api/library/starter', { kinds }); });
@@ -121,6 +137,10 @@ export function LibraryPane() {
         <span className="lib-download">
           <button type="button" disabled={!mine.some((e) => e.src)} onClick={() => void download(kind)}>{t('Download {kind}', { kind: t(LIBRARY_KIND_LABELS[kind]) })}</button>
           <button type="button" className="link" disabled={!lib.entries.some((e) => e.src)} onClick={() => void download('all')}>{t('Download everything')}</button>
+          <label className="link-button" title={t('Put back a library zip you downloaded earlier. Sounds that are already here are skipped.')}>
+            <input type="file" accept=".zip,application/zip" hidden disabled={busy === 'restore'} onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} />
+            {busy === 'restore' ? t('Putting back…') : t('Restore from a zip')}
+          </label>
         </span>
       </div>
 

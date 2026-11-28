@@ -161,7 +161,7 @@ async function rig(env: NodeJS.ProcessEnv = { HEARTHFORGE_ADMIN_PASSWORD: 'open 
   const ctx: AdminContext = {
     dataDir, version: '0.1.0', startedAt: Date.now() - 5000, env: config.env, config, auth, accounts,
     usage: new Usage(dataDir), credits: new Credits(dataDir), logs: new Logs(), updater: new Updater(dataDir),
-    store, rooms, openRoom, bin, restoreTable, tablesChanged: () => {},
+    store, rooms, openRoom, bin, sounds: { exportable: () => ({ library: { entries: [] }, icons: { sheets: [], use: {}, off: [], errors: {} } }), restoreList: () => 0 }, restoreTable, tablesChanged: () => {},
     connections: (): AdminConnection[] => [{ id: 7, ip: '192.168.1.20', since: Date.now() - 60000, agent: 'Firefox/130', table: '', tableTitle: '', name: '', playerId: '', host: false }],
     disconnect: (target) => void out.closed.push(target),
     notice: (text) => void out.notices.push(text),

@@ -2,11 +2,11 @@
 // they share one look and cost a quarter as much. Every icon the game can show is one "subject": an item slot or a
 // skill, spell, feat or feature picture. Subjects that look the same share one icon, the way they shared one picture
 // in the older icon set, so the list is the distinct pictures of shared/art.ts and shared/glyphs.ts.
-import { GAME_ICON_PATHS } from './art';
-import { GLYPH_PATHS } from './glyphs';
+import { ITEM_ICON_NAMES } from './art';
+import { GLYPH_ICON_NAMES } from './glyphs';
 
 export interface IconSubject {
-  /** Stable id of the picture (for now the older set's file name, such as "lorc/fire-ray"). */
+  /** Stable id of the picture, such as "fire-ray". */
   id: string;
   /** What it shows, in English, from that name: "fire ray". */
   name: string;
@@ -18,12 +18,12 @@ const humanize = (s: string) => s.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').tr
 
 function subjects(): IconSubject[] {
   const by = new Map<string, string[]>();
-  for (const [slot, path] of [...Object.entries(GAME_ICON_PATHS), ...Object.entries(GLYPH_PATHS)]) {
-    const list = by.get(path) ?? [];
+  for (const [slot, name] of [...Object.entries(ITEM_ICON_NAMES), ...Object.entries(GLYPH_ICON_NAMES)]) {
+    const list = by.get(name) ?? [];
     list.push(slot);
-    by.set(path, list);
+    by.set(name, list);
   }
-  return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, slots]) => ({ id, name: humanize(id.split('/').pop() ?? id).replace(/ \d+$/, ''), slots }));
+  return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, slots]) => ({ id, name: humanize(id).replace(/ \d+$/, ''), slots }));
 }
 
 export const ICON_SUBJECTS: IconSubject[] = subjects();

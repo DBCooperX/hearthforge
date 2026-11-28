@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickSample, sfxForRoll, SFX_EVENTS } from '../../shared/sfx';
+import { sfxForRoll, SFX_EVENTS } from '../../shared/sfx';
 import type { RollInfo } from '../../shared/types';
 
 const roll = (over: Partial<RollInfo>): RollInfo => ({ actor: 'A', label: 'Longsword', die: 12, rolls: [12], mode: 'normal', modifier: 3, total: 15, target: { kind: 'AC', value: 12 }, outcome: 'hit', damage: { amount: 6, type: 'slashing' }, ...over });
@@ -16,13 +16,6 @@ describe('sound effects', () => {
   });
   it('keeps saves and checks silent', () => {
     expect(sfxForRoll(roll({ target: { kind: 'DC', value: 13 }, outcome: 'failure' }))).toEqual([]);
-  });
-  it('picks a recording by file-name prefix, or none', () => {
-    const names = ['impactMetal_heavy_000.ogg', 'impactMetal_heavy_001.ogg', 'handleCoins.ogg'];
-    expect(pickSample('hit_crit', names, () => 0)).toBe('impactMetal_heavy_000.ogg');
-    expect(pickSample('coins', names)).toBe('handleCoins.ogg');
-    expect(pickSample('victory', names)).toBeNull();
-    expect(pickSample('footstep', names)).toBeNull();
   });
   it('has a built-in sound for every event', async () => {
     const calls: string[] = [];
