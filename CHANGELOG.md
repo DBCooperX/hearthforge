@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Library: "Delete everything" and the starter counter
+- **Delete everything** in Sound and voice → Library removes every sound and its file, and lets the starter set be made again from nothing, for example with the newer ElevenLabs models.
+- **Fixed the starter bar** that said "0 of 32 made" and "All made" together. Sounds you had deleted one by one counted as neither made nor missing. They now show as "{n} deleted by you: make them again", with the price.
+
 ### People keep their story straight (#132)
 - **Settled facts.** When the heroes question people (who brought the letter, where someone was last night), the Dungeon Master now fixes the true answer once with a new `fact` tool and the server notes what each person told the party. Both are listed for the Dungeon Master every turn, so a second person questioned later knows the same truth, or lies for a reason the Dungeon Master chose, and the first person repeats what they said before. A settled truth is never replaced; trying to settle it again gives the old one back.
 - **Safety net.** If the Dungeon Master forgets the tool, the check after each reply notes the answer anyway (never for heroes) and reminds the Dungeon Master to settle the truth behind it.
