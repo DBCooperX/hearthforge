@@ -48,7 +48,7 @@ describe('the sound library', () => {
     expect(readdirSync(join(dir, 'files'))).toHaveLength(1);
     expect(eleven.calls[0].url).toContain('/v1/sound-generation');
     expect(eleven.calls[0].key).toBe('test-key');
-    expect(eleven.calls[0].body).toMatchObject({ duration_seconds: 2, model_id: 'eleven_text_to_sound_v2' });
+    expect(eleven.calls[0].body).toMatchObject({ duration_seconds: 2, model_id: 'eleven_text_to_sound_v3' });
     expect(eleven.calls[0].body.text).toContain('Heavy sword hits a wooden shield');
     expect(eleven.calls[0].body.loop).toBeUndefined();
     expect(costs).toEqual([{ usd: soundCost('sfx', 2), payer: { account: 'acc-1' }, id: e.id }]);
@@ -64,7 +64,7 @@ describe('the sound library', () => {
     const amb = eleven.calls.find((c) => c.url.includes('sound-generation'))!;
     expect(amb.body).toMatchObject({ loop: true, duration_seconds: 30 });
     const mus = eleven.calls.find((c) => c.url.includes('/v1/music'))!;
-    expect(mus.body).toMatchObject({ music_length_ms: 120000, force_instrumental: true, model_id: 'music_v1' });
+    expect(mus.body).toMatchObject({ music_length_ms: 120000, force_instrumental: true, model_id: 'music_v2_5' });
     expect(String(mus.body.prompt)).toContain('misty harbour at night');
     expect(lib.entries().every((e) => e.status === 'ready')).toBe(true);
     expect(lib.entries().find((e) => e.kind === 'ambient')!.loop).toBe(true);

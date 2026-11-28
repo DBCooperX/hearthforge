@@ -74,13 +74,18 @@ function reasonOf(body: string): { status: string; message: string } {
   return { status: '', message: body.slice(0, 300) };
 }
 
+/** Newest ElevenLabs models (music_v1 goes away Jan 31 2027). Loops stay on the v2 effects model, whose docs still list loop support; v2 goes away Mar 1 2027. */
+export const MUSIC_MODEL = 'music_v2_5';
+export const SFX_MODEL = 'eleven_text_to_sound_v3';
+export const AMBIENT_MODEL = 'eleven_text_to_sound_v2';
+
 /** Ask ElevenLabs for one sound. Returns the mp3. Throws LibraryError with the provider's reason. */
 export async function elevenSound(key: string, kind: LibraryKind, prompt: string, seconds: number, fetchFn: typeof fetch = fetch): Promise<Uint8Array> {
   const music = kind === 'music';
   const url = music ? `${ELEVEN}/music?output_format=mp3_44100_128` : `${ELEVEN}/sound-generation?output_format=mp3_44100_128`;
   const body = music
-    ? { prompt, music_length_ms: Math.round(seconds * 1000), model_id: 'music_v1', force_instrumental: true }
-    : { text: prompt, duration_seconds: seconds, prompt_influence: 0.4, model_id: 'eleven_text_to_sound_v2', ...(kind === 'ambient' ? { loop: true } : {}) };
+    ? { prompt, music_length_ms: Math.round(seconds * 1000), model_id: MUSIC_MODEL, force_instrumental: true }
+    : { text: prompt, duration_seconds: seconds, prompt_influence: 0.4, model_id: kind === 'ambient' ? AMBIENT_MODEL : SFX_MODEL, ...(kind === 'ambient' ? { loop: true } : {}) };
   let res: Response;
   try {
     res = await fetchFn(url, {
