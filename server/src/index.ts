@@ -641,12 +641,13 @@ async function libraryApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       return json(200, library.library());
     }
     if (url.pathname === '/api/library/starter') {
-      library.makeStarter(body.kinds, payer);
+      library.makeStarter(body.kinds, payer, body.again === true);
       return json(200, library.library());
     }
     if (url.pathname === '/api/library/action') {
       if (body.do === 'set') library.set(body.id, body);
       else if (body.do === 'remove') library.remove(body.id);
+      else if (body.do === 'clear') library.clear(body.kinds);
       else if (body.do === 'regenerate') library.regenerate(body.id, payer);
       else throw new LibraryError('bad_request');
       return json(200, library.library());

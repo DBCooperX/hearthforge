@@ -125,8 +125,8 @@ export function LibraryPane() {
       {error && <p className="art-error" role="alert">{t(LIBRARY_ERRORS[error.code as keyof typeof LIBRARY_ERRORS] ?? LIBRARY_ERRORS.failed, { detail: error.detail || '?' })}</p>}
       {note && <p className="art-note" role="status">{note}</p>}
 
-      <StarterBar kind={kind} lib={lib} busy={busy === 'starter'} onMake={(kinds, usd) => {
-        void ask(t('Make {n} starter sounds for about {usd}? They are made in the background, effects first; you can keep playing meanwhile.', { n: kinds.reduce((n, k) => n + lib.starter[k].missing, 0), usd: dollars(usd) })).then((yes) => { if (yes) void run('starter', '/api/library/starter', { kinds }); });
+      <StarterBar kind={kind} lib={lib} busy={busy === 'starter'} onMake={(kinds, usd, again) => {
+        void ask(t('Make {n} starter sounds for about {usd}? They are made in the background, effects first; you can keep playing meanwhile.', { n: kinds.reduce((n, k) => n + (again ? lib.starter[k].deleted : lib.starter[k].missing), 0), usd: dollars(usd) })).then((yes) => { if (yes) void run('starter', '/api/library/starter', { kinds, ...(again ? { again: true } : {}) }); });
       }} />
 
       {lib.canMake && <MakeForm key={kind} kind={kind} usdPerMinute={lib.usdPerMinute[kind]} busy={busy === 'make'} onMake={(body) => run('make', '/api/library/make', { kind, ...body })} />}
@@ -137,6 +137,7 @@ export function LibraryPane() {
         <span className="lib-download">
           <button type="button" disabled={!mine.some((e) => e.src)} onClick={() => void download(kind)}>{t('Download {kind}', { kind: t(LIBRARY_KIND_LABELS[kind]) })}</button>
           <button type="button" className="link" disabled={!lib.entries.some((e) => e.src)} onClick={() => void download('all')}>{t('Download everything')}</button>
+          <button type="button" className="link danger" disabled={!lib.entries.length || !!busy} onClick={() => { void ask(t('Delete every sound in the library, music, ambient loops and effects, files included? Download first if you want a copy. The starter set can then be made again from scratch.'), { danger: true }).then((yes) => { if (yes) void run('clear', '/api/library/action', { do: 'clear' }); }); }}>{t('Delete everything')}</button>
           <label className="link-button" title={t('Put back a library zip you downloaded earlier. Sounds that are already here are skipped.')}>
             <input type="file" accept=".zip,application/zip" hidden disabled={busy === 'restore'} onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} />
             {busy === 'restore' ? t('Putting back…') : t('Restore from a zip')}
@@ -164,7 +165,7 @@ export function LibraryPane() {
 }
 
 /** How much of the starter set is made, and a button for the rest: this kind, or every kind at once. */
-function StarterBar({ kind, lib, busy, onMake }: { kind: LibraryKind; lib: LibraryView; busy: boolean; onMake: (kinds: LibraryKind[], usd: number) => void }) {
+function StarterBar({ kind, lib, busy, onMake }: { kind: LibraryKind; lib: LibraryView; busy: boolean; onMake: (kinds: LibraryKind[], usd: number, again?: boolean) => void }) {
   const t = useT();
   const p = lib.starter[kind];
   const allMissing = LIBRARY_KINDS.reduce((n, k) => n + lib.starter[k].missing, 0);
@@ -174,7 +175,8 @@ function StarterBar({ kind, lib, busy, onMake }: { kind: LibraryKind; lib: Libra
       <span><b>{t('Starter set')}</b> <span className="muted small">{t('{made} of {total} made', { made: p.made, total: p.total })}</span></span>
       {p.missing > 0 && lib.canMake && <button type="button" className="primary" disabled={busy} onClick={() => onMake([kind], p.missingUsd)}>{t('Make the {n} missing for about {usd}', { n: p.missing, usd: dollars(p.missingUsd) })}</button>}
       {allMissing > p.missing && lib.canMake && <button type="button" disabled={busy} onClick={() => onMake([...LIBRARY_KINDS], allUsd)}>{t('Everything missing: {n} for about {usd}', { n: allMissing, usd: dollars(allUsd) })}</button>}
-      {p.missing === 0 && <span className="muted small">{t('All made.')}</span>}
+      {p.deleted > 0 && lib.canMake && <button type="button" className="link" disabled={busy} onClick={() => onMake([kind], p.deletedUsd, true)}>{t('{n} deleted by you: make them again', { n: p.deleted })}</button>}
+      {p.missing === 0 && p.deleted === 0 && <span className="muted small">{t('All made.')}</span>}
     </div>
   );
 }
