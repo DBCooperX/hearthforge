@@ -53,6 +53,9 @@ export interface StarterProgress {
   /** Lines still to make, and what they cost at the list price. Lines the owner deleted are not made again. */
   missing: number;
   missingUsd: number;
+  /** Lines the owner deleted one by one; "Delete everything" or "make them again" brings these back into play. */
+  deleted: number;
+  deletedUsd: number;
 }
 
 export interface LibraryView {

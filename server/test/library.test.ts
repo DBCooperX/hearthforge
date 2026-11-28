@@ -274,6 +274,23 @@ describe('the starter set', () => {
     lib.remove(jig.id);
     expect(lib.library().starter.music.missing).toBe(0);
     expect(lib.makeStarter('music')).toBe(0);
+    expect(lib.library().starter.music.deleted).toBe(1);
+    expect(lib.makeStarter('music', {}, true)).toBe(1);
+    await lib.whenIdle();
+    expect(lib.library().starter.music).toMatchObject({ missing: 0, deleted: 0 });
+  });
+
+  it('deletes everything, files too, and lets the starter set be made again from nothing', async () => {
+    const { lib, dir } = make();
+    lib.makeStarter(['sfx', 'ambient', 'music']);
+    await lib.whenIdle();
+    lib.remove(lib.entries().find((e) => e.kind === 'music')!.id);
+    expect(lib.clear()).toBeGreaterThan(100);
+    expect(lib.entries()).toEqual([]);
+    expect(readdirSync(join(dir, 'files'))).toEqual([]);
+    const p = lib.library().starter;
+    expect(p.music).toMatchObject({ made: 0, deleted: 0, missing: p.music.total });
+    expect(lib.makeStarter('music')).toBe(p.music.total);
   });
 
   it('tries a failed starter sound again in its old entry', async () => {

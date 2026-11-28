@@ -157,9 +157,9 @@ export class SoundLibrary {
   }
 
   /** Starter lines that have no sound yet (or only a failed one), leaving out the ones the owner deleted. */
-  private starterMissing(kinds: readonly LibraryKind[]): StarterSound[] {
+  private starterMissing(kinds: readonly LibraryKind[], again = false): StarterSound[] {
     const have = new Set(this.s.entries.filter((e) => e.starter && e.status !== 'failed').map((e) => e.starter));
-    const dropped = new Set(this.s.droppedStarter ?? []);
+    const dropped = new Set(again ? [] : this.s.droppedStarter ?? []);
     return STARTER_SET.filter((x) => kinds.includes(x.kind) && !have.has(x.key) && !dropped.has(x.key));
   }
 
@@ -169,7 +169,7 @@ export class SoundLibrary {
       const all = STARTER_SET.filter((x) => x.kind === kind);
       const missing = this.starterMissing([kind]);
       const made = new Set(this.s.entries.filter((e) => e.kind === kind && e.starter && e.status !== 'failed').map((e) => e.starter)).size;
-      out[kind] = { total: all.length, made, missing: missing.length, missingUsd: round(starterCost(missing, SOUND_USD_PER_MINUTE)) };
+      out[kind] = { total: all.length, made, missing: missing.length, missingUsd: round(starterCost(missing, SOUND_USD_PER_MINUTE)), ...(() => { const rest = this.starterMissing([kind], true).filter((x) => !missing.some((m) => m.key === x.key)); return { deleted: rest.length, deletedUsd: round(starterCost(rest, SOUND_USD_PER_MINUTE)) }; })() };
     }
     return out;
   }
@@ -178,11 +178,12 @@ export class SoundLibrary {
    * Make every missing starter sound of these kinds. A line whose earlier try failed gets a new try in its old
    * entry. Returns how many were put in the queue.
    */
-  makeStarter(kinds: unknown, payer: Payer = {}): number {
+  makeStarter(kinds: unknown, payer: Payer = {}, again = false): number {
     if (!this.key()) throw new LibraryError('no_key');
     const wanted = (Array.isArray(kinds) ? kinds : [kinds]).filter(isLibraryKind);
     if (!wanted.length) throw new LibraryError('bad_request');
-    const missing = this.starterMissing(wanted);
+    const missing = this.starterMissing(wanted, again);
+    if (again) this.s.droppedStarter = (this.s.droppedStarter ?? []).filter((k) => !missing.some((x) => x.key === k));
     for (const x of missing) {
       const failed = this.s.entries.find((e) => e.starter === x.key);
       if (failed) {
@@ -277,6 +278,21 @@ export class SoundLibrary {
     this.dropFile(e.file);
     this.save();
     this.hooks.onChange?.();
+  }
+
+  /** Delete every sound of these kinds (all kinds if none are named), files included, and let the starter set be made afresh. */
+  clear(kinds?: unknown): number {
+    const wanted = new Set((Array.isArray(kinds) && kinds.length ? kinds : [...LIBRARY_KINDS]).filter(isLibraryKind));
+    const gone = this.s.entries.filter((e) => wanted.has(e.kind));
+    this.s.entries = this.s.entries.filter((e) => !wanted.has(e.kind));
+    const ids = new Set(gone.map((e) => e.id));
+    this.queue = this.queue.filter((q) => !ids.has(q.id));
+    for (const e of gone) this.dropFile(e.file);
+    const starterKeys = new Set(STARTER_SET.filter((x) => wanted.has(x.kind)).map((x) => x.key));
+    this.s.droppedStarter = (this.s.droppedStarter ?? []).filter((k) => !starterKeys.has(k));
+    this.save();
+    this.hooks.onChange?.();
+    return gone.length;
   }
 
   private dropFile(file: string | undefined) {
