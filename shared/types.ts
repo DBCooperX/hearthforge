@@ -1009,7 +1009,7 @@ export type ClientMessage =
   | { t: 'set_language'; lang: Lang }
   | { t: 'set_start'; start: Partial<StartOptions> }
   | { t: 'set_style'; style: Partial<DmStyle> }
-  | { t: 'say'; text: string; /** An out-of-character question to the Dungeon Master. */ ooc?: boolean }
+  | { t: 'say'; text: string; /** An out-of-character question to the Dungeon Master. */ ooc?: boolean; /** The skill tag of the suggested action that was picked. */ skill?: string }
   | { t: 'unsay' }
   | { t: 'reset' };
 

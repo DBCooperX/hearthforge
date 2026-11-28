@@ -2,6 +2,7 @@
 // The tag is split off: the chip shows the skill's icon and the hero's bonus, never a DC, and the
 // player still decides what to do. The Dungeon Master still decides whether a roll is needed.
 import { abilityMod, type Character } from './types';
+import { hasFeature } from './classes';
 import { SKILLS as SKILL_ABILITY } from './content';
 import { DE } from './i18n-de';
 
@@ -22,10 +23,12 @@ export function parseActionTag(raw: string): { text: string; skill: string | nul
   return { text: m[3].trim(), skill };
 }
 
-/** A hero's bonus for a skill check: the ability modifier, plus proficiency (doubled with expertise). */
-export function skillBonus(c: Pick<Character, 'abilities' | 'skills' | 'expertise' | 'profBonus'>, skill: string): number {
+/** A hero's bonus for a skill check, as the server rolls it: the skill's own ability modifier, plus proficiency (doubled with expertise). */
+export function skillBonus(c: Pick<Character, 'abilities' | 'skills' | 'expertise' | 'profBonus'> & Partial<Pick<Character, 'classId' | 'level'>>, skill: string): number {
   const ability = SKILL_ABILITY[skill];
   if (!ability) return 0;
-  const prof = c.skills.includes(skill) ? c.profBonus * (c.expertise.includes(skill) ? 2 : 1) : 0;
+  // Jack of All Trades: half proficiency where there is none, as in the roll the server makes.
+  const jack = c.classId && c.level && hasFeature({ classId: c.classId, level: c.level }, 'jack_of_all_trades') ? Math.floor(c.profBonus / 2) : 0;
+  const prof = c.skills.includes(skill) ? c.profBonus * (c.expertise.includes(skill) ? 2 : 1) : jack;
   return abilityMod(c.abilities[ability]) + prof;
 }

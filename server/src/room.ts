@@ -4,6 +4,7 @@ import type { Character, CharacterSpec, ChatMessage, ClientMessage, ServerMessag
 import type { Store } from './db';
 import { storyLedger } from './story/ledger';
 import type { DungeonMaster, MonsterActor, PlayerLine } from './dm/types';
+import { SKILLS } from '../../shared/content';
 import { battleLineFor, highlightOf } from '../../shared/battleNarration';
 import type { NpcState } from './game/world';
 import { Game, GameError, type Beat, type MonsterActResult, type InternalState } from './game/engine';
@@ -509,7 +510,7 @@ export class Room {
       if (refused) return this.send(ws, { t: 'error', message: refused });
     }
     switch (msg.t) {
-      case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc);
+      case 'say': return this.say(ws, playerId, String(msg.text ?? ''), !!msg.ooc, typeof msg.skill === 'string' && SKILLS[msg.skill] ? msg.skill : undefined);
       case 'unsay': return this.unsay(ws, playerId);
       case 'test': return this.testAction(ws, playerId, msg.do);
       case 'trip': return this.trip(ws, playerId, !!msg.go);
@@ -818,7 +819,7 @@ export class Room {
   // ------------------------------------------------------- talking to the DM
 
   /** Something said in character or tried in the story. It is shown at once and answered by the Dungeon Master. */
-  private say(ws: WebSocket, playerId: string, raw: string, ooc: boolean) {
+  private say(ws: WebSocket, playerId: string, raw: string, ooc: boolean, skill?: string) {
     const text = raw.trim().slice(0, 500);
     if (!text) return;
     const question = ooc ? parseOoc(text) ?? text : parseOoc(text);
@@ -826,7 +827,7 @@ export class Room {
     const name = this.game.player(playerId)?.name ?? 'Adventurer';
     this.game.log('chat', text, { speaker: name });
     this.setTyping(playerId, null);
-    if (this.game.s.phase !== 'lobby') this.pending.push({ playerId, player: name, text, logId: this.game.s.logSeq });
+    if (this.game.s.phase !== 'lobby') this.pending.push({ playerId, player: name, text, logId: this.game.s.logSeq, ...(skill ? { skill } : {}) });
     this.considerAnswer();
     this.flush();
   }
@@ -918,7 +919,7 @@ export class Room {
     const epoch = this.epoch;
     this.background(async () => {
       // Taken only now, so anything said while an earlier scene was being written is included.
-      const said = this.pending.splice(0).map(({ player, text, director }) => ({ player, text, ...(director ? { director } : {}) }));
+      const said = this.pending.splice(0).map(({ player, text, director, skill }) => ({ player, text, ...(director ? { director } : {}), ...(skill ? { skill } : {}) }));
       try {
         if (!said.length) return;
         const scene = await this.dm.respond(this.game, said, async () => this.flush());

@@ -107,6 +107,8 @@ export class GameError extends Error {}
 export class JoinError extends GameError {}
 
 const cleanName = (raw: unknown) => String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, 24);
+/** A named skill is always rolled with its own ability, so the roll matches the bonus shown on the sheet and on suggested actions. A raw check (no skill) keeps the ability asked for. */
+const skillAbility = (skill: string, asked: AbilityKey): AbilityKey => SKILLS[String(skill ?? '').trim().toLowerCase()] ?? asked;
 const sameName = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
 const MAX_CHAT = 200;
 
@@ -5797,6 +5799,7 @@ export class Game {
    * for them to press Roll (or for the time to run out) before the die is cast: the pen-and-paper moment.
    */
   async requestCheck(characterId: string, ability: AbilityKey, skill: string, dc: number) {
+    ability = skillAbility(skill, ability);
     const c = this.char(characterId);
     if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
     const waiter = this.checkWaiter;
@@ -5816,6 +5819,7 @@ export class Game {
   }
 
   skillCheck(characterId: string, ability: AbilityKey, skill: string, dc: number, checkId?: string) {
+    ability = skillAbility(skill, ability);
     const c = this.char(characterId);
     if (!this.conscious(c)) throw new GameError(this.t`${c.name} is in no state to try that`);
     const name = skill.trim().toLowerCase();

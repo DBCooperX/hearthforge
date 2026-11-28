@@ -22,6 +22,8 @@ export interface PlayerLine {
   text: string;
   /** A hint from the host in test mode, not something a player said: never shown in the story. */
   director?: boolean;
+  /** The skill tag of the suggested action the player picked, so the roll the server makes matches the bonus the chip showed. */
+  skill?: string;
 }
 
 export interface DungeonMaster {

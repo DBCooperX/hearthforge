@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Suggested rolls match the real roll (#131)
+- **Same bonus on the chip and in the roll.** A skill is now always rolled with its own ability (Persuasion with Charisma, Stealth with Dexterity), even when the Dungeon Master asks for another one, so the bonus on the suggested action, the Roll card and the roll itself agree. Jack of All Trades is counted on the chip too.
+- **A picked suggestion keeps its skill.** When you pick a suggestion with a skill tag, the Dungeon Master is told which skill it was, so a roll it calls for uses that skill and not another.
+
 ### Your own sound library (phase 5): the old sources are gone, the library is in backups
 - **Removed.** The Freesound, Kenney, Kevin MacLeod, OpenGameArt and game-icons.net downloaders, the art, tile and sound uploads, their Innkeeper tabs, the "Art credits" window and the options `FREESOUND_API_KEY`, `HEARTHFORGE_ART`, `HEARTHFORGE_AUTO_ASSETS` and `HEARTHFORGE_ART_UPLOADS`. Music and effects now come only from the sound library, icons only from the painted icons, and the browser's own synth sounds and emoji stay as the fallback. Make the starter set first: a server without one is silent until it has made sounds.
 - **Old files.** Files already in `/data/music`, `/data/sfx` and `/data/art` are no longer used; delete them when you like.
