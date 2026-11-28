@@ -30,7 +30,7 @@ interface Props {
   /** Go to one of your tables. */
   onSit: (tb: TableSummary) => void;
   /** Open a new table with this many seats. */
-  onOpen: (seats: number) => void;
+  onOpen: (seats: number, name?: string) => void;
 }
 
 /** A free name for a copy: "Brann II", "Brann III" and so on, within the twenty letters a name may have. */
@@ -153,7 +153,7 @@ export function HeroesTab({ heroes, loaded, tables, ready, onSit, onOpen }: Prop
 interface PanelProps {
   hero: HeroTemplate; at: HeroAt[]; tables: TableSummary[]; ready: boolean; full: boolean;
   onClose: () => void; onEdit: () => void; onCopy: () => void; onDelete: () => void;
-  onSit: (tb: TableSummary) => void; onOpen: (seats: number) => void;
+  onSit: (tb: TableSummary) => void; onOpen: (seats: number, name?: string) => void;
 }
 
 /** One hero opened up: who they are, their numbers, where they play, and what you can do with them. */
@@ -162,6 +162,7 @@ function HeroPanel({ hero, at, tables, ready, full, onClose, onEdit, onCopy, onD
   const { lang } = useLang();
   const [playing, setPlaying] = useState(false);
   const [seats, setSeats] = useState(1);
+  const [tableName, setTableName] = useState('');
   const spec = hero.spec;
   const sheet = useMemo(() => buildSheet(spec), [spec]);
   const spells = sheet ? sheet.abilityIds.filter((id) => ABILITIES[id]?.spellLevel !== undefined) : [];
@@ -213,10 +214,11 @@ function HeroPanel({ hero, at, tables, ready, full, onClose, onEdit, onCopy, onD
           )}
           <div className="hero-play-new">
             <span>{t('A new table')}</span>
+            <input value={tableName} onChange={(e) => setTableName(e.target.value)} maxLength={40} placeholder={t('Name of the table')} aria-label={t('Name of the table')} />
             <span className="pick" role="group" aria-label={t('Players')}>
               {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
             </span>
-            <button type="button" className="primary" disabled={!ready} onClick={() => take(() => onOpen(seats))}>{t('Open the table')}</button>
+            <button type="button" className="primary" disabled={!ready} onClick={() => take(() => onOpen(seats, tableName))}>{t('Open the table')}</button>
           </div>
           <small className="muted">{t('Tables where the adventure is under way take no new heroes. The hero joins as a fresh level 1 copy.')}</small>
           <button type="button" className="link" onClick={() => setPlaying(false)}>{t('Cancel')}</button>
