@@ -20,6 +20,7 @@ import type { DungeonMaster, MonsterActor, PlayerLine, Scene } from './types';
 import { RECONCILE_SYSTEM, applyFindings, parseFindings, reconcilePrompt, type TurnRecord } from './reconcile';
 import type { UsageSample } from '../admin/usage';
 import { logEvent, secret } from '../game/timeline';
+import { settleFact } from '../game/facts';
 import { CAMPAIGN_TOOL_DESCRIPTION, campaignTool } from '../campaign/prompt';
 import { readCampaign } from '../campaign/digest';
 import type { Book } from '../campaign/read';
@@ -278,6 +279,12 @@ const STORY_TOOLS: Tool[] = [
     after: str('For hold: what must happen first, in plain words, for example "the party has found the ledger in the mill cellar". Empty string otherwise.'),
     not_before: str('For hold, when timing matters: the earliest moment, as "in 2 days", "tomorrow", "tonight" or "day 4". Empty string for no limit.'),
   }),
+  looseTool('fact', 'Keep the story straight when people are questioned. Before someone answers a question about the story that the state does not answer yet (who brought the letter, where someone was last night, who paid whom), settle what is really so; and note what a person told the party about it, true or not. A settled truth never changes: asking again with the same about gives it back. Settled facts are listed for you each turn with what everyone said.', {
+    about: str('The question it answers, a few words in the table language, for example "who brought the letter". Reuse the wording or id from the list to add to one.'),
+    truth: str('What is really so, one sentence in the table language. Required the first time; empty string to only note what someone said.'),
+    told_by: str('Who just told the party something about it, by name as in your memory. Empty string if nobody did.'),
+    told: str('What they said, one sentence, true or not: a lie or a mistake they hold to. Empty string if nobody said anything.'),
+  }),
   looseTool('illustrate', 'Ask for a hand-drawn picture of this moment, shown above the scene of this reply. Only for a moment the state lists as available for illustrations; the server refuses the rest. Call it at most once per reply, before scene.', {
     moment: str('What kind of moment it is: "boss" (a boss or mighty foe steps out), "victory" (a hard fight is won), "reveal" (a big secret comes out), "opening" (the first scene of an adventure), "place" (the party has just arrived at a new place for the first time; the server only allows it then) or "farewell" (a death, a parting, the end of a quest).'),
     picture: str('The picture in one to three sentences of English: who does what, where, in what light. One clear moment, as a painter would frame it. No text or letters in the picture.'),
@@ -531,6 +538,8 @@ export class ClaudeDM implements DungeonMaster {
             if (what === 'order') return orderSound(game, { kind: i.kind, description: i.words, meanwhile: i.id });
             throw new Error('do must be "find", "play" or "order".');
           }
+          case 'fact':
+            return settleFact(game, { about: String(i.about ?? ''), truth: String(i.truth ?? ''), toldBy: String(i.told_by ?? ''), told: String(i.told ?? ''), by: 'dm' });
           case 'secret':
             return secret(game, { action: String(i.action ?? ''), text: String(i.text ?? ''), after: String(i.after ?? ''), notBefore: String(i.not_before ?? '') });
           default:

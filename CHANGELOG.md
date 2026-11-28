@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### People keep their story straight (#132)
+- **Settled facts.** When the heroes question people (who brought the letter, where someone was last night), the Dungeon Master now fixes the true answer once with a new `fact` tool and the server notes what each person told the party. Both are listed for the Dungeon Master every turn, so a second person questioned later knows the same truth, or lies for a reason the Dungeon Master chose, and the first person repeats what they said before. A settled truth is never replaced; trying to settle it again gives the old one back.
+- **Safety net.** If the Dungeon Master forgets the tool, the check after each reply notes the answer anyway (never for heroes) and reminds the Dungeon Master to settle the truth behind it.
+- **Where to see it.** Players find what someone told them on that person's page in the journal (*What they told you* / *Aussagen*). The Innkeeper's story view lists all settled facts, with the truths behind the spoiler switch. English and German.
+
 ### Your own sound library (phase 4): painted icons
 - **Art → Icons.** The server can paint its own icons for every item, spell, skill, feat and class feature (411 pictures) in one look that matches the hero portraits, with the picture service set up under Illustrations (Gemini by default). Four icons go on one picture, which keeps them alike and costs a quarter as much: about 103 sheets, roughly $7 at Gemini's list price. *Paint missing icons* shows the price first and runs in the background. Players see each icon as soon as its sheet is there; the browser cuts it out and takes the background away.
 - **Four new takes.** Open an icon, optionally say how it should look, and get four new takes on one sheet; the old one stays until you pick another. Switch an icon off to bring back the older icon or the emoji. *Download icons* saves every sheet and `icons.json` as a zip for your own copy.

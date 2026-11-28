@@ -12,6 +12,7 @@ import { PREMISE_HOURS, campaignRegion, classicRegion, openingFor, premiseTheme,
 import type { CampaignDigest } from '../campaign/library';
 
 import type { SecretState, TimelineEvent } from './timeline';
+import type { FactState } from './facts';
 
 export interface LocationState extends Omit<Location, 'dungeon'> {
   /** The party knows this place exists and where it is. */
@@ -77,6 +78,8 @@ export interface MemoryState {
   timeline: TimelineEvent[];
   /** Revelations held back until their condition is met. Missing in saves from before the timeline. */
   secrets: SecretState[];
+  /** Questions of the story with their settled answers and what people told the party. Missing in older saves. */
+  facts: FactState[];
 }
 
 /** Where and how this table's story is set. Saved with the game; tables from before start options have none. */
@@ -368,6 +371,7 @@ export function generateWorld(start: StartOptions, lang: Lang = 'en', book?: { i
     mysteries: [],
     timeline: [],
     secrets: [],
+    facts: [],
   };
   const lair = region.locations.find((l) => l.id === 'lair') ?? region.locations.find((l) => l.questId);
   const dist = lair ? `about ${hexDistance(home, lair) * HEX_MILES} miles ${direction(home, lair)}` : 'not far';

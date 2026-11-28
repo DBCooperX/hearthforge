@@ -473,6 +473,7 @@ export class AdminApi {
       quests: m.quests.map((q) => ({ id: q.id, title: q.title, status: q.status, summary: q.summary, notes: q.notes ?? [], rewardXp: q.rewardXp ?? 0, rewardGold: q.rewardGold ?? 0 })),
       mysteries: (m.mysteries ?? []).map((x) => ({ id: x.id, question: x.question, solved: x.solved, clues: x.clues.map((c) => ({ day: c.day, text: c.text, source: c.source, place: c.place })) })),
       secrets: (m.secrets ?? []).map((x) => ({ id: x.id, text: x.text, after: x.after, revealedDay: x.revealed === null ? null : dayOf(x.revealed) })),
+      facts: (m.facts ?? []).map((f) => ({ id: f.id, about: f.about, truth: f.truth, day: f.day, told: f.told.map((t) => ({ who: t.who, text: t.text, day: t.day })) })),
       npcs: m.npcs.map((n) => ({ id: n.id, name: n.name, role: n.role, disposition: n.disposition, met: n.met, place: placeName(n.locationId), notes: n.notes ?? [] })),
       places: places.map((l) => ({ id: l.id, name: l.name, kind: l.kind, discovered: l.discovered, visited: l.visited, origin: l.origin, cleared: l.stages?.length ? (l.cleared ?? 0) : null, total: l.stages?.length ?? null })),
       factions: (s.factions ?? []).map((f) => ({ id: f.id, name: f.name, standing: f.standing })),

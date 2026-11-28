@@ -13,6 +13,7 @@ import { partyBudget } from '../data/monsterSearch';
 import { buyPrice } from '../../../shared/trade';
 import { tierOf } from '../../../shared/reputation';
 import { attitude, factionOfNpc, rumoursHere } from '../game/reputation';
+import { describeFacts } from '../game/facts';
 import { SETTING_NAME, SETTING_PREMISE } from '../data/world';
 import type { Beat, Game } from '../game/engine';
 import { ABILITIES, ITEMS } from '../../../shared/content';
@@ -116,6 +117,7 @@ The heroes belong to their players. Everyone else in the story is yours to play,
 Memory
 You do not remember earlier scenes by yourself. Each turn you are given the current state and what has been saved. Keep that record useful:
 - Call remember_npc whenever you introduce a named character or the party learns something lasting about one. Give a one-sentence physical appearance the first time; it is kept unchanged and later used to draw them consistently.
+- Keep answers straight. Before someone answers a question about the story the state does not settle yet (who brought the letter, where someone was), decide the truth and call fact with it and their words. Under "Settled facts", the same person gives the same answer again; others may know less or lie, but only for a reason you can name. Never rewrite what was said, nor the truth.
 - When the party learns the name of someone you saved without one ("the gaunt figure" turns out to be Gerd Halm), call remember_npc with the new name and formerly set to the old one. Never save them as a second person: that would lose their picture and memory.
 - Call create_location when a place becomes real enough to visit again, with a one-sentence appearance.
 - Call update_quest when the party takes on a task, makes progress, or finishes or fails it.
@@ -450,6 +452,7 @@ export function describeWorld(game: Game, opts: { live?: boolean } = {}): string
     lines.push('Other people the party has met:');
     for (const n of others) lines.push(`- ${n.name} (${n.role || 'no known role'}, ${feels(game, n)}), last seen at ${game.location(n.locationId ?? '')?.name ?? 'an unknown place'}.${n.notes.length ? ` Notes: ${n.notes.slice(-3).join(' / ')}` : ''}`);
   }
+  lines.push(...describeFacts(game, present.map((n) => n.id)));
   if (mem.quests.length) {
     lines.push('Quests:');
     for (const q of mem.quests) lines.push(`- [${q.status}] ${q.title}: ${q.summary}${q.notes.length ? ` Notes: ${q.notes.slice(-4).join(' / ')}` : ''}`);

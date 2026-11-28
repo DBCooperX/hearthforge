@@ -232,6 +232,8 @@ export interface AdminCampaign {
   mysteries: { id: string; question: string; solved: boolean; clues: { day: number; text: string; source: string; place: string }[] }[];
   /** Truths held back until something has happened. `revealed` is the world day when they came out. */
   secrets: { id: string; text: string; after: string; revealedDay: number | null }[];
+  /** Questions of the story the Dungeon Master has settled, with what people told the party. `truth` is empty while unsettled. */
+  facts: { id: string; about: string; truth: string; day: number; told: { who: string; text: string; day: number }[] }[];
   npcs: { id: string; name: string; role: string; disposition: string; met: boolean; place: string; notes: string[] }[];
   places: { id: string; name: string; kind: string; discovered: boolean; visited: boolean; origin: 'seed' | 'dm'; cleared: number | null; total: number | null }[];
   factions: { id: string; name: string; standing: number }[];

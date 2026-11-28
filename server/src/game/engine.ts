@@ -92,6 +92,7 @@ import { HAGGLE_DC, SHOP_NAMES, buyPrice, clampMood, haggleMood, sellPrice, type
 import { seedStream } from '../../../shared/start';
 import { emptyStats, type Stats } from '../../../shared/achievements';
 import { logEvent } from './timeline';
+import { toldBy } from './facts';
 import { soundtrackNow, type SoundHooks } from './sounds';
 import { companionFigureSubject, heroFigureSubject, monsterFigureSubject, npcFigureSubject, npcPortraitKey, placeAsk, type PictureAsk, type PictureHooks } from './pictures';
 import { PICTURE_MOMENTS } from '../../../shared/illustrations';
@@ -385,7 +386,7 @@ const DIRS: Pt[] = [
 const MAX_LOG = 400;
 /** How far the Dungeon Master may move the party by story alone; longer journeys go over the map. */
 const STORY_TRAVEL_HEXES = 4;
-const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [], timeline: [], secrets: [] });
+const emptyMemory = (): MemoryState => ({ npcs: [], quests: [], deeds: [], journal: [], chronicle: '', rumours: [], mysteries: [], timeline: [], secrets: [], facts: [] });
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
 
 export class Game {
@@ -428,6 +429,7 @@ export class Game {
     this.s.memory.mysteries ??= []; // saves from before clue tracking
     this.s.memory.timeline ??= []; // saves from before the timeline
     this.s.memory.secrets ??= [];
+    this.s.memory.facts ??= []; // saves from before settled facts
     this.s.achievements ??= [];
     this.s.stats = { ...emptyStats(), ...this.s.stats };
     this.s.factions ??= this.s.world ? makeFactions(this.s.setting?.seed ?? 'HEARTH', this.lang, !this.s.setting || this.s.setting.region === 'classic') : [];
@@ -6752,7 +6754,7 @@ export class Game {
         safe: this.isSafe(),
       },
       memory: {
-        npcs: s.memory.npcs.filter((n) => n.met).map(({ met: _met, ...n }) => n),
+        npcs: s.memory.npcs.filter((n) => n.met).map(({ met: _met, ...n }) => { const told = toldBy(this, n.id); return told.length ? { ...n, told } : n; }),
         quests: s.memory.quests.map(({ rewardXp: _x, rewardGold: _g, ...q }) => q),
         deeds: s.memory.deeds,
         mysteries: s.memory.mysteries,
