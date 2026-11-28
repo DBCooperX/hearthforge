@@ -8,6 +8,7 @@ import { SLOT_IDS } from '../../../shared/types';
 import type { Game } from '../game/engine';
 import type { PlayerLine } from './types';
 import { logEvent, secret } from '../game/timeline';
+import { settleFact } from '../game/facts';
 import { currentZone } from '../game/zone';
 
 /** What the DM did during one reply, so the check does not repeat it. */
@@ -36,6 +37,7 @@ export interface Findings {
   present?: unknown;
   events?: unknown;
   revealed?: unknown;
+  told?: unknown;
 }
 
 export const RECONCILE_SYSTEM = 'You keep the game state of a Dungeons & Dragons game in step with what the Dungeon Master narrated. You read carefully, you report only what the narration plainly says has happened, and you answer with exactly the JSON you are asked for.';
@@ -76,6 +78,8 @@ function stateFor(game: Game, turn: TurnRecord): string {
   if (dated.length) lines.push(`Events already on the timeline: ${dated.map((e) => e.what).join(' / ')}`);
   const held = s.memory.secrets.filter((x) => x.revealed === null);
   if (held.length) lines.push('Secrets held back (id, text):', ...held.map((x) => `- [${x.id}] ${x.text}`));
+  const facts = [...s.memory.facts].sort((a, b) => b.touched - a.touched).slice(0, 20);
+  if (facts.length) lines.push(`Questions people have already answered (reuse this wording in about): ${facts.map((f) => f.about).join(' / ')}`);
   return lines.join('\n');
 }
 
@@ -103,7 +107,7 @@ ${tools.length ? tools.map(callLine).join('\n') : '(nothing)'}
 Compare the reply with the game state. List only what the reply plainly says has already happened and the game does not show yet. Leave out anything the tools above already did, anything that is only planned, offered, suggested or thought about, and anything you are not sure of. Most replies need no change at all; then answer with {}.
 
 Answer with one JSON object and nothing else. Every field is optional:
-{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "handed": [{"from": "<hero or companion id>", "to": "<hero or companion id>", "item": "<name exactly as carried>", "quantity": 1}], "where": "<where the scene now plays, a few words>", "spot": "<the spot of the place the party is at now, one or two words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"]}
+{"place": "<id of the known place the party is at by the end of the reply>", "minutes": <minutes of time the reply lets pass that the clock does not show yet>, "rest": "short" | "long", "gold": <gold the party received, negative when it paid>, "gold_for": "<what for, a few words in the language of the reply>", "gained": [{"hero": "<hero id>", "item": "<name>", "description": "<one sentence, only for something new>", "quantity": 1}], "lost": [{"hero": "<hero id>", "item": "<name exactly as carried>", "quantity": 1}], "equipped": [{"hero": "<hero id>", "item": "<name exactly as carried>"}], "handed": [{"from": "<hero or companion id>", "to": "<hero or companion id>", "item": "<name exactly as carried>", "quantity": 1}], "where": "<where the scene now plays, a few words>", "spot": "<the spot of the place the party is at now, one or two words>", "present": "<everyone in the scene besides the heroes, comma separated, or none>", "events": [{"what": "<one sentence in the language of the reply>", "when": "<a number and a unit, such as 3 days ago, 2 weeks ago, 4 months ago>", "where": "<a few words>", "known_by": "<who told it or saw it>"}], "revealed": ["<id of a held-back secret>"], "told": [{"who": "<the person's name>", "about": "<the question it answers, a few words>", "said": "<what they said, one sentence in the language of the reply>"}]}
 
 - place: only when the party went to one of the known places listed, and the game has it somewhere else. The server adds the travel time itself, so do not count the walk in minutes. A place that is not listed: leave place out and use where.
 - minutes: a long talk, a search, a meal, waiting, a rest. 0 or leave out for an ordinary exchange. At most ${MAX_MINUTES}.
@@ -114,6 +118,7 @@ Answer with one JSON object and nothing else. Every field is optional:
 - equipped: a hero drew, wielded, put on or switched to something from the backpack.
 - events: only a past event that someone in the reply tells of with a time ("in winter I sent two guards", "three days ago the barge sank") and that is not among the events already on the timeline. Turn a vague time into the closest number and unit ("in winter" in an autumn story: "8 months ago"). Not the scene's own action. At most 2.
 - revealed: a held-back secret that the reply plainly states or lets someone say. Not hints.
+- told: a named person answered a question about the story (who did something, where someone was, when or why it happened, who sent or paid whom), so that they or someone else could be asked the same again. Give the gist of their answer, true or not. Not greetings, prices, directions or small talk. At most 2.
 - where and present: when the reply moved the scene to another room or spot, or people came or went. Name people as the reply does; use "none" when the heroes are alone. Leave both out when nothing changed.
 - spot: when the party walked to another spot of this place (a building, the jetty, the reeds). Use the name from the zone map when it is listed, otherwise one or two words from the reply.`;
 }
@@ -223,6 +228,15 @@ export function applyFindings(game: Game, f: Findings, turn: TurnRecord): Reconc
       if (held.notBefore !== null && game.world.minutes < held.notBefore) console.warn(`[dm] reconcile: ${held.id} came out before its time.`);
       held.notBefore = null;
       tryIt(`revealed ${id}`, () => secret(game, { action: 'reveal', text: id }));
+    }
+  }
+
+  if (!used('fact')) {
+    for (const t of list(f.told).slice(0, 2)) {
+      const who = text(t.who), about = text(t.about), said = text(t.said);
+      // Heroes belong to their players; only people of the story are held to what they said.
+      if (game.s.characters.some((c) => c.name.toLowerCase() === who.toLowerCase())) continue;
+      if (who && about && said) tryIt(`told ${about.slice(0, 40)}`, () => settleFact(game, { about, toldBy: who, told: said, by: 'check' }));
     }
   }
 

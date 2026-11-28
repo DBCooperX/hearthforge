@@ -771,6 +771,8 @@ export interface Npc {
   portraitId?: string | null;
   /** What the portrait was painted from, so a changed appearance gets a new one. */
   portraitKey?: string;
+  /** What they have told the party about questions of the story, oldest first. Only in the players' view. */
+  told?: { about: string; text: string; day: number }[];
 }
 
 /** Someone in the current scene. Only people the party has met by name have an id, a role and a disposition. */

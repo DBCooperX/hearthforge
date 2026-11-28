@@ -94,6 +94,19 @@ export function Campaign({ id, onBack, onError }: { id: string; onBack: () => vo
         </ul>
       </Block>
 
+      <Block title={t('Settled facts')} count={c.facts.length}>
+        {c.facts.length === 0 && <p className="muted">{t('None yet.')}</p>}
+        <ul className="camp-list">
+          {c.facts.map((f) => (
+            <li key={f.id}>
+              <b>{f.about}</b>{' '}
+              {!f.truth ? <Tag kind="warn">{t('Not settled yet')}</Tag> : spoilers ? <>{f.truth}</> : <span className="muted">{t('Hidden')}</span>}
+              {f.told.length > 0 && <ul className="camp-notes">{f.told.map((x, i) => <li key={i}><span className="muted small">{day(x.day)} · {x.who}:</span> {x.text}</li>)}</ul>}
+            </li>
+          ))}
+        </ul>
+      </Block>
+
       <Block title={t('People')} count={met.length}>
         {met.length === 0 && <p className="muted">{t('Nobody met yet.')}</p>}
         <ul className="camp-list tight">

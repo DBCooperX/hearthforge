@@ -189,6 +189,12 @@ export function Journal({ state, onClose, onShowMap }: Props) {
             <ul className="notes">{n.notes.map((x, i) => <li key={i}><RichText text={x} /></li>)}</ul>
           </>
         )}
+        {(n.told?.length ?? 0) > 0 && (
+          <>
+            <h3>{t('What they told you')}</h3>
+            <ul className="notes">{n.told!.map((x, i) => <li key={i}><small>{t('Day')} {x.day} · {x.about}</small> <RichText text={x.text} /></li>)}</ul>
+          </>
+        )}
       </article>
     );
   };
