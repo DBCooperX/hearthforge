@@ -487,7 +487,7 @@ export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProp
 
   const signal = useTypingSignal(conn, 'story');
   const [ooc, setOoc] = useState(false);
-  const say = useCallback((line: string, question = false) => { if (line.trim()) conn.send({ t: 'say', text: line.trim(), ...(question ? { ooc: true } : {}) }); }, [conn]);
+  const say = useCallback((line: string, question = false, skill?: string | null) => { if (line.trim()) conn.send({ t: 'say', text: line.trim(), ...(question ? { ooc: true } : {}), ...(skill ? { skill } : {}) }); }, [conn]);
   const asking = ooc || parseOoc(text) !== null;
   const exploring = state.phase === 'explore';
   // Suggestions belong to the newest scene. Each player keeps them until they have answered it themselves.
@@ -560,7 +560,7 @@ export function StoryFeed({ state, conn, compact, afterFight, battle }: FeedProp
             const bonus = skill && myHero ? skillBonus(myHero, skill) : null;
             const tip = skill ? (bonus !== null && myHero ? t('{skill} check: {name} adds {bonus}. The Dungeon Master decides whether to roll, and how hard it is.', { skill: t(skill), name: myHero.name, bonus: plusMinus(bonus) }) : t('{skill} check', { skill: t(skill) })) : undefined;
             return (
-              <button key={i} className={skill ? 'chip-action tagged' : 'chip-action'} data-pick={i + 1} title={tip} onClick={() => say(a)}>
+              <button key={i} className={skill ? 'chip-action tagged' : 'chip-action'} data-pick={i + 1} title={tip} onClick={() => say(a, false, skill)}>
                 {i < 9 && <kbd className="kbd">{i + 1}</kbd>}
                 {skill && <span className="chip-skill"><SkillGlyph skill={skill} /><span className="cap">{t(skill)}</span>{bonus !== null && <b>{plusMinus(bonus)}</b>}</span>}
                 {a}

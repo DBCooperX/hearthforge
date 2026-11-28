@@ -1,4 +1,4 @@
-// Pictures for skills, feats, spells and class features, from the game-icons.net set the server
+// Pictures for skills, feats, spells and class features, from the server's own painted icons
 // has installed (see shared/glyphs.ts). Where there is no picture, because the set is not
 // installed or another icon pack is in use, the entry keeps its emoji.
 import type { ReactNode } from 'react';

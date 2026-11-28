@@ -1,11 +1,12 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { zipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ICON_SUBJECTS, iconSheetPrompt, sheetsFor } from '../../shared/iconLibrary';
-import { GAME_ICON_PATHS } from '../../shared/art';
-import { GLYPH_PATHS } from '../../shared/glyphs';
-import { IconLibrary, cellRect, imageSize, type IconPainter } from '../src/iconLibrary';
+import { ITEM_ICON_NAMES } from '../../shared/art';
+import { GLYPH_ICON_NAMES } from '../../shared/glyphs';
+import { IconError, IconLibrary, cellRect, imageSize, type IconPainter } from '../src/iconLibrary';
 
 /** The header of a PNG of this size, which is all the library reads. */
 function png(w: number, h: number, salt = 0) {
@@ -35,10 +36,10 @@ function make(opts: { fail?: boolean; noKey?: boolean } = {}) {
 
 describe('the server\'s own icons', () => {
   it('has one subject for every distinct picture the game shows', () => {
-    const paths = new Set([...Object.values(GAME_ICON_PATHS), ...Object.values(GLYPH_PATHS)]);
+    const paths = new Set([...Object.values(ITEM_ICON_NAMES), ...Object.values(GLYPH_ICON_NAMES)]);
     expect(ICON_SUBJECTS.length).toBe(paths.size);
     const slots = ICON_SUBJECTS.flatMap((s) => s.slots);
-    expect(slots.length).toBe(Object.keys(GAME_ICON_PATHS).length + Object.keys(GLYPH_PATHS).length);
+    expect(slots.length).toBe(Object.keys(ITEM_ICON_NAMES).length + Object.keys(GLYPH_ICON_NAMES).length);
     expect(ICON_SUBJECTS.every((s) => s.name && !s.name.includes('/'))).toBe(true);
   });
 
@@ -116,5 +117,49 @@ describe('the server\'s own icons', () => {
     expect(lib.view().icons[0].error).toMatch(/refused/);
     expect(lib.view().missing).toBe(ICON_SUBJECTS.length);
     expect(() => make({ noKey: true }).lib.makeMissing()).toThrow(/no_key/);
+  });
+
+  it('turns the ids of icons chosen before the rename ("author/name") into plain names', () => {
+    const { dir } = make();
+    const id = ICON_SUBJECTS[0].id;
+    writeFileSync(join(dir, 'icons.json'), JSON.stringify({
+      sheets: [{ id: 'sheet-old', file: 'aaaaaaaaaaaaaaaaaaaa.png', mime: 'image/png', w: 1024, h: 1024, subjects: [`lorc/${id}`], takes: false, usd: 0.067, at: 1 }],
+      use: { [`lorc/${id}`]: { sheet: 'sheet-old', cell: 0 } }, off: [`lorc/${ICON_SUBJECTS[1].id}`], errors: {},
+    }));
+    const lib = new IconLibrary(dir, { painter: () => null });
+    expect(lib.view().icons.find((i) => i.id === id)?.src).toBe('/icons/aaaaaaaaaaaaaaaaaaaa.png');
+    expect(lib.view().icons.find((i) => i.id === ICON_SUBJECTS[1].id)?.disabled).toBe(true);
+  });
+
+  it('puts a downloaded zip back, skips what is already there, and refuses anything else', async () => {
+    const first = make();
+    first.lib.makeMissing();
+    await first.lib.whenIdle();
+    const out = first.dir;
+    const files: Record<string, Uint8Array> = { 'icons.json': new TextEncoder().encode(JSON.stringify({ format: 'hearthforge-icons', version: 1, ...first.lib.exportable() })) };
+    for (const sh of first.lib.exportable().sheets) files[`sheets/${sh.file}`] = readFileSync(join(out, 'sheets', sh.file));
+    const zip = zipSync(files);
+    const fresh = make();
+    const done = fresh.lib.restoreZip(zip);
+    expect(done.added).toBe(first.lib.exportable().sheets.length);
+    expect(fresh.lib.refs()).toEqual(first.lib.refs());
+    expect(fresh.lib.restoreZip(zip).added).toBe(0);
+    expect(() => fresh.lib.restoreZip(new Uint8Array([1, 2, 3]))).toThrow(IconError);
+    expect(() => fresh.lib.restoreZip(zipSync({ 'icons.json': new TextEncoder().encode('{"format":"other"}') }))).toThrow(IconError);
+    // A sheet whose bytes do not match its name is left out.
+    const forged = zipSync({ ...files, [`sheets/${first.lib.exportable().sheets[0].file}`]: png(1024, 1024, 999) });
+    expect(make().lib.restoreZip(forged).skipped).toBeGreaterThan(0);
+  });
+
+  it('brings back the list from a backup while the sheets are still in the folder', async () => {
+    const first = make();
+    first.lib.makeMissing();
+    await first.lib.whenIdle();
+    const saved = JSON.parse(JSON.stringify(first.lib.exportable()));
+    writeFileSync(join(first.dir, 'icons.json'), '{}');
+    const lost = new IconLibrary(first.dir, { painter: () => null });
+    expect(lost.view().missing).toBe(ICON_SUBJECTS.length);
+    expect(lost.restoreList(saved)).toBe(saved.sheets.length);
+    expect(lost.view().missing).toBe(0);
   });
 });

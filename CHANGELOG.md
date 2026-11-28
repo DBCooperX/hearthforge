@@ -7,6 +7,16 @@
 - **Safety net.** If the Dungeon Master forgets the tool, the check after each reply notes the answer anyway (never for heroes) and reminds the Dungeon Master to settle the truth behind it.
 - **Where to see it.** Players find what someone told them on that person's page in the journal (*What they told you* / *Aussagen*). The Innkeeper's story view lists all settled facts, with the truths behind the spoiler switch. English and German.
 
+### Suggested rolls match the real roll (#131)
+- **Same bonus on the chip and in the roll.** A skill is now always rolled with its own ability (Persuasion with Charisma, Stealth with Dexterity), even when the Dungeon Master asks for another one, so the bonus on the suggested action, the Roll card and the roll itself agree. Jack of All Trades is counted on the chip too.
+- **A picked suggestion keeps its skill.** When you pick a suggestion with a skill tag, the Dungeon Master is told which skill it was, so a roll it calls for uses that skill and not another.
+
+### Your own sound library (phase 5): the old sources are gone, the library is in backups
+- **Removed.** The Freesound, Kenney, Kevin MacLeod, OpenGameArt and game-icons.net downloaders, the art, tile and sound uploads, their Innkeeper tabs, the "Art credits" window and the options `FREESOUND_API_KEY`, `HEARTHFORGE_ART`, `HEARTHFORGE_AUTO_ASSETS` and `HEARTHFORGE_ART_UPLOADS`. Music and effects now come only from the sound library, icons only from the painted icons, and the browser's own synth sounds and emoji stay as the fallback. Make the starter set first: a server without one is silent until it has made sounds.
+- **Old files.** Files already in `/data/music`, `/data/sfx` and `/data/art` are no longer used; delete them when you like.
+- **Backups.** The daily backup now holds the lists of sounds and icons, and restoring a backup brings them back. The audio and sheets themselves live in the data volume; *Download* saves a zip of them, and the new *Restore from a zip* button in Library and Icons puts one back (sounds up to 600 MB, files checked, nothing overwritten). Icon ids lost their author prefix; saved choices convert on load.
+- Docs and credits rewritten, English and German.
+
 ### Your own sound library (phase 4): painted icons
 - **Art → Icons.** The server can paint its own icons for every item, spell, skill, feat and class feature (411 pictures) in one look that matches the hero portraits, with the picture service set up under Illustrations (Gemini by default). Four icons go on one picture, which keeps them alike and costs a quarter as much: about 103 sheets, roughly $7 at Gemini's list price. *Paint missing icons* shows the price first and runs in the background. Players see each icon as soon as its sheet is there; the browser cuts it out and takes the background away.
 - **Four new takes.** Open an icon, optionally say how it should look, and get four new takes on one sheet; the old one stays until you pick another. Switch an icon off to bring back the older icon or the emoji. *Download icons* saves every sheet and `icons.json` as a zip for your own copy.

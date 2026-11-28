@@ -645,12 +645,14 @@ export class ClaudeDM implements DungeonMaster {
     const inCombat = game.s.phase === 'combat';
     const one = said.length === 1 ? said[0] : null;
     const who = one ? `the player ${one.player}${playerHeroes(game, one.player)}` : '';
-    const lines = said.map((l) => `- ${l.player}${playerHeroes(game, l.player)}: ${JSON.stringify(l.text)}`).join('\n');
+    // A picked suggestion that carried a skill tag showed the player that skill's bonus: a roll for it must be that skill.
+    const tag = (l: PlayerLine) => (l.skill ? ` (picked from a suggestion tagged ${l.skill}: if it needs a roll, call skill_check with skill "${l.skill}", and the server uses that skill's own ability)` : '');
+    const lines = said.map((l) => `- ${l.player}${playerHeroes(game, l.player)}: ${JSON.stringify(l.text)}${tag(l)}`).join('\n');
     // Several players who answered the same scene get one reply, so nobody is narrated over.
     const together = `These players act at the same moment, each for their own hero:\n${lines}\n\nResolve all of it in one scene, in whatever order makes sense in the story. Give every one of them a result of their own and about the same weight; do not let the first or the loudest decide for the others. If two of them want things that cannot both happen, let the world settle it (a roll, or a character in the scene reacting) instead of picking a favourite.`;
     const ask = inCombat
       ? `${one ? `In the middle of the fight, ${who} says to you: ${JSON.stringify(one.text)}` : `In the middle of the fight, several players speak to you:\n${lines}`}\n\nAnswer briefly as the Dungeon Master. Attacks, spells and movement happen through the battle map, so point them there for those. Then call scene with no suggested actions. Never mention tools or that anything is missing.`
-      : `${one ? `The player ${one.player}${playerHeroes(game, one.player)} says or does this: ${JSON.stringify(one.text)}` : together}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. ${one ? 'Their message is' : 'Their messages are'} already shown to everyone, so open with how the world answers ${one ? 'it' : 'them'} instead of repeating ${one ? 'it' : 'them'}.`;
+      : `${one ? `The player ${one.player}${playerHeroes(game, one.player)} says or does this: ${JSON.stringify(one.text)}${tag(one)}` : together}\n\nResolve it as the Dungeon Master: use your tools for anything that changes the world or needs a roll, then call scene. ${one ? 'Their message is' : 'Their messages are'} already shown to everyone, so open with how the world answers ${one ? 'it' : 'them'} instead of repeating ${one ? 'it' : 'them'}.`;
     const directed = hints.length
       ? `PLAYTEST DIRECTION from the table's host (no hero knows of it, and no player sees this note): ${hints.map((h) => JSON.stringify(h.text)).join(' and ')}\n\nMake that happen in the story now, in a way that fits the place, the time and what the heroes were doing. Use your tools for whatever changes the world (a merchant, a person, a fight, a roll), then call scene. Never mention the note, the host or testing; narrate it as the world acting on its own.`
       : '';

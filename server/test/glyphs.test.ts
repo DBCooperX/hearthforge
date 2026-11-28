@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_FEATURES, CLASS_IDS, OPTIONS, RESOURCES, featureLine, optionLine } from '../../shared/classes';
 import { ABILITIES, SKILLS } from '../../shared/content';
-import { GLYPH_PATHS, featureLineKeys, glyphKeys, isGlyphKey } from '../../shared/glyphs';
+import { GLYPH_ICON_NAMES, featureLineKeys, glyphKeys, isGlyphKey } from '../../shared/glyphs';
 import { FEATS, SPECIES, STYLES, effectLine } from '../../shared/rules';
 import { SPELLS } from '../../shared/spells';
-import { ArtStore } from '../src/artLibrary';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 const found = (keys: string[]) => keys.some(isGlyphKey);
 
-describe('game-icons for skills, feats, spells and features', () => {
-  it('every path is "author/name" in the shape of game-icons.net', () => {
-    for (const [key, p] of Object.entries(GLYPH_PATHS)) expect(p, key).toMatch(/^[a-z0-9-]+\/[a-z0-9-]+$/);
+describe('icons for skills, feats, spells and features', () => {
+  it('every icon is named in lower case letters, digits and hyphens', () => {
+    for (const [key, name] of Object.entries(GLYPH_ICON_NAMES)) expect(name, key).toMatch(/^[a-z0-9-]+$/);
   });
 
   it('every spell has an icon of its own, and every skill and feat a picture', () => {
@@ -40,19 +36,5 @@ describe('game-icons for skills, feats, spells and features', () => {
     const rage = CLASS_FEATURES.barbarian.find((f) => f.id === 'rage')!;
     expect(featureLineKeys(featureLine(rage))[0]).toBe('feature:rage');
     expect(featureLineKeys(optionLine(Object.values(OPTIONS)[0]))[0]).toBe(`feature:${Object.values(OPTIONS)[0].id}`);
-  });
-
-  it('the art library lists the files to fetch and shows the icons it has', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hf-art-'));
-    const store = new ArtStore(dir);
-    expect(Object.keys(store.manifest().icons).some((k) => k.startsWith('spell:'))).toBe(false);
-    const path = GLYPH_PATHS['spell:fire_bolt'];
-    mkdirSync(join(dir, 'game-icons', path.split('/')[0]), { recursive: true });
-    for (let i = 0; i < 25; i++) { mkdirSync(join(dir, 'game-icons', 'x'), { recursive: true }); writeFileSync(join(dir, 'game-icons', 'x', `f${i}.svg`), '<svg/>'); }
-    writeFileSync(join(dir, 'game-icons', `${path}.svg`), '<svg/>');
-    writeFileSync(join(dir, 'library.json'), JSON.stringify({ icons: 'game-icons', packs: {} }));
-    const icons = new ArtStore(dir).manifest().icons;
-    expect(icons['spell:fire_bolt']).toEqual({ src: `/art/game-icons/${path}.svg` });
-    expect(icons['spell:fireball']).toBeUndefined();
   });
 });

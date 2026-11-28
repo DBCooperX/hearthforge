@@ -1,7 +1,7 @@
-import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { unzipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { searchLibrary, soundCost, type LibraryEntry } from '../../shared/library';
 import { Credits } from '../src/credits';
@@ -48,7 +48,7 @@ describe('the sound library', () => {
     expect(readdirSync(join(dir, 'files'))).toHaveLength(1);
     expect(eleven.calls[0].url).toContain('/v1/sound-generation');
     expect(eleven.calls[0].key).toBe('test-key');
-    expect(eleven.calls[0].body).toMatchObject({ duration_seconds: 2, model_id: 'eleven_text_to_sound_v2' });
+    expect(eleven.calls[0].body).toMatchObject({ duration_seconds: 2, model_id: 'eleven_text_to_sound_v3' });
     expect(eleven.calls[0].body.text).toContain('Heavy sword hits a wooden shield');
     expect(eleven.calls[0].body.loop).toBeUndefined();
     expect(costs).toEqual([{ usd: soundCost('sfx', 2), payer: { account: 'acc-1' }, id: e.id }]);
@@ -64,7 +64,7 @@ describe('the sound library', () => {
     const amb = eleven.calls.find((c) => c.url.includes('sound-generation'))!;
     expect(amb.body).toMatchObject({ loop: true, duration_seconds: 30 });
     const mus = eleven.calls.find((c) => c.url.includes('/v1/music'))!;
-    expect(mus.body).toMatchObject({ music_length_ms: 120000, force_instrumental: true, model_id: 'music_v1' });
+    expect(mus.body).toMatchObject({ music_length_ms: 120000, force_instrumental: true, model_id: 'music_v2_5' });
     expect(String(mus.body.prompt)).toContain('misty harbour at night');
     expect(lib.entries().every((e) => e.status === 'ready')).toBe(true);
     expect(lib.entries().find((e) => e.kind === 'ambient')!.loop).toBe(true);
@@ -157,7 +157,7 @@ describe('the sound library', () => {
     ] };
     const merged = lib.mergeMusic(old);
     expect(merged.tracks.map((t) => t.title)).toEqual(['tavern jig', 'X', 'Fire']);
-    expect(lib.mergeSfx({ enabled: true, pending: false, files: [] }).events?.coins).toHaveLength(2);
+    expect(lib.mergeSfx({ enabled: true, pending: false }).events?.coins).toHaveLength(2);
     lib.set(a.id, { enabled: false });
     expect(lib.mergeMusic(old).tracks.map((t) => t.title)).toEqual(['Folk', 'X', 'Fire']);
     expect(lib.mergeMusic({ ...old, enabled: false }).tracks).toHaveLength(3);
@@ -288,5 +288,50 @@ describe('the starter set', () => {
     await lib.whenIdle();
     expect(lib.entries().length).toBe(count);
     expect(lib.library().starter.music.missing).toBe(0);
+  });
+});
+
+describe('the library in backups', () => {
+  async function zipOf(lib: SoundLibrary) {
+    const chunks: Buffer[] = [];
+    const res = { writeHead() {}, write: (c: Buffer) => { chunks.push(Buffer.from(c)); }, end: () => {}, destroy() {} };
+    lib.archive(null, res as never);
+    for (let i = 0; i < 100 && !chunks.length; i++) await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 50));
+    return new Uint8Array(Buffer.concat(chunks));
+  }
+
+  it('puts a downloaded zip back with titles, scenes and moments, and skips what is already there', async () => {
+    const a = make();
+    a.lib.make({ kind: 'music', description: 'slow fiddle, misty harbour at night', title: 'Harbour mist', scene: 'town' }, 'innkeeper');
+    a.lib.make({ kind: 'sfx', description: 'heavy door creaks open', event: 'click' }, 'innkeeper');
+    await a.lib.whenIdle();
+    const zip = await zipOf(a.lib);
+    const b = make();
+    expect(b.lib.restoreZip(zip)).toEqual({ added: 2, skipped: 0 });
+    expect(b.lib.entries().map((e) => [e.title, e.scene ?? e.event, e.status]).sort()).toEqual(a.lib.entries().map((e) => [e.title, e.scene ?? e.event, e.status]).sort());
+    expect(existsSync(join(b.dir, 'files'))).toBe(true);
+    expect(b.lib.restoreZip(zip)).toEqual({ added: 0, skipped: 2 });
+    expect(() => b.lib.restoreZip(new Uint8Array([1, 2, 3]))).toThrow(LibraryError);
+    expect(() => b.lib.restoreZip(zipSync({ 'library.json': new TextEncoder().encode('{"format":"x","entries":[]}') }))).toThrow(LibraryError);
+    // Something that is not audio is left out.
+    const bad = unzipSync(zip);
+    const first = Object.keys(bad).find((k) => k.endsWith('.mp3'))!;
+    bad[first] = new Uint8Array(5000).fill(1);
+    expect(make().lib.restoreZip(zipSync(bad))).toEqual({ added: 1, skipped: 1 });
+  });
+
+  it('brings back the list from a backup while the audio files are still in the folder', async () => {
+    const a = make();
+    a.lib.make({ kind: 'ambient', description: 'quiet tavern crowd and a fire', title: 'Tavern' }, 'innkeeper');
+    await a.lib.whenIdle();
+    const list = JSON.parse(JSON.stringify(a.lib.exportable()));
+    writeFileSync(join(a.dir, 'library.json'), '{}');
+    const lost = new SoundLibrary(a.dir, KEY, {});
+    expect(lost.entries()).toHaveLength(0);
+    expect(lost.restoreList(list)).toBe(1);
+    expect(lost.entries()[0]).toMatchObject({ title: 'Tavern', status: 'ready' });
+    expect(lost.restoreList(list)).toBe(0);
+    expect(lost.restoreList({ entries: [{ id: 'music-x', kind: 'music', file: '../../etc/passwd' }] })).toBe(0);
   });
 });

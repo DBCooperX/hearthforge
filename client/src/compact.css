@@ -194,5 +194,7 @@
 .icon-takes button.on { border-color: var(--gold, #c9a86a); }
 .icon-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .icon-actions input[type='text'] { flex: 1 1 200px; }
+.link-button { cursor: pointer; text-decoration: underline; color: var(--gold, #c9a86a); font-size: 0.9em; padding: 4px 6px; }
+.link-button:hover { filter: brightness(1.2); }
 .lib-starter-bar { flex: 1 1 160px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .lib-starter-bar span { display: block; height: 100%; background: var(--gold, #c9a86a); }

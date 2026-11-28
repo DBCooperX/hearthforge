@@ -59,6 +59,8 @@ export interface AdminContext {
   rooms: Map<string, Room>;
   openRoom(id: string): Room;
   bin: TableBin;
+  /** The server's own sounds and icons. The audio and pictures stay in their folders; a backup keeps the lists. */
+  sounds: { exportable(): { library: unknown; icons: unknown }; restoreList(d: { library?: unknown; icons?: unknown }): number };
   restoreTable(binId: number, by: { id: string; innkeeper: boolean }): { room: string; title: string };
   tablesChanged(): void;
   connections(): AdminConnection[];
@@ -536,7 +538,7 @@ export class AdminApi {
       createdAt: new Date(this.now()).toISOString(),
       app: ctx.version,
       tables,
-      ...(only ? {} : { settings: ctx.config.exportable(), ...ctx.auth.exportable(), accounts: ctx.accounts.exportable(), credits: ctx.credits.exportable() }),
+      ...(only ? {} : { ...ctx.sounds.exportable(), settings: ctx.config.exportable(), ...ctx.auth.exportable(), accounts: ctx.accounts.exportable(), credits: ctx.credits.exportable() }),
     };
   }
 
@@ -573,7 +575,7 @@ export class AdminApi {
   /** Put the tables of a backup back. Tables that are not in it stay as they are. */
   private restore(data: unknown, withSettings: boolean) {
     const { ctx } = this;
-    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown; accounts?: unknown; credits?: unknown };
+    const d = data as { format?: unknown; tables?: unknown; settings?: unknown; bans?: unknown; accounts?: unknown; credits?: unknown; library?: unknown; icons?: unknown };
     if (!d || typeof d !== 'object' || d.format !== BACKUP_FORMAT || !d.tables || typeof d.tables !== 'object') throw new Refused(400, 'bad_backup');
     const entries = Object.entries(d.tables as Record<string, InternalState>);
     for (const [id, s] of entries) {
@@ -593,6 +595,8 @@ export class AdminApi {
       const added = ctx.accounts.restore(d.accounts);
       if (added) console.log(`[innkeeper] ${added} account${added === 1 ? '' : 's'} came back from the backup. Reset their passwords to let them in.`);
       ctx.credits.restore(d.credits);
+      const sounds = ctx.sounds.restoreList(d);
+      if (sounds) console.log(`[innkeeper] ${sounds} sound or icon entr${sounds === 1 ? 'y' : 'ies'} came back from the backup.`);
     }
     ctx.tablesChanged();
     console.log(`[innkeeper] Restored ${entries.length} table${entries.length === 1 ? '' : 's'} from a backup.`);

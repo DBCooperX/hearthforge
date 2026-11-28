@@ -29,4 +29,25 @@ describe('skill-tagged choices', () => {
     expect(skillBonus(c, plain)).toBe(Math.floor((c.abilities[plain === 'athletics' ? 'str' : 'int'] - 10) / 2));
     expect(skillBonus(c, skill)).toBeGreaterThan(skillBonus({ ...c, skills: [], expertise: [] }, skill));
   });
+  it('rolls a named skill with its own ability, so the roll matches the bonus the chip showed', () => {
+    const g = new Game('match', () => 0.5);
+    g.upsertPlayer('p1', 'Chris', true);
+    g.addPremade('p1', 'vex', 'Zarek');
+    g.start();
+    const c = g.s.characters[0];
+    // The Dungeon Master asked for the wrong ability: the skill's own ability counts.
+    for (const skill of ['persuasion', 'athletics', 'perception', 'stealth']) {
+      const r = g.skillCheck(c.id, skill === 'persuasion' ? 'str' : 'cha', skill, 10);
+      expect(r.modifier).toBe(skillBonus(c, skill));
+    }
+    // A raw ability check (no skill) keeps the ability that was asked for.
+    expect(g.skillCheck(c.id, 'str', '', 10).modifier).toBe(Math.floor((c.abilities.str - 10) / 2));
+  });
+
+  it('counts Jack of All Trades in the shown bonus', () => {
+    const c = { abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, skills: [] as string[], expertise: [] as string[], profBonus: 3, classId: 'bard' as const, level: 2 };
+    expect(skillBonus(c, 'history')).toBe(1);
+    expect(skillBonus({ ...c, level: 1 }, 'history')).toBe(0);
+    expect(skillBonus({ ...c, skills: ['history'] }, 'history')).toBe(3);
+  });
 });
