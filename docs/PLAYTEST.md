@@ -41,7 +41,6 @@ These features pass their automated tests and the scripted fallback, but have **
 - [ ] Change tone, rules strictness and content rating in the table room, play a few beats, and check that the narration follows them.
 
 ## Sound and art
-- [ ] Freesound: add an API key under Innkeeper → Settings → Playing and check that CC0 ambient loops are fetched and credited.
 - [ ] Combat action bar icons (Attack, spells, features) and skill, feat and spell icons show on the sheet.
 
 ## Multiplayer

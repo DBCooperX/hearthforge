@@ -1,4 +1,4 @@
-// The Innkeeper: the panel of whoever owns this server. Tables, players, art packs, settings and
+// The Innkeeper: the panel of whoever owns this server. Tables, players, sounds and icons, settings and
 // API key, updates and restarts, costs, the log and backups, so that nothing needs a terminal.
 // It is reached from the list of tables and from Settings, by accounts with the Innkeeper role.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -12,7 +12,6 @@ import { getMoney, setMoney, usd } from './money';
 import type { ClassId } from '../../../shared/types';
 import { useLang, useT, type Translate } from '../i18n';
 import { FLAVOUR_INFO, RATING_INFO, RULES_INFO, TONE_INFO } from '../../../shared/style';
-import { ArtWindow } from './ArtWindow';
 import { Emblem } from './Brand';
 import { Info } from './Hint';
 import { DeletedTables } from './Bin';
@@ -26,10 +25,8 @@ import type { AccountRow, AccountView, InviteView, LegacySeat, Role } from '../.
 import { playTime } from './Profile';
 import { ART_TABS, INN_MISC, INN_SECTIONS, INN_TABS, SERVER_TABS, SOUND_TABS, KEY_RESULTS, LOG_FILTERS, PHASE_LABELS, SOURCE_LABELS, UPDATER_STATES } from './labels';
 import { sfx } from './sound';
-import { SfxLibrary } from './SfxLibrary';
 import { NarratorLibrary } from './NarratorLibrary';
 import { PictureLibrary } from './PictureLibrary';
-import { SoundLibrary } from './SoundLibrary';
 import { LibraryPane } from './LibraryPane';
 import { IconPane } from './IconPane';
 import { TabBar, Window } from './Window';
@@ -46,10 +43,9 @@ const DM_SECTIONS = [
 ];
 const SOUND_SECTIONS = [
   { title: INN_SECTIONS.switches, keys: ['HEARTHFORGE_MUSIC', 'HEARTHFORGE_SFX', 'HEARTHFORGE_NARRATOR', 'HEARTHFORGE_DM_SOUND_ORDERS'] },
-  { title: INN_SECTIONS.soundKeys, keys: ['FREESOUND_API_KEY', 'ELEVENLABS_API_KEY', 'OPENAI_API_KEY'] },
+  { title: INN_SECTIONS.soundKeys, keys: ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY'] },
 ];
 const ART_SECTIONS = [
-  { title: INN_SECTIONS.art, keys: ['HEARTHFORGE_ART', 'HEARTHFORGE_AUTO_ASSETS', 'HEARTHFORGE_ART_UPLOADS'] },
   { title: INN_SECTIONS.pictureKeys, keys: ['GEMINI_API_KEY', 'FAL_KEY', 'REPLICATE_API_TOKEN', 'OPENAI_API_KEY'] },
 ];
 const SERVER_SECTIONS = [{ title: INN_SECTIONS.server, keys: ['HEARTHFORGE_AUTO_UPDATE', 'HEARTHFORGE_TRUST_PROXY'] }];
@@ -171,7 +167,7 @@ function SubTabs<K extends string>({ tabs, children, value, onChange }: { tabs: 
 function SoundPane(pane: PaneProps & { go: (tab: Tab) => void }) {
   return (
     <SubTabs tabs={SOUND_TABS}>
-      {(sub) => sub === 'library' ? <LibraryPane /> : sub === 'effects' ? <SfxLibrary /> : sub === 'narrator' ? <NarratorLibrary /> : sub === 'settings' ? <div className="inn-sub"><SettingsBlock {...pane} sections={SOUND_SECTIONS} /></div> : <SoundLibrary key={sub} layer={sub} />}
+      {(sub) => sub === 'library' ? <LibraryPane /> : sub === 'narrator' ? <NarratorLibrary /> : <div className="inn-sub"><SettingsBlock {...pane} sections={SOUND_SECTIONS} /></div>}
     </SubTabs>
   );
 }
@@ -180,7 +176,7 @@ function ArtPane(pane: PaneProps & { go: (tab: Tab) => void }) {
   const [sub, setSub] = useState<keyof typeof ART_TABS>('icons');
   return (
     <SubTabs tabs={ART_TABS} value={sub} onChange={setSub}>
-      {(tab) => tab === 'icons' ? <IconPane /> : tab === 'art' ? <ArtWindow embedded /> : tab === 'pictures' ? <PictureLibrary onKeys={() => setSub('settings')} /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}
+      {(tab) => tab === 'icons' ? <IconPane /> : tab === 'pictures' ? <PictureLibrary onKeys={() => setSub('settings')} /> : <div className="inn-sub"><SettingsBlock {...pane} sections={ART_SECTIONS} /></div>}
     </SubTabs>
   );
 }
@@ -452,10 +448,6 @@ const CHOICE_NAMES: Record<string, Record<string, { en: string; de: string }>> =
   HEARTHFORGE_DM_EFFORT: {
     low: { en: 'Low', de: 'Niedrig' }, medium: { en: 'Medium', de: 'Mittel' }, high: { en: 'High', de: 'Hoch' },
     xhigh: { en: 'Very high', de: 'Sehr hoch' }, max: { en: 'Maximum', de: 'Maximum' },
-  },
-  HEARTHFORGE_ART: {
-    generated: { en: 'Hearthforge pixel art (built in)', de: 'Hearthforge-Pixelgrafik (eingebaut)' },
-    kenney: { en: 'Tiny Dungeon (Kenney)', de: 'Tiny Dungeon (Kenney)' }, '0x72': { en: 'DungeonTileset II (0x72)', de: 'DungeonTileset II (0x72)' },
   },
 };
 
@@ -948,7 +940,7 @@ function BackupsPane({ fail, say }: PaneProps) {
         <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void askRestore().then((yes) => { if (yes) void run(() => inn(`/restore?${q}`, { raw: f }), restored); }); }} />
       </div>
       <label className="inn-check"><input type="checkbox" checked={settings} onChange={(e) => setSettings(e.target.checked)} />{t('When restoring, also take the settings and bans of the backup')}</label>
-      <p className="muted small">{t('A backup holds every table with its heroes, story and world, the settings and the bans. It never holds the API key or passwords, and not the art packs. The server makes one by itself every day and keeps the newest {n}.', { n: 14 })}</p>
+      <p className="muted small">{t('A backup holds every table with its heroes, story and world, the settings, the bans and the lists of sounds and icons. It never holds the API key or passwords, nor the audio files and icon sheets (download those under Sound and voice → Library and Art → Icons). The server makes one by itself every day and keeps the newest {n}.', { n: 14 })}</p>
       {list.length === 0 ? <p className="muted">{t('No backup on the server yet.')}</p> : (
         <table className="inn-table">
           <thead><tr><th>{t('Backup')}</th><th>{t('Made')}</th><th className="num">{t('Tables')}</th><th className="num">{t('Size')}</th><th /></tr></thead>

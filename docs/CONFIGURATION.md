@@ -14,17 +14,17 @@ Everything below can be changed in the **Innkeeper → Settings**. A value set t
 | `HEARTHFORGE_DM_STORY_ON_KEY` | `off` | `on` runs every story turn outside fights on the key-moment model, for comparing dialogue quality. |
 | `HEARTHFORGE_DM_EFFORT` | `low` | How hard the DM thinks per beat: `low`, `medium` or `high`. |
 | `HEARTHFORGE_DM_CACHE_TTL` | `1h` | How long the DM's system prompt and tools stay in Claude's prompt cache: `1h` or `5m`. An hour costs a little more to write but survives quiet spells and rare key-moment calls. |
-| `HEARTHFORGE_ART` | `generated` | Tile pack for a fresh server: `generated`, `kenney` or `0x72`. A choice made in the game wins. |
-| `HEARTHFORGE_ART_UPLOADS` | `on` | `off` locks the art library against changes from the browser. |
-| `HEARTHFORGE_AUTO_ASSETS` | `on` | Fetch freely licensed item icons on first start. |
-| `HEARTHFORGE_MUSIC` | `on` | `off` skips the music download and the player. |
-| `HEARTHFORGE_SFX` | `on` | `off` silences all effects. Kenney's CC0 packs are added by the owner under Assets → Sound effects. |
+| `HEARTHFORGE_MUSIC` | `on` | `off` silences all music and ambient loops. |
+| `HEARTHFORGE_SFX` | `on` | `off` silences all effects. |
+| `HEARTHFORGE_DM_SOUND_ORDERS` | `0` | How many new sounds the Dungeon Master may have made per table and day. `0` sets no limit. |
+| `LIBRARY_DIR` | `/data/library` | Where the sound library keeps its files. |
+| `ICONS_DIR` | `/data/icons` | Where the painted icon sheets are kept. |
 | `HEARTHFORGE_TURN_WAIT` | `8` | Seconds the DM waits for the other players after the first one acts. `0` answers every action at once. |
 | `HEARTHFORGE_READY_WAIT` | `60` | Seconds a new fight waits on its "get ready" card (why the fight starts, who the foes are) for every player to press To battle. After that, or once everyone is ready, the monsters move. `0` starts at once. |
 | `HEARTHFORGE_REACTION_WAIT` | `20` | Seconds a player gets to decide on an opportunity attack when an enemy leaves their hero's reach. After that the hero strikes. `0` never asks. |
 | `HEARTHFORGE_AUTO_UPDATE` | `off` | `on` installs new versions by itself when nobody sits at a table. |
 | `HEARTHFORGE_TRUST_PROXY` | `off` | Read the player's address from `X-Forwarded-For`. Only behind your own reverse proxy. |
-| `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Assets → Narrator. |
+| `HEARTHFORGE_NARRATOR` | `on` | `off` removes the narrator that reads the story aloud. The voice itself is chosen under Sound and voice → Narrator. |
 | `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | empty | ElevenLabs for the hosted narrator voice, OpenAI for story illustrations. See [Voice and HTTPS](PICTURES-AND-VOICE.md#voice-and-https). |
 | `GEMINI_API_KEY`, `FAL_KEY`, `REPLICATE_API_TOKEN` | empty | For story illustrations; can also be typed in the Innkeeper. See [Story illustrations](PICTURES-AND-VOICE.md#story-illustrations). |
 | `COMPOSE_PROFILES=https`, `HEARTHFORGE_DOMAIN`, `HEARTHFORGE_LOCAL_HOSTS`, `HEARTHFORGE_DNS_PROVIDER`, `HEARTHFORGE_DNS_TOKEN`, `HEARTHFORGE_ACME_EMAIL` | off | HTTPS through Caddy (`.env` only). See [HTTPS](PICTURES-AND-VOICE.md#https). |

@@ -64,7 +64,7 @@ export function LobbyScreen({ conn, me: who, onInnkeeper, onMenu }: { conn: Conn
   }, [conn.connected]);
 
   // Name and story language are set in the table room, under "Table details". Tables for several players start with an invite code, which the host can switch off there.
-  const openTable = (seats: number) => conn.create(me, { title: t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: seats > 1 });
+  const openTable = (seats: number, name?: string) => conn.create(me, { title: name?.trim() || t("{name}'s table", { name: me }), language: lang, maxPlayers: seats, locked: seats > 1 });
   const sitAt = (tb: TableSummary) => conn.join(tb.id, me);
 
   const tabs: { id: HomeTab; label: string; icon: 'table' | 'character'; count: number; note: string }[] = [
@@ -172,10 +172,11 @@ function AccountMenu({ who }: { who: Me }) {
   );
 }
 
-interface TablesProps { conn: Connection; who: Me; me: string; link: ReturnType<typeof linkedTable>; ready: boolean; onOpen: (seats: number) => void }
+interface TablesProps { conn: Connection; who: Me; me: string; link: ReturnType<typeof linkedTable>; ready: boolean; onOpen: (seats: number, name?: string) => void }
 
 /** The Tables tab: your tables, the ones open to join, and the bin, with who is here beside them. */
 function TablesTab({ conn, who, me, link, ready, onOpen }: TablesProps) {
+  const [tableName, setTableName] = useState('');
   const t = useT();
   const { lang } = useLang();
   /** The locked table whose invite code is being asked for. */
@@ -247,14 +248,16 @@ function TablesTab({ conn, who, me, link, ready, onOpen }: TablesProps) {
         <div className="open-wrap" ref={openBox}>
           <button type="button" className="primary" aria-expanded={opening} onClick={() => setOpening(!opening)}>＋ {t('Open a new table')}</button>
           {opening && (
-            <form className="open-pop" onSubmit={(e) => { e.preventDefault(); setOpening(false); onOpen(seats); }}>
+            <form className="open-pop" onSubmit={(e) => { e.preventDefault(); setOpening(false); onOpen(seats, tableName); setTableName(''); }}>
+              <b>{t('Name of the table')}</b>
+              <input value={tableName} onChange={(e) => setTableName(e.target.value)} maxLength={40} placeholder={t("{name}'s table", { name: me })} aria-label={t('Name of the table')} autoFocus />
               <b>{t('How many players?')}</b>
               <span className="pick" role="group" aria-label={t('Players')}>
                 {[1, 2, 3, 4].map((n) => <button type="button" key={n} className={seats === n ? 'on' : ''} aria-pressed={seats === n} title={n === 1 ? undefined : t('{n} players', { n })} onClick={() => setSeats(n)}>{n === 1 ? t('Solo') : `👥 ${n}`}</button>)}
               </span>
               <small className="muted">{seats === 1 ? t('Only you sit at a solo table. You can still play up to four heroes.') : t('Friends join with the invite link or code.')}</small>
               <span className="row">
-                <button className="primary" disabled={!ready} autoFocus>{t('Open the table')}</button>
+                <button className="primary" disabled={!ready}>{t('Open the table')}</button>
                 <button type="button" className="link" onClick={() => setOpening(false)}>{t('Cancel')}</button>
               </span>
             </form>

@@ -6,7 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { Zip, ZipPassThrough } from 'fflate';
+import { Zip, ZipPassThrough, unzipSync } from 'fflate';
 import type { ArtRef } from '../../shared/art';
 import { ICON_SUBJECTS, ICON_SUBJECT_BY_ID, iconSheetPrompt, type IconLibraryView, type IconSubject, type IconView } from '../../shared/iconLibrary';
 
@@ -77,6 +77,19 @@ export const cellRect = (s: { w: number; h: number }, cell: number) => {
 const ORDER = [...ICON_SUBJECTS].sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || a.slots[0].localeCompare(b.slots[0]));
 function kindOf(s: IconSubject) { const f = s.slots[0]; return f.includes(':') ? f.split(':')[0] : 'item'; }
 
+/** Icons used to be named "author/name" after the set they were first chosen from; the name alone is the id now. */
+const bare = (id: string) => id.split('/').pop() ?? id;
+
+function cleanSaved(v: Partial<Saved>): Saved {
+  const sheets = (Array.isArray(v.sheets) ? v.sheets : []).filter((x) => x && typeof x.id === 'string' && /^[0-9a-f]{20}\.(png|jpg|webp)$/.test(String(x.file)) && Array.isArray(x.subjects))
+    .map((x) => ({ ...x, subjects: x.subjects.map((id) => bare(String(id))) }));
+  const use: Saved['use'] = {};
+  for (const [id, u] of Object.entries(v.use && typeof v.use === 'object' ? v.use : {})) if (u && typeof u.sheet === 'string' && Number.isInteger(u.cell) && u.cell >= 0 && u.cell < 4) use[bare(id)] = u;
+  const errors: Saved['errors'] = {};
+  for (const [id, why] of Object.entries(v.errors && typeof v.errors === 'object' ? v.errors : {})) errors[bare(id)] = String(why).slice(0, 300);
+  return { sheets, use, off: (Array.isArray(v.off) ? v.off : []).map((id) => bare(String(id))), errors };
+}
+
 export class IconLibrary {
   private s: Saved;
   private queue: Job[] = [];
@@ -89,10 +102,7 @@ export class IconLibrary {
   }
 
   private load(): Saved {
-    try {
-      const v = JSON.parse(readFileSync(join(this.dir, 'icons.json'), 'utf8')) as Partial<Saved>;
-      return { sheets: Array.isArray(v.sheets) ? v.sheets : [], use: v.use && typeof v.use === 'object' ? v.use : {}, off: Array.isArray(v.off) ? v.off : [], errors: v.errors && typeof v.errors === 'object' ? v.errors : {} };
-    } catch { return { sheets: [], use: {}, off: [], errors: {} }; }
+    try { return cleanSaved(JSON.parse(readFileSync(join(this.dir, 'icons.json'), 'utf8'))); } catch { return { sheets: [], use: {}, off: [], errors: {} }; }
   }
   private save() {
     const file = join(this.dir, 'icons.json');
@@ -236,6 +246,49 @@ export class IconLibrary {
     this.save();
     console.log(`[icons] Painted ${job.takes ? `four takes of ${subjects[0]?.name}` : subjects.map((x) => x.name).join(', ')} ($${painter.usd.toFixed(3)}).`);
     this.hooks.onChange?.();
+  }
+
+  /** The list of icons without the pictures, for the daily backup. */
+  exportable() { return this.s; }
+
+  /** Take in sheets and choices from a backup whose sheet files are still in the folder. What is already here wins. */
+  restoreList(d: unknown): number {
+    const v = cleanSaved((d ?? {}) as Partial<Saved>);
+    return this.merge(v, (sh) => existsSync(join(this.dir, 'sheets', sh.file)));
+  }
+
+  private merge(v: Saved, haveFile: (sh: Sheet) => boolean): number {
+    let added = 0;
+    for (const sh of v.sheets) {
+      if (this.sheet(sh.id) || !haveFile(sh)) continue;
+      this.s.sheets.push(sh);
+      added++;
+    }
+    for (const [id, u] of Object.entries(v.use)) if (!this.s.use[id] && this.sheet(u.sheet) && ICON_SUBJECT_BY_ID.has(id)) this.s.use[id] = u;
+    for (const id of v.off) if (!this.s.off.includes(id) && ICON_SUBJECT_BY_ID.has(id)) this.s.off.push(id);
+    if (added) { this.save(); this.hooks.onChange?.(); }
+    return added;
+  }
+
+  /** Put a downloaded icons zip back. Sheets already here are skipped. */
+  restoreZip(zip: Uint8Array): { added: number; skipped: number } {
+    let files: Record<string, Uint8Array>;
+    try { files = unzipSync(zip); } catch { throw new IconError('bad_request', 'not a zip'); }
+    let meta: Partial<Saved> & { format?: unknown };
+    try { meta = JSON.parse(new TextDecoder().decode(files['icons.json'])); } catch { throw new IconError('bad_request', 'no icons.json'); }
+    if (meta.format !== 'hearthforge-icons') throw new IconError('bad_request', 'not a Hearthforge icons zip');
+    const v = cleanSaved(meta);
+    let skipped = 0;
+    mkdirSync(join(this.dir, 'sheets'), { recursive: true });
+    const ok = (sh: Sheet) => {
+      const bytes = files[`sheets/${sh.file}`];
+      const size = bytes ? imageSize(Buffer.from(bytes)) : null;
+      if (!bytes || !size || bytes.length > MAX_BYTES || createHash('sha256').update(bytes).digest('hex').slice(0, 20) !== sh.file.split('.')[0]) { skipped++; return false; }
+      if (!existsSync(join(this.dir, 'sheets', sh.file))) writeFileSync(join(this.dir, 'sheets', sh.file), bytes);
+      return true;
+    };
+    const added = this.merge(v, ok);
+    return { added, skipped };
   }
 
   /** The sheet behind /icons/<name>, or null. */

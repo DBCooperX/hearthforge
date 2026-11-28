@@ -86,7 +86,7 @@ finish() {
   say "Hearthforge is running in container $CTID"
   echo "    Open:       http://${ip:-<container-ip>}:${PORT}"
   echo "    Innkeeper:  http://${ip:-<container-ip>}:${PORT}/?innkeeper"
-  echo "                The owner's panel: tables, players, art packs, settings, API key,"
+  echo "                The owner's panel: tables, players, sounds and icons, settings, API key,"
   echo "                updates, restart, logs and backups. No terminal needed from here on."
   if [ -n "$ADMIN_PASSWORD_NEW" ]; then
     echo "    Account:    innkeeper"

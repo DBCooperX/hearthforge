@@ -47,6 +47,7 @@ export function IconPane() {
   const [show, setShow] = useState<'all' | 'missing' | 'off'>('all');
   const [open, setOpen] = useState<string | null>(null);
   const [hint, setHint] = useState('');
+  const [note, setNote] = useState<string | null>(null);
   const detail = useRef<HTMLDivElement | null>(null);
   useEffect(() => { if (open) detail.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [open]);
 
@@ -81,6 +82,19 @@ export function IconPane() {
     } catch { setError('failed'); }
   };
 
+  const restore = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null); setNote(null);
+    try {
+      const res = await fetch('/api/icons/restore', { method: 'POST', cache: 'no-store', headers: { [INNKEEPER_HEADER]: innkeeperSession(), 'content-type': 'application/zip' }, body: file });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(out?.error ?? 'failed'));
+      setMoney(out.money);
+      setLib(out as View);
+      setNote(t('Put back {added} sheets, skipped {skipped} that were already here or not usable.', { added: out.restored.added, skipped: out.restored.skipped }));
+    } catch (e) { setError(e instanceof Error ? e.message : 'failed'); }
+  };
+
   if (!lib) return <div className="settings-body"><p className="muted">{error ? t(ICON_ERRORS.failed) : t('Loading…')}</p></div>;
   const have = lib.icons.length - lib.missing;
   const sel = open ? lib.icons.find((i) => i.id === open) ?? null : null;
@@ -89,6 +103,7 @@ export function IconPane() {
       <p className="muted small">{t('The server\'s own icons for items, spells, skills, feats and features, painted in one look four to a sheet with the picture service you set up under Illustrations. Players see each one as soon as its sheet is painted; icons without one keep the older icon or the emoji.')}</p>
       {!lib.canPaint && <p className="art-note">{t(ICON_ERRORS.no_key)}</p>}
       {error && <p className="art-error" role="alert">{t(ICON_ERRORS[error] ?? ICON_ERRORS.failed)}</p>}
+      {note && <p className="art-note" role="status">{note}</p>}
 
       <div className="lib-starter">
         <div className="lib-starter-bar" aria-hidden><span style={{ width: `${Math.round((have / Math.max(1, lib.icons.length)) * 100)}%` }} /></div>
@@ -109,7 +124,13 @@ export function IconPane() {
           <option value="missing">{t('Not painted yet')}</option>
           <option value="off">{t('Switched off')}</option>
         </select>
-        <span className="lib-download"><button type="button" disabled={!have} onClick={() => void download()}>{t('Download icons')}</button></span>
+        <span className="lib-download">
+          <button type="button" disabled={!have} onClick={() => void download()}>{t('Download icons')}</button>
+          <label className="link-button" title={t('Put back an icons zip you downloaded earlier. Sheets that are already here are skipped.')}>
+            <input type="file" accept=".zip,application/zip" hidden onChange={(e) => { void restore(e.target.files?.[0]); e.target.value = ''; }} />
+            {t('Restore from a zip')}
+          </label>
+        </span>
       </div>
 
       {sel && (

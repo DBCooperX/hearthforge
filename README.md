@@ -64,7 +64,7 @@ It is built to feel like a pen-and-paper evening, not a video game with a chat w
 - **Together or alone.** Accounts with an owner role, invite links, tables with a host, ready check, invite codes, table talk and whispers, and an in-character vs out-of-character split. Solo tables are private.
 - **Campaign books.** Hand the Dungeon Master a published adventure (PDF, text or Markdown) and it runs the book, reading the section the party is in.
 - **English and German**, per player. The table picks the story language. German follows the official SRD terms, with Swiss spelling.
-- **The Innkeeper**, the owner's panel in the browser: updates, settings, accounts, costs, assets, backups and logs without a terminal.
+- **The Innkeeper**, the owner's panel in the browser: updates, settings, accounts, costs, sounds and icons, backups and logs without a terminal.
 - **Local first.** One container, SQLite saves that survive updates, fonts bundled, nothing loaded from the internet by the browser.
 
 ## Install on Proxmox
@@ -128,13 +128,13 @@ Hearthforge is built for a home network. Keep it on your LAN, behind a VPN or be
 | [The Innkeeper](docs/INNKEEPER.md) | Accounts, tables, costs and credits, updates, backups, resetting a password |
 | [Configuration](docs/CONFIGURATION.md) | Every setting and `.env` variable, with defaults |
 | [Story pictures, voice and HTTPS](docs/PICTURES-AND-VOICE.md) | Setting up pictures, the narrator, speech input and certificates |
-| [Art and music](docs/ART-AND-MUSIC.md) | What downloads by itself, what you add, and the licences |
+| [Sounds, music and icons](docs/ART-AND-MUSIC.md) | The server's own sound library and painted icons, backups, and what they cost |
 | [German terms](docs/GERMAN.md) | The glossary behind the German interface |
 | [Development](docs/DEVELOPMENT.md) | Running from source, tests, code layout |
 | [Changelog](CHANGELOG.md) · [Play-test checklist](docs/PLAYTEST.md) | What changed and what still needs real play |
 
 ## Credits and licenses
 
-See [CREDITS.md](CREDITS.md) for the full list. In short: the rules content is from the D&D System Reference Document (CC BY 4.0), the pixel art is original and generated in code (CC0), music and icon packs are fetched at runtime and credited in the game, and the fonts are under the SIL Open Font License. Hearthforge bundles and hosts no third-party art or audio.
+See [CREDITS.md](CREDITS.md) for the full list. In short: the rules content is from the D&D System Reference Document (CC BY 4.0), the pixel art is original and generated in code (CC0), sounds, music and icons are made for your server with your own keys, and the fonts are under the SIL Open Font License. Hearthforge bundles and hosts no third-party art or audio.
 
 This work includes material from the System Reference Document 5.1 and 5.2.1 by Wizards of the Coast LLC, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode). Hearthforge is not affiliated with, endorsed, sponsored, or specifically approved by Wizards of the Coast LLC.

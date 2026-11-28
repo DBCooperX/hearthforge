@@ -51,7 +51,7 @@ export function Settings({ onClose }: Props) {
               </span>
             </div>
             <div className="setting">
-              <span>{t('Battle ground')} <Info text={t('Painted: the battle map as one painted picture, with soft ground, water and inked trees. Pixel tiles: the older square tiles, which an art pack on the server can replace.')} /></span>
+              <span>{t('Battle ground')} <Info text={t('Painted: the battle map as one painted picture, with soft ground, water and inked trees. Pixel tiles: the older square tiles.')} /></span>
               <span className="pick">
                 {(['painted', 'pixel'] as const).map((m) => <button key={m} type="button" className={prefs.battleGround === m ? 'on' : ''} aria-pressed={prefs.battleGround === m} onClick={() => { setPrefs({ battleGround: m }); sfx('tab'); }}>{t(m === 'painted' ? 'Painted' : 'Pixel tiles')}</button>)}
               </span>

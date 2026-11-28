@@ -1,25 +1,32 @@
-# Art and music
+# Sounds, music and icons
 
 Back to the [README](../README.md).
 
-Hearthforge bundles no third-party art or audio, and it never hosts or mirrors anything. Out of the box it draws its own 16×16 pixel art and shows items as emoji. Everything else goes from the artist's site to your server, and how depends on what the source allows:
+Hearthforge bundles no third-party art or audio, and it downloads none. Everything you see as an icon and hear as music, an ambient loop or an effect is made by your own server, with your own keys, and kept in your data folder. Nothing is shared with other servers.
 
-| Source type | What happens |
-| --- | --- |
-| **Free license** (CC0, CC BY) | The server downloads it by itself: Kevin MacLeod's 50 music tracks (CC BY 4.0) and the game-icons.net icons for items, skills, feats, spells and class features (CC BY 3.0). Switch off with `HEARTHFORGE_MUSIC=off` or `HEARTHFORGE_AUTO_ASSETS=off`. |
-| **Direct download allowed** | The owner presses **Download** in the Innkeeper, or pastes a direct link, and the server fetches it from the source (for example OpenGameArt). |
-| **Login, Patreon or terms that forbid it** | The Innkeeper shows a **Get it here** link; download the file yourself and drag it onto the page (Kenney, itch.io, Freesound, Sonniss, Pixabay). Kenney's site answers automated downloads with "forbidden", so its tile pack (Tiny Dungeon) and sound packs are added the same way. |
+| What | Made with | Where |
+| --- | --- | --- |
+| Effects, ambient loops (ElevenLabs Sound Effects) and music (Eleven Music) | `ELEVENLABS_API_KEY` | Innkeeper → **Sound and voice → Library**, files in `/data/library` |
+| Icons for items, skills, feats, spells and class features | The picture service under **Art → Illustrations** (Gemini by default) | Innkeeper → **Art → Icons**, sheets in `/data/icons` |
+| Map tiles and figures | Drawn by the browser from the game itself (`client/src/game/sprites.ts`, CC0) | nothing to set up |
 
-In the Innkeeper's **Assets** page, with the tabs **Music**, **Ambient** and **Art**:
+Without an ElevenLabs key the game is silent except for the effects the browser makes itself; without painted icons items show emoji. Both fill up as you make things.
 
-- **Music.** Every track can be played, switched off, moved to another scene (tavern, town, overworld, dungeon, combat, boss) or removed. Tracks that failed to download get a button to try again. Drop audio files or a zip onto the page, or paste a link. Files are kept in `/data/music`.
-- **Ambient sound.** Quiet loops (crowd, fire, wind, rain) under the music with their own volume slider. A few free OpenGameArt loops (fire, wind, dark pad) download automatically; for the rest, paste a free Freesound API key under Settings → Playing and the server fetches CC0 crowd, town, forest and cave loops by itself (or add your own).
-- **Art.** Drop a zip from itch.io, Kenney or OpenGameArt. PNG images are kept, packs are recognised by name or contents, and item icons are matched by file name, with **Assign icons** for the rest. Players see what is in use, with credits, under **Settings → Art & Assets**.
+## Sounds and music
 
-Licenses differ: CC0 needs nothing, CC BY needs a credit (the game shows title, artist and license of the playing track and the art packs in use), and a few free packs may be used but not passed on. [CREDITS.md](../CREDITS.md) lists what was checked. The Kenney and 0x72 tile mappings are experimental, since the packs could not be downloaded where this was built. To correct a Kenney tile, write numbers into `kenney-map.json`:
+- **Starter set.** The Library page can make a starter set in one go: about 124 effects (every game moment, plus doors, chests, beasts, bells), 30 ambient loops and 32 music tracks for every scene. It shows the price (about $14 at ElevenLabs' list prices) before anything is made, and does effects first.
+- **Your own sounds.** Describe a track, a loop or an effect and the server makes it in the background. You can rename it, move it to another scene or game moment, switch it off, make a new take or delete it. If ElevenLabs refuses (music on an account without the right plan, say), the reason is shown on the sound.
+- **The Dungeon Master.** The Dungeon Master can look through the library for a mood a scene needs (a misty harbour at night, a funeral, a chase) and put a sound on for the whole table. When nothing fits it can order a new one, which plays the closest match until it is ready and stays in the library for every table. The table pays for these like it pays for pictures; **Sound and voice → Switches and keys** has an optional daily cap per table (`HEARTHFORGE_DM_SOUND_ORDERS`, default no limit).
+- **Costs.** ElevenLabs' list prices are booked as a *Sounds* line in Costs and credits.
 
-```bash
-docker compose exec hearthforge sh -c 'echo "{\"goblin\": 111, \"fighter\": 96}" > /data/art/kenney-map.json'
-```
+## Icons
 
-Browsers only allow sound after the first click, so music starts when a player first touches the page. A scene with no track is silent, and a failed download never breaks the game.
+**Art → Icons** lists the 411 pictures the game can show. *Paint missing icons* paints them four to a sheet in one look (about 103 sheets, roughly $7 at Gemini's list price; the button shows the price first). Open any icon to ask for four new takes, optionally with a hint such as "made of bone", and pick the one you like. Switch an icon off to show the emoji again.
+
+## Backups
+
+- The daily backup under **Server → Backups** keeps the list of sounds and icons (titles, scenes, moments, which take is in use) next to the tables. The audio and the icon sheets stay in `/data/library` and `/data/icons`, which are part of the data volume: back that volume up, or use the zips below.
+- **Download** in the Library and Icons pages saves the sounds (by kind or everything) and the icon sheets as zips with a `library.json` / `icons.json` that names every file.
+- **Restore from a zip** on the same pages puts a downloaded zip back: sounds and icons that are already there are skipped, the rest comes back with its titles and choices. Restoring a backup from the Backups page brings back the lists whose files are still in the folders.
+
+Browsers only allow sound after the first click, so music starts when a player first touches the page. A scene with no track is silent, and a failed take never breaks the game.
