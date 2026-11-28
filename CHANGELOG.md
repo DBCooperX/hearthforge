@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Suggested rolls match the real roll (#131)
+- **Same bonus on the chip and in the roll.** A skill is now always rolled with its own ability (Persuasion with Charisma, Stealth with Dexterity), even when the Dungeon Master asks for another one, so the bonus on the suggested action, the Roll card and the roll itself agree. Jack of All Trades is counted on the chip too.
+- **A picked suggestion keeps its skill.** When you pick a suggestion with a skill tag, the Dungeon Master is told which skill it was, so a roll it calls for uses that skill and not another.
+
 ### Your own sound library (phase 4): painted icons
 - **Art → Icons.** The server can paint its own icons for every item, spell, skill, feat and class feature (411 pictures) in one look that matches the hero portraits, with the picture service set up under Illustrations (Gemini by default). Four icons go on one picture, which keeps them alike and costs a quarter as much: about 103 sheets, roughly $7 at Gemini's list price. *Paint missing icons* shows the price first and runs in the background. Players see each icon as soon as its sheet is there; the browser cuts it out and takes the background away.
 - **Four new takes.** Open an icon, optionally say how it should look, and get four new takes on one sheet; the old one stays until you pick another. Switch an icon off to bring back the older icon or the emoji. *Download icons* saves every sheet and `icons.json` as a zip for your own copy.
