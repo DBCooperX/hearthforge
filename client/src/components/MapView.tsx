@@ -12,6 +12,7 @@ import { useEntityHover } from './Story';
 import { OddsBlock } from './Odds';
 import { heroSenses, partyOf } from '../game/util';
 import type { MoveListener } from '../net';
+import { PHONE_QUERY, usePhone } from '../ui/phone';
 
 interface Props {
   state: GameState;
@@ -28,14 +29,21 @@ interface Props {
 
 const VIEW_KEY = 'hearthforge.battleView';
 const ZOOM_KEY = 'hearthforge.battleZoom';
+// A phone held upright is tall and narrow: the fight fits its width with room to spare above and below, so it
+// starts closer in and keeps its own zoom apart from the computer's.
+const PHONE_ZOOM_KEY = 'hearthforge.battleZoom.phone';
+const PHONE_ZOOM_DEFAULT = 2.3;
+const phoneNow = () => typeof window !== 'undefined' && !!window.matchMedia?.(PHONE_QUERY).matches;
+const zoomKey = () => (phoneNow() ? PHONE_ZOOM_KEY : ZOOM_KEY);
+const zoomDefault = () => (phoneNow() ? PHONE_ZOOM_DEFAULT : ZOOM_DEFAULT);
 
 function storedView(): BattleView {
   try { if (localStorage.getItem(VIEW_KEY) === 'flat') return 'flat'; } catch { /* private window */ }
   return 'tilt';
 }
 function storedZoom(): number {
-  try { const z = Number(localStorage.getItem(ZOOM_KEY)); if (z) return clampZoom(z); } catch { /* private window */ }
-  return ZOOM_DEFAULT;
+  try { const z = Number(localStorage.getItem(zoomKey())); if (z) return clampZoom(z); } catch { /* private window */ }
+  return zoomDefault();
 }
 function remember(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* not remembered, still applied */ }
@@ -87,7 +95,7 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
 
   useEffect(() => {
     renderer.current?.setZoom(zoom);
-    const id = setTimeout(() => remember(ZOOM_KEY, String(zoom)), 400);
+    const id = setTimeout(() => remember(zoomKey(), String(zoom)), 400);
     return () => clearTimeout(id);
   }, [zoom]);
 
@@ -96,7 +104,7 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
     const el = host.current;
     if (!el) return;
     const wheel = (e: WheelEvent) => {
-      if ((e.target as HTMLElement).closest('.map-legend, .map-controls, .token-statuses')) return;
+      if ((e.target as HTMLElement).closest('.map-legend, .map-controls, .map-menu, .token-statuses')) return;
       e.preventDefault();
       setZoom((z) => clampZoom(z * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     };
@@ -104,6 +112,10 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
     return () => el.removeEventListener('wheel', wheel);
   }, []);
   const pickMode = (m: BattleView) => { setMode(m); remember(VIEW_KEY, m); };
+  // On a phone the view switches and the notes on the ground fold into one small menu over the board.
+  const phone = usePhone();
+  const [menu, setMenu] = useState(false);
+  useEffect(() => { if (!phone) setMenu(false); }, [phone]);
 
   // Looking around: edge scrolling (a setting), and Shift with the arrow keys or WASD.
   const { edgeScroll, battleGround } = usePrefs();
@@ -138,6 +150,11 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
     window.addEventListener('blur', blur);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
   }, []);
+
+  // A finger's plan dropped (the blow went, or it was cancelled): its card goes with it.
+  useEffect(() => { if (!view.planned) setToken(null); }, [view.planned]);
+  // A phone switched to or from: the zoom of that kind of screen.
+  useEffect(() => { setZoom(storedZoom()); }, [phone]);
 
   // Pointing at a monster shows its card, anchored to its token.
   const hovered = token ? state.monsters.find((m) => m.id === token.id && m.alive) : undefined;
@@ -220,24 +237,62 @@ export function MapView({ state, view, onTile, onMoved, aim, onHoverTile, moveTi
         ))}
       </div>
       {token && <div ref={anchor} className="token-anchor" style={{ left: token.left, top: token.top, width: token.size, height: token.size }} />}
-      <div className="map-controls" role="toolbar" aria-label={t('Battle view')} onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-        <span className="map-mode" role="group">
-          <button type="button" className={mode === 'tilt' ? 'on' : ''} aria-pressed={mode === 'tilt'} onClick={() => pickMode('tilt')} title={t('Tilted view with standing miniatures, light and spell effects')}>2.5D</button>
-          <button type="button" className={mode === 'flat' ? 'on' : ''} aria-pressed={mode === 'flat'} onClick={() => pickMode('flat')} title={t('Flat view from above: lighter for older computers')}>{t('Flat')}</button>
-        </span>
-        <span className="map-zoom" role="group">
-          <button type="button" onClick={() => renderer.current?.recenter()} title={t('Back to whoever is acting')} aria-label={t('Back to whoever is acting')}>⌖</button>
-          <button type="button" onClick={() => setZoom((z) => clampZoom(z / 1.2))} disabled={zoom <= ZOOM_MIN} title={t('Zoom out (mouse wheel)')} aria-label={t('Zoom out')}>−</button>
-          <button type="button" onClick={() => setZoom(ZOOM_DEFAULT)} className="zoom-level" title={t('Reset zoom')}>{Math.round(zoom * 100)}%</button>
-          <button type="button" onClick={() => setZoom((z) => clampZoom(z * 1.2))} disabled={zoom >= ZOOM_MAX} title={t('Zoom in (mouse wheel)')} aria-label={t('Zoom in')}>+</button>
-        </span>
-      </div>
-      <div className="map-legend">
-        <strong>{names[state.map.biome] ?? names.dungeon}</strong>
-        {slow && <span>{t('Mud, brush, rubble and shallow water cost double movement.')}</span>}
-        {cover && <span>{t('Trees, rocks and furniture give half cover (+2 AC) against shots.')}</span>}
-        {lightNote && <span className="light-note">{lightNote}</span>}
-      </div>
+      {(() => {
+        const modes = (
+          <span className="map-mode" role="group">
+            <button type="button" className={mode === 'tilt' ? 'on' : ''} aria-pressed={mode === 'tilt'} onClick={() => pickMode('tilt')} title={t('Tilted view with standing miniatures, light and spell effects')}>2.5D</button>
+            <button type="button" className={mode === 'flat' ? 'on' : ''} aria-pressed={mode === 'flat'} onClick={() => pickMode('flat')} title={t('Flat view from above: lighter for older computers')}>{t('Flat')}</button>
+          </span>
+        );
+        const recenter = <button type="button" onClick={() => renderer.current?.recenter()} title={t('Back to whoever is acting')} aria-label={t('Back to whoever is acting')}>⌖</button>;
+        const zooms = (
+          <>
+            <button type="button" onClick={() => setZoom((z) => clampZoom(z / 1.2))} disabled={zoom <= ZOOM_MIN} title={t('Zoom out (mouse wheel)')} aria-label={t('Zoom out')}>−</button>
+            <button type="button" onClick={() => setZoom(zoomDefault())} className="zoom-level" title={t('Reset zoom')}>{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => setZoom((z) => clampZoom(z * 1.2))} disabled={zoom >= ZOOM_MAX} title={t('Zoom in (mouse wheel)')} aria-label={t('Zoom in')}>+</button>
+          </>
+        );
+        const legend = (
+          <div className="map-legend">
+            <strong>{names[state.map.biome] ?? names.dungeon}</strong>
+            {slow && <span>{t('Mud, brush, rubble and shallow water cost double movement.')}</span>}
+            {cover && <span>{t('Trees, rocks and furniture give half cover (+2 AC) against shots.')}</span>}
+            {lightNote && <span className="light-note">{lightNote}</span>}
+          </div>
+        );
+        const stop = { onPointerDown: (e: { stopPropagation: () => void }) => e.stopPropagation(), onMouseDown: (e: { stopPropagation: () => void }) => e.stopPropagation(), onDoubleClick: (e: { stopPropagation: () => void }) => e.stopPropagation() };
+        if (phone) return (
+          <>
+            <div className="map-controls phone" role="toolbar" aria-label={t('Battle view')} {...stop}>
+              <span className="map-zoom">{recenter}</span>
+              <span className="map-zoom">
+                <button type="button" className={menu ? 'on' : ''} aria-expanded={menu} onClick={() => setMenu((m) => !m)} title={t('View and ground')} aria-label={t('View and ground')}>
+                  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden><path d="M10 2 18 6 10 10 2 6Z M2 10l8 4 8-4 M2 14l8 4 8-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+                </button>
+              </span>
+            </div>
+            {menu && (
+              <div className="map-menu" role="dialog" aria-label={t('View and ground')} {...stop}>
+                <div className="map-menu-row">
+                  {modes}
+                  <span className="map-zoom" role="group">{zooms}</span>
+                  <button type="button" className="chip close" onClick={() => setMenu(false)} aria-label={t('Close')}>✕</button>
+                </div>
+                {legend}
+              </div>
+            )}
+          </>
+        );
+        return (
+          <>
+            <div className="map-controls" role="toolbar" aria-label={t('Battle view')} {...stop}>
+              {modes}
+              <span className="map-zoom" role="group">{recenter}{zooms}</span>
+            </div>
+            {legend}
+          </>
+        );
+      })()}
     </div>
   );
 }

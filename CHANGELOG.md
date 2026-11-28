@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Phones: the battle board comes first
+- **The board fills the screen.** On a phone held upright the battle map now takes about two thirds or more of the screen. The party strip gives way to the initiative row, which already shows every face and its hit points, and the top bar keeps to one line. Phones start closer in (230%) and remember their own zoom apart from the computer's.
+- **One slim bar.** Under the board sit the turn's pips and feet, an **Actions** button and **End turn**. Actions opens a sheet from the bottom with every action, spell and the spellbook, each with its name under the icon; picking one closes the sheet so you can tap the target on the board. Opportunity attacks are switched at the bottom of the sheet.
+- **Cards slide up from the bottom.** Tapping a monster (or a name in the story) shows its card at the bottom of the screen instead of over the board. "Tap again to move" and "pick a target" float just above the bar, with an ✕ to cancel.
+- **View menu.** 2.5D/Flat, zoom and the notes about the ground fold into one button on the board; recentre stays beside it.
+- Tablets and computers are unchanged. English and German.
+
 ### Suggested rolls match the real roll (#131)
 - **Same bonus on the chip and in the roll.** A skill is now always rolled with its own ability (Persuasion with Charisma, Stealth with Dexterity), even when the Dungeon Master asks for another one, so the bonus on the suggested action, the Roll card and the roll itself agree. Jack of All Trades is counted on the chip too.
 - **A picked suggestion keeps its skill.** When you pick a suggestion with a skill tag, the Dungeon Master is told which skill it was, so a roll it calls for uses that skill and not another.
