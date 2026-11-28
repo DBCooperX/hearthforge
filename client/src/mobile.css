@@ -146,3 +146,135 @@
   .art-drop > b:not(.busy) { display: none; }
   .art-drop { border-style: solid; }
 }
+
+/* ---------- a phone in a fight: the board first ----------
+   The board fills the screen between a slim initiative row and one slim bar: what the hero still has, an Actions
+   button and End turn. The actions open as a sheet from the bottom (Hud.tsx, phone branch of ActionBar); the
+   view switches and the notes on the ground fold into one menu (MapView.tsx); cards slide up from the bottom. */
+@media (max-width: 640px) {
+  /* The top bar keeps to one row. */
+  .game > .topbar { flex-wrap: nowrap; gap: 6px; padding: 4px 8px; min-height: 44px; }
+  .game > .topbar h1.brand .brand-emblem, .game > .topbar .brand-emblem { width: 28px; height: auto; }
+  .game > .topbar .nav { gap: 2px; }
+  .game > .topbar .nav-btn, .game > .topbar .music-btn, .game > .topbar .menu-btn { min-width: 34px; padding: 4px 6px; }
+  .game > .topbar .nav-btn > span { display: none; }
+  .game > .topbar .chat-toggle { font-size: 13px; }
+
+  /* In a fight the initiative row already shows every face and its hit points; the party has its own tab. */
+  .game[data-battle][data-pane='fight'] > .party { display: none; }
+  .game[data-battle] .turnbar { min-height: 0; padding: 4px 8px 2px; gap: 8px; }
+  .game[data-battle] .turnbar .phase { font-size: 14px; white-space: nowrap; }
+  .game[data-battle] .turnbar .init { width: 38px; }
+  .game[data-battle] .turnbar .init-face { width: 28px; height: 28px; }
+  .game[data-battle] .turnbar .init.now .init-face { width: 34px; height: 34px; }
+  .game[data-battle] .turnbar .init-hp { width: 26px; }
+  .game[data-battle] .turnbar .init.now .init-hp { width: 30px; }
+  .game[data-battle] .turnbar .init-name { display: none; }
+  .game[data-battle] .turnbar .init.now .init-name { display: block; max-width: 60px; }
+  .game[data-battle] .turnbar .thinking { font-size: 12px; white-space: nowrap; }
+
+  /* The view menu over the board. */
+  .map-controls.phone { top: 8px; right: 8px; gap: 6px; }
+  .map-controls.phone button { min-width: 42px; min-height: 40px; display: grid; place-items: center; }
+  .map-menu {
+    position: absolute; top: 56px; right: 8px; left: 8px; z-index: 6; display: grid; gap: 8px; padding: 8px;
+    background: rgba(18, 15, 13, 0.96); border: 1px solid #5c534a; border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  }
+  .map-menu-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .map-menu-row > span { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .map-menu-row button:not(.chip) { min-width: 44px; min-height: 40px; background: none; border: none; color: var(--text); font-family: var(--font-head); }
+  .map-menu-row button:not(.chip) + button { border-left: 1px solid var(--line); }
+  .map-menu-row button.on { color: #1b140c; background: linear-gradient(#e2bf72, #b98e45); }
+  .map-menu-row button:disabled { opacity: 0.4; }
+  .map-menu-row .close { margin-left: auto; min-width: 40px; min-height: 40px; }
+  .map-menu .map-legend { position: static; max-width: none; font-size: 13px; background: none; border: none; padding: 0 2px; box-shadow: none; }
+
+  /* The slim bar: pips and feet, Actions, End turn. */
+  .actionbar.hotbar.phone { padding: 6px 8px; gap: 0; border-top: 1px solid #3a3530; }
+  .hb-phonebar { display: flex; align-items: stretch; gap: 6px; min-height: 48px; }
+  .hb-phonebar .economy { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; align-content: center; gap: 4px 10px; font-size: 12px; }
+  /* The pips speak for themselves here; holding one still names it. */
+  .hb-phonebar .eco.action, .hb-phonebar .eco.bonus, .hb-phonebar .eco.reaction { font-size: 0; gap: 0; }
+  .hb-phonebar .eco.action b { font-size: 11px; margin-left: 3px; }
+  .hb-phonebar .eco.move .track { width: 38px; }
+  .hb-phonebar .eco.mana { font-size: 12px; }
+  .hb-actions, .hb-phonebar .hb-endturn {
+    flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 0 12px;
+    font-family: var(--font-head); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 8px;
+  }
+  .hb-actions { background: linear-gradient(#2b2622, #1d1a17); border: 1px solid #6a5f53; color: #f1e2c8; }
+  .hb-actions.on { border-color: var(--gold); color: var(--gold); }
+  .hb-actions .item-art.glyph, .hb-phonebar .hb-endturn .item-art.glyph { width: 20px; height: 20px; }
+  .hb-phonebar .hb-endturn { flex-direction: row; min-width: 0; }
+
+  /* What the board is waiting for (tap again, pick a target) floats just above the bar. */
+  .hb-prompt {
+    position: absolute; left: 8px; right: 8px; bottom: calc(100% + 8px); z-index: 25; display: flex; align-items: center; gap: 8px;
+    padding: 7px 8px 7px 12px; font-size: 13.5px; line-height: 1.3; color: #f3e6cf;
+    background: rgba(20, 16, 12, 0.94); border: 1px solid #c8913e; border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  }
+  .hb-prompt > span { flex: 1; min-width: 0; }
+  .hb-prompt .close { flex: none; min-width: 36px; min-height: 36px; }
+  .actionbar.phone .endturn-nudge { right: 8px; bottom: calc(100% + 10px); max-width: calc(100% - 16px); }
+
+  /* The actions sheet. */
+  .hb-scrim { position: fixed; inset: 0; z-index: 19; background: rgba(0, 0, 0, 0.35); }
+  .hb-sheet {
+    position: absolute; left: 0; right: 0; bottom: calc(100% + 1px); z-index: 20; max-height: min(62dvh, 520px); overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; background: var(--iron); border-top: 1px solid #6a5f53; border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.7); animation: sheet-up 0.18s ease-out both;
+  }
+  .hb-sheet-grip { flex: none; height: 16px; display: grid; place-items: center; }
+  .hb-sheet-grip::before { content: ''; width: 40px; height: 4px; border-radius: 2px; background: #5c534a; }
+  .hb-sheet-head { display: flex; align-items: flex-start; gap: 10px; padding: 0 12px 8px; }
+  .hb-sheet-head b { font-family: var(--font-head); letter-spacing: 0.08em; color: #f1d7a8; text-transform: uppercase; font-size: 14px; padding-top: 6px; }
+  .hb-sheet-head .muted { flex: 1; font-size: 12px; line-height: 1.35; }
+  .hb-sheet-head .close, .hb-sheet .hb-book-head .close { min-width: 36px; min-height: 36px; }
+  .hb-sheet-grid { --hb: 52px; display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 8px 6px; padding: 0 10px 10px; }
+  .hb-slot.named { width: 100%; height: auto; aspect-ratio: auto; min-height: 74px; padding: 6px 2px 5px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .hb-slot.named .hb-icon { width: 34px; height: 34px; font-size: 26px; flex: none; }
+  .hb-slot .hb-name { display: none; }
+  .hb-slot.named .hb-name {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 11px; line-height: 1.15; text-align: center; color: #e8dcc8; overflow-wrap: anywhere; hyphens: auto;
+  }
+  .hb-slot.named.off .hb-name { color: #8a8178; }
+  .hb-sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px 12px; border-top: 1px solid #3a3530; font-size: 13px; }
+  .hb-sheet-foot .oa-mode { min-height: 40px; font-size: 13px; padding: 4px 12px; }
+  /* The spellbook takes the sheet's place, with room to tap. */
+  .hb-sheet .hb-book { position: static; max-height: none; border: none; border-radius: 0; box-shadow: none; background: none; }
+  .hb-sheet .hb-book-body { overflow: visible; }
+  .hb-sheet .hb-book-group { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .hb-sheet .hb-book-label { padding-top: 0; }
+  .hb-sheet .hb-book-slots { --hb: 48px; gap: 6px; }
+  .hb-sheet .hb-castat .chip { min-width: 34px; min-height: 32px; }
+
+  /* Cards about a monster, a person or a thing slide up from the bottom instead of covering what was tapped. */
+  .game ~ .hovercard {
+    left: 8px !important; right: 8px; top: auto !important; bottom: calc(118px + env(safe-area-inset-bottom)); width: auto; transform: none !important;
+    max-height: 46dvh; overflow-y: auto; padding: 10px 12px; gap: 6px; font-size: 14px; border-radius: 12px 12px 10px 10px;
+    animation: sheet-up 0.16s ease-out both;
+  }
+  .game[data-pane='story']:not([data-battle]) ~ .hovercard { bottom: calc(132px + env(safe-area-inset-bottom)); }
+  .game ~ .hovercard .hc-portrait, .game ~ .hovercard.monster .hc-portrait, .game ~ .hovercard.hero .hc-portrait { width: 40px; height: 40px; }
+  .game ~ .hovercard p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
+  .game ~ .hovercard ul { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+
+  /* The tab bar a little slimmer. */
+  .mtab { min-height: 46px; font-size: 11px; }
+}
+@keyframes sheet-up { from { transform: translateY(16px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hb-sheet, .game ~ .hovercard { animation: none; } }
+@media (max-width: 640px) {
+  .hb-sheet .hb-book-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 8px 6px; }
+  .hb-slot.named.marked { outline: 2px solid var(--gold); outline-offset: -2px; }
+  /* The wordmark gives its room to the table's name. */
+  .game > .topbar .brand-emblem, .game > .topbar h1.brand { display: none; }
+  .game > .topbar .table-name { flex: 1 1 auto; }
+}
+/* The narrowest phones: the movement track goes, the feet stay. */
+@media (max-width: 380px) {
+  .hb-phonebar .eco.move .track { display: none; }
+  .hb-actions, .hb-phonebar .hb-endturn { padding: 0 8px; font-size: 12px; gap: 4px; letter-spacing: 0.03em; }
+  .hb-phonebar { gap: 4px; }
+}

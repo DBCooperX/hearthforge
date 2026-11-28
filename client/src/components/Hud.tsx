@@ -16,6 +16,7 @@ import { useLang, useT } from '../i18n';
 import { Rich, dice, signed } from './Guide';
 import { Hint } from '../ui/Hint';
 import { usePrefs } from '../ui/prefs';
+import { usePhone } from '../ui/phone';
 import { AbilityGlyph, Glyph, UiGlyph } from '../ui/Glyph';
 import {
   HOTBAR_DRAG, HOTBAR_ROW, abilityRef, itemRef, loadHotbar, parseRef, placeOnHotbar, removeFromHotbar, saveHotbar, syncHotbar,
@@ -108,12 +109,16 @@ interface ActionBarProps {
   setTargeting: (t: Targeting) => void;
   conn: Connection;
   hint: string;
+  /** The hint asks for something now (pick a target, tap again to go): on a phone it floats over the board. */
+  prompt?: boolean;
+  /** Drops the planned move or the target being picked. */
+  onCancel?: () => void;
 }
 
 /** Abilities every hero has, which sit with the common actions rather than on the hotbar. */
 const COMMON_IDS = ['dodge'];
 
-export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, hint }: ActionBarProps) {
+export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, hint, prompt, onCancel }: ActionBarProps) {
   const t = useT();
   const { lang } = useLang();
   const combat = state.phase === 'combat' ? state.combat : null;
@@ -125,6 +130,11 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
   const [castAt, setCastAt] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [layouts, setLayouts] = useState<Record<string, HotbarLayout>>({});
+  // On a phone the actions wait in a sheet behind one button, so the board keeps the screen.
+  const phone = usePhone();
+  const [sheet, setSheet] = useState(false);
+  const turnKey = combat ? `${combat.round}:${combat.turnIndex}` : '';
+  useEffect(() => { setSheet(false); setBook(false); }, [turnKey, phone]);
 
   const items = me ? [...Object.values(me.equipment), ...me.bag] : [];
   const potion = me?.bag.find((b) => b && itemDef(state.items, b.defId)?.consumable?.heal) ?? null;
@@ -348,9 +358,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
     { label: t('Wands and staffs'), refs: wands.map((w) => itemRef(w.uid)) },
   ].filter((g) => g.refs.length > 0);
 
-  return (
-    <div className={['actionbar', 'hotbar', dragging && 'dragging'].filter(Boolean).join(' ')} onDragEnd={() => setDragging(false)}>
-      {book && (
+  const bookEl = (
         <div className="hb-book" onDragOver={(e) => e.preventDefault()}>
           <div className="hb-book-head">
             <b>{t('Spellbook')}</b>
@@ -372,14 +380,85 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
                 <div className="hb-book-slots">
                   {g.refs.map((r) => {
                     const en = entryOf(r);
-                    return en && <Slot key={r} entry={en} small marked={onBar.has(r)} draggable onDragStart={dragStart(r)} onPlace={touchUi ? () => toggleOnBar(r) : undefined} />;
+                    return en && <Slot key={r} entry={en} small={!phone} named={phone} marked={onBar.has(r)} draggable onDragStart={dragStart(r)} onPlace={touchUi ? () => toggleOnBar(r) : undefined} />;
                   })}
                 </div>
               </div>
             ))}
           </div>
         </div>
-      )}
+  );
+
+  const bookSlot: Entry = {
+    ref: 'book', name: t('Spellbook'), icon: <Glyph keys={['action:spellbook']} emoji="📖" />, cost: 'free', why: '', on: book,
+    tip: t('All your spells and features, grouped by level. Drag them onto the hotbar, and pick a higher level to cast a spell more strongly.'),
+    run: () => setBook(!book),
+  };
+  const endTurn = (
+    <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
+      <Glyph keys={['action:end_turn']} emoji="⏭️" />
+      <span>{t('End turn')}</span>
+    </button>
+  );
+  const nudgeNote = nudge?.note && (
+    <div className="endturn-nudge" role="status" aria-live="polite">
+      <b>{nudge.kind === 'spent' ? t('That was everything for this turn') : t('Your move, {name}', { name: c.name })}</b>
+      <span>{nudge.kind === 'spent' ? t('End your turn when you are ready.') : t('Pick an action, or end your turn.')}</span>
+    </div>
+  );
+
+  if (phone) {
+    // Choosing something closes the sheet, so the finger can go straight to the board to aim.
+    const closing = (en: Entry): Entry => (en.run ? { ...en, run: () => { en.run!(); setSheet(false); } } : en);
+    const placed = slots.filter((r): r is string => !!r).map((r) => entryOf(r)).filter((en): en is Entry => !!en);
+    const close = () => { setSheet(false); setBook(false); };
+    return (
+      <div className={sheet ? 'actionbar hotbar phone sheet-open' : 'actionbar hotbar phone'}>
+        {sheet && <div className="hb-scrim" onClick={close} aria-hidden />}
+        {sheet && (
+          <div className="hb-sheet" role="dialog" aria-label={t('Actions')}>
+            <div className="hb-sheet-grip" onClick={close} aria-hidden />
+            {book ? bookEl : (
+              <>
+                <div className="hb-sheet-head">
+                  <b>{t('Actions')}</b>
+                  <span className="muted">{canAct ? t('Tap an action. If it needs a target, tap that on the board. Hold a button to read what it does.') : general}</span>
+                  <button className="chip close" onClick={close} aria-label={t('Close')}>✕</button>
+                </div>
+                <div className="hb-sheet-grid">
+                  {common.map((en) => <Slot key={en.ref} entry={closing(en)} named />)}
+                  <Slot entry={bookSlot} named />
+                  {placed.map((en) => <Slot key={en.ref} entry={closing(en)} named />)}
+                </div>
+                <div className="hb-sheet-foot">
+                  <span className="muted">{t('Opportunity attacks')}</span>
+                  <OpportunitySwitch actor={c} conn={conn} />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {!sheet && (prompt && hint ? (
+          <div className="hb-prompt" role="status" aria-live="polite">
+            <span>{hint}</span>
+            {onCancel && <button className="chip close" onClick={onCancel} aria-label={t('Cancel')}>✕</button>}
+          </div>
+        ) : nudgeNote)}
+        <div className="hb-phonebar">
+          <Economy state={state} hero={c} active={canAct} />
+          <button className={sheet ? 'hb-actions on' : 'hb-actions'} aria-expanded={sheet} onClick={() => (sheet ? close() : setSheet(true))}>
+            <Glyph keys={['action:attack']} emoji="⚔️" />
+            <span>{t('Actions')}</span>
+          </button>
+          {endTurn}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={['actionbar', 'hotbar', dragging && 'dragging'].filter(Boolean).join(' ')} onDragEnd={() => setDragging(false)}>
+      {book && bookEl}
       <div className="hb-top">
         <Economy state={state} hero={c} active={canAct} />
         {hint && <div className="hint">{hint}</div>}
@@ -387,11 +466,7 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
       <div className="hb-main">
         <div className="hb-common">
           {common.map((en) => <Slot key={en.ref} entry={en} />)}
-          <Slot entry={{
-            ref: 'book', name: t('Spellbook'), icon: <Glyph keys={['action:spellbook']} emoji="📖" />, cost: 'free', why: '', on: book,
-            tip: t('All your spells and features, grouped by level. Drag them onto the hotbar, and pick a higher level to cast a spell more strongly.'),
-            run: () => setBook(!book),
-          }} />
+          <Slot entry={bookSlot} />
         </div>
         <div className="hb-slots" onDragOver={(e) => e.preventDefault()}>
           {slots.map((ref, i) => {
@@ -410,18 +485,10 @@ export function ActionBar({ state, actor, hero, targeting, setTargeting, conn, h
           })}
         </div>
         <div className="hb-end">
-          {nudge?.note && (
-            <div className="endturn-nudge" role="status" aria-live="polite">
-              <b>{nudge.kind === 'spent' ? t('That was everything for this turn') : t('Your move, {name}', { name: c.name })}</b>
-              <span>{nudge.kind === 'spent' ? t('End your turn when you are ready.') : t('Pick an action, or end your turn.')}</span>
-            </div>
-          )}
+          {nudgeNote}
           <OpportunitySwitch actor={c} conn={conn} />
           <Hint title={t('End turn')} text={<>{t('Hand the turn to the next in the initiative order.')}<em>{t('Space')}</em></>}>
-            <button className={nudge ? 'hb-endturn nudge' : 'hb-endturn'} aria-disabled={!canAct} onClick={() => canAct && conn.send({ t: 'end_turn', characterId: c.id })}>
-              <Glyph keys={['action:end_turn']} emoji="⏭️" />
-              <span>{t('End turn')}</span>
-            </button>
+            {endTurn}
           </Hint>
         </div>
       </div>
@@ -481,13 +548,15 @@ interface SlotProps {
   onContextMenu?: (e: MouseEvent) => void;
   /** In the spellbook on a touch screen: a tap places the entry on the hotbar instead of using it. */
   onPlace?: () => void;
+  /** Shows the name under the icon, for a phone where there is no pointing to read it. */
+  named?: boolean;
 }
 
 /** A square button with an icon, framed in the colour of what it spends. Its name and everything else is in the tooltip. */
-function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDragEnd, onDrop, onContextMenu, onPlace }: SlotProps) {
+function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDragEnd, onDrop, onContextMenu, onPlace, named }: SlotProps) {
   const t = useT();
   const blocked = !!en.why || !en.run;
-  const cls = ['hb-slot', `cost-${en.cost}`, en.on && 'on', blocked && 'off', en.auto && 'auto', small && 'small', marked && 'marked'].filter(Boolean).join(' ');
+  const cls = ['hb-slot', `cost-${en.cost}`, en.on && 'on', blocked && 'off', en.auto && 'auto', small && 'small', marked && 'marked', named && 'named'].filter(Boolean).join(' ');
   return (
     <Hint title={en.name} text={<>
       <span className={`hb-tip-cost cost-${en.cost}`}>{t(COST_LABEL[en.cost])}{en.mana ? ` · ${t('{n} mana', { n: en.mana })}` : ''}</span>
@@ -515,6 +584,7 @@ function Slot({ entry: en, hotkey, small, marked, draggable, onDragStart, onDrag
         {en.mana ? <span className="hb-mana">{en.mana}</span> : null}
         {en.uses !== undefined ? <span className="hb-uses">{en.uses}</span> : null}
         {en.auto && <span className="hb-auto">{t('auto')}</span>}
+        {named && <span className="hb-name">{en.name}</span>}
       </button>
     </Hint>
   );

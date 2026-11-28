@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Phones: the battle board comes first
+- **The board fills the screen.** On a phone held upright the battle map now takes about two thirds or more of the screen. The party strip gives way to the initiative row, which already shows every face and its hit points, and the top bar keeps to one line. Phones start closer in (230%) and remember their own zoom apart from the computer's.
+- **One slim bar.** Under the board sit the turn's pips and feet, an **Actions** button and **End turn**. Actions opens a sheet from the bottom with every action, spell and the spellbook, each with its name under the icon; picking one closes the sheet so you can tap the target on the board. Opportunity attacks are switched at the bottom of the sheet.
+- **Cards slide up from the bottom.** Tapping a monster (or a name in the story) shows its card at the bottom of the screen instead of over the board. "Tap again to move" and "pick a target" float just above the bar, with an ✕ to cancel.
+- **View menu.** 2.5D/Flat, zoom and the notes about the ground fold into one button on the board; recentre stays beside it.
+- Tablets and computers are unchanged. English and German.
+
 ### Library: "Delete everything" and the starter counter
 - **Delete everything** in Sound and voice → Library removes every sound and its file, and lets the starter set be made again from nothing, for example with the newer ElevenLabs models.
 - **Fixed the starter bar** that said "0 of 32 made" and "All made" together. Sounds you had deleted one by one counted as neither made nor missing. They now show as "{n} deleted by you: make them again", with the price.

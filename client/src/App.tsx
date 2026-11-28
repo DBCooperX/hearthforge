@@ -457,7 +457,8 @@ function Game({ acct, profile }: { acct: AccountState; profile: Profile }) {
                   <SurpriseBanner state={state} />
                   <TurnCallout state={state} actor={actor} />
                   <ReactionPrompt state={state} playable={playable} conn={conn} />
-                  <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint} />
+                  <ActionBar state={state} actor={actor} hero={actor ?? (selected && playable.includes(selected) ? selected : null)} targeting={targeting} setTargeting={setTargeting} conn={conn} hint={hint}
+                    prompt={!!(planned || targeting || risky)} onCancel={() => { setPlanned(null); setRisky(null); setTargeting(null); }} />
                 </>
               ) : (
                 <FightEndBanner end={fightEnd!} onContinue={endFight} writing={state.dmBusy} />

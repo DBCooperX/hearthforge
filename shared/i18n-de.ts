@@ -2677,4 +2677,9 @@ export const DE: Record<string, string> = {
   'Make the {n} missing for about {usd}': 'Die {n} fehlenden für etwa {usd} machen',
   'Everything missing: {n} for about {usd}': 'Alles Fehlende: {n} für etwa {usd}',
   'All made.': 'Alle gemacht.',
+
+  // Phones: the map-first battle layout.
+  'Actions': 'Aktionen',
+  'Tap an action. If it needs a target, tap that on the board. Hold a button to read what it does.': 'Tippe auf eine Aktion. Braucht sie ein Ziel, tippst du es auf dem Spielfeld an. Halte einen Knopf gedrückt, um zu lesen, was er tut.',
+  'View and ground': 'Ansicht und Gelände',
 };
